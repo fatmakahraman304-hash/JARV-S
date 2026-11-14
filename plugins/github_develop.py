@@ -9,7 +9,7 @@ import time
 import tempfile
 from pathlib import Path
 
-REPO = 'fatmakahraman304-hash/Mark-LVII'
+REPO = 'fatmakahraman304-hash/JARV-S'
 WORK = Path.home() / 'JarvisDevelopment' / 'Mark-LVII'
 _LOCK = threading.Lock()
 PLUGIN = {'name':'github_develop','description':

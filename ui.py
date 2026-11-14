@@ -279,6 +279,9 @@ class JarvisUI:
         """Schedule a one-frame scan on the desktop."""
         self._win._scan_request_sig.emit()
 
+    def research_scan(self, subject: str, book: bool):
+        self._win._scan_research_sig.emit(subject, book)
+
     def show_camera_scan(self, jpeg: bytes, report: dict):
         self._win._scan_result_sig.emit(jpeg, report)
 

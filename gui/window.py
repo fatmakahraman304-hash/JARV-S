@@ -107,6 +107,10 @@ class MainWindow(QMainWindow):
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
     _prototype_sig = pyqtSignal(str)
+    _scan_research_sig = pyqtSignal(str, bool)
+    _scan_research_result_sig = pyqtSignal(int, str, object)
+    _page_gesture_sig = pyqtSignal(int, int)
+    _gesture_finished_sig = pyqtSignal(int, str)
     _scan_request_sig = pyqtSignal()
     _scan_result_sig = pyqtSignal(bytes, object)
     _social_sig = pyqtSignal(str)
@@ -376,6 +380,15 @@ class MainWindow(QMainWindow):
         self._update_done_sig.connect(self._update_done)
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._scan_generation = 0
+        self._gesture_generation = 0
+        self._gesture_thread = None
+        self._gesture_stop = threading.Event()
+        self._scan_research_sig.connect(self._research_scan)
+        self._scan_research_result_sig.connect(self._show_scan_research)
+        self._page_gesture_sig.connect(self._turn_book_by_gesture)
+        self._gesture_finished_sig.connect(self._gesture_finished)
+        self._hud_cam_stack.currentChanged.connect(self._stop_gestures_outside_book)
         self._scan_request_sig.connect(self._start_camera_scan)
         self._scan_result_sig.connect(self._show_camera_scan)
         self._content_sig.connect(self._show_content)
@@ -538,6 +551,7 @@ class MainWindow(QMainWindow):
                 )
 
     def start_camera_stream(self) -> None:
+        self._gesture_stop.set()
         self._cam_stop.clear()
         self._cam_stream_sig.emit(True)
         t = threading.Thread(target=self._cam_loop, daemon=True, name="cam-stream")
@@ -591,6 +605,7 @@ class MainWindow(QMainWindow):
         if camera_open and not frame:
             self._log.append_log("SYS: Kamera henüz görüntü vermedi. Tekrar dene.")
             return
+        self._gesture_stop.set()
         self._desktop_scan_busy = True
         self._log.append_log("SYS: Kamera görüntüsü analiz ediliyor…")
 
@@ -629,11 +644,135 @@ class MainWindow(QMainWindow):
             from gui.scan_panel import ScanPanel
 
             self._scan_panel = ScanPanel(self._hud_cam_stack)
+            self._scan_panel.research_requested.connect(self._research_scan)
             self._scan_panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
             self._hud_cam_stack.addWidget(self._scan_panel)
         self._cam_stop.set()
+        self._scan_generation += 1
         self._scan_panel.show_scan(jpeg, result)
         self._hud_cam_stack.setCurrentWidget(self._scan_panel)
+
+    def _research_scan(self, subject, book):
+        scan = getattr(self, "_scan_panel", None)
+        if scan is None:
+            self._log.append_log("SYS: Önce bir kamera taraması yap.")
+            return
+        subject = subject.strip()[:180]
+        selected = scan.books.currentText().strip()[:180]
+        author = scan.books.currentData() if book and (not subject or subject == selected) else ""
+        if book and not subject:
+            subject = selected
+        if not subject:
+            self._hud_cam_stack.setCurrentWidget(scan)
+            scan.research_status.setText("Araştırılacak başlığı veya nesnenin adını yaz.")
+            return
+        if getattr(self, "_research_busy", False):
+            scan.research_status.setText("Önceki araştırma sürüyor.")
+            return
+        self._research_busy = True
+        generation = self._scan_generation
+        self._hud_cam_stack.setCurrentWidget(scan)
+        scan.research_status.setText("Web kaynakları aranıyor…")
+
+        def worker():
+            from core.scan_research import research
+            try:
+                pages = research(subject, author or "", book)
+            except Exception:
+                pages = []
+            self._scan_research_result_sig.emit(generation, subject, pages)
+
+        try:
+            threading.Thread(target=worker, daemon=True, name="jarvis-scan-research").start()
+        except RuntimeError:
+            self._research_busy = False
+            scan.research_status.setText("Araştırma başlatılamadı.")
+
+    def _show_scan_research(self, generation, subject, pages):
+        self._research_busy = False
+        if generation != self._scan_generation:
+            return
+        self._scan_panel.research_status.setText(
+            "" if pages else "Sonuç bulunamadı veya web servisi yanıt vermedi."
+        )
+        if self._hud_cam_stack.currentWidget() not in (
+            self._scan_panel, getattr(self, "_book_panel", None)
+        ):
+            return
+        if not hasattr(self, "_book_panel"):
+            from gui.book_panel import BookPanel
+
+            self._book_panel = BookPanel(self._hud_cam_stack)
+            self._book_panel.back_requested.connect(
+                lambda: self._hud_cam_stack.setCurrentWidget(self._scan_panel)
+            )
+            self._book_panel.gestures_changed.connect(self._set_book_gestures)
+            self._hud_cam_stack.addWidget(self._book_panel)
+        self._book_panel.gestures.setChecked(False)
+        self._book_panel.show_pages(subject, pages)
+        self._hud_cam_stack.setCurrentWidget(self._book_panel)
+
+    def _stop_gestures_outside_book(self, _index):
+        book = getattr(self, "_book_panel", None)
+        if book is not None and self._hud_cam_stack.currentWidget() is not book:
+            book.gestures.setChecked(False)
+
+    def _set_book_gestures(self, enabled):
+        self._gesture_generation += 1
+        if not enabled:
+            self._gesture_stop.set()
+            self._book_panel.status.clear()
+            return
+        if self._gesture_thread is not None and self._gesture_thread.is_alive():
+            self._book_panel.gestures.setChecked(False)
+            self._book_panel.status.setText("Kamera kapanıyor. Bir an sonra tekrar dene.")
+            return
+        generation = self._gesture_generation
+        self._gesture_stop = threading.Event()
+        self._book_panel.status.setText("Kamera açık · Elini sola kaydır: ileri, sağa kaydır: geri.")
+        self._gesture_thread = threading.Thread(
+            target=self._book_gesture_loop, args=(generation, self._gesture_stop),
+            daemon=True, name="jarvis-book-gestures",
+        )
+        try:
+            self._gesture_thread.start()
+        except RuntimeError:
+            self._gesture_finished(generation, "Kamera başlatılamadı.")
+
+    def _book_gesture_loop(self, generation, stop):
+        camera = None
+        error = ""
+        try:
+            import cv2
+            from actions.screen_processor import _cv2_backend, _get_camera_index
+            from core.page_gesture import PageSwipe
+
+            camera = cv2.VideoCapture(_get_camera_index(), _cv2_backend())
+            if not camera.isOpened():
+                raise RuntimeError("camera unavailable")
+            detector = PageSwipe()
+            while not stop.wait(.05):
+                ok, frame = camera.read()
+                if not ok:
+                    raise RuntimeError("no frame")
+                direction = detector.feed(frame)
+                if direction and not stop.is_set():
+                    self._page_gesture_sig.emit(generation, direction)
+        except Exception:
+            error = "El hareketi için kamera açılamadı. Kamera iznini kontrol et."
+        finally:
+            if camera is not None:
+                camera.release()
+            self._gesture_finished_sig.emit(generation, error)
+
+    def _turn_book_by_gesture(self, generation, direction):
+        if generation == self._gesture_generation and self._book_panel.gestures.isChecked():
+            self._book_panel.turn(direction)
+
+    def _gesture_finished(self, generation, error):
+        if generation == self._gesture_generation:
+            self._book_panel.gestures.setChecked(False)
+            self._book_panel.status.setText(error)
 
     # --- Video in the HUD area ---------------------------------------------
     #
@@ -3249,6 +3388,9 @@ class MainWindow(QMainWindow):
         from core.camera_scan import is_scan_command
         from core.social_sites import site_for_command
 
+        if txt.rstrip(".!?").casefold() in {"kitabı araştır", "bu kitabı araştır", "kitabı yansıt"}:
+            self._research_scan("", True)
+            return
         if is_scan_command(txt):
             self._start_camera_scan()
             return

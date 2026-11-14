@@ -17,7 +17,7 @@ from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 import zipfile
 
-REPOSITORY = 'fatmakahraman304-hash/Mark-LVII'
+REPOSITORY = 'fatmakahraman304-hash/JARV-S'
 ROOT = Path(__file__).resolve().parents[1]
 LIMIT = 150 * 1024 * 1024
 
