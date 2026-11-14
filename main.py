@@ -1002,6 +1002,13 @@ class JarvisLive:
         )
 
     def _routine_builtin(self, name: str, options: dict) -> None:
+        if name in ("night_review", "night_briefing"):
+            from plugins import night_shift
+            if name == "night_review":
+                night_shift.build_report(options)
+            else:
+                self.ui.write_log("SYS: " + night_shift.show_report(self.ui))
+            return
         loop = getattr(self, "_loop", None)
         if not loop or not self.session:
             raise RuntimeError("the assistant is not connected")

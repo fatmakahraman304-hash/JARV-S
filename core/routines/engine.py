@@ -362,7 +362,7 @@ class RoutineEngine:
         if late > self.grace(r):
             self._advance(r["id"], dt, note=f"missed by {late / 60:.0f} min")
             return
-        if r["kind"] != "task" and not ready:
+        if r["kind"] != "task" and r.get("builtin") not in ("night_review", "night_briefing") and not ready:
             return                                   # wait for the assistant, within grace
         self._fire(r)
         self._advance(r["id"], dt)

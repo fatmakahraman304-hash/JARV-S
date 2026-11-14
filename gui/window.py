@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
     _route_choices_sig = pyqtSignal(object)
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
+    _prototype_sig = pyqtSignal(str)
     _social_sig = pyqtSignal(str)
     _osiris_sig     = pyqtSignal(str)        # map URL — worker thread -> Qt UI thread
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
@@ -410,6 +411,7 @@ class MainWindow(QMainWindow):
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
         self._osiris_sig.connect(self._open_osiris)
+        self._prototype_sig.connect(self._open_prototype)
         self._social_sig.connect(self._open_social)
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
@@ -457,6 +459,17 @@ class MainWindow(QMainWindow):
         sc_intr.activated.connect(self._do_interrupt)
         sc_world = QShortcut(QKeySequence("Ctrl+Shift+O"), self)
         sc_world.activated.connect(self._open_default_osiris)
+
+    def _open_prototype(self, text: str) -> None:
+        from gui.prototype_panel import PrototypePanel
+
+        panel = getattr(self, "_prototype_panel", None)
+        if panel is None:
+            panel = self._prototype_panel = PrototypePanel(self._hud_cam_stack)
+            panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentWidget(self.hud))
+            self._hud_cam_stack.addWidget(panel)
+        self._hud_cam_stack.setCurrentWidget(panel)
+        panel.show_html(text)
 
     def _open_social(self, site: str) -> None:
         from core.social_sites import SITES

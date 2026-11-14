@@ -81,24 +81,40 @@ def main():
     print("OSIRIS log:", log_path, flush=True)
     with log_path.open("a", encoding="utf-8") as log:
         try:
-            server = subprocess.Popen([node, str(next_bin), "start",
+            def start_server():
+                return subprocess.Popen([node, str(next_bin), "start",
                                        "--hostname", "127.0.0.1", "--port", str(args.port)],
                                       cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT)
+            server = start_server()
             wait_ready(server, url + "jarvis-bridge-health.json")
             print("Local OSIRIS ready:", url, flush=True)
             if args.check_only:
                 return
             jarvis = subprocess.Popen([sys.executable, "main.py"], cwd=project, env=env)
-            warned = False
+            recovery_attempts = 0
+            next_recovery = 0.0
+            recovery_exhausted = False
             while True:
                 code = jarvis.poll()
                 if code == 75:
                     jarvis = subprocess.Popen([sys.executable, "main.py"], cwd=project, env=env)
                 elif code is not None:
                     break
-                if server.poll() is not None and not warned:
-                    print("OSIRIS stopped. JARVIS remains running; map requests may fail.", flush=True)
-                    warned = True
+                if server.poll() is not None and time.monotonic() >= next_recovery:
+                    if recovery_attempts < 3:
+                        recovery_attempts += 1
+                        print(f"OSIRIS exited with code {server.returncode}; retry {recovery_attempts}/3.", file=log, flush=True)
+                        try:
+                            server = start_server()
+                            wait_ready(server, url + "jarvis-bridge-health.json", timeout=15)
+                            print("OSIRIS restarted and passed the readiness check.", file=log, flush=True)
+                        except (OSError, RuntimeError) as exc:
+                            print(f"OSIRIS recovery failed: {exc}", file=log, flush=True)
+                            stop_owned(server)
+                        next_recovery = time.monotonic() + 5 * recovery_attempts
+                    elif not recovery_exhausted:
+                        print("OSIRIS recovery exhausted. See:", log_path, flush=True)
+                        recovery_exhausted = True
                 time.sleep(.5)
         finally:
             stop_owned(jarvis)

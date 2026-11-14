@@ -275,6 +275,10 @@ class JarvisUI:
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])
 
+    def show_prototype(self, html: str) -> None:
+        """Queue an offline HTML preview on the UI thread."""
+        self._win._prototype_sig.emit(html)
+
     def show_social(self, site: str) -> None:
         """Queue an official social website in the center panel."""
         self._win._social_sig.emit(site)
