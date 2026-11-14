@@ -4,20 +4,29 @@
 # first experience — so nothing here needs to be committed, and some of it must
 # never be.
 
-# ── Secrets. Committing any of these publishes them. ──────────────────────────
-config/api_keys.json          # your Gemini API key, plus per-plugin credentials
-config/certs/                 # the dashboard's TLS private key and certificate
-config/whatsapp_web/          # a LINKED WhatsApp session — committing it hands
-                              # somebody your WhatsApp account, not just a key
-**/token*.json                # Google OAuth tokens (Gmail / Calendar plugins)
-**/client_secret*.json        # Google OAuth client secrets
+# Local credentials and account state
+/config/api_keys.json
+/config/api_keys.json.*
+/config/certs/
+/config/whatsapp_web/
+**/token*.json
+**/client_secret*.json
 *credentials*.json
 .env
 .env.*
 
-# ── Personal data the assistant accumulates about you ─────────────────────────
-memory/long_term.json
+# Personal data and generated reports
+/memory/long_term.json
+/memory/long_term.json.tmp
+/memory/routines.json
+/memory/routines.json.tmp
+/memory/tasks/
 memory/*.db
+memory/*.db-*
+/config/night_shift_report.*
+/reports/
+/uploads/
+/.jarvis_backup/
 
 # ── Python build noise ────────────────────────────────────────────────────────
 __pycache__/

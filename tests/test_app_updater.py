@@ -81,6 +81,14 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(config.read_text(), 'private')
         self.assertNotIn('memory/long_term.json', files)
 
+    def test_zip_updates_gitignore_but_leaves_runtime_files(self):
+        runtime = {'uploads/photo.jpg': b'photo', 'reports/report.md': b'report',
+                   'memory/tasks/scratch.py': b'local script'}
+        files = u._archive(self.archive({**runtime, '.gitignore': b'/uploads/\n'}))
+        self.assertTrue(runtime.keys().isdisjoint(files))
+        u._apply_zip(self.root, files, self.sha, 'main')
+        self.assertEqual((self.root / '.gitignore').read_bytes(), b'/uploads/\n')
+
     def test_path_traversal_rejected(self):
         with self.assertRaises(RuntimeError):
             u._archive(self.archive({'../../outside': b'bad'}))

@@ -974,7 +974,7 @@ def test_panel_settings_survive():
     except Exception as e:
         check("PyQt6 available", False, str(e))
         return
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication(["jarvis-providers-test"])
 
     import ui as UI
     from memory.config_manager import (get_pipeline, get_provider_config,
@@ -983,14 +983,13 @@ def test_panel_settings_survive():
                                        save_provider_mode,
                                        save_sidecar_provider)
 
-    # The test writes the real config and puts it back. A fresh install has
-    # none yet: then the file it made is removed again afterwards.
-    cfg_file = Path(__file__).resolve().parent.parent / "config" / "api_keys.json"
-    had_config = cfg_file.exists()
-    restore = json.loads(cfg_file.read_text(encoding="utf-8")).get("providers") \
-        if had_config else None
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    from memory import config_manager
 
-    try:
+    with TemporaryDirectory() as directory, patch.object(
+        config_manager, "CONFIG_DIR", Path(directory)
+    ), patch.object(config_manager, "CONFIG_FILE", Path(directory) / "api_keys.json"):
         save_provider_mode("gemini")
         save_pipeline(stt="", llm="", tts="")
         save_sidecar_provider("")
@@ -1067,11 +1066,7 @@ def test_panel_settings_survive():
         combos = ov2.findChildren(QComboBox)
         check(f"all {len(combos)} boxes ignore the wheel unless focused",
               combos and all(isinstance(c, UI._ScrollSafeCombo) for c in combos))
-    finally:
-        from memory.config_manager import _patch_config
-        _patch_config(providers=restore or {})
-        if not had_config:
-            cfg_file.unlink(missing_ok=True)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -73,7 +73,7 @@ def main() -> None:
 
     # requirements.txt filters OS-specific extras by itself via pip markers.
     _run("Installing Python dependencies (OS-specific extras auto-filtered)…",
-         [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+         [sys.executable, "-m", "pip", "install", "-r", str(HERE / "requirements.txt")])
 
     # Chromium covers Chrome/Edge/Opera/Brave/Vivaldi; Firefox for Firefox.
     # (Safari automation additionally needs: python -m playwright install webkit)
@@ -107,6 +107,7 @@ def main() -> None:
         print(
             "\nℹ️  Linux note — a few voice-controlled OS actions shell out to "
             "native tools. Install the ones you'll use via your package manager:\n"
+            "    • microphone  → libportaudio2 (Debian / Ubuntu)\n"
             "    • volume      → pulseaudio-utils   (pactl)\n"
             "    • brightness  → brightnessctl\n"
             "    • reminders   → systemd (systemd-run) or 'at'\n"

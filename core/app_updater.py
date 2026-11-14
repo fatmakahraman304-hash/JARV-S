@@ -65,12 +65,14 @@ def _hash(data):
 
 
 def _protected(name):
+    if name == '.gitignore':
+        return False
     p = PurePosixPath(name)
     return (any(part.startswith('.') for part in p.parts)
-            or p.parts[0] in {'venv', 'env', 'ENV', 'logs', 'downloads', 'screenshots', '__pycache__'}
+            or p.parts[0] in {'venv', 'env', 'ENV', 'logs', 'downloads', 'screenshots', '__pycache__', 'uploads', 'reports'}
             or (p.parts[0] == 'config' and name not in {'config/__init__.py', 'config/jarvis.ico'})
             or p.suffix.lower() in {'.db', '.log', '.pyc'}
-            or (p.parts[0] == 'memory' and p.suffix != '.py')
+            or (p.parts[0] == 'memory' and (p.suffix != '.py' or p.parts[1:2] == ('tasks',)))
             or any(x in p.name.lower() for x in ('token', 'credential', 'client_secret')))
 
 
@@ -112,6 +114,8 @@ def _apply_zip(root, files, sha, branch):
     old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
     previous = old.get('files', {})
     for name, digest in previous.items():
+        if _protected(name):
+            continue
         path = _target(root, name)
         if path.exists() and _hash(path.read_bytes()) != digest:
             raise RuntimeError(f'Yerel değişiklik korunuyor: {name}. Güncelleme uygulanmadı.')

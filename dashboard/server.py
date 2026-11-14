@@ -500,43 +500,46 @@ def _ensure_network_access(*ports: int) -> None:
                 pass
         return False
 
-    try:  # ufw
-        r = subprocess.run(["ufw", "status"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
-        if "active" in r.stdout.lower():
+    if not ports:
+        return
+
+    def _check(command):
+        try:
+            return subprocess.run(command, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+
+    ufw = _check(["ufw", "status"])
+    if ufw and ufw.returncode == 0 and "status: active" in ufw.stdout.lower():
+        for port in ports:
             if _privileged(["ufw", "allow", f"{port}/tcp"]):
                 print(f"[Dashboard] ufw: port {port} allowed.")
             else:
-                print(f"[Dashboard] Run manually:  sudo ufw allow {port}/tcp")
-            return
-    except FileNotFoundError:
-        pass
+                print(f"[Dashboard] Run manually: sudo ufw allow {port}/tcp")
+        return
 
-    try:  # firewalld
-        r = subprocess.run(
-            ["firewall-cmd", "--state"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
-        )
-        if "running" in r.stdout.lower():
-            ok = (_privileged(["firewall-cmd", "--add-port", f"{port}/tcp", "--permanent"])
-                  and _privileged(["firewall-cmd", "--reload"]))
-            if ok:
-                print(f"[Dashboard] firewalld: port {port} allowed.")
+    firewalld = _check(["firewall-cmd", "--state"])
+    if firewalld and firewalld.returncode == 0 and firewalld.stdout.strip() == "running":
+        opened = []
+        for port in ports:
+            if _privileged(["firewall-cmd", "--add-port", f"{port}/tcp", "--permanent"]):
+                opened.append(port)
             else:
-                print(f"[Dashboard] Run manually:  sudo firewall-cmd --add-port={port}/tcp --permanent && sudo firewall-cmd --reload")
-            return
-    except FileNotFoundError:
-        pass
+                print(f"[Dashboard] firewalld: could not configure port {port}.")
+        if opened and _privileged(["firewall-cmd", "--reload"]):
+            print(f"[Dashboard] firewalld: ports {', '.join(map(str, opened))} allowed.")
+        elif opened:
+            print("[Dashboard] firewalld: configured rules could not be reloaded.")
+        return
 
-    try:  # iptables (not persistent but works until reboot)
-        r = subprocess.run(["iptables", "-L", "INPUT", "-n"], capture_output=True, timeout=5)
-        if r.returncode == 0:
+    iptables = _check(["iptables", "-L", "INPUT", "-n"])
+    if iptables and iptables.returncode == 0:
+        for port in ports:
             if _privileged(["iptables", "-A", "INPUT", "-p", "tcp", "--dport", str(port), "-j", "ACCEPT"]):
                 print(f"[Dashboard] iptables: port {port} opened.")
             else:
-                print(f"[Dashboard] Run manually:  sudo iptables -A INPUT -p tcp --dport {port} -j ACCEPT")
-    except FileNotFoundError:
-        pass  # no iptables means firewall is probably off — nothing to do
-
-
+                print(f"[Dashboard] iptables: could not open port {port}.")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

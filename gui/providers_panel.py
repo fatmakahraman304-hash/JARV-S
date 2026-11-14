@@ -305,7 +305,6 @@ class ProvidersOverlay(_HudOverlay):
         later. Failure is silent: not reaching the endpoint yet is the normal
         state while somebody is still typing an address, and TEST is where a
         real answer about reachability belongs."""
-        import threading
 
         if not pid or pid in self._fetching:
             return
@@ -340,7 +339,6 @@ class ProvidersOverlay(_HudOverlay):
         Piper uses it to download the chosen voice. Generic on purpose: the
         panel asks whether the module has a `prepare`, and providers that do not
         need one are simply skipped — nothing here knows what a voice is."""
-        import threading
 
         try:
             decl = self._registry.get_declaration(pid)
@@ -1104,7 +1102,6 @@ class ProvidersOverlay(_HudOverlay):
     def _install(self, pid: str) -> None:
         """Fetch a provider's optional dependency, off the Qt thread — pip takes
         tens of seconds and a frozen window looks like a crashed one."""
-        import subprocess
         import sys as _sys
         import threading
 

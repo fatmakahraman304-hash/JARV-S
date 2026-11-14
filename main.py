@@ -1,16 +1,18 @@
 import platform as _platform
 import subprocess as _subprocess
 
-# ── Nuclear: force CREATE_NO_WINDOW on EVERY subprocess call on Windows ───────
-# This patches Popen itself, so no per-file flag is needed anywhere.
+# Hide Windows console windows by default while honoring explicit launch modes.
 if _platform.system() == "Windows":
     _OrigPopen = _subprocess.Popen
 
     class _Popen(_OrigPopen):
         def __init__(self, args, **kw):
-            kw["creationflags"] = kw.get("creationflags", 0) | _subprocess.CREATE_NO_WINDOW
-            kw.pop("startupinfo", None)   # drop any stale/shared STARTUPINFO
-            super().__init__(args, **                       kw)
+            flags = kw.get("creationflags", 0)
+            if flags & (_subprocess.CREATE_NEW_CONSOLE | _subprocess.DETACHED_PROCESS):
+                kw["creationflags"] = flags & ~_subprocess.CREATE_NO_WINDOW
+            else:
+                kw["creationflags"] = flags | _subprocess.CREATE_NO_WINDOW
+            super().__init__(args, **kw)
 
     _subprocess.Popen = _Popen
 
@@ -54,7 +56,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except OSError as exc:
+    if _platform.system() == "Linux" and "PortAudio library not found" in str(exc):
+        raise SystemExit(
+            "JARVIS ses kütüphanesi PortAudio bulunamadı. Linux paket yöneticisinden "
+            "PortAudio’yu kurup yeniden başlatın. Debian/Ubuntu paketi: libportaudio2."
+        ) from exc
+    raise
 import numpy as np
 from core.snap_wake import SnapDetector, is_sleep_command
 from core.voice_commands import is_close_command

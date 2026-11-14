@@ -86,7 +86,6 @@ from gui.providers_panel import (
     ProvidersOverlay,
 )
 
-from PyQt6.QtWidgets import QGridLayout
 
 from gui.style import DISPLAY_CSS, btn_css, hud_font, px_font, scroll_css
 from gui.location_map import LocationPanel
@@ -312,52 +311,14 @@ class MainWindow(QMainWindow):
         )
         _vid_v.addWidget(self._video_widget, stretch=1)
 
-        if HAVE_VIDEO:
-            self._video_item = QGraphicsVideoItem()
-            self._video_scene.addItem(self._video_item)
-
-            self._video_audio = QAudioOutput()
-            self._video_audio.setMuted(True)
-            self._video_player = QMediaPlayer()
-            self._video_player.setVideoOutput(self._video_item)
-            # Keep the picture filling the view as the window is resized.
-            self._video_item.nativeSizeChanged.connect(self._fit_video)
-            self._video_player.setAudioOutput(self._video_audio)
-            self._video_player.errorOccurred.connect(self._on_video_error)
-            # Where the video is, kept on the Qt thread so video_state() can be
-            # read from any thread without touching the player.
-            self._video_player.positionChanged.connect(self._on_video_position)
-            self._video_player.durationChanged.connect(self._on_video_duration)
-            self._video_player.playbackStateChanged.connect(self._on_video_playback)
-
-            # A SECOND player, for sound that arrives separately.
-            #
-            # YouTube no longer serves a single stream carrying both picture and
-            # sound — not for new uploads and not for old ones; checked against
-            # three videos including the oldest on the site, and every one of
-            # them offered zero combined formats. Picture and sound are two
-            # URLs, so they are two players, started together and nudged back
-            # into line by the timer below.
-            #
-            # A local file or a direct video URL still uses the first player
-            # alone: one stream, one player, nothing to synchronise.
-            self._video_sound = QMediaPlayer()
-            self._video_sound_out = QAudioOutput()
-            self._video_sound_out.setMuted(True)
-            self._video_sound.setAudioOutput(self._video_sound_out)
-
-            self._video_sync = QTimer(self)
-            self._video_sync.setInterval(1000)
-            self._video_sync.timeout.connect(self._sync_video_sound)
-        else:
-            # Pictures still work; only the moving ones are missing, and the
-            # open path says so when one is actually asked for.
-            self._video_item = None
-            self._video_player = None
-            self._video_audio = None
-            self._video_sound = None
-            self._video_sound_out = None
-            self._video_sync = None
+        # Initializing an audio backend can fail on machines without a sound
+        # server. Defer it until the first video; still images need no backend.
+        self._video_item = None
+        self._video_player = None
+        self._video_audio = None
+        self._video_sound = None
+        self._video_sound_out = None
+        self._video_sync = None
 
         # Stack: 0 = animated HUD, 1 = live camera, 2 = video
         self._hud_cam_stack = QStackedWidget()
@@ -616,12 +577,52 @@ class MainWindow(QMainWindow):
     # Everything below runs on the Qt thread. Plugins and the assistant reach it
     # through the signals above, the same way every other panel is driven, so a
     # background thread never touches a widget.
+    def _init_video_players(self) -> None:
+        self._video_item = QGraphicsVideoItem()
+        self._video_scene.addItem(self._video_item)
+
+        self._video_audio = QAudioOutput()
+        self._video_audio.setMuted(True)
+        self._video_player = QMediaPlayer()
+        self._video_player.setVideoOutput(self._video_item)
+        # Keep the picture filling the view as the window is resized.
+        self._video_item.nativeSizeChanged.connect(self._fit_video)
+        self._video_player.setAudioOutput(self._video_audio)
+        self._video_player.errorOccurred.connect(self._on_video_error)
+        # Where the video is, kept on the Qt thread so video_state() can be
+        # read from any thread without touching the player.
+        self._video_player.positionChanged.connect(self._on_video_position)
+        self._video_player.durationChanged.connect(self._on_video_duration)
+        self._video_player.playbackStateChanged.connect(self._on_video_playback)
+
+        # A SECOND player, for sound that arrives separately.
+        #
+        # YouTube no longer serves a single stream carrying both picture and
+        # sound — not for new uploads and not for old ones; checked against
+        # three videos including the oldest on the site, and every one of
+        # them offered zero combined formats. Picture and sound are two
+        # URLs, so they are two players, started together and nudged back
+        # into line by the timer below.
+        #
+        # A local file or a direct video URL still uses the first player
+        # alone: one stream, one player, nothing to synchronise.
+        self._video_sound = QMediaPlayer()
+        self._video_sound_out = QAudioOutput()
+        self._video_sound_out.setMuted(True)
+        self._video_sound.setAudioOutput(self._video_sound_out)
+
+        self._video_sync = QTimer(self)
+        self._video_sync.setInterval(1000)
+        self._video_sync.timeout.connect(self._sync_video_sound)
+
     def _on_video_open(self, source: str, title: str, muted: bool,
                        audio_source: str = "") -> None:
-        if not HAVE_VIDEO or not self._video_player:
+        if not HAVE_VIDEO:
             self._log.append_log("SYS: Video playback is not available in this Qt "
                            "install.")
             return
+        if self._video_player is None:
+            self._init_video_players()
         # A video and the live camera cannot share the centre of the HUD.
         self._cam_stop.set()
 
