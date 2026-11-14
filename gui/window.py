@@ -1877,22 +1877,6 @@ class MainWindow(QMainWindow):
             self._wake_btns_sig.emit()
         threading.Thread(target=work, daemon=True, name="wake-state-warm").start()
 
-    def _offer_deepseek_setup(self):
-        from memory.config_manager import get_deepseek_coding_keys
-
-        if not get_deepseek_coding_keys():
-            self._open_deepseek_setup()
-
-    def _open_deepseek_setup(self):
-        from gui.deepseek_setup import DeepSeekSetup
-
-        dialog = getattr(self, "_deepseek_setup", None)
-        if dialog is None:
-            dialog = self._deepseek_setup = DeepSeekSetup(self)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
-
     def _open_settings_page(self):
         from gui.settings_page import SettingsPage
         self._drawer_btn.setChecked(False)

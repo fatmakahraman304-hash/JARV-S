@@ -370,31 +370,6 @@ def update_config(**fields) -> None:
     _patch_config(**fields)
 
 
-def _normalize_deepseek_keys(values) -> tuple[str, ...]:
-    if not isinstance(values, (list, tuple)) or len(values) != 3:
-        return ()
-    if not all(isinstance(value, str) for value in values):
-        return ()
-    keys = tuple(value.strip() for value in values)
-    if len(set(keys)) != 3 or any(
-        not key or len(key) > 512 or any(not 33 <= ord(char) <= 126 for char in key)
-        for key in keys
-    ):
-        return ()
-    return keys
-
-
-def get_deepseek_coding_keys() -> tuple[str, ...]:
-    return _normalize_deepseek_keys(load_api_keys().get("deepseek_coding_keys"))
-
-
-def save_deepseek_coding_keys(values) -> None:
-    keys = _normalize_deepseek_keys(values)
-    if not keys:
-        raise ValueError("Üç farklı ve boş olmayan API anahtarı gir.")
-    _patch_config(deepseek_coding_keys=list(keys))
-
-
 def get_input_device() -> str:
     """Microphone device name, or '' for the system default."""
     return (load_api_keys().get("input_device", "") or "").strip()

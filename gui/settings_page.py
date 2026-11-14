@@ -199,7 +199,6 @@ class SettingsPage(QDialog):
         action(look, 'Merkez görünümü', 'CORE ile animasyonlu yüz arasında geçiş yap.', owner._toggle_hud_style)
         brain = page('Zekâ ve hafıza', 'Modellerini ve asistanın hatırladıklarını yönet.')
         action(brain, 'Motor ve sağlayıcılar', 'Yapay zekâ modelleri ve bağlantı ayarları.', owner._open_providers)
-        action(brain, 'DeepSeek kodlama', 'Kod değişikliklerinde kullanılan üç API anahtarını değiştir.', owner._open_deepseek_setup)
         action(brain, 'Hafıza', 'Kaydedilmiş bilgileri görüntüle ve düzenle.', owner._open_memory_panel)
         extras = page('Bağlantılar', 'Ek yetenekler ve uzaktan erişim.')
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
