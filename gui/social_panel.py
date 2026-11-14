@@ -1,11 +1,13 @@
 """On-demand views of the official websites, inside the central HUD."""
 
+from PyQt6 import sip
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
 from core.social_sites import SITES
 from gui.style import btn_css
+from gui.theme import C
 
 try:
     from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
@@ -21,6 +23,10 @@ def permitted_url(url, site):
         and url.port(443) == 443
         and not url.userInfo()
     )
+
+
+def open_in_browser(site):
+    return QDesktopServices.openUrl(QUrl(SITES[site][1]))
 
 
 if QWebEngineView is not None:
@@ -42,25 +48,41 @@ if QWebEngineView is not None:
 
         def _open_here(self, request):
             url = request.requestedUrl()
-            if request.isUserInitiated() and permitted_url(url, self.site):
+            if not request.isUserInitiated():
+                return
+            if permitted_url(url, self.site):
                 self.setUrl(url)
+            else:
+                self.blocked.emit()
 
 
 class SocialPanel(QWidget):
     back_requested = pyqtSignal()
+    site_requested = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._views = {}
-        self._buttons = {}
+        QApplication.instance().aboutToQuit.connect(self._release_profiles)
         self._site = ""
         layout = QVBoxLayout(self)
         row = QHBoxLayout()
+        self._selector = QComboBox()
+        self._selector.setAccessibleName("Platform seç")
+        self._selector.setMinimumHeight(32)
+        self._selector.setMinimumWidth(125)
+        self._selector.setStyleSheet(
+            f"QComboBox {{ color: {C.TEXT}; background: {C.PANEL2}; "
+            f"border: 1px solid {C.BORDER}; border-radius: 8px; padding-left: 10px; }} "
+            f"QAbstractItemView {{ color: {C.TEXT}; background: {C.PANEL2}; "
+            f"selection-background-color: {C.BORDER}; }}"
+        )
         for key, (label, _, _) in SITES.items():
-            button = self._button(label, lambda checked=False, site=key: self.open_site(site))
-            self._buttons[key] = button
-            row.addWidget(button)
+            self._selector.addItem(label, key)
+        self._selector.activated.connect(self._select_site)
+        row.addWidget(self._selector)
         row.addStretch()
+        row.addWidget(self._button("Tarayıcıda aç", self._open_external))
         self._retry = self._button("Yenile", self._reload)
         row.addWidget(self._retry)
         row.addWidget(self._button("CORE’a dön", self.back_requested.emit))
@@ -69,9 +91,6 @@ class SocialPanel(QWidget):
         self._status.setWordWrap(True)
         self._status.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self._status)
-        self._browser = self._button("Tarayıcıda aç", self._open_external)
-        self._browser.hide()
-        layout.addWidget(self._browser, alignment=Qt.AlignmentFlag.AlignLeft)
         self._stack = QStackedWidget(self)
         layout.addWidget(self._stack, 1)
 
@@ -83,45 +102,53 @@ class SocialPanel(QWidget):
         button.clicked.connect(action)
         return button
 
+    def _select_site(self, index):
+        site = self._selector.itemData(index)
+        self._selector.setCurrentIndex(self._selector.findData(self._site))
+        self.site_requested.emit(site)
+
     def open_site(self, site):
-        label, address, _ = SITES[site]
+        _, address, _ = SITES[site]
         self._site = site
-        for key, button in self._buttons.items():
-            button.setStyleSheet(btn_css("primary" if key == site else "dim", align="center"))
+        self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
         if QWebEngineView is None:
-            self._status.setText("Gömülü web görünümü eksik. JARVIS kurulumunu yeniden çalıştır.")
-            self._browser.show()
+            self._status.setText("Gömülü web görünümü eksik. Tarayıcıda açabilirsin.")
+            self._status.show()
             return
         if site not in self._views:
             view = QWebEngineView(self._stack)
-            # Separate site storage, alive until the application closes.
+            # Keep the existing storage name so previous sign-ins still work.
             profile = QWebEngineProfile("jarvis-social-" + site, QApplication.instance())
+            profile.setPersistentCookiesPolicy(
+                QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
+            )
             page = SocialPage(profile, view, site)
             view.setPage(page)
             self._stack.addWidget(view)
-            self._views[site] = [view, "Yükleniyor…", False]
+            self._views[site] = [view, "Yükleniyor…"]
             view.loadStarted.connect(lambda: self._set_status(site, "Yükleniyor…"))
             view.loadFinished.connect(lambda ok: self._loaded(site, ok))
-            page.blocked.connect(lambda: self._set_status(site, "Bağlantı bu hizmetin dışına çıkıyor.", True))
+            page.blocked.connect(lambda: self._set_status(
+                site, "Bu bağlantı gömülü görünümde açılamıyor. Giriş için tarayıcıyı kullanabilirsin."
+            ))
             view.setUrl(QUrl(address))
         self._stack.setCurrentWidget(self._views[site][0])
         self._refresh_status()
 
-    def _set_status(self, site, message, external=False):
-        self._views[site][1:] = [message, external]
+    def _set_status(self, site, message):
+        self._views[site][1] = message
         if site == self._site:
             self._refresh_status()
 
     def _refresh_status(self):
-        _, message, external = self._views[self._site]
+        _, message = self._views[self._site]
         self._status.setText(message)
         self._status.setVisible(bool(message))
-        self._browser.setVisible(external)
 
     def _loaded(self, site, ok):
         message = "" if ok else "Site yüklenemedi. Yenile veya tarayıcıda aç."
-        self._set_status(site, message, not ok)
+        self._set_status(site, message)
 
     def _reload(self):
         entry = self._views.get(self._site)
@@ -132,6 +159,16 @@ class SocialPanel(QWidget):
             else:
                 view.setUrl(QUrl(SITES[self._site][1]))
 
+    def _release_profiles(self):
+        # main.py exits with os._exit after the Qt loop. Destroy disk profiles
+        # while Qt is still alive so Chromium can flush their data.
+        for view, _ in self._views.values():
+            profile = view.page().profile()
+            sip.delete(view)
+            sip.delete(profile)
+        self._views.clear()
+
     def _open_external(self):
-        if self._site:
-            QDesktopServices.openUrl(QUrl(SITES[self._site][1]))
+        if self._site and not open_in_browser(self._site):
+            self._status.setText("Varsayılan tarayıcı açılamadı.")
+            self._status.show()

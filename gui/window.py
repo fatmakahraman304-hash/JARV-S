@@ -477,14 +477,21 @@ class MainWindow(QMainWindow):
 
     def _open_social(self, site: str) -> None:
         from core.social_sites import SITES
+        from memory.config_manager import get_platform_external_browser
 
         if site not in SITES:
             return
-        from gui.social_panel import SocialPanel
+        from gui.social_panel import SocialPanel, open_in_browser
+
+        if get_platform_external_browser(site):
+            if not open_in_browser(site):
+                self._log.append_log("SYS: Varsayılan tarayıcı açılamadı.")
+            return
 
         panel = getattr(self, "_social_panel", None)
         if panel is None:
             panel = self._social_panel = SocialPanel(self._hud_cam_stack)
+            panel.site_requested.connect(self._open_social)
             panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
             self._hud_cam_stack.addWidget(panel)
         self._hud_cam_stack.setCurrentWidget(panel)

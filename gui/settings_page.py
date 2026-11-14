@@ -2,7 +2,8 @@
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QAbstractButton, QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
+    QCheckBox, QLabel, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
+from core.social_sites import SITES
 from gui.theme import C
 from gui.style import px_font
 
@@ -55,7 +56,7 @@ class SettingsPage(QDialog):
         self.setFont(px_font(13))
         self.setStyleSheet(f'''
             QDialog {{ background: {C.BG}; }}
-            QLabel {{ color: {C.TEXT}; background: transparent; }}
+            QLabel, QCheckBox {{ color: {C.TEXT}; background: transparent; }}
             QWidget#page, QWidget#body {{ background: {C.BG}; }}
             QFrame#card {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 12px; }}
             QFrame#nav {{ background: {C.PANEL}; border-radius: 14px; }}
@@ -175,15 +176,16 @@ class SettingsPage(QDialog):
             control.clicked.connect(change)
             self.syncs.append(sync)
             sync()
-        def action(rows, title, detail, callback):
-            row = card(rows, title, detail)
-            button = QPushButton('Aç  →')
+        def action_button(title, callback, text='Aç  →'):
+            button = QPushButton(text)
             button.setAccessibleName(title)
             def open_panel():
                 self.hide()
                 callback()
             button.clicked.connect(open_panel)
-            row.addWidget(button)
+            return button
+        def action(rows, title, detail, callback):
+            card(rows, title, detail).addWidget(action_button(title, callback))
         general = page('Genel', 'Başlangıç ve günlük kullanım tercihlerin.')
         update_row = card(general, 'JARVIS güncellemesi', 'GitHub’daki yeni sürümü kontrol et ve yükle.')
         update_row.addWidget(owner._build_update_button())
@@ -206,6 +208,27 @@ class SettingsPage(QDialog):
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
         action(extras, 'Eklenti ayarları', 'Eklentilere özel seçenekleri düzenle.', owner._open_plugin_settings)
         action(extras, 'Uzaktan kontrol', 'Uzaktan erişim seçeneklerini aç.', owner._open_remote)
+        platforms = page(
+            'Platformlar',
+            'Bir platform seç ve kendi giriş ekranından hesabını aç. Sonraki sesli ve yazılı '
+            'komutlar aynı oturumu kullanır. Gömülü giriş çalışmazsa o platform için '
+            '“Tarayıcıda aç” seçeneğini işaretle ve tarayıcıda giriş yap.',
+        )
+        platform_details = {
+            'whatsapp': 'Telefonunda Bağlı cihazlar bölümünden ekrandaki QR kodu okut.',
+            'github': 'GitHub web hesabını aç. Git ile gönderim için ayrı yetki gerekir.',
+        }
+        for site, (name, _, _) in SITES.items():
+            detail = platform_details.get(site, f'{name} hesabınla resmi sayfada oturum aç.')
+            row = card(platforms, name, detail)
+            external = QCheckBox('Tarayıcıda aç')
+            external.setAccessibleName(f'{name} için varsayılan tarayıcıyı kullan')
+            external.setChecked(cfg.get_platform_external_browser(site))
+            external.toggled.connect(lambda checked, key=site: cfg.save_platform_external_browser(key, checked))
+            row.addWidget(external)
+            row.addWidget(action_button(
+                f'{name} hesabını aç', lambda key=site: owner._open_social(key), 'Giriş / Aç',
+            ))
         navigation.addStretch()
         self.categories[0].setChecked(True)
         self.timer = QTimer(self)
