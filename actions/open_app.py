@@ -266,6 +266,28 @@ def _launch_and_verify(player, spoken: str, launcher_name: str,
             _log(player, f"JARVIS: {appeared.label} is open.")
             return
 
+        # Slow, single-instance apps may reuse a window instead of creating a PID.
+        matches = appidentity.running(spoken)
+        if matches and matches[0].titles and (len(matches) == 1 or matches[0].score > matches[1].score):
+            if appidentity.focus(matches[0]):
+                _log(player, f"JARVIS: {matches[0].label} is open.")
+                return
+
+        # Only retry a known local executable when the first launch was rejected.
+        # Replaying Start Menu or URL handlers could start an unrelated app.
+        executable = shutil.which(launcher_name) if not requested else None
+        if executable and _SYSTEM == "Windows" and executable.lower().endswith(".exe"):
+            try:
+                subprocess.Popen([executable])
+            except OSError as exc:
+                _log(player, f"SYS: {spoken} yeniden başlatılamadı ({type(exc).__name__}).")
+            else:
+                requested = True
+                appeared = appidentity.wait_for_launch(spoken, before, timeout=_LAUNCH_TIMEOUT)
+                if appeared is not None:
+                    _log(player, f"JARVIS: {appeared.label} is open.")
+                    return
+
         if not requested:
             trouble = (f"{spoken} could not be started - nothing on this system "
                        f"answers to that name, so it may not be installed")

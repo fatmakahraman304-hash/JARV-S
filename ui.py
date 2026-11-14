@@ -271,6 +271,10 @@ class JarvisUI:
         """Thread-safe: use the same cleanup path as closing the window."""
         self._win._close_assistant_sig.emit()
 
+    def request_app_update(self) -> None:
+        """Run the normal updater on the UI thread after a verified merge."""
+        self._win._request_update_sig.emit()
+
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])

@@ -96,6 +96,7 @@ from gui.widgets import (ArcLogo, CommandFrame, DataRow, HeaderBar, HoloPanel, I
 
 
 class MainWindow(QMainWindow):
+    _request_update_sig = pyqtSignal()
     _update_progress_sig = pyqtSignal(str)
     _update_done_sig = pyqtSignal(bool, str)
     _close_assistant_sig = pyqtSignal()
@@ -407,6 +408,9 @@ class MainWindow(QMainWindow):
         self._update_metrics()
 
         self._close_assistant_sig.connect(self.close)
+        self._request_update_sig.connect(self._start_update)
+        self._update_progress_sig.connect(self._update_progress)
+        self._update_done_sig.connect(self._update_done)
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
@@ -1370,16 +1374,16 @@ class MainWindow(QMainWindow):
             f"QPushButton:disabled {{ color: {C.PRI_DIM}; }}")
         self._update_btn.setToolTip("GitHub’ı kontrol et ve mevcut dalı güncelle")
         self._update_btn.clicked.connect(self._start_update)
-        self._update_progress_sig.connect(self._update_progress)
-        self._update_done_sig.connect(self._update_done)
+        self._update_btn.setEnabled(not getattr(self, "_updating", False))
         return self._update_btn
 
     def _start_update(self):
         if getattr(self, "_updating", False):
             return
         self._updating = True
-        self._update_btn.setEnabled(False)
-        self._update_btn.setText("KONTROL…")
+        if hasattr(self, "_update_btn"):
+            self._update_btn.setEnabled(False)
+            self._update_btn.setText("KONTROL…")
         def work():
             try:
                 from core.app_updater import update
@@ -1391,18 +1395,21 @@ class MainWindow(QMainWindow):
         threading.Thread(target=work, name="jarvis-update", daemon=False).start()
 
     def _update_progress(self, message):
-        self._update_btn.setText("GÜNCELLENİYOR…")
-        self._update_btn.setToolTip(message)
+        if hasattr(self, "_update_btn"):
+            self._update_btn.setText("GÜNCELLENİYOR…")
+            self._update_btn.setToolTip(message)
         self._log.append_log(f"SYS: {message}")
 
     def _update_done(self, changed, message):
         self._updating = False
-        self._update_btn.setEnabled(not changed)
-        self._update_btn.setText("YENİDEN AÇ" if changed else "GÜNCELLE")
-        self._update_btn.setToolTip(message)
+        if hasattr(self, "_update_btn"):
+            self._update_btn.setEnabled(not changed)
+            self._update_btn.setText("YENİDEN AÇ" if changed else "GÜNCELLE")
+            self._update_btn.setToolTip(message)
         self._log.append_log(f"SYS: {message}")
         if changed:
-            self._update_btn.setText("YENİDEN BAŞLATILIYOR…")
+            if hasattr(self, "_update_btn"):
+                self._update_btn.setText("YENİDEN BAŞLATILIYOR…")
             QTimer.singleShot(1500, self._restart_after_update)
             return
         from PyQt6.QtWidgets import QMessageBox
@@ -1423,7 +1430,8 @@ class MainWindow(QMainWindow):
             QApplication.instance().quit()
         except Exception as exc:
             self._restart_requested = False
-            self._update_btn.setText("ELLE YENİDEN AÇ")
+            if hasattr(self, "_update_btn"):
+                self._update_btn.setText("ELLE YENİDEN AÇ")
             self._log.append_log(
                 f"SYS: Otomatik yeniden başlatma başarısız: {exc}. "
                 "JARVIS'i kapatıp tekrar açın."

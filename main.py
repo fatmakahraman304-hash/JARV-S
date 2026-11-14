@@ -1248,9 +1248,10 @@ class JarvisLive:
             return
 
         command, _, instruction = text.strip().partition(" ")
-        if command.casefold() == "/jarvis-gelistir":
+        if command.casefold() in ("/jarvis-gelistir", "/jarvis-yayinla"):
+            mode = "self_release" if command.casefold() == "/jarvis-yayinla" else "self_edit"
             result = self._plugin_registry.run(
-                "github_develop", {"mode": "self_edit", "instruction": instruction}, player=self.ui
+                "github_develop", {"mode": mode, "instruction": instruction}, player=self.ui
             )
             self.ui.write_log(f"SYS: {result}")
             return

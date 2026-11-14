@@ -1265,7 +1265,7 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
     return problems
 
 
-def _improve_folder(folder: Path, instruction: str, player=None) -> str:
+def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=True) -> str:
     """Plan, back up, write, check, fix, register undo. Runs to completion and
     returns the summary; the caller decides whether that is on a thread."""
     started = time.monotonic()
@@ -1480,7 +1480,8 @@ def _improve_folder(folder: Path, instruction: str, player=None) -> str:
     # and pay for it again on the next request.
     _refresh_brief(folder)
 
-    _open_vscode(folder)
+    if open_editor:
+        _open_vscode(folder)
     took = time.monotonic() - started
     parts = []
     if edited:
