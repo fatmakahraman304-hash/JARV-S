@@ -185,6 +185,8 @@ class SettingsPage(QDialog):
             button.clicked.connect(open_panel)
             row.addWidget(button)
         general = page('Genel', 'Başlangıç ve günlük kullanım tercihlerin.')
+        update_row = card(general, 'JARVIS güncellemesi', 'GitHub’daki yeni sürümü kontrol et ve yükle.')
+        update_row.addWidget(owner._build_update_button())
         switch(general, 'Windows ile başlat', 'Bilgisayar açıldığında JARVIS hazır olsun.', owner._check_autostart, owner._toggle_autostart)
         switch(general, 'Günlük özet', 'Günlük bilgilendirme rutinini etkinleştir.', cfg.get_brief_enabled, owner._toggle_brief)
         action(general, 'Masaüstü kısayolu', 'JARVIS’e masaüstünden hızlı eriş.', owner._create_desktop_shortcut)

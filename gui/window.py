@@ -1328,28 +1328,6 @@ class MainWindow(QMainWindow):
         self._ctrl_btn.setToolTip("Controls — the everyday switches")
         self._ctrl_btn.clicked.connect(self._toggle_controls)
         self._ctrl_btn.hide()
-        customize = QPushButton("ÖZELLEŞTİR")
-        customize.setStyleSheet(btn_css("dim"))
-        customize.setMinimumHeight(36)
-        customize.setFont(px_font(12, QFont.Weight.DemiBold))
-        customize.clicked.connect(self._open_customize)
-        left_lay.addWidget(customize)
-        self._update_btn = QPushButton("GÜNCELLE")
-        self._update_btn.setFont(px_font(10, QFont.Weight.DemiBold, spacing=1))
-        self._update_btn.setMinimumHeight(32)
-        self._update_btn.setStyleSheet(
-            f"QPushButton {{ color: {C.WHITE}; background: {C.BG}; "
-            f"border: 1px solid {C.PRI_DIM}; border-radius: 6px; padding: 0 12px; }}"
-            f"QPushButton:hover {{ border-color: {C.WHITE}; }}"
-            f"QPushButton:disabled {{ color: {C.PRI_DIM}; }}")
-        self._update_btn.setToolTip("GitHub’ı kontrol et ve mevcut dalı güncelle")
-        self._update_btn.clicked.connect(self._start_update)
-        self._update_progress_sig.connect(self._update_progress)
-        self._update_done_sig.connect(self._update_done)
-        left_lay.addWidget(self._update_btn)
-        # The central HUD already displays listening/speaking state.
-        # Do not duplicate that state at the top left.
-
         clock_col = QVBoxLayout()
         clock_col.setSpacing(0)
         self._clock_lbl = QLabel("00:00:00")
@@ -1363,13 +1341,23 @@ class MainWindow(QMainWindow):
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._date_lbl)
         lay.addLayout(clock_col)
-        left_lay.addSpacing(4)
-        self._fs_btn = IconButton("expand", 32)
-        self._fs_btn.setToolTip("Fullscreen  [F11]")
-        self._fs_btn.clicked.connect(self._toggle_fullscreen)
-        left_lay.addWidget(self._fs_btn)
         left_lay.addStretch()
         return w
+
+    def _build_update_button(self):
+        self._update_btn = QPushButton("GÜNCELLE")
+        self._update_btn.setFont(px_font(10, QFont.Weight.DemiBold, spacing=1))
+        self._update_btn.setMinimumHeight(32)
+        self._update_btn.setStyleSheet(
+            f"QPushButton {{ color: {C.WHITE}; background: {C.BG}; "
+            f"border: 1px solid {C.PRI_DIM}; border-radius: 6px; padding: 0 12px; }}"
+            f"QPushButton:hover {{ border-color: {C.WHITE}; }}"
+            f"QPushButton:disabled {{ color: {C.PRI_DIM}; }}")
+        self._update_btn.setToolTip("GitHub’ı kontrol et ve mevcut dalı güncelle")
+        self._update_btn.clicked.connect(self._start_update)
+        self._update_progress_sig.connect(self._update_progress)
+        self._update_done_sig.connect(self._update_done)
+        return self._update_btn
 
     def _start_update(self):
         if getattr(self, "_updating", False):

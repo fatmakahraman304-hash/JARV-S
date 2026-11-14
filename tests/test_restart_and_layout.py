@@ -109,11 +109,11 @@ class LayoutContractTests(unittest.TestCase):
     def test_header_actions_are_left_and_duplicate_state_hidden(self):
         text = self.source
         beginning = text.index("    def _build_header(self)")
-        end = text.index("    def _start_update(self)", beginning)
+        end = text.index("    def _build_update_button(self)", beginning)
         header = text[beginning:end]
-        for item in ("_drawer_btn", "_update_btn", "_fs_btn"):
-            self.assertIn(f"left_lay.addWidget(self.{item})", header)
-        self.assertIn("left_lay.addWidget(customize)", header)
+        self.assertIn("left_lay.addWidget(self._drawer_btn)", header)
+        for item in ("_update_btn", "_fs_btn", "ÖZELLEŞTİR"):
+            self.assertNotIn(item, header)
         self.assertIn("self._ctrl_btn.hide()", header)
         self.assertNotIn("left_lay.addWidget(self._state_chip)", header)
         self.assertIn("lay.addLayout(clock_col)", header)

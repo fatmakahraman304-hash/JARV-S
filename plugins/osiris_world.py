@@ -91,7 +91,7 @@ PLUGIN = {
         "event or aircraft was observed. Turkish requests are supported. "
         "Modes: open, show, hide, focus, preset, reset, clear, locate, zoom, status, view, reset_view, close. "
         "locate/zoom/status/view/reset_view require a patched local OSIRIS instance; results arrive "
-        "asynchronously in the activity log. Never claim completion from a queued response."
+        "asynchronously in the activity log. Online locate searches the normal map instead. Clearly state this fallback, and never claim completion from a queued response."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -222,6 +222,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 control({"kind": "layers", "layers": sorted(parse_layers(params.get("layers"))),
                          "operation": mode})
                 return "OSIRIS komutu kuyruğa alındı; harita sonucu etkinlik günlüğünde doğrulanacak."
+        if mode == "locate" and not local:
+            place = params.get("place")
+            if not isinstance(place, str) or not 1 <= len(place.strip()) <= 120:
+                return "Gitmek istediğin şehri veya yeri belirt."
+            from plugins.normal_map import run as show_on_street_map
+
+            result = show_on_street_map({"place": place.strip()}, player=player)
+            return "Çevrimiçi OSIRIS’te kamera kontrolü yok. " + result
         if mode in ("locate", "zoom", "status", "view", "reset_view"):
             if not local:
                 return "Bu komut köprü kurulmuş yerel OSIRIS gerektirir; çevrimiçi sürümde anlık kontrol yok."

@@ -105,11 +105,19 @@ class OsirisPluginTests(unittest.TestCase):
             plugin.run({"mode": "zoom", "delta": delta}, player=ui)
         self.assertEqual(len(ui.commands), 3)
 
-    def test_remote_control_refused(self):
+    @patch("plugins.normal_map.run", return_value="Yer normal haritada aranıyor.")
+    def test_online_locate_routes_to_normal_map(self, normal_map):
         from unittest.mock import Mock
         ui = Mock()
         reply = plugin.run({"mode": "locate", "place": "Gazimağusa"}, player=ui)
-        self.assertIn("yerel OSIRIS", reply)
+        self.assertIn("normal haritada", reply)
+        normal_map.assert_called_once_with({"place": "Gazimağusa"}, player=ui)
+        ui.control_osiris.assert_not_called()
+
+    def test_online_zoom_needs_local_bridge(self):
+        from unittest.mock import Mock
+        ui = Mock()
+        self.assertIn("yerel OSIRIS", plugin.run({"mode": "zoom"}, player=ui))
         ui.control_osiris.assert_not_called()
 
     @patch("plugins.osiris_world.webbrowser.open", return_value=True)
