@@ -17,6 +17,20 @@ Android 8+ APK using the Gemini REST API. Does not need laptop, Ollama or Qwen.
    permission once, and starts listening while the app is in the foreground.
    No microphone buttons are needed; a text field remains for unsupported TVs.
 
+## Android projector without file picker (v0.4.1)
+
+Some HY-320 firmware variants lack the Android DocumentsUI file picker; the
+normal USB JSON import button then displays an error. As a one-time fallback,
+the setup screen includes a **masked Gemini API key field** and **save**
+action. The user may enter their own Google AI Studio key directly on that
+Android device. On successful import the app encrypts the key in Android
+Keystore, hides the setup controls and automatically loads it at future app
+launches. No vault password is required. The fallback field is only shown
+during initial setup; there are still no buttons for ordinary voice conversation.
+Typing a key on the projector may require its on-screen keyboard or a USB
+keyboard. Never share or photograph the key. If an APK upgrade fails due to a
+different debug signing key, uninstalling the old app erases the saved key.
+
 ## Android voice: v0.4 button-free foreground mode (NOT Gemini Live)
 
 - On app launch, after the first-time Android microphone permission and initial
