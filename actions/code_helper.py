@@ -18,7 +18,8 @@ MAX_BUILD_ATTEMPTS = 3
 # Model choice lives in core/gemini.py, and so does the timeout and the
 # fallback ladder. Writing a model name here is what left this file hanging
 # forever whenever that one alias was unwell.
-from core import gemini
+from core import deepseek_coding, gemini
+from memory.config_manager import get_deepseek_coding_keys
 
 
 def _get_api_key() -> str:
@@ -26,11 +27,15 @@ def _get_api_key() -> str:
         return json.load(f)["gemini_api_key"]
 
 
-def _get_gemini(tier: str = gemini.SMART):
+def _get_gemini(tier: str = gemini.SMART, *, coding: bool = False):
     """Writing and fixing code is the reasoning tier; a 60s deadline because a
     whole file can come back."""
+    keys = get_deepseek_coding_keys() if coding else ()
+
     class _W:
         def generate_content(self, contents):
+            if keys:
+                return deepseek_coding.generate_content(contents, keys)
             resp = gemini.call(contents, tier=tier, timeout_ms=60000)
             if resp is None:
                 raise RuntimeError("every Gemini model on the ladder failed")
@@ -166,7 +171,7 @@ def _detect_intent(description: str, file_path: str, code: str) -> str:
 
 def _write(description: str, language: str, output_path: str, player=None) -> tuple[str, Path]:
     lang  = language or "python"
-    model = _get_gemini()
+    model = _get_gemini(coding=True)
 
     prompt = f"""You are an expert {lang} developer.
 Write clean, working, well-commented {lang} code for the description below.
@@ -189,7 +194,7 @@ Code:"""
 
 
 def _fix_code(code: str, error_output: str, description: str) -> str:
-    model  = _get_gemini()
+    model  = _get_gemini(coding=True)
     prompt = f"""You are an expert debugger.
 The code below failed with the following error. Fix it.
 Return ONLY the corrected code — no explanation, no markdown, no backticks.
@@ -323,7 +328,7 @@ def _edit_action(file_path, instruction, player) -> str:
     if player:
         player.write_log("[Code] Editing file...")
 
-    model  = _get_gemini()
+    model  = _get_gemini(coding=True)
     prompt = f"""You are an expert code editor.
 Apply the following change to the code below.
 Return ONLY the complete updated code — no explanation, no markdown, no backticks.
@@ -398,7 +403,7 @@ def _optimize_action(file_path, code, language, output_path, player) -> str:
         player.write_log("[Code] Optimizing code...")
 
     lang  = language or "python"
-    model = _get_gemini()
+    model = _get_gemini(coding=True)
 
     prompt = f"""You are an expert {lang} developer and code reviewer.
 Optimize the following code for:

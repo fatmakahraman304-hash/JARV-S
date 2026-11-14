@@ -1361,20 +1361,6 @@ class MainWindow(QMainWindow):
         self._fs_btn.setToolTip("Fullscreen  [F11]")
         self._fs_btn.clicked.connect(self._toggle_fullscreen)
         left_lay.addWidget(self._fs_btn)
-        from PyQt6.QtWidgets import QMenu
-        from core.social_sites import SITES
-
-        social = QPushButton("SOSYAL")
-        social.setMinimumHeight(36)
-        social.setFont(px_font(12, QFont.Weight.DemiBold))
-        social.setStyleSheet(btn_css("dim", align="center"))
-        menu = QMenu(social)
-        for key, (label, _, _) in SITES.items():
-            menu.addAction(label).triggered.connect(
-                lambda checked=False, site=key: self._open_social(site)
-            )
-        social.setMenu(menu)
-        left_lay.addWidget(social)
         left_lay.addStretch()
         return w
 
@@ -1890,6 +1876,22 @@ class MainWindow(QMainWindow):
                 pass
             self._wake_btns_sig.emit()
         threading.Thread(target=work, daemon=True, name="wake-state-warm").start()
+
+    def _offer_deepseek_setup(self):
+        from memory.config_manager import get_deepseek_coding_keys
+
+        if not get_deepseek_coding_keys():
+            self._open_deepseek_setup()
+
+    def _open_deepseek_setup(self):
+        from gui.deepseek_setup import DeepSeekSetup
+
+        dialog = getattr(self, "_deepseek_setup", None)
+        if dialog is None:
+            dialog = self._deepseek_setup = DeepSeekSetup(self)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _open_settings_page(self):
         from gui.settings_page import SettingsPage

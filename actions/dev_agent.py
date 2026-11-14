@@ -20,7 +20,8 @@ API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
 PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
-from core import gemini
+from core import deepseek_coding, gemini
+from memory.config_manager import get_deepseek_coding_keys
 
 MODEL_PLANNER    = gemini.SMART
 MODEL_WRITER     = gemini.SMART
@@ -32,6 +33,8 @@ def _get_api_key() -> str:
 
 def _coding_provider() -> str:
     """The service chosen under ENGINE & PROVIDERS → CODING, or ''."""
+    if get_deepseek_coding_keys():
+        return "DeepSeek@DeepSeek V4.1 Flash"
     try:
         from memory.config_manager import get_coding_provider
         return get_coding_provider()
@@ -40,16 +43,14 @@ def _coding_provider() -> str:
 
 
 def _get_model(model_name: str = gemini.SMART):
-    """Planning and writing whole files — the reasoning tier, and a long
-    deadline because the answer is a source file rather than a sentence.
-
-    A coding model chosen in the panel is tried first, with the Gemini ladder
-    behind it. Its deadline is longer still: a reasoning model thinks before
-    it writes, and a whole file from one routinely takes past a minute."""
-    provider = _coding_provider()
+    """Use the dedicated DeepSeek keys for coding when configured."""
+    keys = get_deepseek_coding_keys()
+    provider = "" if keys else _coding_provider()
 
     class _W:
         def generate_content(self, contents):
+            if keys:
+                return deepseek_coding.generate_content(contents, keys)
             resp = gemini.call(contents, tier=model_name,
                                timeout_ms=180000 if provider else 60000,
                                provider=provider)
@@ -475,7 +476,7 @@ def _build_project(
         _log(player, msg)
 
     provider = _coding_provider()
-    log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
+    log(f"Coding with {provider.partition('@')[2] or provider}."
         if provider else "Coding with the background-request models.")
     _update("planning")
     log("Planning project structure...")

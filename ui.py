@@ -23,7 +23,7 @@ import psutil
 # Before any Qt import: Qt's video backend prints signed stream URLs otherwise.
 os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*=false")
 
-from PyQt6.QtCore import QCoreApplication, Qt
+from PyQt6.QtCore import QCoreApplication, Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from gui import hud as _gui_hud
@@ -110,6 +110,7 @@ class JarvisUI:
         self._win = MainWindow(face_path)
         self.root = _RootShim(self._app)
         self._win.show()
+        QTimer.singleShot(0, self._win._offer_deepseek_setup)
 
     @property
     def muted(self) -> bool:
