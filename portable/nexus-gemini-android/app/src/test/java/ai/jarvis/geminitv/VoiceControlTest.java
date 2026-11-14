@@ -16,6 +16,15 @@ public class VoiceControlTest {
         assertEquals(VoiceControl.Command.UNMUTE, VoiceControl.classify("Konuşmaya başla."));
         assertEquals(VoiceControl.Command.UNMUTE, VoiceControl.classify("sesini aç"));
     }
+    @Test public void sleepAndWakeAreSeparateFromMute() {
+        assertEquals(VoiceControl.Command.SLEEP, VoiceControl.classify("Uyu"));
+        assertEquals(VoiceControl.Command.SLEEP, VoiceControl.classify("JARVİS, UYU!"));
+        assertEquals(VoiceControl.Command.SLEEP, VoiceControl.classify("Jarvis uyku modu"));
+        assertEquals(VoiceControl.Command.WAKE, VoiceControl.classify("JARVIS uyan."));
+        assertEquals(VoiceControl.Command.WAKE, VoiceControl.classify("Uyan"));
+        assertEquals(VoiceControl.Command.NONE, VoiceControl.classify("Uyu ne demek?"));
+        assertEquals(VoiceControl.Command.NONE, VoiceControl.classify("Jarvis uyanınca ne olur?"));
+    }
     @Test public void doNotMistakeQuestionsForCommands() {
         assertEquals(VoiceControl.Command.NONE, VoiceControl.classify("Sus ne demek?"));
         assertEquals(VoiceControl.Command.NONE, VoiceControl.classify("Herkes sus dediğinde ne olur?"));

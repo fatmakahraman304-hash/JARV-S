@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /** Exact, conservative Turkish voice commands: never send these to Gemini. */
 public final class VoiceControl {
-    public enum Command { NONE, MUTE, UNMUTE }
+    public enum Command { NONE, MUTE, UNMUTE, SLEEP, WAKE }
     private VoiceControl() {}
 
     public static Command classify(String utterance) {
@@ -13,6 +13,14 @@ public final class VoiceControl {
                 .replaceAll("[^\\p{L}\\p{N}\\s]", " ")
                 .replaceAll("\\s+", " ").trim();
         switch (cmd) {
+            case "uyu":
+            case "jarvis uyu":
+            case "uyku modu":
+            case "jarvis uyku modu":
+                return Command.SLEEP;
+            case "uyan":
+            case "jarvis uyan":
+                return Command.WAKE;
             case "sus":
             case "jarvis sus":
             case "sessiz ol":

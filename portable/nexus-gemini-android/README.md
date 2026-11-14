@@ -31,7 +31,7 @@ Typing a key on the projector may require its on-screen keyboard or a USB
 keyboard. Never share or photograph the key. If an APK upgrade fails due to a
 different debug signing key, uninstalling the old app erases the saved key.
 
-## Android voice: v0.4 button-free foreground mode (NOT Gemini Live)
+## Android voice: v0.4.2 button-free foreground mode
 
 - On app launch, after the first-time Android microphone permission and initial
   API key import, JARVIS greets the user using Android Turkish TTS and starts
@@ -46,11 +46,13 @@ different debug signing key, uninstalling the old app erases the saved key.
 - Recognition is **foreground-only**, explicit Android RECORD_AUDIO permission
   is required, microphone status is shown prominently, and the microphone
   closes when the user exits the app or the activity stops.
-- Android SpeechRecognizer is not designed for sustained, continuous speech
-  recognition. This version restarts short 20-second sessions while visible
-  and stops retrying after repeated service errors. Therefore it cannot
-  guarantee true always-on, zero-gap wake-word recognition, especially on
-  Android 11 projectors with limited microphone/service support.
+- Say **"uyu"** or **"JARVIS uyu"** to stop speech, discard a pending answer
+  and pause conversation. The app keeps recognizing short phrases while visible.
+  Only **"JARVIS uyan"** or **"uyan"** resumes conversation in sleep mode. Both
+  commands also work in the text field with Enter. Speech mute remains separate.
+- Android SpeechRecognizer runs in short foreground sessions. Temporary
+  failures retry with bounded backoff. A missing recognition service or denied
+  microphone permission keeps the text field available.
 - Android speech recognition may send audio to its own remote provider. This
   app sends only transcribed text to Gemini REST. No app-side recording files,
   background service, wake word engine, or Gemini Live audio streaming.
@@ -63,8 +65,7 @@ different debug signing key, uninstalling the old app erases the saved key.
   typed Enter-to-send fallback remains available; buttons are not required.
 - Updating a debug APK may fail because debug build signing keys may differ
   across build environments. If Android reports an incompatible signature,
-  uninstall the old test APK, install v0.4, and re-import the existing USB
-  `jarvis-gemini-key.json`. It has no vault password.
+  uninstall the old test APK, install the new APK and enter the key again. No vault password is required.
 
 ## Security
 **The USB JSON contains the API key in PLAINTEXT.** Anybody who copies it
