@@ -267,6 +267,10 @@ class JarvisUI:
         while not self._win._ready:
             time.sleep(0.1)
 
+    def close_assistant(self) -> None:
+        """Thread-safe: use the same cleanup path as closing the window."""
+        self._win._close_assistant_sig.emit()
+
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])

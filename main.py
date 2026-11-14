@@ -57,6 +57,7 @@ from pathlib import Path
 import sounddevice as sd
 import numpy as np
 from core.snap_wake import SnapDetector, is_sleep_command
+from core.voice_commands import is_close_command
 from google import genai
 from google.genai import types
 from ui import JarvisUI
@@ -70,7 +71,7 @@ from memory.memory_manager import (
 # imported or declared here — they self-describe via a TOOL dict in their own
 # actions/*.py file and are auto-discovered by core.action_loader at startup.
 # Only tools that are tied to live-session state stay inline in this file
-# (screen_process, close_camera, save_memory, manage_monitor, shutdown_jarvis,
+# (screen_process, close_camera, save_memory, manage_monitor,
 # system_status).
 from core import outcome
 from core.action_loader import strip_meta
@@ -454,19 +455,6 @@ TOOL_DECLARATIONS = [
             },
             "required": ["action"],
         },
-    },
-    {
-        "name": "shutdown_jarvis",
-        "description": (
-            "Shuts down the assistant completely. "
-            "Call this when the user expresses intent to end the conversation, "
-            "close the assistant, say goodbye, or stop Jarvis. "
-            "The user can say this in ANY language."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {},
-        }
     },
     {
         "name": "save_memory",
@@ -1240,6 +1228,9 @@ class JarvisLive:
                 getattr(self._dashboard, "_bind_error", "") or "")
 
     def _on_text_command(self, text: str):
+        if is_close_command(text):
+            self.ui.close_assistant()
+            return
         from plugins.github_develop import local_command_mode
 
         if is_sleep_command(text):
@@ -1618,6 +1609,10 @@ class JarvisLive:
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         name = fc.name
+        if name == "shutdown_jarvis":
+            return types.FunctionResponse(
+                id=fc.id, name=name, response={"result": "Use the explicit application close command."}
+            )
         args = dict(fc.args or {})
 
         print(f"[JARVIS] 🔧 {name}  {args}")
@@ -1715,38 +1710,6 @@ class JarvisLive:
                     result = ("Monitoring: " + ", ".join(topics)) if topics else "No topics are being monitored."
                 else:
                     result = "Specify action (add/remove/list) and a topic."
-
-            elif name == "shutdown_jarvis":
-                self.ui.write_log("SYS: Shutdown requested.")
-                async def _do_shutdown():
-                    # The goodbye is said while the summary is written, and the
-                    # process ends once the goodbye has been HEARD — a fixed 1.5 s
-                    # from sending used to cut it off mid-word.
-                    async def _goodbye():
-                        if not self.session:
-                            return
-                        try:
-                            if self._turn_done_event:
-                                self._turn_done_event.clear()
-                            await self.session.send_client_content(
-                                turns={"role": "user", "parts": [{"text": "Say a brief natural goodbye to the user."}]},
-                                turn_complete=True,
-                            )
-                            if self._turn_done_event:
-                                await asyncio.wait_for(self._turn_done_event.wait(), timeout=8.0)
-                            deadline = time.monotonic() + 6.0
-                            while time.monotonic() < deadline:
-                                with self._speaking_lock:
-                                    if not self._is_speaking:
-                                        break
-                                await asyncio.sleep(0.2)
-                            await asyncio.sleep(0.4)
-                        except Exception:
-                            await asyncio.sleep(1.5)
-                    await asyncio.gather(_goodbye(), self._wrap_up())
-                    self._stop_engines()
-                    _exit_process(75 if getattr(ui._win, "_restart_requested", False) else 0)
-                self._keep_task(asyncio.create_task(_do_shutdown()))
 
             elif self._action_registry.has(name):
                 # file_processor: fall back to the currently-uploaded file when none is given
@@ -2043,8 +2006,10 @@ class JarvisLive:
                             self._resume_handle = _sru.new_handle
 
                     sc = response.server_content
-                    if sc and getattr(sc, "interrupted", False) and not self._interrupted:
-                        self.interrupt()
+                    if sc and getattr(sc, "interrupted", False):
+                        if not self._interrupted and (self._is_speaking or not self.audio_in_queue.empty()):
+                            self.interrupt()
+                        out_buf.clear()
 
                     if response.data:
                         if self._interrupted or not self._awake:
@@ -2086,7 +2051,13 @@ class JarvisLive:
                                 self._last_user_speech = time.monotonic()
 
                         if sc.turn_complete:
-                            if self._awake and is_sleep_command(" ".join(in_buf)):
+                            user_text = " ".join(in_buf)
+                            if self._awake and is_close_command(user_text):
+                                in_buf, out_buf = [], []
+                                self.interrupt()
+                                self.ui.close_assistant()
+                                return
+                            if self._awake and is_sleep_command(user_text):
                                 in_buf, out_buf = [], []
                                 self._sleep_until_snap()
                                 self._interrupted = False  # this turn has already ended
