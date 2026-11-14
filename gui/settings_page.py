@@ -229,11 +229,24 @@ class SettingsPage(QDialog):
             row.addWidget(action_button(
                 f'{name} hesabını aç', lambda key=site: owner._open_social(key), 'Giriş / Aç',
             ))
+            if site in {'chatgpt', 'claude', 'github'}:
+                authorize = QPushButton('Yetkilendir')
+                authorize.setAccessibleName(f'{name} için JARVIS’i yetkilendir')
+                authorize.clicked.connect(lambda checked=False, key=site: self._authorize(key))
+                row.addWidget(authorize)
         navigation.addStretch()
         self.categories[0].setChecked(True)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(700)
+
+    def _authorize(self, site):
+        from gui.platform_authorization import AuthorizationDialog
+
+        dialogs = self.__dict__.setdefault('_authorization_dialogs', {})
+        if site not in dialogs:
+            dialogs[site] = AuthorizationDialog(site, self)
+        dialogs[site].open()
 
     def refresh(self):
         if self.isVisible():

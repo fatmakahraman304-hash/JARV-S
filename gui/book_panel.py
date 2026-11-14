@@ -1,7 +1,8 @@
 """A paged, two-column reading surface inside the HUD."""
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PyQt6.QtCore import QUrl, Qt, pyqtSignal
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSpinBox, QTextEdit, QVBoxLayout, QWidget
 
 from gui.style import btn_css, px_font
 from gui.theme import C
@@ -25,6 +26,7 @@ class BookPanel(QWidget):
         spread = QHBoxLayout()
         spread.setSpacing(4)
         self.leaves = []
+        self.sources = []
         for side in range(2):
             leaf = QTextEdit(readOnly=True)
             leaf.setFont(px_font(15))
@@ -34,12 +36,25 @@ class BookPanel(QWidget):
                 f"border: 1px solid {C.BORDER}; border-{border}: 2px solid {C.PRI}; }}"
             )
             self.leaves.append(leaf)
-            spread.addWidget(leaf, 1)
+            page = QVBoxLayout()
+            page.addWidget(leaf, 1)
+            source = QPushButton("Kaynağı aç")
+            source.clicked.connect(lambda checked=False, offset=side: self._open_source(offset))
+            source.setStyleSheet(btn_css("dim", align="center"))
+            self.sources.append(source)
+            page.addWidget(source)
+            spread.addLayout(page, 1)
         layout.addLayout(spread, 1)
         bar = QHBoxLayout()
         self.previous = QPushButton("‹ Önceki")
         self.next = QPushButton("Sonraki ›")
         self.count = QLabel()
+        self.jump = QSpinBox()
+        self.jump.setAccessibleName("Sayfaya git")
+        self.jump.setPrefix("Sayfa ")
+        self.jump.setSingleStep(2)
+        self.jump.setKeyboardTracking(False)
+        self.jump.valueChanged.connect(self._jump_to)
         self.gestures = QPushButton("El hareketi")
         self.gestures.setCheckable(True)
         self.gestures.toggled.connect(self.gestures_changed)
@@ -47,7 +62,7 @@ class BookPanel(QWidget):
         back.clicked.connect(self.back_requested)
         self.previous.clicked.connect(lambda: self.turn(-1))
         self.next.clicked.connect(lambda: self.turn(1))
-        for widget in (self.previous, self.count, self.next, self.gestures, back):
+        for widget in (self.previous, self.jump, self.count, self.next, self.gestures, back):
             if isinstance(widget, QPushButton):
                 widget.setStyleSheet(btn_css("dim", align="center"))
             bar.addWidget(widget)
@@ -70,9 +85,24 @@ class BookPanel(QWidget):
             self.index = target
             self._render()
 
+    def _jump_to(self, page):
+        if 1 <= page <= len(self.pages):
+            target = ((page - 1) // 2) * 2
+            if target != self.index:
+                self.index = target
+                self._render()
+
+    def _open_source(self, offset):
+        index = self.index + offset
+        if index < len(self.pages):
+            url = QUrl(self.pages[index][2])
+            if url.scheme() in {"https", "http"} and url.host() and not url.userInfo():
+                QDesktopServices.openUrl(url)
+
     def _render(self):
         for offset, widget in enumerate(self.leaves):
             index = self.index + offset
+            self.sources[offset].setVisible(index < len(self.pages))
             if index >= len(self.pages):
                 widget.setPlainText("Kaynaklı sonuç bulunamadı." if not self.pages and not offset else "")
                 continue
@@ -82,6 +112,11 @@ class BookPanel(QWidget):
             f"{self.index + 1}–{min(self.index + 2, len(self.pages))} / {len(self.pages)}"
             if self.pages else "0 sayfa"
         )
+        self.jump.blockSignals(True)
+        self.jump.setRange(1, max(1, len(self.pages)))
+        self.jump.setValue(self.index + 1)
+        self.jump.setEnabled(bool(self.pages))
+        self.jump.blockSignals(False)
         self.previous.setEnabled(self.index > 0)
         self.next.setEnabled(self.index + 2 < len(self.pages))
         self.gestures.setEnabled(len(self.pages) > 2)

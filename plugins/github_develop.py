@@ -9,7 +9,12 @@ import time
 import tempfile
 from pathlib import Path
 
-REPO = 'fatmakahraman304-hash/JARV-S'
+from core.platform_authorization import GITHUB_REPOSITORY
+
+REPO = GITHUB_REPOSITORY
+# Use the user's GitHub CLI credential just for this repository and invocation.
+_GH_GIT = ["git", "-c", "credential.https://github.com.helper=",
+           "-c", "credential.https://github.com.helper=!gh auth git-credential"]
 WORK = Path.home() / 'JarvisDevelopment' / 'Mark-LVII'
 _LOCK = threading.Lock()
 PLUGIN = {'name':'github_develop','description':
@@ -149,7 +154,7 @@ def workflow(mode, instruction, files):
         command(['git','add','--',*files])
         command(['git','commit','-m',instruction or 'JARVIS geliştirmesi'])
         head=command(['git','rev-parse','HEAD'])
-        command(['git','push','-u','origin',branch])
+        command([*_GH_GIT, 'push', f'https://github.com/{REPO}.git', branch])
         prs=json.loads(command(['gh','pr','list','--repo',REPO,'--head',branch,'--json','number']))
         if not prs:
             command(['gh','pr','create','--repo',REPO,'--base','main','--head',branch,'--title',instruction[:120] or 'JARVIS geliştirmesi','--body','JARVIS geliştirme alanında hazırlanmış değişiklikler. Python testleri yerel olarak çalıştırıldı; GitHub kontrolleri birleştirmeden önce zorunludur.'])
@@ -211,7 +216,7 @@ def self_release(instruction, player):
         command(["git", "--literal-pathspecs", "add", "--", *files], cwd=folder)
         command(["git", "commit", "-m", "JARVIS: kullanıcı geliştirme isteği"], cwd=folder)
         head = command(["git", "rev-parse", "HEAD"], cwd=folder)
-        command(["git", "push", "origin", branch], cwd=folder)
+        command([*_GH_GIT, "push", remote, branch], cwd=folder)
         pr = command(["gh", "pr", "create", "--repo", REPO, "--base", "main",
                       "--head", branch, "--title", "JARVIS geliştirmesi",
                       "--body", "Kullanıcı isteğiyle oluşturuldu. Yerel Python testleri geçti."],

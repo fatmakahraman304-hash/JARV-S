@@ -585,6 +585,27 @@ def save_provider_config(provider_id: str, values: dict) -> None:
 
 
 @_locked
+def save_authorized_model(provider_id: str, key: str, model: str, base_url: str,
+                          *, coding: bool, background: bool) -> None:
+    """Save verified credentials and their chosen uses in one settings write."""
+    providers = get_providers()
+    credentials = providers.get("creds")
+    if not isinstance(credentials, dict):
+        credentials = {}
+    current = credentials.get(provider_id)
+    current = dict(current) if isinstance(current, dict) else {}
+    current.update(api_key=key, model=model, base_url=base_url)
+    credentials[provider_id] = current
+    providers["creds"] = credentials
+    if coding or providers.get("coding") == provider_id:
+        providers["coding"] = provider_id if coding else ""
+    if background or providers.get("sidecar") == provider_id:
+        providers["sidecar"] = provider_id if background else ""
+        providers["sidecar_first"] = background
+    _patch_config(providers=providers)
+
+
+@_locked
 def save_pipeline(stt: str = None, llm: str = None, tts: str = None) -> None:
     """Set one or more pipeline slots. `None` leaves a slot alone; '' clears it."""
     p = get_providers()
