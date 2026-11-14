@@ -275,6 +275,13 @@ class JarvisUI:
         """Run the normal updater on the UI thread after a verified merge."""
         self._win._request_update_sig.emit()
 
+    def scan_camera(self):
+        """Schedule a one-frame scan on the desktop."""
+        self._win._scan_request_sig.emit()
+
+    def show_camera_scan(self, jpeg: bytes, report: dict):
+        self._win._scan_result_sig.emit(jpeg, report)
+
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])

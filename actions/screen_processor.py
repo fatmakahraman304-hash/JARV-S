@@ -58,9 +58,8 @@ def _load_config() -> dict:
 
 def _save_config_key(key: str, value) -> None:
     try:
-        cfg = _load_config()
-        cfg[key] = value
-        _CONFIG_PATH.write_text(json.dumps(cfg, indent=4), encoding="utf-8")
+        from memory.config_manager import _patch_config
+        _patch_config(**{key: value})
     except Exception as e:
         print(f"[Vision] ⚠️  Could not save config key '{key}': {e}")
 
@@ -163,14 +162,14 @@ def _capture_camera() -> tuple[bytes, str]:
     backend = _cv2_backend()
     cap     = cv2.VideoCapture(index, backend)
 
-    if not cap.isOpened():
-        raise RuntimeError(f"Camera index {index} could not be opened.")
-
-    for _ in range(10):
-        cap.read()
-
-    ret, frame = cap.read()
-    cap.release()
+    try:
+        if not cap.isOpened():
+            raise RuntimeError(f"Camera index {index} could not be opened.")
+        for _ in range(10):
+            cap.read()
+        ret, frame = cap.read()
+    finally:
+        cap.release()
 
     if not ret or frame is None:
         raise RuntimeError("Camera returned no frame.")

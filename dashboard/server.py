@@ -733,6 +733,7 @@ class DashboardServer:
         self._command_queue               = asyncio.Queue()
         self._wake_callback               = None
         self._connect_callback            = None
+        self._scan_callback               = None
         self._pending_keys: dict[str, float] = {}
         self._throttle                    = _Throttle()
         self._device_sessions: dict[str, dict] = {}  # device_token → {session_key}
@@ -744,6 +745,9 @@ class DashboardServer:
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
         self.app                          = self._build_app()
+
+    def set_scan_callback(self, callback):
+        self._scan_callback = callback
 
     # ── one-time key management ───────────────────────────────────────────
 
@@ -1034,6 +1038,7 @@ class DashboardServer:
                     self._wake_callback()
             return JSONResponse({"ok": True})
 
+        from core import camera_photo
         from dashboard import coffee_fortune
 
         fortune_lock = asyncio.Lock()
@@ -1043,7 +1048,7 @@ class DashboardServer:
             if not _auth(req):
                 return JSONResponse({"error": "Oturum sona erdi. QR koduyla yeniden bağlan."}, status_code=401)
             content_type = req.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-            if content_type not in coffee_fortune.PHOTO_TYPES:
+            if content_type not in camera_photo.PHOTO_TYPES:
                 return JSONResponse({"error": "JPEG, PNG veya WebP fotoğrafı seç."}, status_code=415)
             if fortune_lock.locked():
                 return JSONResponse({"error": "Bir fincan yorumlanıyor. Biraz sonra tekrar dene."}, status_code=429)
@@ -1052,11 +1057,11 @@ class DashboardServer:
                     data = bytearray()
                     async with asyncio.timeout(30):
                         async for chunk in req.stream():
-                            if len(data) + len(chunk) > coffee_fortune.MAX_PHOTO_BYTES:
+                            if len(data) + len(chunk) > camera_photo.MAX_PHOTO_BYTES:
                                 return JSONResponse({"error": "Fotoğraf 8 MB sınırını aşıyor."}, status_code=413)
                             data.extend(chunk)
                     result = await asyncio.to_thread(coffee_fortune.read_fortune, bytes(data))
-                except coffee_fortune.InvalidPhoto as exc:
+                except camera_photo.InvalidPhoto as exc:
                     return JSONResponse({"error": str(exc)}, status_code=400)
                 except TimeoutError:
                     return JSONResponse({"error": "Fotoğraf yüklenirken süre doldu."}, status_code=408)
@@ -1066,6 +1071,37 @@ class DashboardServer:
                         status_code=502,
                     )
                 return JSONResponse({"reading": result}, headers={"Cache-Control": "no-store"})
+
+        @app.post("/api/camera-scan")
+        async def scan_camera(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Oturum sona erdi. QR koduyla yeniden bağlan."}, status_code=401)
+            content_type = req.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if content_type not in camera_photo.PHOTO_TYPES:
+                return JSONResponse({"error": "JPEG, PNG veya WebP fotoğrafı seç."}, status_code=415)
+            if self._scan_callback is None:
+                return JSONResponse({"error": "JARVIS masaüstü bağlantısı hazır değil."}, status_code=503)
+
+            from core.camera_scan import analyze, ScanBusy
+
+            data = bytearray()
+            try:
+                async with asyncio.timeout(30):
+                    async for chunk in req.stream():
+                        if len(data) + len(chunk) > camera_photo.MAX_PHOTO_BYTES:
+                            return JSONResponse({"error": "Fotoğraf 8 MB sınırını aşıyor."}, status_code=413)
+                        data.extend(chunk)
+                jpeg, result = await asyncio.to_thread(analyze, bytes(data), "Telefon kamerası")
+            except camera_photo.InvalidPhoto as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+            except ScanBusy as exc:
+                return JSONResponse({"error": str(exc)}, status_code=429)
+            except TimeoutError:
+                return JSONResponse({"error": "Fotoğraf yüklenirken süre doldu."}, status_code=408)
+            if not _auth(req):
+                return JSONResponse({"error": "Oturum sona erdi. QR koduyla yeniden bağlan."}, status_code=401)
+            self._scan_callback(jpeg, result)
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
         @app.post("/api/wake")
         async def wake_ep(req: Request):

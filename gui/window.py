@@ -107,6 +107,8 @@ class MainWindow(QMainWindow):
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
     _prototype_sig = pyqtSignal(str)
+    _scan_request_sig = pyqtSignal()
+    _scan_result_sig = pyqtSignal(bytes, object)
     _social_sig = pyqtSignal(str)
     _osiris_sig     = pyqtSignal(str)        # map URL — worker thread -> Qt UI thread
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
@@ -374,6 +376,8 @@ class MainWindow(QMainWindow):
         self._update_done_sig.connect(self._update_done)
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._scan_request_sig.connect(self._start_camera_scan)
+        self._scan_result_sig.connect(self._show_camera_scan)
         self._content_sig.connect(self._show_content)
         self._osiris_sig.connect(self._open_osiris)
         self._prototype_sig.connect(self._open_prototype)
@@ -512,12 +516,16 @@ class MainWindow(QMainWindow):
     # --- Live camera stream in HUD area ------------------------------------
     def _on_cam_stream(self, start: bool) -> None:
         if start:
+            self._latest_scan_frame = b""
             self._hud_cam_stack.setCurrentIndex(1)
         else:
-            self._hud_cam_stack.setCurrentIndex(0)
+            self._latest_scan_frame = b""
+            if self._hud_cam_stack.currentIndex() == 1:
+                self._hud_cam_stack.setCurrentIndex(0)
             self._cam_live_lbl.clear()
 
     def _on_cam_frame(self, data: bytes) -> None:
+        self._latest_scan_frame = data
         px = QPixmap()
         px.loadFromData(data)
         if not px.isNull():
@@ -571,6 +579,61 @@ class MainWindow(QMainWindow):
 
     def stop_camera_stream(self) -> None:
         self._cam_stop.set()
+
+    def _start_camera_scan(self):
+        if getattr(self, "_desktop_scan_busy", False):
+            self._log.append_log("SYS: Kamera taraması devam ediyor.")
+            return
+        from core.camera_scan import analyze, ScanBusy
+
+        frame = getattr(self, "_latest_scan_frame", b"")
+        camera_open = self._hud_cam_stack.currentIndex() == 1
+        if camera_open and not frame:
+            self._log.append_log("SYS: Kamera henüz görüntü vermedi. Tekrar dene.")
+            return
+        self._desktop_scan_busy = True
+        self._log.append_log("SYS: Kamera görüntüsü analiz ediliyor…")
+
+        def worker():
+            try:
+                data = frame if camera_open else self._capture_scan_frame()
+                jpeg, result = analyze(data, "Bilgisayar kamerası")
+            except ScanBusy as exc:
+                jpeg, result = b"", {"source": "Bilgisayar kamerası", "notice": str(exc)}
+            except Exception:
+                jpeg, result = b"", {
+                    "source": "Bilgisayar kamerası",
+                    "notice": "Kamera görüntüsü alınamadı. Bağlantıyı ve kamera iznini kontrol et.",
+                }
+            finally:
+                self._scan_result_sig.emit(jpeg, result)
+
+        try:
+            threading.Thread(target=worker, daemon=True, name="jarvis-camera-scan").start()
+        except RuntimeError:
+            self._desktop_scan_busy = False
+            self._log.append_log("SYS: Kamera taraması başlatılamadı.")
+
+    @staticmethod
+    def _capture_scan_frame():
+        from actions.screen_processor import _capture_camera
+
+        return _capture_camera()[0]
+
+    def _show_camera_scan(self, jpeg, result):
+        if result["source"] == "Bilgisayar kamerası":
+            self._desktop_scan_busy = False
+        if self._video_on:
+            self._on_video_close()
+        if not hasattr(self, "_scan_panel"):
+            from gui.scan_panel import ScanPanel
+
+            self._scan_panel = ScanPanel(self._hud_cam_stack)
+            self._scan_panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
+            self._hud_cam_stack.addWidget(self._scan_panel)
+        self._cam_stop.set()
+        self._scan_panel.show_scan(jpeg, result)
+        self._hud_cam_stack.setCurrentWidget(self._scan_panel)
 
     # --- Video in the HUD area ---------------------------------------------
     #
@@ -3183,8 +3246,12 @@ class MainWindow(QMainWindow):
         if not txt: return
         self._input.clear()
         self._log.append_log(f"You: {txt}")
+        from core.camera_scan import is_scan_command
         from core.social_sites import site_for_command
 
+        if is_scan_command(txt):
+            self._start_camera_scan()
+            return
         site = site_for_command(txt)
         if site:
             self._open_social(site)

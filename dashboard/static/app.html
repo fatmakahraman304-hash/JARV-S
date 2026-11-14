@@ -131,7 +131,11 @@
     }
     #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
-    .fortune-open { margin: 8px 16px 0; align-self: flex-start; }
+    .camera-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 16px 0; }
+    #scan-preview { width: 100%; max-height: 270px; object-fit: contain; border-radius: 12px; }
+    #scan-result { color: #bcecff; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #scan-video { width: 100%; max-height: 270px; border-radius: 12px; }
+    [hidden] { display: none !important; }
     .fortune-dialog {
       color: var(--text); background: #111827; border: 1px solid var(--border);
       border-radius: 18px; width: min(460px, calc(100% - 32px)); box-sizing: border-box;
@@ -158,7 +162,28 @@
     <div class="spacer"></div>
     <div class="url">__IP__:__PORT__</div>
   </header>
-  <button class="btn fortune-open" type="button" id="fortune-open">☕ Kahve Falı</button>
+  <div class="camera-tools">
+    <button class="btn" type="button" id="scan-open">Kamera Tara</button>
+    <button class="btn" type="button" id="fortune-open">☕ Kahve Falı</button>
+  </div>
+  <dialog class="fortune-dialog" id="scan-dialog" aria-labelledby="scan-title">
+    <div class="fortune-heading">
+      <h2 id="scan-title">Kamera Taraması</h2>
+      <button class="btn" type="button" id="scan-close">Kapat</button>
+    </div>
+    <p>Bir nesneyi, yazıyı veya QR kodunu kadraja al. Seçtiğin kare görsel analiz için model sağlayıcısına gönderilir. Sonuç JARVIS ekranına yansır.</p>
+    <form id="scan-form">
+      <button class="btn" type="button" id="scan-camera" hidden>Kamerayı aç</button>
+      <video id="scan-video" hidden playsinline muted autoplay></video>
+      <button class="btn" type="button" id="scan-capture" hidden>Kareyi çek</button>
+      <label for="scan-photo">Kamerayla çek veya fotoğraf seç</label>
+      <input id="scan-photo" type="file" accept="image/*" capture="environment">
+      <img id="scan-preview" hidden alt="Taranacak kare">
+      <button class="btn btn-send" id="scan-submit" type="submit" disabled>Tara ve yansıt</button>
+    </form>
+    <p id="scan-status" role="status"></p>
+    <div id="scan-result" aria-live="polite"></div>
+  </dialog>
   <dialog class="fortune-dialog" id="fortune-dialog" aria-labelledby="fortune-title">
     <div class="fortune-heading">
       <h2 id="fortune-title">Kahve Falı</h2>
@@ -200,6 +225,134 @@
       return fetch(url, opts);
     }
 
+
+    const scanDialog = document.getElementById('scan-dialog');
+    const scanForm = document.getElementById('scan-form');
+    const scanInput = document.getElementById('scan-photo');
+    const scanPreview = document.getElementById('scan-preview');
+    const scanVideo = document.getElementById('scan-video');
+    const scanCamera = document.getElementById('scan-camera');
+    const scanCapture = document.getElementById('scan-capture');
+    const scanSubmit = document.getElementById('scan-submit');
+    const scanStatus = document.getElementById('scan-status');
+    const scanResult = document.getElementById('scan-result');
+    let scanStream = null;
+    let scanFile = null;
+    let scanUrl = null;
+    let scanSession = 0;
+    let scanSending = false;
+
+    function stopScanCamera() {
+      if (scanStream) scanStream.getTracks().forEach(track => track.stop());
+      scanStream = null;
+      scanVideo.srcObject = null;
+      scanVideo.hidden = true;
+      scanCapture.hidden = true;
+    }
+
+    function setScanPhoto(file) {
+      if (scanUrl) URL.revokeObjectURL(scanUrl);
+      scanFile = file || null;
+      scanUrl = file ? URL.createObjectURL(file) : null;
+      scanPreview.hidden = !scanUrl;
+      if (scanUrl) scanPreview.src = scanUrl;
+      else scanPreview.removeAttribute('src');
+      scanSubmit.disabled = !scanFile || scanSending;
+      scanStatus.textContent = '';
+      scanResult.textContent = '';
+    }
+
+    scanCamera.hidden = !navigator.mediaDevices?.getUserMedia;
+    document.getElementById('scan-open').addEventListener('click', () => scanDialog.showModal());
+    document.getElementById('scan-close').addEventListener('click', () => scanDialog.close());
+    scanDialog.addEventListener('close', () => {
+      scanSession++;
+      stopScanCamera();
+      scanForm.reset();
+      setScanPhoto(null);
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopScanCamera();
+    });
+
+    scanInput.addEventListener('change', () => {
+      stopScanCamera();
+      setScanPhoto(scanInput.files[0]);
+    });
+    scanCamera.addEventListener('click', async () => {
+      if (scanStream) return;
+      const session = scanSession;
+      scanCamera.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }, audio: false,
+        });
+        if (!scanDialog.open || session !== scanSession || document.hidden) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        scanStream = stream;
+        scanVideo.srcObject = stream;
+        scanVideo.hidden = false;
+        scanCapture.hidden = false;
+      } catch {
+        if (session === scanSession) scanStatus.textContent =
+          'Kamera açılamadı. Fotoğraf seçme düğmesiyle çekmeyi dene.';
+      } finally {
+        scanCamera.disabled = false;
+      }
+    });
+    scanCapture.addEventListener('click', () => {
+      if (!scanVideo.videoWidth) return;
+      const session = scanSession;
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 1600 / Math.max(scanVideo.videoWidth, scanVideo.videoHeight));
+      canvas.width = Math.round(scanVideo.videoWidth * scale);
+      canvas.height = Math.round(scanVideo.videoHeight * scale);
+      canvas.getContext('2d').drawImage(scanVideo, 0, 0, canvas.width, canvas.height);
+      stopScanCamera();
+      canvas.toBlob(file => {
+        if (session === scanSession && file) setScanPhoto(file);
+      }, 'image/jpeg', .9);
+    });
+
+    scanForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (scanSending || !scanFile) return;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(scanFile.type) ||
+          scanFile.size > 8 * 1024 * 1024) {
+        scanStatus.textContent = '8 MB veya daha küçük bir JPEG, PNG ya da WebP fotoğrafı kullan.';
+        return;
+      }
+      const session = scanSession;
+      const photo = scanFile;
+      stopScanCamera();
+      scanSending = true;
+      scanSubmit.disabled = scanInput.disabled = scanCamera.disabled = true;
+      scanResult.textContent = '';
+      scanStatus.textContent = 'Görüntü taranıyor…';
+      try {
+        const response = await _authFetch('/api/camera-scan', {
+          method: 'POST', headers: { 'Content-Type': photo.type }, body: photo,
+        });
+        const data = await response.json();
+        if (session !== scanSession) return;
+        if (!response.ok) {
+          scanStatus.textContent = data.error || 'Tarama tamamlanamadı.';
+          return;
+        }
+        scanStatus.textContent = 'Sonuç JARVIS’e gönderildi.';
+        scanResult.textContent = [data.summary, ...data.details,
+          ...(data.qr.length ? ['Okunan QR', ...data.qr] : []), data.notice]
+          .filter(Boolean).join('\n\n');
+      } catch {
+        if (session === scanSession) scanStatus.textContent = 'Bağlantı kesildi. JARVIS açıkken tekrar dene.';
+      } finally {
+        scanSending = false;
+        scanCamera.disabled = scanInput.disabled = false;
+        scanSubmit.disabled = !scanFile;
+      }
+    });
 
     const fortuneDialog = document.getElementById('fortune-dialog');
     const fortuneForm = document.getElementById('fortune-form');
@@ -512,6 +665,13 @@
       if (!txt) return;
       inp.value = '';
       append('user', txt);
+      const scanCommand = txt.replaceAll('İ', 'i').toLowerCase()
+        .replace(/^(jarvis|friday)[, ]+/, '').trim().replace(/[.!?]+$/, '')
+        .replace(/\s+/g, ' ');
+      if (['verileri aktar ve yansıt', 'kamerayı tara', 'kamerayı tara ve yansıt'].includes(scanCommand)) {
+        if (!scanDialog.open) scanDialog.showModal();
+        return;
+      }
       const enc  = await _encrypt(txt);
       const body = enc ? { enc } : { text: txt };
       _authFetch('/api/command', {
