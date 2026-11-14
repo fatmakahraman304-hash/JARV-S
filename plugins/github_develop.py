@@ -12,9 +12,9 @@ REPO = 'fatmakahraman304-hash/Mark-LVII'
 WORK = Path.home() / 'JarvisDevelopment' / 'Mark-LVII'
 _LOCK = threading.Lock()
 PLUGIN = {'name':'github_develop','description':
-    'JARVIS GitHub development workflow. prepare clones the user JARVIS repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside JARVIS. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',
+    'JARVIS GitHub development workflow. prepare clones the user JARVIS repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. self_edit is the entry point when the user asks JARVIS to change itself or add an extension: prepares the isolated repository if needed, then hands off to the code agent. Never use self_edit on other repositories. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside JARVIS. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',
     'parameters':{'type':'OBJECT','properties':{
-        'mode':{'type':'STRING','enum':['prepare','inspect','develop','sync','test','publish','merge']},
+        'mode':{'type':'STRING','enum':['prepare','inspect','develop','self_edit','sync','test','publish','merge']},
         'instruction':{'type':'STRING'},
         'files':{'type':'ARRAY','items':{'type':'STRING'},'description':'Exact changed source/test paths to include; never secrets or personal config.'}},'required':['mode']}}
 
@@ -162,6 +162,51 @@ def workflow(mode, instruction, files):
 def run(parameters, player=None, session_memory=None):
     mode=parameters.get('mode','')
     instruction=str(parameters.get('instruction','')).strip()
+    if mode == "self_edit":
+        if not instruction:
+            return "JARVIS’te yapılacak kod değişikliğini tarif et."
+        if not player:
+            return "Geliştirme ilerlemesi için JARVIS arayüzü gerekli."
+        if not _LOCK.acquire(False):
+            return "Bir GitHub işlemi zaten çalışıyor."
+
+        def prepare_and_edit():
+            try:
+                from actions import dev_agent
+
+                if dev_agent._job_lock.locked():
+                    raise ValueError("Kod geliştirme işi tamamlanınca tekrar deneyin.")
+                if WORK.resolve() == Path(__file__).resolve().parents[1]:
+                    raise ValueError("JARVIS’i normal kurulumdan aç; bu klasör geliştirme kopyası.")
+                if not (WORK / ".git").exists():
+                    workflow("prepare", "", [])
+                branch = command(["git", "branch", "--show-current"])
+                if not branch.startswith("jarvis-dev/"):
+                    raise ValueError("JARVIS değişiklikleri geliştirme dalında hazırlanır.")
+                notes = (
+                    "\n\nWork only in this development checkout. Follow AGENTS.md. "
+                    "For a new JARVIS tool, use the existing Python plugin contract; "
+                    "add a JavaScript helper only if needed and use an explicit, narrow "
+                    "Python entry point. Preserve user settings. Add focused tests for "
+                    "new behavior. Do not publish or change the running installation."
+                )
+                result = dev_agent.dev_agent(
+                    {"mode": "improve", "folder": str(WORK), "description": instruction + notes},
+                    player=player,
+                )
+                player.write_log("GELİŞTİRME: " + result)
+            except Exception as exc:
+                player.write_log("GELİŞTİRME: " + str(exc))
+            finally:
+                _LOCK.release()
+
+        try:
+            threading.Thread(target=prepare_and_edit, daemon=True, name="jarvis-self-edit").start()
+        except Exception:
+            _LOCK.release()
+            raise
+        return "JARVIS kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
+
     if mode=='develop':
         if _LOCK.locked(): return 'GitHub işlemi bitene kadar kod düzenleme beklemeli.'
         if not (WORK/'.git').exists(): return 'Önce geliştirme alanını hazırlayın.'

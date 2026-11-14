@@ -1249,6 +1249,13 @@ class JarvisLive:
                 self.ui.write_log("SYS: Uyku modu için JARVIS’in ses oturumu hazır olmalı.")
             return
 
+        command, _, instruction = text.strip().partition(" ")
+        if command.casefold() == "/jarvis-gelistir":
+            result = self._plugin_registry.run(
+                "github_develop", {"mode": "self_edit", "instruction": instruction}, player=self.ui
+            )
+            self.ui.write_log(f"SYS: {result}")
+            return
         mode = local_command_mode(text)
         if mode:
             result = self._plugin_registry.run("github_develop", {"mode": mode}, player=self.ui)
