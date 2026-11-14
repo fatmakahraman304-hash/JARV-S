@@ -10,10 +10,8 @@ during that gap is how an assistant hears its own last sentence and answers
 itself. This module lets the tail drop our own voice while still passing a user
 who replies instantly, instead of blanket-muting.
 
-Interrupting mid-sentence by voice is the other thing it can do, and everything
-needed for it is here and tested — but it depends on the listener's room, so it
-stays switched off until it can be tried on real hardware. See the note in
-`_listen_audio` for how little it takes to turn back on.
+For a mid-sentence interruption the microphone caller requires consecutive
+speech blocks before stopping playback and forwarding those blocks to Live.
 
 The problem with a level test
 -----------------------------

@@ -1499,6 +1499,11 @@ class JarvisLive:
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
+        parts.append(
+            "In voice replies, use natural pacing and an expressive tone suited to "
+            "the conversation: warm and calm for concerns, brighter for good news, "
+            "and neutral for routine commands. Follow explicit voice tone requests."
+        )
 
         cfg = dict(
             response_modalities=["AUDIO"],
@@ -1831,7 +1836,30 @@ class JarvisLive:
         print("[JARVIS] 🎤 Mic started")
         loop = asyncio.get_event_loop()
 
+        speech_blocks: list[bytes] = []
+        interruption_pending = False
+
+        def cut_in(blocks):
+            nonlocal interruption_pending
+            try:
+                if not self._awake or self.ui.muted or self._phone_active:
+                    return
+                if self._ptt_enabled and not self._ptt_held:
+                    return
+                with self._speaking_lock:
+                    speaking = self._is_speaking
+                if speaking:
+                    turn_finished = bool(self._turn_done_event and self._turn_done_event.is_set())
+                    self.interrupt()
+                    if turn_finished:
+                        self._interrupted = False
+                for block in blocks:
+                    self.out_queue.put_nowait({"data": block, "mime_type": "audio/pcm"})
+            finally:
+                interruption_pending = False
+
         def callback(indata, frames, time_info, status):
+            nonlocal interruption_pending
             # ── Wake-word gate ───────────────────────────────────────────────
             # While asleep, the mic audio NEVER goes to Gemini (nothing is
             # streamed, so JARVIS can't respond to speech not addressed to it and
@@ -1852,25 +1880,23 @@ class JarvisLive:
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
 
-            # ── Barge-in ─────────────────────────────────────────────────────
-            # While JARVIS talks the mic is not streamed, but it is still worth
-            # listening to locally: if the user starts speaking, cut the answer
-            # short the way a person would stop when interrupted.
-            #
-            # The whole difficulty is echo — on speakers the mic hears JARVIS.
-            # So the test is not "is the mic loud" but "is the mic louder than
-            # the echo of what we are playing right now", sustained long enough
-            # that a cough or a keystroke cannot trigger it.
-            if jarvis_speaking:
-                # Nothing is streamed while JARVIS talks.
-                #
-                # Interrupting by voice used to live here: `EchoGuard` can pick a
-                # user out from under our own echo, and `core/echo.py` still does
-                # that for the tail below. Re-enabling is small — classify each
-                # block here and call interrupt() after `required_blocks` of
-                # agreement — but it depends on the listener's room, so it stays
-                # out until it can be tried on real hardware.
+            if self.ui.muted or self._phone_active or (self._ptt_enabled and not self._ptt_held):
+                speech_blocks.clear()
                 return
+            if interruption_pending:
+                return
+            if jarvis_speaking:
+                if self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, _pcm_level(indata)):
+                    speech_blocks.append(indata.tobytes())
+                    if len(speech_blocks) >= self._echo.required_blocks:
+                        blocks = tuple(speech_blocks)
+                        speech_blocks.clear()
+                        interruption_pending = True
+                        loop.call_soon_threadsafe(cut_in, blocks)
+                else:
+                    speech_blocks.clear()
+                return
+            speech_blocks.clear()
 
             # ── Echo tail ────────────────────────────────────────────────────
             # The speaking flag has dropped but the speakers have not finished.
@@ -1889,26 +1915,14 @@ class JarvisLive:
             elif self._echo._hist:
                 self._echo.reset()
 
-            # ── Push-to-talk ─────────────────────────────────────────────────
-            # When it is on the microphone is closed by default and the chord
-            # opens it, which is the whole point: nothing leaves the machine
-            # unless you are holding the key.
-            if self._ptt_enabled and not self._ptt_held:
-                return
-            
-            if not self.ui.muted and not self._phone_active:
-                data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
-                # Feed the live mic level to the HUD so the waveform reacts to
-                # the user's actual voice while listening. Purely cosmetic — any
-                # failure here must never disturb the mic.
-                try:
-                    self.ui.set_audio_level(_pcm_level(indata))
-                except Exception:
-                    pass
+            loop.call_soon_threadsafe(
+                self.out_queue.put_nowait,
+                {"data": indata.tobytes(), "mime_type": "audio/pcm"},
+            )
+            try:
+                self.ui.set_audio_level(_pcm_level(indata))
+            except Exception:
+                pass
 
         try:
             def _open_mic(dev):
@@ -2020,6 +2034,10 @@ class JarvisLive:
                             if self._resume_handle is None:
                                 print("[JARVIS] 🔗 Session resumption armed")
                             self._resume_handle = _sru.new_handle
+
+                    sc = response.server_content
+                    if sc and getattr(sc, "interrupted", False) and not self._interrupted:
+                        self.interrupt()
 
                     if response.data:
                         if self._interrupted or not self._awake:
@@ -2199,16 +2217,16 @@ class JarvisLive:
 
                 # Batch all immediately-available chunks into one write to reduce
                 # thread-pool round-trips (was one asyncio.to_thread per 50ms slice).
-                # Cap at ~200 ms so interrupt() still stops audio within ~200 ms.
+                # Cap each write at ~100 ms to limit queued playback after a cut-in.
                 batch = bytearray(chunk)
-                while len(batch) < 9600:   # 9600 bytes ≈ 200 ms at 24 kHz / 16-bit mono
+                while len(batch) < 4800:   # 4800 bytes = 100 ms at 24 kHz / 16-bit mono
                     try:
                         batch.extend(self.audio_in_queue.get_nowait())
                     except asyncio.QueueEmpty:
                         break
 
                 # Drive the HUD waveform and the avatar's mouth from JARVIS's
-                # own voice. The batch is up to 200 ms long, so we hand over a
+                # own voice. The batch is up to 100 ms long, so we hand over a
                 # *schedule* of 20 ms viseme frames instead of a single averaged
                 # level and let the HUD play it out in step with the audio.
                 try:
