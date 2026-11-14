@@ -9,7 +9,11 @@ import numpy as np
 def is_sleep_command(text: str) -> bool:
     text = unicodedata.normalize("NFKC", text).replace("İ", "i").casefold()
     words = re.findall(r"[^\W_]+", text, re.UNICODE)
-    return words in (["uyu"], ["jarvis", "uyu"], ["j", "a", "r", "v", "i", "s", "uyu"])
+    if words[:6] == ["j", "a", "r", "v", "i", "s"]:
+        words = ["jarvis", *words[6:]]
+    if words and words[0] in {"jarvis", "friday"}:
+        words = words[1:]
+    return words in (["uyu"], ["uyku", "moduna", "geç"])
 
 
 class SnapDetector:

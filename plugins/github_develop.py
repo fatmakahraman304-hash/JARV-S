@@ -313,5 +313,9 @@ def run(parameters, player=None, session_memory=None):
             player.write_log('GELİŞTİRME: '+str(exc))
         finally:
             _LOCK.release()
-    threading.Thread(target=work,daemon=True,name='jarvis-github').start()
+    try:
+        threading.Thread(target=work,daemon=True,name='jarvis-github').start()
+    except RuntimeError:
+        _LOCK.release()
+        return 'Geliştirme işi başlatılamadı. Tekrar deneyebilirsiniz.'
     return 'GitHub geliştirme işlemi arka planda başladı; sonucu ekranda göstereceğim.'

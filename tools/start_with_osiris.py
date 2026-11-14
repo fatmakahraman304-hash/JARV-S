@@ -14,20 +14,22 @@ from urllib.request import ProxyHandler, build_opener
 from prepare_osiris import prepare, fingerprint
 
 
-def wait_ready(process, url, timeout=60):
+def health_ok(url):
     opener = build_opener(ProxyHandler({}))
+    try:
+        with opener.open(url, timeout=2) as response:
+            return json.loads(response.read(1024)) == {"jarvis_bridge": 1}
+    except (OSError, URLError, ValueError):
+        return False
+
+
+def wait_ready(process, url, timeout=60):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError("OSIRIS stopped during startup; inspect the OSIRIS log.")
-        try:
-            with opener.open(url, timeout=2) as response:
-                # The adapter file proves this is the prepared local instance.
-                data = json.loads(response.read(1024))
-                if data == {"jarvis_bridge": 1}:
-                    return
-        except (OSError, URLError, ValueError):
-            pass
+        if health_ok(url):
+            return
         time.sleep(.25)
     raise RuntimeError("OSIRIS startup timed out; inspect the OSIRIS log.")
 
@@ -94,12 +96,31 @@ def main():
             recovery_attempts = 0
             next_recovery = 0.0
             recovery_exhausted = False
+            next_health_check = time.monotonic() + 15
+            healthy_since = time.monotonic()
+            failed_health_checks = 0
             while True:
                 code = jarvis.poll()
                 if code == 75:
                     jarvis = subprocess.Popen([sys.executable, "main.py"], cwd=project, env=env)
                 elif code is not None:
                     break
+                now = time.monotonic()
+                if server.poll() is None and now >= next_health_check:
+                    next_health_check = now + 15
+                    if health_ok(url + "jarvis-bridge-health.json"):
+                        failed_health_checks = 0
+                        if healthy_since is None:
+                            healthy_since = now
+                        if now - healthy_since >= 60:
+                            recovery_attempts = 0
+                            recovery_exhausted = False
+                    else:
+                        healthy_since = None
+                        failed_health_checks += 1
+                        if failed_health_checks >= 3:
+                            print("OSIRIS failed three health checks; restarting the owned service.", file=log, flush=True)
+                            stop_owned(server)
                 if server.poll() is not None and time.monotonic() >= next_recovery:
                     if recovery_attempts < 3:
                         recovery_attempts += 1
@@ -107,6 +128,9 @@ def main():
                         try:
                             server = start_server()
                             wait_ready(server, url + "jarvis-bridge-health.json", timeout=15)
+                            healthy_since = time.monotonic()
+                            failed_health_checks = 0
+                            next_health_check = healthy_since + 15
                             print("OSIRIS restarted and passed the readiness check.", file=log, flush=True)
                         except (OSError, RuntimeError) as exc:
                             print(f"OSIRIS recovery failed: {exc}", file=log, flush=True)

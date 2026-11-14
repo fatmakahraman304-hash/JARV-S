@@ -32,6 +32,7 @@ def site_for_name(name: str) -> str | None:
 
 def site_for_command(text: str) -> str | None:
     words = " ".join(text.strip().replace("İ", "i").casefold().split()).rstrip(".!")
+    words = re.sub(r"^(?:jarvis|friday)[, ]+", "", words)
     match = _OPEN_COMMAND.fullmatch(words)
     if not match:
         return None
@@ -39,4 +40,4 @@ def site_for_command(text: str) -> str | None:
     site = site_for_name(name)
     if site:
         return site
-    return site_for_name(re.sub(r"(?:['’]y?[ıiuü]|[ıiuü])$", "", name))
+    return site_for_name(re.sub(r"['’]?y?[ıiuü]$", "", name))

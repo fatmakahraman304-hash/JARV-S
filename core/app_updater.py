@@ -12,7 +12,7 @@ import socket
 import subprocess
 import sys
 import time
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 import zipfile
@@ -32,17 +32,29 @@ def _git(root, *args):
 
 def _get(url):
     req = Request(url, headers={'User-Agent': 'Jarvis-Updater', 'Accept': 'application/vnd.github+json'})
-    try:
-        with urlopen(req, timeout=45) as response:
-            data = response.read(LIMIT + 1)
-    except URLError as exc:
-        if isinstance(exc.reason, socket.gaierror):
-            host = urlsplit(url).hostname
-            raise RuntimeError(
-                f"GitHub bağlantısı kurulamadı ({host}). "
-                "DNS veya proxy ayarlarını kontrol edip yeniden deneyin."
-            ) from exc
-        raise
+    for attempt in range(3):
+        try:
+            with urlopen(req, timeout=45) as response:
+                data = response.read(LIMIT + 1)
+            break
+        except HTTPError as exc:
+            # Retry temporary server failures, leaving authentication and quota
+            # errors visible to the user without repeated requests.
+            if exc.code not in {502, 503, 504} or attempt == 2:
+                raise
+            exc.close()
+        except (URLError, TimeoutError, ConnectionError) as exc:
+            reason = getattr(exc, 'reason', exc)
+            transient = isinstance(reason, (socket.gaierror, TimeoutError, ConnectionError))
+            if not transient or attempt == 2:
+                if isinstance(reason, socket.gaierror):
+                    host = urlsplit(url).hostname
+                    raise RuntimeError(
+                        f"GitHub bağlantısı kurulamadı ({host}). "
+                        "DNS veya proxy ayarlarını kontrol edip yeniden deneyin."
+                    ) from exc
+                raise
+        time.sleep(attempt + 1)
     if len(data) > LIMIT:
         raise RuntimeError('Güncelleme indirme sınırını aşıyor.')
     return data
@@ -104,7 +116,7 @@ def _apply_zip(root, files, sha, branch):
         if path.exists() and _hash(path.read_bytes()) != digest:
             raise RuntimeError(f'Yerel değişiklik korunuyor: {name}. Güncelleme uygulanmadı.')
     names = set(files) | {n for n in previous if not _protected(n)}
-    backup = root / '.jarvis-backups' / (time.strftime('%Y%m%d-%H%M%S') + '-' + sha[:8])
+    backup = root / '.jarvis-backups' / (time.strftime('%Y%m%d-%H%M%S') + '-' + sha[:8] + '-' + str(time.time_ns()))
     backup.mkdir(parents=True, exist_ok=False)
     existed = set()
     for name in names:

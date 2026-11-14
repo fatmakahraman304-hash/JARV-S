@@ -51,15 +51,22 @@ def simulate(initial, growth, days, alternatives):
             raise ValueError("Her alternatif için kısa bir ad gir.")
         capacity = _number(option.get("daily_capacity"), 1, 1e12)
         backlog = 0.0
+        peak_backlog = 0.0
         first = None
         first_demand = None
+        cleared = None
         for day, arrivals in enumerate(demand, 1):
-            backlog = max(0.0, backlog + arrivals - capacity)
-            if first is None and arrivals > capacity and not math.isclose(arrivals, capacity):
+            outstanding = backlog + arrivals
+            backlog = 0.0 if math.isclose(outstanding, capacity) else max(0.0, outstanding - capacity)
+            peak_backlog = max(peak_backlog, backlog)
+            if first is None and backlog > 0:
                 first, first_demand = day, arrivals
+            elif first is not None and backlog == 0 and cleared is None:
+                cleared = day
         results.append({
             "name": name.strip(), "capacity": capacity, "first": first,
             "first_demand": first_demand, "backlog": backlog,
+            "peak_backlog": peak_backlog, "cleared": cleared,
         })
     return results, demand[-1]
 
@@ -80,6 +87,9 @@ def run(parameters, player=None, session_memory=None):
             status = "Bu süre içinde günlük kapasite aşılmadı."
         else:
             status = f"{option['first']}. günde darboğaz: {option['first_demand']:,.0f} iş talebi."
+            status += f" En yüksek kuyruk: {option['peak_backlog']:,.0f} iş."
+            if option["cleared"] is not None:
+                status += f" Kuyruk {option['cleared']}. günde temizlenir."
         lines.append(
             f"{option['name']} · Kapasite {option['capacity']:,.0f} iş/gün. "
             f"{status} Son gün bekleyen: {option['backlog']:,.0f} iş."

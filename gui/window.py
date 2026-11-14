@@ -1951,6 +1951,7 @@ class MainWindow(QMainWindow):
                 return
             chosen = places[labels.index(label)]
         self._explore_city_map()
+        self._large_city_map.route_points = []
         self._large_city_map.zoom = chosen['zoom']
         self._large_city_map.set_location(chosen['lat'], chosen['lon'])
         self._map_place_label.setText(chosen['name'])
@@ -1961,9 +1962,15 @@ class MainWindow(QMainWindow):
         if not hasattr(self, '_city_explorer'):
             self._city_explorer = QWidget()
             layout = QVBoxLayout(self._city_explorer)
+            toolbar = QHBoxLayout()
             back = QPushButton('CORE’a dön')
             back.clicked.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            layout.addWidget(back)
+            toolbar.addWidget(back)
+            toolbar.addStretch()
+            locate = QPushButton('Konumuma dön')
+            locate.clicked.connect(self._center_city_map)
+            toolbar.addWidget(locate)
+            layout.addLayout(toolbar)
             self._map_place_label = QLabel('Haritayı sürükleyerek gezin · Tekerlekle yakınlaştırın')
             self._map_place_label.setWordWrap(True)
             self._map_place_label.setTextFormat(Qt.TextFormat.PlainText)
@@ -1974,11 +1981,22 @@ class MainWindow(QMainWindow):
             layout.addWidget(self._large_city_map, 1)
             layout.addWidget(QLabel('© OpenStreetMap contributors · Konum IP üzerinden yaklaşıktır'))
             self._hud_cam_stack.addWidget(self._city_explorer)
-        self._large_city_map.route_points = []
-        small = self._location_panel.map
-        self._large_city_map.zoom = small.zoom
-        self._large_city_map.center = small.center or (2 ** small.zoom / 2, 2 ** small.zoom / 2)
+            small = self._location_panel.map
+            self._large_city_map.zoom = small.zoom
+            self._large_city_map.center = small.center or (2 ** small.zoom / 2, 2 ** small.zoom / 2)
         self._hud_cam_stack.setCurrentWidget(self._city_explorer)
+        self._large_city_map.load_tiles()
+        self._large_city_map.update()
+
+    def _center_city_map(self):
+        small = self._location_panel.map
+        if small.center is None:
+            self._log.append_log('HARİTA: Güncel konum henüz alınamadı.')
+            return
+        self._large_city_map.route_points = []
+        self._large_city_map.zoom = small.zoom
+        self._large_city_map.center = small.center
+        self._map_place_label.setText(self._location_panel.city.text() + ' · Yaklaşık konum')
         self._large_city_map.load_tiles()
         self._large_city_map.update()
 

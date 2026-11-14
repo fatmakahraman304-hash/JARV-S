@@ -113,6 +113,8 @@ class CityMap(QWidget):
         visible = self.visible_tiles()
         wanted = {key for key, _, _ in visible}
         self.tiles = {key: value for key, value in self.tiles.items() if key in wanted}
+        now = time.monotonic()
+        self.failed = {key: when for key, when in self.failed.items() if now - when < 60}
         for key, _, _ in visible:
             if key in self.tiles or key in self.pending or time.monotonic() - self.failed.get(key, -1000) < 60:
                 continue

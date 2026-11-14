@@ -1846,6 +1846,7 @@ class JarvisLive:
             # only a queue push, so the audio path is never slowed. When wake word
             # is off (default) or we're awake, this is a single boolean check.
             if not self._awake:
+                speech_blocks.clear()
                 if self.ui.muted:
                     return
                 snap = self._snap_detector

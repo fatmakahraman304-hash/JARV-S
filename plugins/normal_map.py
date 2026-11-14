@@ -13,15 +13,19 @@ PLUGIN = {
     'parameters': {'type':'OBJECT', 'properties': {'place': {'type':'STRING', 'description':'Place or full address, with city/country when provided.'}}, 'required':['place']}}
 _lock = threading.Lock()
 _cache = {}
+_CACHE_LIMIT = 128
+_CACHE_SECONDS = 900
 _last_request = 0.0
 
 
 def search(place):
     global _last_request
     with _lock:
-        key = place.casefold()
-        if key in _cache:
-            return _cache[key]
+        key = " ".join(place.strip().casefold().split())
+        cached = _cache.get(key)
+        if cached and time.monotonic() - cached[0] < _CACHE_SECONDS:
+            return [dict(item) for item in cached[1]]
+        _cache.pop(key, None)
         time.sleep(max(0, 1.1 - (time.monotonic() - _last_request)))
         _last_request = time.monotonic()
         endpoint = os.environ.get('JARVIS_GEOCODER_URL', 'https://nominatim.openstreetmap.org/search')
@@ -29,16 +33,26 @@ def search(place):
             headers={'User-Agent':'JarvisPersonalMap/1.0 (https://github.com/fatmakahraman304-hash/Mark-LVII)'})
         with urlopen(request, timeout=12) as response:
             values = json.loads(response.read(200000))
+        if not isinstance(values, list):
+            raise ValueError('Yer arama servisi geçersiz yanıt döndürdü.')
         results = []
-        for item in values:
-            lat, lon = float(item['lat']), float(item['lon'])
+        for item in values[:5]:
+            if not isinstance(item, dict) or not isinstance(item.get('display_name'), str):
+                continue
+            try:
+                lat, lon = float(item['lat']), float(item['lon'])
+            except (KeyError, TypeError, ValueError):
+                continue
             if not math.isfinite(lat) or not math.isfinite(lon) or not (-90 <= lat <= 90 and -180 <= lon <= 180):
                 continue
             kind = item.get('addresstype', '')
             zoom = 5 if kind == 'country' else 10 if kind in {'state','province'} else 12 if kind in {'city','town','village'} else 16
             results.append({'name':str(item['display_name']), 'lat':lat, 'lon':lon, 'zoom':zoom})
-        _cache[key] = results
-        return results
+        if results:
+            if len(_cache) >= _CACHE_LIMIT:
+                _cache.pop(next(iter(_cache)))
+            _cache[key] = (time.monotonic(), results)
+        return [dict(item) for item in results]
 
 
 def run(parameters, player=None, session_memory=None):

@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import re
 import subprocess
+from urllib.parse import urlsplit
 
 from core.routines.desktop import engine
 from memory.config_manager import CONFIG_DIR
@@ -65,12 +66,25 @@ def build_report(options):
         try:
             from actions.web_search import _ddg_news
             articles = _ddg_news(topic, max_results=4)
-            for article in articles[:4]:
-                lines.append(str(article.get("title", ""))[:160])
-                lines.append(str(article.get("snippet", ""))[:260])
-                lines.append(str(article.get("url", ""))[:300])
-            if not articles:
-                lines.append("Bu aramada makale bulunamadı.")
+            seen = set()
+            for article in articles:
+                title = str(article.get("title") or "").strip()
+                link = str(article.get("url") or "").strip()
+                try:
+                    parsed = urlsplit(link)
+                except ValueError:
+                    continue
+                key = parsed._replace(fragment="").geturl()
+                if not title or parsed.scheme not in {"https", "http"} or not parsed.hostname or key in seen:
+                    continue
+                seen.add(key)
+                source = article.get("source") or parsed.hostname
+                summary = " ".join(str(article.get("snippet") or "").split())[:260]
+                lines.append("\n".join(part for part in (f"{title[:150]} · {str(source)[:65]}", summary, link) if part))
+                if len(seen) == 4:
+                    break
+            if not seen:
+                lines.append("Bu aramada geçerli bir kaynak adresi bulunamadı.")
         except Exception:
             lines.append("Araştırma servisine ulaşılamadı.")
     path = _report_path()
@@ -87,6 +101,8 @@ def show_report(player):
         return "Gece mesaisi raporu henüz oluşmadı."
     if player:
         player.show_content("Sabah brifingi", report)
+    else:
+        return report
     return "Son gece mesaisi raporu hazır."
 
 

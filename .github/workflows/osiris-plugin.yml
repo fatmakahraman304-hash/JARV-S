@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, feature/osiris-world-command]
   pull_request:
-    paths: ["plugins/**", "actions/**", "core/**", "gui/**", "ui.py", "requirements.txt", "integrations/osiris/**", "tools/*osiris.py", "tests/**", "tests/test_location_map.py", ".github/workflows/osiris-plugin.yml"]
+    paths: ["plugins/**", "actions/**", "core/**", "gui/**", "ui.py", "main.py", "requirements.txt", "integrations/osiris/**", "tools/*osiris.py", "tests/**", ".github/workflows/osiris-plugin.yml"]
 permissions:
   contents: read
 jobs:
@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libopengl0 libnss3 libasound2t64 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxkbcommon0 libgbm1
-      - run: python -m pip install "PyQt6>=6.6,<7" "PyQt6-WebEngine>=6.6,<7" psutil
+      - run: python -m pip install "PyQt6>=6.6,<7" "PyQt6-WebEngine>=6.6,<7" psutil numpy
       - run: python -m compileall -q gui plugins tools tests ui.py
       - name: Restart lifecycle
         run: python -m unittest discover -s tests -p test_restart_app.py -v
@@ -47,3 +47,5 @@ jobs:
         run: python -m unittest discover -s tests -p test_osiris_qt.py -v
       - name: Personal city map regression
         run: python -m unittest discover -s tests -p test_location_map.py -v
+      - name: Updates, saved maps, sleep and prototype revisions
+        run: python -m unittest discover -s tests -p test_improvement_regressions.py -v
