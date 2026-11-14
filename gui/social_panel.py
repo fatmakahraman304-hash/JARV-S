@@ -1,8 +1,11 @@
 """On-demand views of the official websites, inside the central HUD."""
 
+import os
+import sys
+
 from PyQt6 import sip
 from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtGui import QColor, QDesktopServices
 from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
 from core.social_sites import CHAT_HOSTS, SITES
@@ -11,7 +14,7 @@ from gui.style import btn_css
 from gui.theme import C
 
 try:
-    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineScript
+    from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo, QWebEnginePage, QWebEngineProfile, QWebEngineScript
     from PyQt6.QtWebEngineWidgets import QWebEngineView
 except ImportError:
     QWebEngineView = None
@@ -26,8 +29,18 @@ def permitted_url(url, site):
     )
 
 
-def open_in_browser(site):
-    return QDesktopServices.openUrl(QUrl(SITES[site][1]))
+def open_in_browser(site, *, edge=False):
+    address = SITES[site][1]
+    if not edge and QDesktopServices.openUrl(QUrl(address)):
+        return True
+    if sys.platform != "win32":
+        return False
+    try:
+        os.startfile("microsoft-edge:" + address)
+    except OSError:
+        return False
+    return True
+
 
 
 if QWebEngineView is not None:
@@ -66,6 +79,8 @@ class SocialPanel(QWidget):
         self._views = {}
         QApplication.instance().aboutToQuit.connect(self._release_profiles)
         self._site = ""
+        self._blocked = set()
+        self._failed = set()
         self._draft_request = None
         layout = QVBoxLayout(self)
         row = QHBoxLayout()
@@ -84,7 +99,9 @@ class SocialPanel(QWidget):
         self._selector.activated.connect(self._select_site)
         row.addWidget(self._selector)
         row.addStretch()
-        row.addWidget(self._button("Tarayıcıda aç", self._open_external))
+        row.addWidget(self._button("Tarayıcıda aç", lambda: self._open_external()))
+        if sys.platform == "win32":
+            row.addWidget(self._button("Edge’de aç", lambda: self._open_external(edge=True)))
         self._retry = self._button("Yenile", self._reload)
         row.addWidget(self._retry)
         row.addWidget(self._button("CORE’a dön", self.back_requested.emit))
@@ -100,6 +117,20 @@ class SocialPanel(QWidget):
         layout.addWidget(self._draft_notice)
         self._stack = QStackedWidget(self)
         layout.addWidget(self._stack, 1)
+        help_row = QHBoxLayout()
+        self._link = QLabel()
+        self._link.setTextFormat(Qt.TextFormat.PlainText)
+        self._link.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        help_row.addWidget(self._link, 1)
+        help_row.addWidget(self._button("Adresi kopyala", self._copy_address))
+        layout.addLayout(help_row)
+        self._fallback = QLabel("Siteyi yeniden yükleyebilir veya adresi tarayıcıya yapıştırabilirsin.")
+        self._fallback.setWordWrap(True)
+        self._fallback.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._fallback.setStyleSheet(
+            f"background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding: 18px;"
+        )
+        self._stack.addWidget(self._fallback)
 
     @staticmethod
     def _button(text, action):
@@ -120,11 +151,13 @@ class SocialPanel(QWidget):
             self._draft_notice.hide()
         _, address, _ = SITES[site]
         self._site = site
+        self._link.setText(address)
         self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
         if QWebEngineView is None:
             self._status.setText("Gömülü web görünümü eksik. Tarayıcıda açabilirsin.")
             self._status.show()
+            self._stack.setCurrentWidget(self._fallback)
             return
         if site not in self._views:
             view = QWebEngineView(self._stack)
@@ -134,16 +167,13 @@ class SocialPanel(QWidget):
                 QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
             )
             page = SocialPage(profile, view, site)
+            page.setBackgroundColor(QColor(C.BG))
             view.setPage(page)
             self._stack.addWidget(view)
             self._views[site] = [view, "Yükleniyor…"]
-            view.loadStarted.connect(lambda: self._set_status(site, "Yükleniyor…"))
-            view.loadFinished.connect(lambda ok: self._loaded(site, ok))
-            page.blocked.connect(lambda: self._set_status(
-                site, "Bu bağlantı gömülü görünümde açılamıyor. Giriş için tarayıcıyı kullanabilirsin."
-            ))
+            page.loadingChanged.connect(lambda info: self._loading_changed(site, info))
+            page.blocked.connect(lambda: self._navigation_blocked(site))
             view.setUrl(QUrl(address))
-        self._stack.setCurrentWidget(self._views[site][0])
         self._refresh_status()
 
     def write_chat_draft(self, draft):
@@ -210,22 +240,55 @@ class SocialPanel(QWidget):
             self._refresh_status()
 
     def _refresh_status(self):
-        _, message = self._views[self._site]
+        view, message = self._views[self._site]
+        self._stack.setCurrentWidget(self._fallback if self._site in self._failed else view)
         self._status.setText(message)
         self._status.setVisible(bool(message))
 
-    def _loaded(self, site, ok):
-        message = "" if ok else "Site yüklenemedi. Yenile veya tarayıcıda aç."
-        self._set_status(site, message)
+    def _navigation_blocked(self, site):
+        self._blocked.add(site)
+        self._set_status(site, "Bu yönlendirme CORE içinde açılamadı. Hesap girişini tarayıcıda deneyebilirsin.")
+
+    def _loading_changed(self, site, info):
+        status = info.status()
+        state = QWebEngineLoadingInfo.LoadStatus
+        if status == state.LoadStartedStatus:
+            self._failed.discard(site)
+            self._blocked.discard(site)
+            self._set_status(site, "Yükleniyor…")
+        elif status == state.LoadSucceededStatus:
+            self._failed.discard(site)
+            if site not in self._blocked:
+                self._set_status(site, "")
+        elif status == state.LoadFailedStatus:
+            self._failed.add(site)
+            if site in self._blocked:
+                self._set_status(site, self._views[site][1])
+                return
+            domain = info.errorDomain().name
+            messages = {
+                "DnsErrorDomain": "Site adresi çözümlenemedi. İnternet ve DNS bağlantısını kontrol et.",
+                "ConnectionErrorDomain": "Siteye bağlantı kurulamadı. Aynı adresi tarayıcıda dene.",
+                "CertificateErrorDomain": "Sitenin güvenli bağlantısı doğrulanamadı.",
+                "HttpErrorDomain": "Site web isteğini tamamlayamadı.",
+                "HttpStatusCodeDomain": "Site web isteğini tamamlayamadı.",
+            }
+            message = messages.get(domain, "Site CORE içinde yüklenemedi.")
+            self._set_status(site, f"{message} Kod: {info.errorCode()}")
 
     def _reload(self):
         entry = self._views.get(self._site)
         if entry:
             view = entry[0]
-            if permitted_url(view.url(), self._site):
-                view.reload()
-            else:
+            if self._site in self._failed or self._site in self._blocked or not permitted_url(view.url(), self._site):
                 view.setUrl(QUrl(SITES[self._site][1]))
+            else:
+                view.reload()
+
+    def _copy_address(self):
+        if self._site:
+            QApplication.clipboard().setText(SITES[self._site][1])
+            self._show_draft_notice("Adres kopyalandı. Tarayıcının adres çubuğuna yapıştır.")
 
     def _release_profiles(self):
         # main.py exits with os._exit after the Qt loop. Destroy disk profiles
@@ -237,7 +300,10 @@ class SocialPanel(QWidget):
             sip.delete(profile)
         self._views.clear()
 
-    def _open_external(self):
-        if self._site and not open_in_browser(self._site):
-            self._status.setText("Varsayılan tarayıcı açılamadı.")
-            self._status.show()
+    def _open_external(self, *, edge=False):
+        if not self._site:
+            return
+        if open_in_browser(self._site, edge=edge):
+            self._show_draft_notice("Adres tarayıcıya iletildi. Açılmazsa adresi kopyalayıp tarayıcıya yapıştır.")
+        else:
+            self._show_draft_notice("Tarayıcı başlatılamadı. Adresi kopyalayıp tarayıcıya yapıştır.")
