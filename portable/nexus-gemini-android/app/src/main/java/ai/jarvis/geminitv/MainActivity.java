@@ -60,8 +60,8 @@ public final class MainActivity extends Activity {
     private final Runnable nextListen = this::startRecognition;
 
     private TextView status, conversation, micIndicator;
-    private EditText prompt;
-    private Button keyPicker;
+    private EditText prompt, manualKey;
+    private Button keyPicker, manualSave;
     private Spinner model;
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
@@ -126,6 +126,27 @@ public final class MainActivity extends Activity {
         keyPicker.setVisibility(apiKey == null ? Button.VISIBLE : Button.GONE);
         keyPicker.setOnClickListener(v -> chooseKeyFile());
 
+        // First-install fallback for Android projectors without DocumentsUI.
+        // Keep the field masked; store only via device-local Android Keystore.
+        manualKey = new EditText(this);
+        manualKey.setTextColor(Color.WHITE);
+        manualKey.setHintTextColor(Color.LTGRAY);
+        manualKey.setHint("Dosya seçici yoksa Gemini API anahtarını buraya bir kez gir");
+        manualKey.setTextSize(19);
+        manualKey.setSingleLine(true);
+        manualKey.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        manualKey.setMaxLines(1);
+        root.addView(manualKey);
+        manualSave = new Button(this);
+        manualSave.setText("Gemini anahtarını bir kez kaydet");
+        manualSave.setTextSize(18);
+        manualSave.setAllCaps(false);
+        manualSave.setMinHeight(68);
+        root.addView(manualSave);
+        manualSave.setOnClickListener(v -> saveManualKey());
+        updateSetupVisibility();
+
         model = new Spinner(this);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, GeminiHttp.MODELS);
@@ -171,13 +192,46 @@ public final class MainActivity extends Activity {
         configureTts();
     }
 
+
+    private void updateSetupVisibility() {
+        boolean setupRequired = apiKey == null;
+        if (keyPicker != null)
+            keyPicker.setVisibility(setupRequired ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (manualKey != null)
+            manualKey.setVisibility(setupRequired ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (manualSave != null)
+            manualSave.setVisibility(setupRequired ? android.view.View.VISIBLE : android.view.View.GONE);
+    }
+
+    private void saveManualKey() {
+        if (apiKey != null) return;
+        String candidate = manualKey.getText().toString().trim();
+        if (!candidate.matches("[\\x21-\\x7e]{20,220}")) {
+            setStatus("Gemini API anahtarını eksiksiz gir (20-220 karakter, boşluk yok).");
+            return;
+        }
+        try {
+            DeviceKeyStore.save(this, candidate);
+            apiKey = candidate;
+            manualKey.setText("");
+            updateSetupVisibility();
+            setStatus("Gemini anahtarın bu projeksiyonda güvenli saklandı. Mikrofon başlatılıyor…");
+            maybeGreet();
+            ensureMicPermission();
+        } catch (Exception e) {
+            manualKey.setText("");
+            setStatus("Android anahtarı güvenli kaydedemedi. Keystore desteğini kontrol et.");
+        }
+    }
+
     private void chooseKeyFile() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         try { startActivityForResult(intent, OPEN_KEY_FILE); }
         catch (ActivityNotFoundException ex) {
-            setStatus("Android dosya seçicisi yok. USB dosyasını cihazdaki dosya yöneticisiyle açmayı dene.");
+            setStatus("Android dosya seçicisi yok. Alttaki gizli anahtar alanına Gemini API anahtarını bir kez gir.");
+            if (manualKey != null) manualKey.requestFocus();
         }
     }
 
@@ -505,7 +559,7 @@ public final class MainActivity extends Activity {
             }
             DeviceKeyStore.save(this, imported);
             apiKey = imported;
-            keyPicker.setVisibility(Button.GONE);
+            updateSetupVisibility();
             setStatus("Gemini anahtarı kaydedildi. Sesli mod başlıyor…");
             maybeGreet();
             ensureMicPermission();
