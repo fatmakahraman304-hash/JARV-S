@@ -41,3 +41,24 @@ def site_for_command(text: str) -> str | None:
     if site:
         return site
     return site_for_name(re.sub(r"['’]?y?[ıiuü]$", "", name))
+
+
+CHAT_HOSTS = {
+    "chatgpt": frozenset({"chatgpt.com", "www.chatgpt.com"}),
+    "claude": frozenset({"claude.ai", "www.claude.ai"}),
+}
+CHAT_DRAFT_LIMIT = 8000
+_CHAT_DRAFT_COMMAND = re.compile(
+    r"(?:(?:jarvis|friday)[, ]+)?"
+    r"(?:(chat\s*g[pb]t|claude)(?:['’]?(?:ye|ya|e|a))?\s+|buraya\s+)"
+    r"(?:şunu\s+)?yaz(?:\s*:\s*|\s+)(.+)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def chat_draft_command(text: str) -> tuple[str, str] | None:
+    match = _CHAT_DRAFT_COMMAND.fullmatch(text.strip())
+    if match:
+        target, draft = match.groups()
+        return (site_for_name(target) if target else "", draft.strip())
+    return None

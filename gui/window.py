@@ -114,6 +114,7 @@ class MainWindow(QMainWindow):
     _scan_request_sig = pyqtSignal()
     _scan_result_sig = pyqtSignal(bytes, object)
     _social_sig = pyqtSignal(str)
+    _chat_draft_sig = pyqtSignal(str, str)
     _osiris_sig     = pyqtSignal(str)        # map URL — worker thread -> Qt UI thread
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
@@ -395,6 +396,7 @@ class MainWindow(QMainWindow):
         self._osiris_sig.connect(self._open_osiris)
         self._prototype_sig.connect(self._open_prototype)
         self._social_sig.connect(self._open_social)
+        self._chat_draft_sig.connect(self._write_chat_draft)
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
         self._route_result_sig.connect(self._show_route)
@@ -454,14 +456,14 @@ class MainWindow(QMainWindow):
         panel.show_html(text)
 
     def _open_social(self, site: str) -> None:
-        from core.social_sites import SITES
+        from core.social_sites import CHAT_HOSTS, SITES
         from memory.config_manager import get_platform_external_browser
 
         if site not in SITES:
             return
         from gui.social_panel import SocialPanel, open_in_browser
 
-        if get_platform_external_browser(site):
+        if site not in CHAT_HOSTS and get_platform_external_browser(site):
             if not open_in_browser(site):
                 self._log.append_log("SYS: Varsayılan tarayıcı açılamadı.")
             return
@@ -474,6 +476,19 @@ class MainWindow(QMainWindow):
             self._hud_cam_stack.addWidget(panel)
         self._hud_cam_stack.setCurrentWidget(panel)
         panel.open_site(site)
+
+    def _write_chat_draft(self, site, text):
+        from core.social_sites import CHAT_DRAFT_LIMIT, CHAT_HOSTS
+
+        if not text.strip() or len(text) > CHAT_DRAFT_LIMIT:
+            self._log.append_log("SYS: En fazla 8.000 karakterlik bir sohbet taslağı yaz.")
+            return
+        if site in CHAT_HOSTS:
+            self._open_social(site)
+        panel = getattr(self, "_social_panel", None)
+        if (panel is None or self._hud_cam_stack.currentWidget() is not panel
+                or not panel.write_chat_draft(text)):
+            self._log.append_log("SYS: CORE alanında ChatGPT veya Claude sohbetini aç.")
 
     def _open_osiris(self, url: str) -> None:
         """Qt-thread slot: keep a single OSIRIS window and reuse it for commands."""
@@ -3384,9 +3399,13 @@ class MainWindow(QMainWindow):
         txt = self._input.text().strip()
         if not txt: return
         self._input.clear()
-        self._log.append_log(f"You: {txt}")
         from core.camera_scan import is_scan_command
-        from core.social_sites import site_for_command
+        from core.social_sites import chat_draft_command, site_for_command
+
+        if draft := chat_draft_command(txt):
+            self._write_chat_draft(*draft)
+            return
+        self._log.append_log(f"You: {txt}")
 
         if txt.rstrip(".!?").casefold() in {"kitabı araştır", "bu kitabı araştır", "kitabı yansıt"}:
             self._research_scan("", True)

@@ -1,16 +1,17 @@
 """On-demand views of the official websites, inside the central HUD."""
 
 from PyQt6 import sip
-from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
-from core.social_sites import SITES
+from core.social_sites import CHAT_HOSTS, SITES
+from gui.chat_composer import composer_script
 from gui.style import btn_css
 from gui.theme import C
 
 try:
-    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineScript
     from PyQt6.QtWebEngineWidgets import QWebEngineView
 except ImportError:
     QWebEngineView = None
@@ -65,6 +66,7 @@ class SocialPanel(QWidget):
         self._views = {}
         QApplication.instance().aboutToQuit.connect(self._release_profiles)
         self._site = ""
+        self._draft_request = None
         layout = QVBoxLayout(self)
         row = QHBoxLayout()
         self._selector = QComboBox()
@@ -91,6 +93,11 @@ class SocialPanel(QWidget):
         self._status.setWordWrap(True)
         self._status.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self._status)
+        self._draft_notice = QLabel()
+        self._draft_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self._draft_notice.setWordWrap(True)
+        self._draft_notice.hide()
+        layout.addWidget(self._draft_notice)
         self._stack = QStackedWidget(self)
         layout.addWidget(self._stack, 1)
 
@@ -108,6 +115,9 @@ class SocialPanel(QWidget):
         self.site_requested.emit(site)
 
     def open_site(self, site):
+        if site != self._site:
+            self._draft_request = None
+            self._draft_notice.hide()
         _, address, _ = SITES[site]
         self._site = site
         self._selector.setCurrentIndex(self._selector.findData(site))
@@ -136,6 +146,64 @@ class SocialPanel(QWidget):
         self._stack.setCurrentWidget(self._views[site][0])
         self._refresh_status()
 
+    def write_chat_draft(self, draft):
+        site = self._site
+        if site not in CHAT_HOSTS:
+            return False
+        entry = self._views.get(site)
+        if entry is None:
+            self._show_draft_notice("Sohbet kutusu için gömülü web görünümü gerekli.")
+            return False
+        request = object()
+        self._draft_request = request
+        self._show_draft_notice("Sohbet kutusu bekleniyor…")
+        self._try_draft(request, site, draft, remaining=20)
+        return True
+
+    def _show_draft_notice(self, text):
+        self._draft_notice.setText(text)
+        self._draft_notice.show()
+
+    def _try_draft(self, request, site, draft, remaining):
+        if request is not self._draft_request or not self.isVisible():
+            return
+        view = self._views[site][0]
+
+        def retry():
+            if remaining:
+                QTimer.singleShot(350, lambda: self._try_draft(request, site, draft, remaining - 1))
+            else:
+                self._draft_request = None
+                self._show_draft_notice(
+                    "Sohbet kutusu bulunamadı. Giriş yapıp sohbeti açtıktan sonra tekrar dene."
+                )
+
+        url = view.url()
+        if not (permitted_url(url, site) and url.host().lower() in CHAT_HOSTS[site]):
+            retry()
+            return
+
+        def finished(result):
+            if request is not self._draft_request or not self.isVisible():
+                return
+            if result == "inserted":
+                self._draft_request = None
+                self._show_draft_notice("Taslak sohbet kutusuna yazıldı. Göndermek için sohbet düğmesini kullan.")
+            elif result in ("no-composer", "wrong-page"):
+                retry()
+            else:
+                self._draft_request = None
+                self._show_draft_notice("Sohbet kutusuna yazı aktarılamadı.")
+
+        view.page().runJavaScript(
+            composer_script(site, draft), QWebEngineScript.ScriptWorldId.ApplicationWorld.value, finished
+        )
+
+    def hideEvent(self, event):
+        self._draft_request = None
+        self._draft_notice.hide()
+        super().hideEvent(event)
+
     def _set_status(self, site, message):
         self._views[site][1] = message
         if site == self._site:
@@ -162,6 +230,7 @@ class SocialPanel(QWidget):
     def _release_profiles(self):
         # main.py exits with os._exit after the Qt loop. Destroy disk profiles
         # while Qt is still alive so Chromium can flush their data.
+        self._draft_request = None
         for view, _ in self._views.values():
             profile = view.page().profile()
             sip.delete(view)
