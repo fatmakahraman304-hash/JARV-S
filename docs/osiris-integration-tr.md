@@ -1,14 +1,15 @@
-# JARVIS + OSIRIS — geliştirme dalı
+# JARVIS + OSIRIS
 
-Bu sürüm kişisel 1080p arayüzünü, Murat Kahraman başlığını ve sol alttaki
-şehir haritasını korur. OSIRIS geliştirmesi feature/osiris-world-command
-dalındadır; gerçek Windows sesli kullanım kabulü tamamlanmadan nihai sürüm değildir.
+OSIRIS, JARVIS’in orta panelinde açılır. Anlık harita komutları için aşağıdaki yerel servis hazırlanır.
 
 ## Mevcut özellikler
 
 - Resmi siteyi veya izin verilen loopback adresini Qt penceresinde açma.
 - Hazırlanmış yerel OSIRIS'te sayfayı yeniden yüklemeden katman açma,
   kapatma, temizleme; şehir arama, yakınlaştırma ve harita durumunu okuma.
+- Küre ve düz harita arasında geçiş, koyu harita ve uydu görünümü, kamerayı
+  başlangıca döndürme. Katman açma ve kapatma, mevcut harita seçimini temel alır.
+- “OSIRIS’i kapat” komutuyla CORE paneline dönme.
 - Komutlar Qt sinyaliyle ana iş parçacığına aktarılır; mikrofonu bekletmez.
 - İlk yanıt yalnızca kuyruğa alındığını söyler. Gerçek harita durumuna göre
   etkinlik günlüğünde done, failed veya unverified sonucu görünür.
@@ -17,7 +18,9 @@ dalındadır; gerçek Windows sesli kullanım kabulü tamamlanmadan nihai sürü
 - Çevrimiçi osirisai.live sayfasına köprü eklenmez; URL değişimi sayfayı yenileyebilir.
 
 Örnekler: “OSIRIS'te sadece depremleri göster”, “Katmanları temizle”,
-“OSIRIS'te Gazimağusa'ya git”, “OSIRIS'te yaklaş”, “OSIRIS harita durumunu oku”.
+“OSIRIS'te Gazimağusa'ya git”, “OSIRIS'te yaklaş”, “OSIRIS’i düz haritaya al”,
+“OSIRIS’te uydu görünümünü aç”, “OSIRIS kamerasını başlangıca döndür”,
+“OSIRIS harita durumunu oku”.
 Ctrl+Shift+O, yapılandırılan yerel adresi de kullanır.
 
 ## Yerel servis hazırlığı

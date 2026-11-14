@@ -89,19 +89,23 @@ PLUGIN = {
         "chosen layer configuration. This does NOT read live information or "
         "control arbitrary web tabs; do not claim the map loaded or that any "
         "event or aircraft was observed. Turkish requests are supported. "
-        "Modes: open, show, hide, focus, preset, reset, clear, locate, zoom, status. "
-        "locate/zoom/status require a patched local OSIRIS instance; results arrive "
+        "Modes: open, show, hide, focus, preset, reset, clear, locate, zoom, status, view, reset_view, close. "
+        "locate/zoom/status/view/reset_view require a patched local OSIRIS instance; results arrive "
         "asynchronously in the activity log. Never claim completion from a queued response."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "mode": {"type": "STRING",
-                     "description": "open/show/hide/focus/preset/reset/clear/locate/zoom/status"},
+                     "description": "open/show/hide/focus/preset/reset/clear/locate/zoom/status/view/reset_view/close"},
             "layers": {"type": "STRING",
                        "description": "Comma-separated layer names, e.g. earthquakes, cctv, flights. For show/hide/focus."},
             "place": {"type": "STRING", "description": "City or place name for locate, e.g. Gazimağusa. Do not invent coordinates."},
             "delta": {"type": "NUMBER", "description": "Zoom change from -3 to 3; positive zooms in."},
+            "projection": {"type": "STRING", "enum": ["globe", "mercator"],
+                           "description": "For view: 3D globe or 2D flat map."},
+            "style": {"type": "STRING", "enum": ["dark", "satellite"],
+                      "description": "For view: dark map or satellite imagery."},
             "preset": {"type": "STRING",
                        "description": "world, air, sea, space, cameras, disasters, weather, news. For preset mode."},
         },
@@ -205,8 +209,21 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             "git": "locate", "konum": "locate", "durum": "status",
             "yaklas": "zoom", "uzaklas": "zoom",
         }.get(mode, mode)
-        if mode in ("locate", "zoom", "status"):
-            if urlsplit(trusted_base_url()).scheme != "http":
+        if mode == "close":
+            control = getattr(player, "control_osiris", None)
+            if not callable(control):
+                return "OSIRIS panelini kapatmak için JARVIS arayüzü gerekli."
+            control({"kind": "close"})
+            return "CORE’a dönme isteği arayüze iletildi."
+        local = urlsplit(trusted_base_url()).scheme == "http"
+        if local and mode in ("show", "hide"):
+            control = getattr(player, "control_osiris", None)
+            if callable(control):
+                control({"kind": "layers", "layers": sorted(parse_layers(params.get("layers"))),
+                         "operation": mode})
+                return "OSIRIS komutu kuyruğa alındı; harita sonucu etkinlik günlüğünde doğrulanacak."
+        if mode in ("locate", "zoom", "status", "view", "reset_view"):
+            if not local:
                 return "Bu komut köprü kurulmuş yerel OSIRIS gerektirir; çevrimiçi sürümde anlık kontrol yok."
             control = getattr(player, "control_osiris", None)
             if not callable(control):
@@ -222,6 +239,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 if type(delta) not in (int, float) or not -3 <= delta <= 3:
                     return "Yakınlaştırma değişimi -3 ile 3 arasında olmalı."
                 command["delta"] = delta
+            if mode == "view":
+                for field, allowed in (("projection", ("globe", "mercator")),
+                                       ("style", ("dark", "satellite"))):
+                    if field in params:
+                        if params[field] not in allowed:
+                            return "Geçersiz OSIRIS görünümü."
+                        command[field] = params[field]
+                if len(command) == 1:
+                    return "Küre, düz harita, koyu harita veya uydu görünümü seç."
             control(command)
             return "OSIRIS komutu kuyruğa alındı; harita sonucu etkinlik günlüğünde doğrulanacak."
         with _lock:

@@ -8,7 +8,7 @@ export function installJarvisBridge(site, host = window) {
   const receipts = new Map();
   const snapshot = () => ({
     layers: Object.entries(site.layers()).filter(([, on]) => on).map(([key]) => key).sort(),
-    view: { lat: site.view().lat, lng: site.view().lng, zoom: site.view().zoom },
+    view: (({ lat, lng, zoom, projection, style }) => ({ lat, lng, zoom, projection, style }))(site.view()),
   });
   const finite = (n, lo, hi) => typeof n === 'number' && Number.isFinite(n) && n >= lo && n <= hi;
   const api = {
@@ -29,10 +29,18 @@ export function installJarvisBridge(site, host = window) {
       if (receipts.has(command.id)) return receipts.get(command.id);
       if (busy) return { status: 'failed', error: 'busy' };
       const fail = error => ({ status: 'failed', error, id: command.id });
-      if (!['layers', 'locate', 'zoom', 'status'].includes(command.kind)) return fail('unsupported');
+      if (!['layers', 'locate', 'zoom', 'status', 'view', 'reset_view'].includes(command.kind)) return fail('unsupported');
       if (command.kind === 'layers' && (!Array.isArray(command.layers) ||
           command.layers.length > 64 || command.layers.some(k => typeof k !== 'string' || !Object.hasOwn(site.layers(), k))))
         return fail('layers');
+      const operation = command.operation ?? 'replace';
+      if (command.kind === 'layers' && !['replace', 'show', 'hide'].includes(operation))
+        return fail('layer_operation');
+      if (command.kind === 'view' && (typeof site.setView !== 'function' ||
+          (command.projection === undefined && command.style === undefined) ||
+          (command.projection !== undefined && !['globe', 'mercator'].includes(command.projection)) ||
+          (command.style !== undefined && !['dark', 'satellite'].includes(command.style))))
+        return fail('view');
       if (command.kind === 'locate' && !(typeof command.place === 'string' && command.place.trim().length > 0 && command.place.length <= 120))
         return fail('place');
       if (command.kind === 'zoom' && !finite(command.delta, -3, 3)) return fail('zoom');
@@ -47,9 +55,19 @@ export function installJarvisBridge(site, host = window) {
       (async () => {
         try {
           let target;
+          let desiredLayers;
           if (command.kind === 'layers') {
-            const desired = new Set(command.layers);
-            site.setLayers(command.layers, Object.keys(site.layers()).filter(k => !desired.has(k)));
+            const current = new Set(snapshot().layers);
+            const requested = new Set(command.layers);
+            desiredLayers = operation === 'show' ? new Set([...current, ...requested]) :
+              operation === 'hide' ? new Set([...current].filter(k => !requested.has(k))) : requested;
+            site.setLayers([...desiredLayers].filter(k => !current.has(k)),
+              [...current].filter(k => !desiredLayers.has(k)));
+          } else if (command.kind === 'view') {
+            site.setView({ projection: command.projection, style: command.style });
+          } else if (command.kind === 'reset_view') {
+            target = { lat: 20, lng: 0, zoom: 2.5 };
+            site.flyTo(target.lat, target.lng, target.zoom);
           } else if (command.kind === 'locate') {
             const hit = await Promise.race([
               site.geocode(command.place.trim()),
@@ -68,7 +86,10 @@ export function installJarvisBridge(site, host = window) {
           for (let attempt = 0; attempt < 60 && valid(); attempt++) {
             const state = snapshot();
             const matches = command.kind === 'status' ||
-              (command.kind === 'layers' && JSON.stringify(state.layers) === JSON.stringify([...new Set(command.layers)].sort())) ||
+              (command.kind === 'layers' && JSON.stringify(state.layers) === JSON.stringify([...desiredLayers].sort())) ||
+              (command.kind === 'view' &&
+                (command.projection === undefined || state.view.projection === command.projection) &&
+                (command.style === undefined || state.view.style === command.style)) ||
               (target && Math.abs(state.view.lat - target.lat) < .02 &&
                 Math.abs(state.view.lng - target.lng) < .02 && Math.abs(state.view.zoom - target.zoom) < .1);
             if (matches) { record({ status: 'done', state }); return; }

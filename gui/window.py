@@ -490,11 +490,18 @@ class MainWindow(QMainWindow):
             self._log.append_log("OSIRIS: " + str(exc))
 
     def _control_osiris(self, command: dict) -> None:
+        if command.get("kind") == "close":
+            if self._osiris_window is not None and self._hud_cam_stack.currentWidget() is self._osiris_window:
+                self._hud_cam_stack.setCurrentWidget(self.hud)
+                self._log.append_log("OSIRIS: CORE görünümüne dönüldü.")
+            return
         if self._osiris_window is None:
             self._open_default_osiris()
         if self._osiris_window is not None:
             accepted = self._osiris_window.command(command)
-            if not accepted:
+            if accepted:
+                self._hud_cam_stack.setCurrentWidget(self._osiris_window)
+            else:
                 self._log.append_log("OSIRIS: Harita komutu kabul edilmedi.")
 
     def _osiris_result(self, result: dict) -> None:

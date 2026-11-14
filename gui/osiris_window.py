@@ -192,6 +192,11 @@ class OsirisWindow(QMainWindow):
             if not isinstance(layers, list) or len(layers) > 64 or any(not isinstance(x, str) or x not in ALLOWED_LAYERS for x in layers):
                 return False
             command["layers"] = layers
+            operation = payload.get("operation", "replace")
+            if operation not in ("replace", "show", "hide"):
+                return False
+            if operation != "replace":
+                command["operation"] = operation
         elif kind == "locate":
             place = payload.get("place")
             if not isinstance(place, str) or not 1 <= len(place.strip()) <= 120:
@@ -202,7 +207,16 @@ class OsirisWindow(QMainWindow):
             if type(delta) not in (int, float) or not -3 <= delta <= 3:
                 return False
             command["delta"] = delta
-        elif kind != "status":
+        elif kind == "view":
+            for field, allowed in (("projection", ("globe", "mercator")),
+                                   ("style", ("dark", "satellite"))):
+                if field in payload:
+                    if payload[field] not in allowed:
+                        return False
+                    command[field] = payload[field]
+            if len(command) == 2:
+                return False
+        elif kind not in ("status", "reset_view"):
             return False
         self._queue.append(command)
         if not self._active:

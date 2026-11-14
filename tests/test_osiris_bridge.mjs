@@ -62,3 +62,31 @@ test('duplicate request is idempotent and disposal removes capability',async()=>
  await new Promise(r=>setTimeout(r,10));assert.equal(calls,1);
  dispose();assert.equal(host.__jarvisOsiris,undefined);
 });
+
+test('incremental changes preserve layers set directly on the map', async () => {
+  const {api, site} = fixture();
+  api.bind(token);
+  site.layers().earthquakes = true;
+  const changed = await result(api, {kind: 'layers', operation: 'hide', layers: ['flights']});
+  assert.equal(changed.status, 'done');
+  assert.deepEqual(changed.state.layers, ['earthquakes']);
+  const added = await result(api, {kind: 'layers', operation: 'show', layers: ['flights']});
+  assert.deepEqual(added.state.layers, ['earthquakes', 'flights']);
+});
+
+test('validates and verifies 2D satellite view and camera reset', async () => {
+  const {api, site} = fixture();
+  const settings = {projection: 'globe', style: 'dark'};
+  const readCamera = site.view;
+  site.view = () => ({...readCamera(), ...settings});
+  site.setView = view => Object.assign(settings, view);
+  api.bind(token);
+  assert.equal((await result(api, {kind: 'view', style: 'unknown'})).status, 'failed');
+  const changed = await result(api, {kind: 'view', projection: 'mercator', style: 'satellite'});
+  assert.equal(changed.status, 'done');
+  assert.equal(changed.state.view.projection, 'mercator');
+  assert.equal(changed.state.view.style, 'satellite');
+  await result(api, {kind: 'zoom', delta: 2});
+  const reset = await result(api, {kind: 'reset_view'});
+  assert.equal(reset.state.view.zoom, 2.5);
+});
