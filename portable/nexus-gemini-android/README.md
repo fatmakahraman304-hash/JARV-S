@@ -31,7 +31,7 @@ Typing a key on the projector may require its on-screen keyboard or a USB
 keyboard. Never share or photograph the key. If an APK upgrade fails due to a
 different debug signing key, uninstalling the old app erases the saved key.
 
-## Android voice: v0.4.2 button-free foreground mode
+## Android voice: v0.4.3 button-free foreground mode
 
 - On app launch, after the first-time Android microphone permission and initial
   API key import, JARVIS greets the user using Android Turkish TTS and starts
@@ -50,6 +50,10 @@ different debug signing key, uninstalling the old app erases the saved key.
   and pause conversation. The app keeps recognizing short phrases while visible.
   Only **"JARVIS uyan"** or **"uyan"** resumes conversation in sleep mode. Both
   commands also work in the text field with Enter. Speech mute remains separate.
+- Sleep cancels the current Gemini request locally. Waking does not restore a
+  delayed answer. A request deadline also frees the conversation after a network
+  stall. Gemini quota, model availability and credential errors are displayed
+  separately. Credential-related errors offer a way to replace the saved key.
 - Android SpeechRecognizer runs in short foreground sessions. Temporary
   failures retry with bounded backoff. A missing recognition service or denied
   microphone permission keeps the text field available.

@@ -28,11 +28,17 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Foreground-only, button-free voice interaction prototype.
@@ -47,7 +53,8 @@ public final class MainActivity extends Activity {
     private static final int MAX_SERVICE_FAILURES = 5;
     private static final int SKY = Color.rgb(123, 223, 255);
     private final Handler ui = new Handler(Looper.getMainLooper());
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ThreadPoolExecutor worker = new ThreadPoolExecutor(
+            0, 2, 30, TimeUnit.SECONDS, new SynchronousQueue<>());
     private final JSONArray history = new JSONArray();
     private boolean listening = false;
     private final Runnable microphoneTimeout = () -> {
@@ -57,10 +64,12 @@ public final class MainActivity extends Activity {
         }
     };
     private final Runnable nextListen = this::startRecognition;
+    private final Runnable requestTimeout = this::onRequestTimeout;
+    private final Runnable speechTimeout = this::onSpeechTimeout;
 
     private TextView status, conversation, micIndicator;
     private EditText prompt, manualKey;
-    private Button keyPicker, manualSave;
+    private Button keyPicker, manualSave, replaceKey;
     private Spinner model;
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
@@ -68,12 +77,13 @@ public final class MainActivity extends Activity {
     private boolean foreground = false;
     private boolean destroyed = false;
     private boolean speaking = false;
-    private boolean busy = false;
+    private GeminiHttp.Call activeRequest;
+    private Future<?> activeTask;
+    private boolean editingKey;
     private boolean voiceEnabled = true;
     private boolean sleeping;
     private boolean permissionRequested;
     private boolean recognitionBlocked;
-    private boolean discardReply;
     private long utteranceSequence;
     private String activeUtterance;
     private boolean ttsReady = false;
@@ -105,6 +115,7 @@ public final class MainActivity extends Activity {
             sleeping = state.getBoolean("sleeping");
             voiceEnabled = state.getBoolean("voiceEnabled", true);
             permissionRequested = state.getBoolean("permissionRequested");
+            editingKey = state.getBoolean("editingKey");
         }
         try { apiKey = DeviceKeyStore.load(this); }
         catch (Exception ignored) { apiKey = null; }
@@ -157,6 +168,17 @@ public final class MainActivity extends Activity {
         manualSave.setMinHeight(68);
         root.addView(manualSave);
         manualSave.setOnClickListener(v -> saveManualKey());
+        replaceKey = new Button(this);
+        replaceKey.setText("Gemini anahtarını değiştir");
+        replaceKey.setAllCaps(false);
+        replaceKey.setVisibility(android.view.View.GONE);
+        replaceKey.setOnClickListener(v -> {
+            editingKey = true;
+            updateSetupVisibility();
+            setStatus("Yeni Gemini API anahtarını gir veya anahtar dosyasını seç.");
+            manualKey.requestFocus();
+        });
+        root.addView(replaceKey);
         updateSetupVisibility();
 
         model = new Spinner(this);
@@ -210,7 +232,8 @@ public final class MainActivity extends Activity {
 
 
     private void updateSetupVisibility() {
-        boolean setupRequired = apiKey == null;
+        boolean setupRequired = apiKey == null || editingKey;
+        if (setupRequired) replaceKey.setVisibility(android.view.View.GONE);
         if (keyPicker != null)
             keyPicker.setVisibility(setupRequired ? android.view.View.VISIBLE : android.view.View.GONE);
         if (manualKey != null)
@@ -220,7 +243,7 @@ public final class MainActivity extends Activity {
     }
 
     private void saveManualKey() {
-        if (apiKey != null) return;
+        if (apiKey != null && !editingKey) return;
         String candidate = manualKey.getText().toString().trim();
         if (!candidate.matches("[\\x21-\\x7e]{20,220}")) {
             setStatus("Gemini API anahtarını eksiksiz gir (20-220 karakter, boşluk yok).");
@@ -236,7 +259,12 @@ public final class MainActivity extends Activity {
             setStatus("Android anahtarı güvenli kaydedemedi. Keystore desteğini kontrol et.");
             return;
         }
+        cancelRequest();
+        if (apiKey != null && !apiKey.equals(candidate)) {
+            while (history.length() > 0) history.remove(history.length() - 1);
+        }
         apiKey = candidate;
+        editingKey = false;
         manualKey.setText("");
         updateSetupVisibility();
         setStatus("Gemini anahtarı kaydedildi. Mikrofon başlatılıyor…");
@@ -249,7 +277,7 @@ public final class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         try { startActivityForResult(intent, OPEN_KEY_FILE); }
-        catch (ActivityNotFoundException ex) {
+        catch (ActivityNotFoundException | SecurityException ex) {
             setStatus("Android dosya seçicisi yok. Alttaki gizli anahtar alanına Gemini API anahtarını bir kez gir.");
             if (manualKey != null) manualKey.requestFocus();
         }
@@ -259,7 +287,7 @@ public final class MainActivity extends Activity {
         tts = new TextToSpeech(this, result -> ui.post(() -> {
             if (destroyed) return;
             if (result == TextToSpeech.SUCCESS && tts != null) {
-                int language = tts.setLanguage(new Locale("tr", "TR"));
+                int language = tts.setLanguage(Locale.forLanguageTag("tr-TR"));
                 ttsReady = language != TextToSpeech.LANG_MISSING_DATA
                         && language != TextToSpeech.LANG_NOT_SUPPORTED;
                 if (ttsReady) {
@@ -291,6 +319,7 @@ public final class MainActivity extends Activity {
     private void finishSpeech(String id, boolean failed) {
         ui.post(() -> {
             if (destroyed || !id.equals(activeUtterance)) return;
+            ui.removeCallbacks(speechTimeout);
             activeUtterance = null;
             speaking = false;
             if (failed) setStatus("Android Türkçe ses motoru ses çıkaramadı.");
@@ -299,13 +328,23 @@ public final class MainActivity extends Activity {
     }
 
     private void stopSpeech() {
+        ui.removeCallbacks(speechTimeout);
         activeUtterance = null;
         speaking = false;
-        if (tts != null) tts.stop();
+        if (tts != null) {
+            try { tts.stop(); } catch (RuntimeException ignored) { }
+        }
+    }
+
+    private void onSpeechTimeout() {
+        stopSpeech();
+        setStatus("Seslendirme zaman aşımına uğradı. Yazılı yanıt ekranda.");
+        scheduleListen(300);
     }
 
     private void say(String message) {
         if (!foreground || sleeping || !voiceEnabled || !ttsReady || tts == null) return;
+        ui.removeCallbacks(speechTimeout);
         String utteranceId = Long.toString(++utteranceSequence);
         activeUtterance = utteranceId;
         try {
@@ -315,6 +354,9 @@ public final class MainActivity extends Activity {
                 activeUtterance = null;
                 speaking = false;
                 setStatus("Türkçe seslendirme başarısız. Android TTS kurulumunu kontrol et.");
+            } else {
+                long speechLimit = Math.max(12000L, message.length() * 140L);
+                ui.postDelayed(speechTimeout, speechLimit);
             }
         } catch (RuntimeException ex) {
             activeUtterance = null;
@@ -468,7 +510,7 @@ public final class MainActivity extends Activity {
         VoiceControl.Command command = VoiceControl.classify(utterance);
         if (command == VoiceControl.Command.SLEEP) {
             sleeping = true;
-            discardReply = busy;
+            cancelRequest();
             stopSpeech();
             showSleepStatus();
             return;
@@ -502,7 +544,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if (fromMicrophone && speaking) return;
-        if (busy) {
+        if (activeRequest != null) {
             setStatus("Önceki istek henüz tamamlanmadı.");
             return;
         }
@@ -520,7 +562,11 @@ public final class MainActivity extends Activity {
             setStatus("Önce Gemini API anahtarını gir veya anahtar dosyasını seç.");
             return;
         }
-        if (busy || input == null || input.trim().isEmpty()) return;
+        if (editingKey) {
+            setStatus("Devam etmek için yeni Gemini anahtarını kaydet.");
+            return;
+        }
+        if (activeRequest != null || input == null || input.trim().isEmpty()) return;
         String question = input.trim();
         if (question.length() > 2000) {
             setStatus("Soru en fazla 2000 karakter olabilir.");
@@ -531,46 +577,91 @@ public final class MainActivity extends Activity {
             setStatus("Seçilen Gemini modeli desteklenmiyor.");
             return;
         }
-        busy = true;
-        discardReply = false;
+        final String keyForCall = apiKey;
+        final JSONArray past;
+        try {
+            past = new JSONArray(history.toString());
+        } catch (Exception ignored) {
+            setStatus("Sohbet geçmişi hazırlanamadı. Tekrar dene.");
+            return;
+        }
+
+        GeminiHttp.Call request = new GeminiHttp.Call();
+        activeRequest = request;
+        try {
+            activeTask = worker.submit(() -> {
+                try {
+                    String answer = GeminiHttp.ask(request, keyForCall, selected, past, question);
+                    ui.post(() -> showAnswer(request, question, selected, answer));
+                } catch (Exception ex) {
+                    ui.post(() -> showRequestError(request, ex));
+                }
+            });
+        } catch (RejectedExecutionException ex) {
+            activeRequest = null;
+            setStatus("Önceki bağlantı kapanıyor. Birkaç saniye sonra tekrar dene.");
+            return;
+        }
         prompt.setText("");
         append("SEN", question);
         setStatus("Gemini yanıtlıyor…");
-        final String keyForCall = apiKey;
-        // Snapshot the history so the background worker does not read mutable UI state.
-        final JSONArray past;
-        try { past = new JSONArray(history.toString()); }
-        catch (Exception ignored) { busy = false; return; }
-        worker.execute(() -> {
-            try {
-                String result = GeminiHttp.ask(keyForCall, selected, past, question);
-                runOnUiThread(() -> {
-                    if (destroyed) return;
-                    busy = false;
-                    if (discardReply) return;
-                    try {
-                        history.put(new JSONObject().put("role", "user").put("text", question));
-                        history.put(new JSONObject().put("role", "model").put("text", result));
-                        while (history.length() > 8) history.remove(0);
-                    } catch (Exception ignored) { }
-                    append("JARVIS", result);
-                    setStatus("Gemini yanıtladı · " + selected);
-                    say(result.substring(0, Math.min(result.length(), 3000)));
-                    scheduleListen(400);
-                });
-            } catch (Exception ex) {
-                final String message = ex instanceof java.io.IOException
-                        ? ex.getMessage() : "Yanıt işlenemedi.";
-                runOnUiThread(() -> {
-                    if (destroyed) return;
-                    busy = false;
-                    if (discardReply) return;
-                    append("JARVIS", "İstek tamamlanamadı: " + message);
-                    setStatus("Gemini API bağlantısını, model erişimini ve kotanı kontrol et.");
-                    scheduleListen(900);
-                });
-            }
-        });
+        ui.postDelayed(requestTimeout, 40000L);
+    }
+
+    private boolean finishRequest(GeminiHttp.Call request) {
+        if (destroyed || activeRequest != request) return false;
+        activeRequest = null;
+        activeTask = null;
+        ui.removeCallbacks(requestTimeout);
+        return true;
+    }
+
+    private void cancelRequest() {
+        if (activeRequest == null) return;
+        HttpURLConnection connection = activeRequest.cancel();
+        Future<?> task = activeTask;
+        finishRequest(activeRequest);
+        if (task != null) task.cancel(true);
+        if (connection != null) {
+            new Thread(() -> {
+                try { connection.disconnect(); } catch (RuntimeException ignored) { }
+            }, "gemini-disconnect").start();
+        }
+    }
+
+    private void onRequestTimeout() {
+        cancelRequest();
+        setStatus("Gemini yanıtı zaman aşımına uğradı. Tekrar sorabilirsin.");
+    }
+
+    private void showAnswer(GeminiHttp.Call request, String question, String modelName, String answer) {
+        if (!finishRequest(request)) return;
+        try {
+            history.put(new JSONObject().put("role", "user").put("text", question));
+            history.put(new JSONObject().put("role", "model").put("text", answer));
+            while (history.length() > 8) history.remove(0);
+        } catch (Exception ignored) { }
+        replaceKey.setVisibility(android.view.View.GONE);
+        append("JARVIS", answer);
+        setStatus("Gemini yanıtladı · " + modelName);
+        say(answer.substring(0, Math.min(answer.length(), 3000)));
+    }
+
+    private void showRequestError(GeminiHttp.Call request, Exception error) {
+        if (!finishRequest(request)) return;
+        String message = "Gemini bağlantısı kesildi. İnterneti kontrol edip tekrar dene.";
+        if (error instanceof GeminiHttp.ApiError) {
+            GeminiHttp.ApiError apiError = (GeminiHttp.ApiError) error;
+            message = apiError.getMessage();
+            if (apiError.canReplaceKey()) replaceKey.setVisibility(android.view.View.VISIBLE);
+        } else if (error instanceof SocketTimeoutException) {
+            message = "Gemini yanıtı zaman aşımına uğradı. Tekrar sorabilirsin.";
+        } else if (error instanceof UnknownHostException) {
+            message = "Gemini'ye ulaşılamadı. Wi-Fi bağlantısını kontrol et.";
+        } else if (error instanceof org.json.JSONException) {
+            message = "Gemini yanıtı okunamadı. Tekrar dene.";
+        }
+        setStatus(message);
     }
 
     private static String readBounded(InputStream input, int limit) throws Exception {
@@ -588,7 +679,7 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request, result, intent);
         if (request != OPEN_KEY_FILE || result != RESULT_OK
                 || intent == null || intent.getData() == null) return;
-        if (apiKey != null) return;
+        if (apiKey != null && !editingKey) return;
         String imported;
         try (InputStream stream = getContentResolver().openInputStream(intent.getData())) {
             if (stream == null) throw new Exception("Missing file");
@@ -611,6 +702,7 @@ public final class MainActivity extends Activity {
         state.putBoolean("sleeping", sleeping);
         state.putBoolean("voiceEnabled", voiceEnabled);
         state.putBoolean("permissionRequested", permissionRequested);
+        state.putBoolean("editingKey", editingKey);
     }
 
     @Override protected void onResume() {
@@ -626,6 +718,10 @@ public final class MainActivity extends Activity {
 
     @Override protected void onStop() {
         foreground = false;
+        if (activeRequest != null) {
+            cancelRequest();
+            setStatus("Uygulama arka plana geçtiği için Gemini isteği durduruldu.");
+        }
         ui.removeCallbacks(nextListen);
         releaseRecognizer();
         stopSpeech();
@@ -633,6 +729,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        cancelRequest();
         destroyed = true;
         ui.removeCallbacks(nextListen);
         ui.removeCallbacks(microphoneTimeout);
