@@ -56,6 +56,7 @@ from pathlib import Path
 
 import sounddevice as sd
 import numpy as np
+from core.snap_wake import SnapDetector, is_sleep_command
 from google import genai
 from google.genai import types
 from ui import JarvisUI
@@ -754,6 +755,8 @@ class JarvisLive:
         # It is True whenever wake word is OFF, so default behaviour is unchanged.
         self._wake_enabled     = get_wake_word_enabled()
         self._awake            = not self._wake_enabled
+        self._snap_detector: SnapDetector | None = None
+        self._snap_after = 0.0
         self._wake_detector: WakeWordDetector | None = None
         self._wake_sleep_timeout = WAKE_SLEEP_TIMEOUT
 
@@ -800,6 +803,7 @@ class JarvisLive:
         if self._awake:
             return
         self._awake = True
+        self._snap_detector = None
         self._last_user_speech = time.monotonic()   # start the auto-sleep clock now
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
@@ -814,7 +818,23 @@ class JarvisLive:
             detector.reset()        # nothing heard before sleeping may wake it again
         self.set_speaking(False)
         self.ui.set_state("SLEEPING")
+        if self._snap_detector is not None:
+            return
         self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey Jarvis' to wake me.")
+
+    def _sleep_until_snap(self) -> None:
+        if self._snap_detector is not None:
+            return
+        self._snap_after = time.monotonic() + 0.6
+        self._snap_detector = SnapDetector(SEND_SAMPLE_RATE)
+        if self._is_speaking or (self.audio_in_queue and not self.audio_in_queue.empty()):
+            self.interrupt()
+        self.sleep(reason="uyu komutu")
+        self.ui.write_log("SYS: Parmak şıklatınca uyanacağım. Mikrofon kapalıysa önce açın.")
+
+    def _wake_from_snap(self, detector: SnapDetector) -> None:
+        if detector is self._snap_detector and not self.ui.muted:
+            self.wake(reason="parmak şıklatması")
 
     async def _run_sleep_watch(self) -> None:
         """Auto-sleep after the configured silence window (wake-word mode only)."""
@@ -856,7 +876,7 @@ class JarvisLive:
 
     def _ui_wake_manual(self) -> None:
         """Manual sleep/wake button in the UI."""
-        if not self._wake_enabled:
+        if not self._wake_enabled and self._awake:
             return
         if self._awake:
             self.sleep(reason="you tapped sleep")
@@ -1222,6 +1242,13 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         from plugins.github_develop import local_command_mode
 
+        if is_sleep_command(text):
+            if self._loop and self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._sleep_until_snap)
+            else:
+                self.ui.write_log("SYS: Uyku modu için JARVIS’in ses oturumu hazır olmalı.")
+            return
+
         mode = local_command_mode(text)
         if mode:
             result = self._plugin_registry.run("github_develop", {"mode": mode}, player=self.ui)
@@ -1232,7 +1259,7 @@ class JarvisLive:
         # Respect wake-word sleep: a typed command must not be answered while
         # asleep either (the sleep gate is not just for the mic). Wake first with
         # "Hey Jarvis" or the WAKE NOW button.
-        if self._wake_enabled and not self._awake:
+        if not self._awake:
             self.ui.write_log("SYS: I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first.")
             return
         asyncio.run_coroutine_threadsafe(
@@ -1301,9 +1328,8 @@ class JarvisLive:
         if held:
             # Holding the key is also a way to wake it, so push-to-talk works
             # without having to say the wake word first.
-            if self._wake_enabled and not self._awake:
-                self._awake = True
-                self._last_user_speech = time.monotonic()
+            if not self._awake:
+                self.wake(reason="push-to-talk")
         # Releasing the key ends the turn. On Live the server works that out from
         # the audio; a local pipeline has no server, so the release IS the
         # signal — which is also why it is the more reliable of the two ways to
@@ -1328,7 +1354,7 @@ class JarvisLive:
                 # tapping WAKE NOW appeared to do nothing: the assistant really
                 # did wake, and the next release immediately painted it asleep
                 # again. Two different ideas were sharing one state.
-                state = ("SLEEPING" if (self._wake_enabled and not self._awake)
+                state = ("SLEEPING" if not self._awake
                          else "LISTENING")
             self.ui.set_state(state)
         except Exception:
@@ -1787,6 +1813,8 @@ class JarvisLive:
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
+            if not self._awake:
+                continue
             # Gemini 3.x Live rejects the old realtime_input.media_chunks field
             # (what `media=...` maps to) and closes the socket with a 1007. Send
             # mic / phone PCM through the new `audio` field instead. Queue items
@@ -1811,10 +1839,15 @@ class JarvisLive:
             # detector, which runs its model in ITS OWN thread — the cost here is
             # only a queue push, so the audio path is never slowed. When wake word
             # is off (default) or we're awake, this is a single boolean check.
-            if self._wake_enabled and not self._awake:
-                det = self._wake_detector
-                if det is not None:
-                    det.feed(indata)
+            if not self._awake:
+                if self.ui.muted:
+                    return
+                snap = self._snap_detector
+                if snap is not None:
+                    if time.monotonic() >= self._snap_after and snap.feed(indata):
+                        loop.call_soon_threadsafe(self._wake_from_snap, snap)
+                elif self._wake_detector is not None:
+                    self._wake_detector.feed(indata)
                 return
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
@@ -1989,8 +2022,8 @@ class JarvisLive:
                             self._resume_handle = _sru.new_handle
 
                     if response.data:
-                        if self._interrupted:
-                            pass  # discard: interrupted
+                        if self._interrupted or not self._awake:
+                            pass  # discard while asleep or interrupted
                         else:
                             if self._turn_done_event and self._turn_done_event.is_set():
                                 self._turn_done_event.clear()
@@ -2028,6 +2061,11 @@ class JarvisLive:
                                 self._last_user_speech = time.monotonic()
 
                         if sc.turn_complete:
+                            if self._awake and is_sleep_command(" ".join(in_buf)):
+                                in_buf, out_buf = [], []
+                                self._sleep_until_snap()
+                                self._interrupted = False  # this turn has already ended
+                                continue
                             if self._turn_done_event:
                                 self._turn_done_event.set()
 
@@ -2060,7 +2098,7 @@ class JarvisLive:
                             if full_out and len(full_out) >= _REPEAT_MIN and self._last_out_logged:
                                 if full_out in self._last_out_logged:
                                     full_out = ""
-                            if full_out:
+                            if full_out and self._awake:
                                 self._last_out_logged = full_out
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
@@ -2560,7 +2598,7 @@ class JarvisLive:
                 if self.session:
                     # A remote command is deliberate control and the phone user
                     # has no desktop WAKE button — so it wakes JARVIS if asleep.
-                    if self._wake_enabled and not self._awake:
+                    if not self._awake:
                         self.wake(reason="remote command")
                     await self.session.send_client_content(
                         turns={"role": "user", "parts": [{"text": text}]},
@@ -2840,7 +2878,10 @@ class JarvisLive:
                             self.ui.write_log(
                                 "SYS: Wake word could not start — listening normally instead. "
                                 "Turn WAKE WORD off and on in CONTROLS to set it up again.")
-                    if self._wake_enabled and wake_ok and (first_connect or not self._awake):
+                    if self._snap_detector is not None:
+                        self._awake = False
+                        self.ui.set_state("SLEEPING")
+                    elif self._wake_enabled and wake_ok and (first_connect or not self._awake):
                         self._awake = False
                         self.ui.set_state("SLEEPING")
                         self.ui.write_log("SYS: JARVIS online — sleeping. Say 'Hey Jarvis' to wake me.")
