@@ -193,7 +193,10 @@ def _project_python(folder: Path) -> str:
         for exe in (Path(venv) / "Scripts" / "python.exe", Path(venv) / "bin" / "python"):
             if (folder / exe).is_file():
                 return str(folder / exe)
-    return sys.executable
+    executable = Path(sys.executable)
+    if executable.name.lower() == "pythonw.exe" and executable.with_name("python.exe").is_file():
+        executable = executable.with_name("python.exe")
+    return str(executable)
 
 
 def _has_module(python: str, module: str) -> bool:
@@ -271,7 +274,10 @@ def detect_stack(folder: Path) -> dict:
                 stack["test_cmd"] = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
                 stack["test_name"] = "pytest"
             else:
-                stack["test_cmd"] = [py, "-m", "unittest", "discover", "-q"]
+                cmd = [py, "-m", "unittest", "discover", "-q"]
+                if (folder / "tests").is_dir() and not (folder / "tests" / "__init__.py").is_file():
+                    cmd.extend(["-s", "tests"])
+                stack["test_cmd"] = cmd
                 stack["test_name"] = "unittest"
 
     # Node: only when it can actually run — a test script that is not npm's
@@ -559,7 +565,8 @@ def run_tests(folder: Path, stack: dict) -> dict | None:
                PYTHONIOENCODING="utf-8")
     try:
         r = subprocess.run(cmd, cwd=str(folder), env=env, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=_TEST_TIMEOUT)
+                           encoding="utf-8", errors="replace", timeout=_TEST_TIMEOUT,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
         return {"ok": False, "failed": ["(the test run timed out)"],
                 "output": f"Tests did not finish within {_TEST_TIMEOUT}s."}
@@ -568,9 +575,9 @@ def run_tests(folder: Path, stack: dict) -> dict | None:
             {"ok": False, "failed": ["(could not start)"], "output": str(e)}
     output = (r.stdout or "") + "\n" + (r.stderr or "")
     failed = sorted({m for rx in _FAIL_RE for m in rx.findall(output)})
-    # "no tests ran" (pytest 5, unittest "Ran 0 tests") is not a failure.
+    # Both pytest and unittest can report an empty suite.
     if r.returncode == 5 or re.search(r"Ran 0 tests", output):
-        return {"ok": True, "failed": [], "output": output[-3000:]}
+        return {"ok": False, "failed": ["(no tests discovered)"], "output": output[-3000:]}
     return {"ok": r.returncode == 0, "failed": failed, "output": output[-3000:]}
 
 

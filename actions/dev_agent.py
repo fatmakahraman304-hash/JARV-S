@@ -20,10 +20,11 @@ API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
 PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
-from core import gemini
+from core import codex_coding, gemini
 
 MODEL_PLANNER    = gemini.SMART
 MODEL_WRITER     = gemini.SMART
+EXPLICIT_CODING_PROVIDERS = {"openai_compat@openai", "openai_compat@anthropic"}
 
 def _get_api_key() -> str:
     with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -48,12 +49,18 @@ def _get_model(model_name: str = gemini.SMART):
     it writes, and a whole file from one routinely takes past a minute."""
     provider = _coding_provider()
 
+    if provider == codex_coding.PROVIDER_ID:
+        return codex_coding
+
     class _W:
         def generate_content(self, contents):
             resp = gemini.call(contents, tier=model_name,
                                timeout_ms=180000 if provider else 60000,
-                               provider=provider)
+                               provider=provider,
+                               provider_only=provider in EXPLICIT_CODING_PROVIDERS)
             if resp is None:
+                if provider in EXPLICIT_CODING_PROVIDERS:
+                    raise RuntimeError(f"{provider.split('@', 1)[-1]} kodlama modeli yanıt vermedi. API ayarlarını kontrol et.")
                 raise RuntimeError("every model on the ladder failed")
             return resp
 
@@ -475,8 +482,11 @@ def _build_project(
         _log(player, msg)
 
     provider = _coding_provider()
-    log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
-        if provider else "Coding with the background-request models.")
+    if provider == codex_coding.PROVIDER_ID or provider in EXPLICIT_CODING_PROVIDERS:
+        log(f"Coding with {provider.partition('@')[2] or provider}.")
+    else:
+        log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
+            if provider else "Coding with the background-request models.")
     _update("planning")
     log("Planning project structure...")
     try:
@@ -1527,7 +1537,8 @@ def _start_improve(folder_raw: str, instruction: str, speak=None, player=None) -
         return f"I am still working on '{_job_name}', sir. One folder at a time."
     _job_name = folder.name
 
-    who = _coding_provider().partition("@")[2] or "the coding model"
+    provider = _coding_provider()
+    who = provider.partition("@")[2] or provider or "the coding model"
     _new_job(folder, who, instruction, player, kind="improve")
     return _run_job(lambda: _improve_folder(folder, instruction, player),
                     folder.name, who, speak, player)
@@ -1581,7 +1592,8 @@ def _start_build(description: str, language: str, project_name: str,
         return f"I am still working on '{_job_name}', sir. One job at a time."
     name = re.sub(r"[^\w\-]", "_", project_name) if project_name else "new project"
     _job_name = name
-    who = _coding_provider().partition("@")[2] or "the coding model"
+    provider = _coding_provider()
+    who = provider.partition("@")[2] or provider or "the coding model"
     _new_job(PROJECTS_DIR / name, who, description, player, kind="build")
     return _run_job(lambda: _build_project(description, language, project_name,
                                            timeout, speak=None, player=player),

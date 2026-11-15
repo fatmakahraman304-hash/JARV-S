@@ -713,7 +713,7 @@ def _provider_call(model: str, contents, config, timeout_ms: int):
 
 def call(contents, tier: str = FAST, config=None,
          timeout_ms: int = DEFAULT_TIMEOUT_MS, key: str = "",
-         provider: str = ""):
+         provider: str = "", *, provider_only: bool = False):
     """Run one generation, walking the ladder until one answers.
 
     Returns the SDK's own response object, so callers that need more than the
@@ -746,7 +746,9 @@ def call(contents, tier: str = FAST, config=None,
     if provider:
         chosen = PROVIDER_PREFIX + provider
         rungs = (chosen,) + tuple(r for r in rungs if r != chosen)
-        ladder = (chosen,) + tuple(m for m in ladder if m != chosen)
+        ladder = (chosen,) if provider_only else (chosen,) + tuple(m for m in ladder if m != chosen)
+        if provider_only:
+            rungs = ladder
 
     resolved_key = key or api_key()
     if not resolved_key:
