@@ -2,7 +2,6 @@
 
 import os
 import sys
-import re
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
@@ -13,10 +12,9 @@ from core.social_sites import CHAT_HOSTS, SITES
 from gui.chat_composer import composer_script
 from gui.style import btn_css
 from gui.theme import C
-from gui.tiktok_playback import PLAYBACK_RESULT, PLAY_VISIBLE_VIDEO
 
 try:
-    from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo, QWebEnginePage, QWebEngineProfile, QWebEngineScript, QWebEngineSettings
+    from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo, QWebEnginePage, QWebEngineProfile, QWebEngineScript
     from PyQt6.QtWebEngineWidgets import QWebEngineView
 except ImportError:
     QWebEngineView = None
@@ -31,17 +29,14 @@ def permitted_url(url, site):
     )
 
 
-def browser_address(site, *, login=False, page_url=None):
+def browser_address(site, *, login=False):
     if login and site == "chatgpt":
         return "https://chatgpt.com/auth/login"
-    if site == "tiktok" and page_url is not None and permitted_url(page_url, site):
-        if re.fullmatch(r"/@[A-Za-z0-9_.]{1,64}/video/[0-9]{1,24}/?", page_url.path()):
-            return page_url.toString(QUrl.UrlFormattingOption.RemoveQuery | QUrl.UrlFormattingOption.RemoveFragment)
     return SITES[site][1]
 
 
-def open_in_browser(site, *, edge=False, login=False, page_url=None):
-    address = browser_address(site, login=login, page_url=page_url)
+def open_in_browser(site, *, edge=False, login=False):
+    address = browser_address(site, login=login)
     if not edge and QDesktopServices.openUrl(QUrl(address)):
         return True
     if sys.platform != "win32":
@@ -107,7 +102,8 @@ class SocialPanel(QWidget):
             f"selection-background-color: {C.BORDER}; }}"
         )
         for key, (label, _, _) in SITES.items():
-            self._selector.addItem(label, key)
+            if key != "tiktok":
+                self._selector.addItem(label, key)
         self._selector.activated.connect(self._select_site)
         row.addWidget(self._selector)
         row.addStretch()
@@ -127,7 +123,6 @@ class SocialPanel(QWidget):
         self._draft_notice.setWordWrap(True)
         self._draft_notice.hide()
         layout.addWidget(self._draft_notice)
-        self._tiktok_request = None
         self._stack = QStackedWidget(self)
         layout.addWidget(self._stack, 1)
         help_row = QHBoxLayout()
@@ -135,9 +130,6 @@ class SocialPanel(QWidget):
         self._link.setTextFormat(Qt.TextFormat.PlainText)
         self._link.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         help_row.addWidget(self._link, 1)
-        self._tiktok_play = self._button("▶ Oynat", self._play_tiktok)
-        self._tiktok_play.hide()
-        help_row.addWidget(self._tiktok_play)
         self._chatgpt_login = self._button("ChatGPT girişini aç", self._open_chatgpt_login)
         self._chatgpt_login.hide()
         help_row.addWidget(self._chatgpt_login)
@@ -171,14 +163,11 @@ class SocialPanel(QWidget):
 
     def open_site(self, site):
         if site != self._site:
-            self._tiktok_request = None
-            self._tiktok_play.setEnabled(True)
             self._draft_request = None
             self._draft_notice.hide()
         _, address, _ = SITES[site]
         self._site = site
         self._link.setText(address)
-        self._tiktok_play.setVisible(site == "tiktok")
         self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
         self._chatgpt_login.setVisible(site == "chatgpt" and QWebEngineView is not None
@@ -202,14 +191,8 @@ class SocialPanel(QWidget):
             self._stack.addWidget(view)
             self._views[site] = [view, "Yükleniyor…"]
             page.loadingChanged.connect(lambda info: self._loading_changed(site, info))
-            if site == "tiktok":
-                page.settings().setAttribute(
-                    QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False
-                )
-                view.urlChanged.connect(self._tiktok_url_changed)
             page.blocked.connect(lambda host: self._navigation_blocked(site, host))
             view.setUrl(QUrl(address))
-        self._tiktok_url_changed(self._views[site][0].url())
         self._refresh_status()
 
     def write_chat_draft(self, draft):
@@ -269,8 +252,6 @@ class SocialPanel(QWidget):
         )
 
     def hideEvent(self, event):
-        self._tiktok_request = None
-        self._tiktok_play.setEnabled(True)
         self._draft_request = None
         self._draft_notice.hide()
         super().hideEvent(event)
@@ -312,11 +293,6 @@ class SocialPanel(QWidget):
         status = info.status()
         state = QWebEngineLoadingInfo.LoadStatus
         if status == state.LoadStartedStatus:
-            if site == "tiktok":
-                if self._tiktok_request is not None:
-                    self._draft_notice.hide()
-                self._tiktok_request = None
-                self._tiktok_play.setEnabled(True)
             if site == "chatgpt":
                 self._chatgpt_google_blocked = False
             self._failed.discard(site)
@@ -351,53 +327,9 @@ class SocialPanel(QWidget):
             else:
                 view.reload()
 
-    def _tiktok_url_changed(self, url):
-        if self._site == "tiktok":
-            self._link.setText(browser_address("tiktok", page_url=url))
-
-    def _play_tiktok(self):
-        entry = self._views.get("tiktok")
-        if self._site != "tiktok" or not entry or not permitted_url(entry[0].url(), "tiktok"):
-            self._show_draft_notice("TikTok sayfası hazır olduğunda tekrar dene.")
-            return
-        view = entry[0]
-        page = view.page()
-        request = self._tiktok_request = object()
-        self._tiktok_play.setEnabled(False)
-        self._show_draft_notice("Video başlatılıyor…")
-        world = QWebEngineScript.ScriptWorldId.ApplicationWorld.value
-
-        def finished(result, remaining):
-            if sip.isdeleted(self) or sip.isdeleted(view) or self._tiktok_request is not request:
-                return
-            if result == "pending" and remaining:
-                QTimer.singleShot(300, lambda: probe(remaining - 1))
-                return
-            self._tiktok_request = None
-            self._tiktok_play.setEnabled(True)
-            if result == "playing":
-                self._draft_notice.hide()
-                return
-            messages = {
-                "no-video": "Ekranda oynatılacak video bulunamadı. Akışta bir videoya gel.",
-                "needs-click": "Videonun üzerindeki TikTok oynatma düğmesine bas.",
-                "pending": "Video henüz başlamadı. TikTok oynatma düğmesine bas veya Yenile’yi dene.",
-            }
-            self._show_draft_notice(messages.get(str(result), "TikTok videoyu başlatamadı. Bu videoyu yeniden dene."))
-
-        def probe(remaining):
-            if not sip.isdeleted(self) and not sip.isdeleted(view) and self._tiktok_request is request:
-                page.runJavaScript(PLAYBACK_RESULT, world, lambda result: finished(result, remaining))
-
-        page.runJavaScript(PLAY_VISIBLE_VIDEO, world, lambda result: finished(result, 16))
-
-    def _current_page_url(self):
-        entry = self._views.get(self._site)
-        return entry[0].url() if self._site == "tiktok" and entry else None
-
     def _copy_address(self):
         if self._site:
-            QApplication.clipboard().setText(browser_address(self._site, page_url=self._current_page_url()))
+            QApplication.clipboard().setText(browser_address(self._site))
             self._show_draft_notice("Adres kopyalandı. Tarayıcının adres çubuğuna yapıştır.")
 
     def _release_profiles(self):
@@ -413,7 +345,7 @@ class SocialPanel(QWidget):
     def _open_external(self, *, edge=False, login=False):
         if not self._site:
             return
-        if open_in_browser(self._site, edge=edge, login=login, page_url=self._current_page_url()):
+        if open_in_browser(self._site, edge=edge, login=login):
             self._show_draft_notice("Adres tarayıcıya iletildi. Açılmazsa adresi kopyalayıp tarayıcıya yapıştır.")
         else:
             self._show_draft_notice("Tarayıcı başlatılamadı. Adresi kopyalayıp tarayıcıya yapıştır.")

@@ -215,6 +215,7 @@ class SettingsPage(QDialog):
             '“Tarayıcıda aç” seçeneğini işaretle ve tarayıcıda giriş yap.',
         )
         platform_details = {
+            'tiktok': 'Kurulu TikTok uygulamasını açar. Hesabına TikTok içinden giriş yap.',
             'whatsapp': 'Telefonunda Bağlı cihazlar bölümünden ekrandaki QR kodu okut.',
             'github': 'GitHub web hesabı tarayıcıda açılır. Kod göndermek için Yetkilendir’i kullan.',
             'chatgpt': 'ChatGPT sohbeti CORE alanında açılır. “ChatGPT’ye yaz” ile taslak yazdır.',
@@ -223,14 +224,16 @@ class SettingsPage(QDialog):
         for site, (name, _, _) in SITES.items():
             detail = platform_details.get(site, f'{name} hesabınla resmi sayfada oturum aç.')
             row = card(platforms, name, detail)
-            if site not in {'chatgpt', 'claude', 'github'}:
+            if site not in {'chatgpt', 'claude', 'github', 'tiktok'}:
                 external = QCheckBox('Tarayıcıda aç')
                 external.setAccessibleName(f'{name} için varsayılan tarayıcıyı kullan')
                 external.setChecked(cfg.get_platform_external_browser(site))
                 external.toggled.connect(lambda checked, key=site: cfg.save_platform_external_browser(key, checked))
                 row.addWidget(external)
             row.addWidget(action_button(
-                f'{name} hesabını aç', lambda key=site: owner._open_social(key), 'Giriş / Aç',
+                f'{name} uygulamasını aç' if site == 'tiktok' else f'{name} hesabını aç',
+                lambda key=site: owner._open_social(key),
+                'Uygulamayı aç' if site == 'tiktok' else 'Giriş / Aç',
             ))
             if site in {'chatgpt', 'claude', 'github'}:
                 authorize = QPushButton('Yetkilendir')

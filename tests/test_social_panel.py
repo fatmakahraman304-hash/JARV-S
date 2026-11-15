@@ -98,18 +98,3 @@ class GitHubRoutingTests(unittest.TestCase):
         with patch.object(social_panel, "open_in_browser", side_effect=RuntimeError):
             MainWindow._open_social(owner, "github")
         self.assertIn("https://github.com/", owner._log.append_log.call_args.args[0])
-
-
-class TikTokPlaybackTests(unittest.TestCase):
-    def test_browser_handoff_preserves_public_video_without_parameters(self):
-        page = QUrl("https://www.tiktok.com/@example/video/123?tracking=x#fragment")
-        with patch.object(social_panel.QDesktopServices, "openUrl", return_value=True) as launch:
-            self.assertTrue(social_panel.open_in_browser("tiktok", page_url=page))
-        launch.assert_called_once_with(QUrl("https://www.tiktok.com/@example/video/123"))
-
-    def test_browser_handoff_does_not_forward_login_or_other_origins(self):
-        for url in ("https://www.tiktok.com/login?code=x",
-                    "https://www.tiktok.com.example.org/@example/video/123"):
-            with self.subTest(url=url):
-                self.assertEqual(social_panel.browser_address("tiktok", page_url=QUrl(url)),
-                                 "https://www.tiktok.com/")
