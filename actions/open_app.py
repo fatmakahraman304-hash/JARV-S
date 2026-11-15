@@ -413,8 +413,8 @@ TOOL = {
         "To CLOSE an application use computer_control with action='close_app', "
         "not this tool. "
         "Use this tool for the Settings > Platforms entries GitHub, Claude, "
-        "and ChatGPT. GitHub opens in the system browser. Claude and ChatGPT "
-        "open in CORE. "
+        "and ChatGPT. GitHub and ChatGPT open in the system browser. "
+        "Claude opens in CORE. "
         "For other web pages or an explicit browser navigation request, use "
         "browser_control by itself."
     ),

@@ -46,24 +46,29 @@ def verify_model(site, key, model):
         raise AuthorizationError("Model boş yanıt verdi.")
 
 
-def github_access():
-    if not shutil.which("gh"):
+def github_access() -> str:
+    executable = shutil.which("gh")
+    if not executable:
         raise AuthorizationError("GitHub CLI (gh) kurulu olmalı.")
-    environment = dict(os.environ, GH_PROMPT_DISABLED="1")
-    status = subprocess.run(
-        ["gh", "auth", "status", "--hostname", "github.com"], capture_output=True,
-        timeout=15, env=environment, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    if status.returncode:
-        raise AuthorizationError("GitHub oturumu açık değil. Önce GitHub’da giriş yap.")
-    result = subprocess.run(
-        ["gh", "api", "--hostname", "github.com", f"repos/{GITHUB_REPOSITORY}"],
+    options = dict(
         capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=15, env=environment,
+        timeout=15, env=dict(os.environ, GH_PROMPT_DISABLED="1"),
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
+    status = subprocess.run(
+        [executable, "auth", "status", "--hostname", "github.com"], **options,
+    )
+    if status.returncode:
+        raise AuthorizationError("GitHub oturumu doğrulanamadı. GitHub hesabını bağla ve tekrar dene.")
+    api = [executable, "api", "--hostname", "github.com"]
+    result = subprocess.run([*api, f"repos/{GITHUB_REPOSITORY}"], **options)
     if result.returncode:
         raise AuthorizationError("GitHub erişimi doğrulanamadı. Oturumu ve internet bağlantısını kontrol et.")
     permissions = json.loads(result.stdout).get("permissions") or {}
     if not permissions.get("push"):
         raise AuthorizationError("GitHub hesabı bu depoya yazma yetkisine sahip değil.")
+    account = subprocess.run([*api, "user", "--jq", ".login"], **options)
+    login = account.stdout.strip()
+    if account.returncode or not login:
+        raise AuthorizationError("Bağlı GitHub hesabı doğrulanamadı.")
+    return login

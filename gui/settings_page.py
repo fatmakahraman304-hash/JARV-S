@@ -211,7 +211,7 @@ class SettingsPage(QDialog):
         platforms = page('Platformlar', 'Hesabını aç veya JARVIS için yetkilendirmeyi yönet.')
         platform_details = {
             'github': 'GitHub web hesabı tarayıcıda açılır. Kod göndermek için Yetkilendir’i kullan.',
-            'chatgpt': 'ChatGPT sohbeti CORE alanında açılır. “ChatGPT’ye yaz” ile taslak yazdır.',
+            'chatgpt': 'Mevcut ChatGPT hesabını tarayıcıda kullan. CORE görünümünü ayrıca açabilirsin.',
             'claude': 'Claude sohbeti CORE alanında açılır. “Claude’a yaz” ile taslak yazdır.',
         }
         for site, (name, _, _) in SITES.items():
@@ -219,7 +219,11 @@ class SettingsPage(QDialog):
             row.addWidget(action_button(
                 f'{name} hesabını aç', lambda key=site: owner._open_social(key), 'Giriş / Aç',
             ))
-            authorize = QPushButton('Yetkilendir')
+            if site == 'chatgpt':
+                row.addWidget(action_button(
+                    'ChatGPT’yi CORE’da aç', lambda: owner._open_social_in_core('chatgpt'), 'CORE’da aç',
+                ))
+            authorize = QPushButton('API yetkisi' if site == 'chatgpt' else 'Yetkilendir')
             authorize.setAccessibleName(f'{name} için JARVIS’i yetkilendir')
             authorize.clicked.connect(lambda checked=False, key=site: self._authorize(key))
             row.addWidget(authorize)

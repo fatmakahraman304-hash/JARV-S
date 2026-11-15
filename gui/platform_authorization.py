@@ -9,7 +9,7 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
 from core.platform_authorization import (
-    AuthorizationError, GITHUB_LOGIN, MODEL_PLATFORMS, github_access, verify_model,
+    AuthorizationError, GITHUB_LOGIN, GITHUB_REPOSITORY, MODEL_PLATFORMS, github_access, verify_model,
 )
 from core.social_sites import SITES
 from gui.style import btn_css
@@ -55,8 +55,10 @@ class AuthorizationDialog(QDialog):
         return button
 
     def _github(self):
-        self._description("GitHub CLI üzerinden tarayıcıda izin ver. JARVIS, proje deposuna yazma yetkisini kontrol eder.")
-        self._button("GitHub’da giriş yap", self._login_github)
+        self._description(f"GitHub hesabını bağla. JARVIS, {GITHUB_REPOSITORY} deposuna yazma yetkisini kontrol eder.")
+        self.login = self._button("GitHub hesabını bağla", self._login_github)
+        self._button("GitHub CLI kurulum sayfası",
+                     lambda: QDesktopServices.openUrl(QUrl("https://cli.github.com/")))
         self._button("Terminal komutunu kopyala",
                      lambda: QApplication.clipboard().setText(shlex.join(GITHUB_LOGIN)))
         self.device = QLabel()
@@ -70,6 +72,8 @@ class AuthorizationDialog(QDialog):
     def _model(self):
         self.provider, _, key_url = MODEL_PLATFORMS[self.site]
         saved = cfg.get_provider_config(self.provider)
+        if self.site == "chatgpt":
+            self._description("Bu pencere JARVIS’in OpenAI API erişimi içindir. ChatGPT hesabını açmak için Platformlar’daki Giriş / Aç düğmesini kullan.")
         self._description("Resmi API anahtarını ve hesabında kullanabildiğin model kimliğini gir. Doğrulama kısa bir model isteği gönderir.")
         self._button("API anahtarı sayfası", lambda: QDesktopServices.openUrl(QUrl(key_url)))
         self.key = QLineEdit()
@@ -100,7 +104,7 @@ class AuthorizationDialog(QDialog):
             return
         executable = shutil.which(GITHUB_LOGIN[0])
         if not executable:
-            self.status.setText("GitHub CLI (gh) bulunamadı. Kurulumdan sonra tekrar dene.")
+            self.status.setText("GitHub CLI (gh) bulunamadı. Kur ve JARVIS’i yeniden başlat.")
             return
         self.device.clear()
         self._device_output = ""
@@ -135,7 +139,9 @@ class AuthorizationDialog(QDialog):
             self.status.setText("Giriş tamamlanamadı. Terminal komutuyla tekrar deneyebilirsin.")
 
     def _check(self):
-        if not self.check.isEnabled():
+        if not self.check.isEnabled() or (
+            self.process and self.process.state() != QProcess.ProcessState.NotRunning
+        ):
             return
         if self.site != "github":
             key = self.key.text().strip() or self._saved_key()
@@ -146,15 +152,17 @@ class AuthorizationDialog(QDialog):
             self.pending = (key, model, self.coding.isChecked(), self.background.isChecked())
         pending = self.pending
         self.check.setEnabled(False)
+        if self.site == "github":
+            self.login.setEnabled(False)
         self.status.setText("Yetki doğrulanıyor…")
 
         def worker():
             try:
                 if self.site == "github":
-                    github_access()
+                    self.verified.emit(True, github_access())
                 else:
                     verify_model(self.site, pending[0], pending[1])
-                self.verified.emit(True, "")
+                    self.verified.emit(True, "")
             except AuthorizationError as exc:
                 self.verified.emit(False, str(exc))
             except Exception:
@@ -167,12 +175,14 @@ class AuthorizationDialog(QDialog):
 
     def _verified(self, ok, message):
         self.check.setEnabled(True)
+        if self.site == "github":
+            self.login.setEnabled(True)
         pending, self.pending = self.pending, None
         if not ok:
             self.status.setText(message)
             return
         if self.site == "github":
-            self.status.setText("GitHub erişimi ve JARVIS deposuna yazma yetkisi doğrulandı.")
+            self.status.setText(f"Bağlı hesap @{message} · {GITHUB_REPOSITORY} için yazma yetkisi doğrulandı.")
             return
         if pending is None:
             return
@@ -187,3 +197,8 @@ class AuthorizationDialog(QDialog):
             return
         self.key.clear()
         self.status.setText("Model erişimi doğrulandı ve kaydedildi.")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.site == "github":
+            self._check()

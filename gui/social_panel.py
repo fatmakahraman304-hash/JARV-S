@@ -194,6 +194,10 @@ class SocialPanel(QWidget):
             view.setUrl(QUrl(address))
         self._refresh_status()
 
+    def is_chatgpt_open_in_core(self):
+        return (self._site == "chatgpt" and self._site in self._views
+                and self._site not in self._failed and self._site not in self._blocked)
+
     def write_chat_draft(self, draft):
         site = self._site
         if site not in CHAT_HOSTS:

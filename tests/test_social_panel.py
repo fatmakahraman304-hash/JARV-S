@@ -78,18 +78,29 @@ class GoogleSignInTests(unittest.TestCase):
         self.assertIn("ayrı tarayıcıda", panel._set_status.call_args.args[1])
 
 
-class GitHubRoutingTests(unittest.TestCase):
-    def test_github_website_uses_system_browser_without_embedded_webengine(self):
+class PlatformRoutingTests(unittest.TestCase):
+    def test_github_and_chatgpt_use_system_browser_without_embedded_webengine(self):
         from gui.window import MainWindow
 
         owner = Mock()
-        with patch.object(social_panel, "open_in_browser", return_value=True) as launch, patch.object(
-            social_panel, "SocialPanel"
-        ) as embedded:
-            MainWindow._open_social(owner, "github")
-        launch.assert_called_once_with("github")
-        embedded.assert_not_called()
+        for site in ("github", "chatgpt"):
+            with self.subTest(site=site), patch.object(
+                social_panel, "open_in_browser", return_value=True
+            ) as launch:
+                MainWindow._open_social(owner, site)
+                launch.assert_called_once_with(site)
+        owner._open_social_in_core.assert_not_called()
         owner._log.append_log.assert_not_called()
+
+    def test_chatgpt_browser_draft_is_copied_for_manual_paste(self):
+        from gui import window
+
+        owner = Mock(_social_panel=None)
+        with patch.object(window.QApplication, "clipboard") as clipboard:
+            window.MainWindow._write_chat_draft(owner, "chatgpt", "Örnek taslak")
+            clipboard.return_value.setText.assert_called_once_with("Örnek taslak")
+        owner._open_social.assert_called_once_with("chatgpt")
+        owner._open_social_in_core.assert_not_called()
 
     def test_browser_launch_error_is_reported_instead_of_escaping_qt_slot(self):
         from gui.window import MainWindow

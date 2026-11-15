@@ -1,4 +1,4 @@
-"""Put a user's explicit dictation into a web chat composer in the HUD."""
+"""Prepare the user's explicit dictation for their selected web chat."""
 
 from core.social_sites import CHAT_DRAFT_LIMIT, CHAT_HOSTS, site_for_name
 
@@ -6,10 +6,11 @@ PLUGIN = {
     "name": "chat_draft",
     "description": (
         "Use only when the user explicitly asks to write or dictate text into the ChatGPT "
-        "or Claude web chat in the JARVIS HUD. Examples: 'Claude’a şunu yaz: ...', "
+        "or Claude web chat. Examples: 'Claude’a şunu yaz: ...', "
         "'ChatGPT’ye yaz: ...', 'buraya yaz: ...' when they mean the active web chat. "
-        "Copy only the user's dictated text verbatim. This types a draft and does not "
-        "send a message. For opening a site without dictation, use open_app."
+        "Preserve the user's dictated text verbatim. This prepares a draft without sending it. "
+        "For browser-based ChatGPT, the draft goes to the clipboard for the user to paste. "
+        "For opening a site without dictation, use open_app."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -36,4 +37,4 @@ def run(parameters, player=None, session_memory=None):
     if not callable(draft):
         return "Sohbet kutusuna yazmak için JARVIS masaüstü arayüzü gerekli."
     draft(site, text)
-    return "Metni sohbet kutusuna aktarma isteği alındı. Durumu HUD’da görebilirsin."
+    return "Sohbet taslağı isteği alındı. Durumu JARVIS’te görebilirsin."

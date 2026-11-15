@@ -42,6 +42,18 @@ class PlatformAuthorizationTests(unittest.TestCase):
             with self.assertRaisesRegex(auth.AuthorizationError, "yazma yetkisine"):
                 auth.github_access()
 
+    def test_github_returns_the_authenticated_account_after_verifying_repo_write_access(self):
+        with patch.object(auth.shutil, "which", return_value="gh"), patch.object(
+            auth.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0),
+                subprocess.CompletedProcess([], 0, json.dumps({"permissions": {"push": True}})),
+                subprocess.CompletedProcess([], 0, "example-user\n"),
+            ],
+        ) as run:
+            self.assertEqual(auth.github_access(), "example-user")
+            self.assertIn(f"repos/{auth.GITHUB_REPOSITORY}", run.call_args_list[1].args[0])
+            self.assertEqual(run.call_args.args[0][-3:], ["user", "--jq", ".login"])
+
     def test_authorized_claude_can_be_selected_without_replacing_voice(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(cfg, "CONFIG_FILE", Path(folder) / "api_keys.json"), patch.object(cfg, "CONFIG_DIR", Path(folder)):
             provider, base, _ = auth.MODEL_PLATFORMS["claude"]

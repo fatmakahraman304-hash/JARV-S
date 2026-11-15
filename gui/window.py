@@ -460,9 +460,9 @@ class MainWindow(QMainWindow):
 
         if site not in SITES:
             return
-        from gui.social_panel import SocialPanel, open_in_browser
+        if site in {"github", "chatgpt"}:
+            from gui.social_panel import open_in_browser
 
-        if site == "github":
             try:
                 opened = open_in_browser(site)
             except (OSError, RuntimeError):
@@ -470,6 +470,11 @@ class MainWindow(QMainWindow):
             if not opened:
                 self._log.append_log(f"SYS: Tarayıcı açılamadı. Adres {SITES[site][1]}")
             return
+
+        self._open_social_in_core(site)
+
+    def _open_social_in_core(self, site: str) -> None:
+        from gui.social_panel import SocialPanel
 
         panel = getattr(self, "_social_panel", None)
         if panel is None:
@@ -486,9 +491,18 @@ class MainWindow(QMainWindow):
         if not text.strip() or len(text) > CHAT_DRAFT_LIMIT:
             self._log.append_log("SYS: En fazla 8.000 karakterlik bir sohbet taslağı yaz.")
             return
-        if site in CHAT_HOSTS:
-            self._open_social(site)
         panel = getattr(self, "_social_panel", None)
+        if site == "chatgpt" and (
+            panel is None or self._hud_cam_stack.currentWidget() is not panel
+            or not panel.is_chatgpt_open_in_core()
+        ):
+            QApplication.clipboard().setText(text)
+            self._log.append_log("SYS: ChatGPT taslağı kopyalandı. Tarayıcıdaki sohbet kutusuna yapıştır.")
+            self._open_social(site)
+            return
+        if site in CHAT_HOSTS:
+            self._open_social_in_core(site)
+            panel = self._social_panel
         if (panel is None or self._hud_cam_stack.currentWidget() is not panel
                 or not panel.write_chat_draft(text)):
             self._log.append_log("SYS: CORE alanında ChatGPT veya Claude sohbetini aç.")
