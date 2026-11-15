@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, Mock, patch
 from urllib.error import HTTPError, URLError
 
 from core import app_updater
-from core.social_sites import site_for_command
+from core.social_sites import SITES, site_for_command
 from plugins import capacity_simulation, github_develop, night_shift, normal_map
 
 
@@ -88,9 +88,17 @@ class SearchTests(unittest.TestCase):
 
 class CommandTests(unittest.TestCase):
     def test_platform_commands_with_names_and_suffixes(self):
-        for command, site in [('Jarvis, WPyi aç', 'whatsapp'), ('Friday ChatGPT’yi aç', 'chatgpt'), ('claudeyi aç', 'claude')]:
+        self.assertEqual(set(SITES), {'github', 'claude', 'chatgpt'})
+        for command, site in [
+            ('Jarvis, GitHub’ı aç', 'github'),
+            ('Friday ChatGPT’yi aç', 'chatgpt'),
+            ('claudeyi aç', 'claude'),
+        ]:
             self.assertEqual(site_for_command(command), site)
-        for command in ['Instagramı açma', 'GitHub kodunu aç', 'Jarvis WhatsApp mesajlarını sil']:
+        for command in [
+            'Instagramı aç', 'TikTok’u aç', 'Facebook aç', 'WhatsApp aç', 'WPyi aç',
+            'Claude’u açma', 'GitHub kodunu aç',
+        ]:
             self.assertIsNone(site_for_command(command))
 
     def test_failed_worker_start_releases_github_lock(self):

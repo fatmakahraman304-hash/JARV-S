@@ -456,17 +456,13 @@ class MainWindow(QMainWindow):
         panel.show_html(text)
 
     def _open_social(self, site: str) -> None:
-        from core.social_sites import CHAT_HOSTS, SITES
-        from memory.config_manager import get_platform_external_browser
+        from core.social_sites import SITES
 
         if site not in SITES:
             return
-        if site == "tiktok":
-            self._open_tiktok_app()
-            return
         from gui.social_panel import SocialPanel, open_in_browser
 
-        if site == "github" or (site not in CHAT_HOSTS and get_platform_external_browser(site)):
+        if site == "github":
             try:
                 opened = open_in_browser(site)
             except (OSError, RuntimeError):
@@ -483,19 +479,6 @@ class MainWindow(QMainWindow):
             self._hud_cam_stack.addWidget(panel)
         self._hud_cam_stack.setCurrentWidget(panel)
         panel.open_site(site)
-
-    def _open_tiktok_app(self) -> None:
-        from core.tiktok_app import launch_tiktok
-
-        worker = getattr(self, "_tiktok_launch_worker", None)
-        if worker is not None and worker.is_alive():
-            return
-
-        def launch():
-            self._log_sig.emit(f"SYS: {launch_tiktok()}")
-
-        self._tiktok_launch_worker = threading.Thread(target=launch, daemon=True)
-        self._tiktok_launch_worker.start()
 
     def _write_chat_draft(self, site, text):
         from core.social_sites import CHAT_DRAFT_LIMIT, CHAT_HOSTS

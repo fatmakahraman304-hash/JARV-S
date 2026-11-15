@@ -102,8 +102,7 @@ class SocialPanel(QWidget):
             f"selection-background-color: {C.BORDER}; }}"
         )
         for key, (label, _, _) in SITES.items():
-            if key != "tiktok":
-                self._selector.addItem(label, key)
+            self._selector.addItem(label, key)
         self._selector.activated.connect(self._select_site)
         row.addWidget(self._selector)
         row.addStretch()

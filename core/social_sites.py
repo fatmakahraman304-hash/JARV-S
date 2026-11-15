@@ -3,10 +3,6 @@
 import re
 
 SITES = {
-    "whatsapp": ("WhatsApp", "https://web.whatsapp.com/", {"web.whatsapp.com"}),
-    "facebook": ("Facebook", "https://www.facebook.com/", {"facebook.com", "www.facebook.com", "m.facebook.com"}),
-    "tiktok": ("TikTok", "https://www.tiktok.com/", {"tiktok.com", "www.tiktok.com"}),
-    "instagram": ("Instagram", "https://www.instagram.com/", {"instagram.com", "www.instagram.com"}),
     "github": ("GitHub", "https://github.com/", {"github.com", "www.github.com"}),
     "claude": ("Claude", "https://claude.ai/", {"claude.ai", "www.claude.ai"}),
     "chatgpt": ("ChatGPT", "https://chatgpt.com/", {
@@ -16,10 +12,6 @@ SITES = {
 }
 
 _ALIASES = {
-    "wp": "whatsapp",
-    "whats": "whatsapp",
-    "whatsab": "whatsapp",
-    "ig": "instagram",
     "chatgbt": "chatgpt",
 }
 _OPEN_COMMAND = re.compile(

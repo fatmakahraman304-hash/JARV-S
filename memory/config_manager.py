@@ -388,22 +388,6 @@ def save_output_device(name: str) -> None:
     _patch_config(output_device=(name or "").strip())
 
 
-def get_platform_external_browser(site: str) -> bool:
-    platforms = load_api_keys().get("platform_external_browser")
-    return isinstance(platforms, dict) and platforms.get(site) is True
-
-
-@_locked
-def save_platform_external_browser(site: str, enabled: bool) -> None:
-    data = _read_for_write()
-    platforms = data.get("platform_external_browser")
-    if not isinstance(platforms, dict):
-        platforms = {}
-    platforms[site] = enabled
-    data["platform_external_browser"] = platforms
-    _write_config(data)
-
-
 def get_plugin_enabled(plugin_name: str) -> bool:
     """Plugins are enabled by default the moment they're discovered (opt-out model)."""
     return load_api_keys().get("plugins_enabled", {}).get(plugin_name, True)

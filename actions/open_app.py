@@ -412,10 +412,9 @@ TOOL = {
         "something without calling this tool. "
         "To CLOSE an application use computer_control with action='close_app', "
         "not this tool. "
-        "Use this tool when the user asks to open a saved Settings > Platforms "
-        "site: WhatsApp (WP), Facebook, Instagram, GitHub, Claude, or "
-        "ChatGPT. It uses the user's saved browser preference and session. "
-        "Use this tool for TikTok too. It opens the installed Windows TikTok app. "
+        "Use this tool for the Settings > Platforms entries GitHub, Claude, "
+        "and ChatGPT. GitHub opens in the system browser. Claude and ChatGPT "
+        "open in CORE. "
         "For other web pages or an explicit browser navigation request, use "
         "browser_control by itself."
     ),
