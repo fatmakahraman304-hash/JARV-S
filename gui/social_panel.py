@@ -1,6 +1,7 @@
 """On-demand views of the official websites, inside the central HUD."""
 
 import os
+import re
 import sys
 
 from PyQt6 import sip
@@ -29,8 +30,18 @@ def permitted_url(url, site):
     )
 
 
-def open_in_browser(site, *, edge=False, login=False):
-    address = "https://chatgpt.com/auth/login" if login and site == "chatgpt" else SITES[site][1]
+def browser_address(site, *, login=False, page_url=None):
+    if login and site == "chatgpt":
+        return "https://chatgpt.com/auth/login"
+    if site == "tiktok" and page_url is not None and permitted_url(page_url, site):
+        # Hand off public video permalinks without tracking or sign-in parameters.
+        if re.fullmatch(r"/@[A-Za-z0-9_.]+/video/[0-9]+/?", page_url.path()):
+            return page_url.toString(QUrl.UrlFormattingOption.RemoveQuery | QUrl.UrlFormattingOption.RemoveFragment)
+    return SITES[site][1]
+
+
+def open_in_browser(site, *, edge=False, login=False, page_url=None):
+    address = browser_address(site, login=login, page_url=page_url)
     if not edge and QDesktopServices.openUrl(QUrl(address)):
         return True
     if sys.platform != "win32":
@@ -116,6 +127,12 @@ class SocialPanel(QWidget):
         self._draft_notice.setWordWrap(True)
         self._draft_notice.hide()
         layout.addWidget(self._draft_notice)
+        self._media_notice = QLabel()
+        self._media_notice.setWordWrap(True)
+        self._media_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self._media_notice.hide()
+        layout.addWidget(self._media_notice)
+        self._tiktok_mp4_supported = None
         self._stack = QStackedWidget(self)
         layout.addWidget(self._stack, 1)
         help_row = QHBoxLayout()
@@ -161,6 +178,7 @@ class SocialPanel(QWidget):
         _, address, _ = SITES[site]
         self._site = site
         self._link.setText(address)
+        self._refresh_media_notice()
         self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
         self._chatgpt_login.setVisible(site == "chatgpt" and QWebEngineView is not None
@@ -184,8 +202,12 @@ class SocialPanel(QWidget):
             self._stack.addWidget(view)
             self._views[site] = [view, "Yükleniyor…"]
             page.loadingChanged.connect(lambda info: self._loading_changed(site, info))
+            if site == "tiktok":
+                view.urlChanged.connect(self._tiktok_url_changed)
+                view.loadFinished.connect(self._check_tiktok_media)
             page.blocked.connect(lambda host: self._navigation_blocked(site, host))
             view.setUrl(QUrl(address))
+        self._tiktok_url_changed(self._views[site][0].url())
         self._refresh_status()
 
     def write_chat_draft(self, draft):
@@ -320,9 +342,42 @@ class SocialPanel(QWidget):
             else:
                 view.reload()
 
+    def _tiktok_url_changed(self, url):
+        if self._site == "tiktok":
+            self._link.setText(browser_address("tiktok", page_url=url))
+
+    def _check_tiktok_media(self, ok):
+        if not ok:
+            return
+        entry = self._views.get("tiktok")
+        if entry and permitted_url(entry[0].url(), "tiktok"):
+            entry[0].page().runJavaScript(
+                """Boolean(document.createElement('video')
+                    .canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'))""",
+                QWebEngineScript.ScriptWorldId.ApplicationWorld.value,
+                self._tiktok_media_checked,
+            )
+
+    def _tiktok_media_checked(self, supported):
+        if type(supported) is bool and self._views:
+            self._tiktok_mp4_supported = supported
+            self._refresh_media_notice()
+
+    def _refresh_media_notice(self):
+        missing = self._site == "tiktok" and self._tiktok_mp4_supported is False
+        if missing:
+            self._media_notice.setText(
+                "CORE bu MP4 video biçimini desteklemiyor. Videoyu tarayıcıda açabilirsin."
+            )
+        self._media_notice.setVisible(missing)
+
+    def _current_page_url(self):
+        entry = self._views.get(self._site)
+        return entry[0].url() if self._site == "tiktok" and entry else None
+
     def _copy_address(self):
         if self._site:
-            QApplication.clipboard().setText(SITES[self._site][1])
+            QApplication.clipboard().setText(browser_address(self._site, page_url=self._current_page_url()))
             self._show_draft_notice("Adres kopyalandı. Tarayıcının adres çubuğuna yapıştır.")
 
     def _release_profiles(self):
@@ -338,7 +393,7 @@ class SocialPanel(QWidget):
     def _open_external(self, *, edge=False, login=False):
         if not self._site:
             return
-        if open_in_browser(self._site, edge=edge, login=login):
+        if open_in_browser(self._site, edge=edge, login=login, page_url=self._current_page_url()):
             self._show_draft_notice("Adres tarayıcıya iletildi. Açılmazsa adresi kopyalayıp tarayıcıya yapıştır.")
         else:
             self._show_draft_notice("Tarayıcı başlatılamadı. Adresi kopyalayıp tarayıcıya yapıştır.")
