@@ -1,14 +1,15 @@
 """On-demand views of the official websites, inside the central HUD."""
 
 import os
-import re
 import sys
+import threading
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QDesktopServices
-from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QInputDialog, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
+from actions._tiktok_video import tiktok_permalink
 from core.social_sites import CHAT_HOSTS, SITES
 from gui.chat_composer import composer_script
 from gui.style import btn_css
@@ -33,10 +34,9 @@ def permitted_url(url, site):
 def browser_address(site, *, login=False, page_url=None):
     if login and site == "chatgpt":
         return "https://chatgpt.com/auth/login"
-    if site == "tiktok" and page_url is not None and permitted_url(page_url, site):
-        # Hand off public video permalinks without tracking or sign-in parameters.
-        if re.fullmatch(r"/@[A-Za-z0-9_.]+/video/[0-9]+/?", page_url.path()):
-            return page_url.toString(QUrl.UrlFormattingOption.RemoveQuery | QUrl.UrlFormattingOption.RemoveFragment)
+    if site == "tiktok" and page_url is not None:
+        if address := tiktok_permalink(page_url.toString()):
+            return address
     return SITES[site][1]
 
 
@@ -84,6 +84,8 @@ if QWebEngineView is not None:
 class SocialPanel(QWidget):
     back_requested = pyqtSignal()
     site_requested = pyqtSignal(str)
+    tiktok_video_ready = pyqtSignal(str, str)
+    _tiktok_result = pyqtSignal(object, str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -127,12 +129,8 @@ class SocialPanel(QWidget):
         self._draft_notice.setWordWrap(True)
         self._draft_notice.hide()
         layout.addWidget(self._draft_notice)
-        self._media_notice = QLabel()
-        self._media_notice.setWordWrap(True)
-        self._media_notice.setTextFormat(Qt.TextFormat.PlainText)
-        self._media_notice.hide()
-        layout.addWidget(self._media_notice)
-        self._tiktok_mp4_supported = None
+        self._tiktok_request = None
+        self._tiktok_result.connect(self._finish_tiktok_video)
         self._stack = QStackedWidget(self)
         layout.addWidget(self._stack, 1)
         help_row = QHBoxLayout()
@@ -140,6 +138,9 @@ class SocialPanel(QWidget):
         self._link.setTextFormat(Qt.TextFormat.PlainText)
         self._link.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         help_row.addWidget(self._link, 1)
+        self._tiktok_play = self._button("JARVIS’te oynat", self._play_tiktok)
+        self._tiktok_play.hide()
+        help_row.addWidget(self._tiktok_play)
         self._chatgpt_login = self._button("ChatGPT girişini aç", self._open_chatgpt_login)
         self._chatgpt_login.hide()
         help_row.addWidget(self._chatgpt_login)
@@ -173,12 +174,14 @@ class SocialPanel(QWidget):
 
     def open_site(self, site):
         if site != self._site:
+            self._tiktok_request = None
+            self._tiktok_play.setEnabled(True)
             self._draft_request = None
             self._draft_notice.hide()
         _, address, _ = SITES[site]
         self._site = site
         self._link.setText(address)
-        self._refresh_media_notice()
+        self._tiktok_play.setVisible(site == "tiktok")
         self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
         self._chatgpt_login.setVisible(site == "chatgpt" and QWebEngineView is not None
@@ -204,7 +207,6 @@ class SocialPanel(QWidget):
             page.loadingChanged.connect(lambda info: self._loading_changed(site, info))
             if site == "tiktok":
                 view.urlChanged.connect(self._tiktok_url_changed)
-                view.loadFinished.connect(self._check_tiktok_media)
             page.blocked.connect(lambda host: self._navigation_blocked(site, host))
             view.setUrl(QUrl(address))
         self._tiktok_url_changed(self._views[site][0].url())
@@ -267,6 +269,8 @@ class SocialPanel(QWidget):
         )
 
     def hideEvent(self, event):
+        self._tiktok_request = None
+        self._tiktok_play.setEnabled(True)
         self._draft_request = None
         self._draft_notice.hide()
         super().hideEvent(event)
@@ -346,30 +350,93 @@ class SocialPanel(QWidget):
         if self._site == "tiktok":
             self._link.setText(browser_address("tiktok", page_url=url))
 
-    def _check_tiktok_media(self, ok):
-        if not ok:
+    def _play_tiktok(self):
+        page = self._current_page_url()
+        address = tiktok_permalink(page.toString()) if page is not None else ""
+        if address or page is None or not permitted_url(page, "tiktok"):
+            self._resolve_tiktok(address)
             return
-        entry = self._views.get("tiktok")
-        if entry and permitted_url(entry[0].url(), "tiktok"):
-            entry[0].page().runJavaScript(
-                """Boolean(document.createElement('video')
-                    .canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'))""",
-                QWebEngineScript.ScriptWorldId.ApplicationWorld.value,
-                self._tiktok_media_checked,
-            )
+        self._tiktok_play.setEnabled(False)
+        view = self._views["tiktok"][0]
 
-    def _tiktok_media_checked(self, supported):
-        if type(supported) is bool and self._views:
-            self._tiktok_mp4_supported = supported
-            self._refresh_media_notice()
+        def found(value):
+            if sip.isdeleted(self) or sip.isdeleted(view):
+                return
+            self._tiktok_play.setEnabled(True)
+            if self._site == "tiktok" and self.isVisible() and view.url() == page:
+                self._resolve_tiktok(tiktok_permalink(value) if isinstance(value, str) else "")
 
-    def _refresh_media_notice(self):
-        missing = self._site == "tiktok" and self._tiktok_mp4_supported is False
-        if missing:
-            self._media_notice.setText(
-                "CORE bu MP4 video biçimini desteklemiyor. Videoyu tarayıcıda açabilirsin."
+        view.page().runJavaScript(
+            r"""(() => {
+                const width = document.documentElement.clientWidth;
+                const height = document.documentElement.clientHeight;
+                const visibleArea = video => {
+                    const r = video.getBoundingClientRect();
+                    return Math.max(0, Math.min(width, r.right) - Math.max(0, r.left)) *
+                           Math.max(0, Math.min(height, r.bottom) - Math.max(0, r.top));
+                };
+                const videos = [...document.querySelectorAll('video')].filter(v => visibleArea(v) > 1000);
+                videos.sort((a, b) => visibleArea(b) - visibleArea(a));
+                let container = videos[0];
+                for (let i = 0; container && i < 6; i++, container = container.parentElement) {
+                    const links = new Set([...container.querySelectorAll('a[href*="/video/"]')].map(a => a.href));
+                    if (links.size === 1) return [...links][0];
+                    if (links.size > 1) return '';
+                }
+                return '';
+            })()""",
+            QWebEngineScript.ScriptWorldId.ApplicationWorld.value, found,
+        )
+
+    def _resolve_tiktok(self, address):
+        from actions._tiktok_video import resolve_video
+
+        if not address:
+            text, accepted = QInputDialog.getText(
+                self, "TikTok videosu", "TikTok’taki Paylaş → Bağlantıyı kopyala ile aldığın video adresi:"
             )
-        self._media_notice.setVisible(missing)
+            if not accepted:
+                return
+            address = tiktok_permalink(text.strip())
+            if not address:
+                self._show_draft_notice("Tarayıcıdaki tam TikTok video adresini yapıştır.")
+                return
+        request = self._tiktok_request = object()
+        self._tiktok_play.setEnabled(False)
+        self._show_draft_notice("TikTok videosu hazırlanıyor…")
+
+        def resolve():
+            try:
+                stream, title = resolve_video(address)
+            except Exception:
+                stream, title = "", ""
+            if not sip.isdeleted(self):
+                self._tiktok_result.emit(request, stream, title)
+
+        try:
+            threading.Thread(target=resolve, daemon=True).start()
+        except RuntimeError:
+            self._finish_tiktok_video(request, "", "")
+
+    def _finish_tiktok_video(self, request, stream, title):
+        if request is not self._tiktok_request:
+            return
+        self._tiktok_request = None
+        self._tiktok_play.setEnabled(True)
+        if not self.isVisible() or self._site != "tiktok":
+            return
+        if stream:
+            self._draft_notice.hide()
+            if entry := self._views.get("tiktok"):
+                entry[0].page().runJavaScript(
+                    "document.querySelectorAll('video').forEach(video => video.pause());",
+                    QWebEngineScript.ScriptWorldId.ApplicationWorld.value,
+                )
+            self.tiktok_video_ready.emit(stream, title)
+        else:
+            self._show_draft_notice(
+                "Video akışı alınamadı. TikTok sayfasında tekrar dene veya aynı videoyu Edge’de aç."
+            )
 
     def _current_page_url(self):
         entry = self._views.get(self._site)

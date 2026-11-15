@@ -476,10 +476,18 @@ class MainWindow(QMainWindow):
         if panel is None:
             panel = self._social_panel = SocialPanel(self._hud_cam_stack)
             panel.site_requested.connect(self._open_social)
+            panel.tiktok_video_ready.connect(self._play_tiktok_in_hud)
             panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
             self._hud_cam_stack.addWidget(panel)
         self._hud_cam_stack.setCurrentWidget(panel)
         panel.open_site(site)
+
+    def _play_tiktok_in_hud(self, stream, title):
+        if not HAVE_VIDEO:
+            self._log.append_log("SYS: JARVIS video oynatıcısı kullanılamıyor.")
+            return
+        self._on_video_open(stream, title, True)
+        self._return_from_video = self._social_panel
 
     def _write_chat_draft(self, site, text):
         from core.social_sites import CHAT_DRAFT_LIMIT, CHAT_HOSTS
@@ -838,6 +846,7 @@ class MainWindow(QMainWindow):
 
     def _on_video_open(self, source: str, title: str, muted: bool,
                        audio_source: str = "") -> None:
+        self._return_from_video = None
         if not HAVE_VIDEO:
             self._log.append_log("SYS: Video playback is not available in this Qt "
                            "install.")
@@ -903,6 +912,7 @@ class MainWindow(QMainWindow):
                 p.stop()
                 p.setSource(QUrl())
         self._video_split = False
+        self._return_from_video = None
         self._video_kind = "image"
         # Silence first: a video whose sound was on has the microphone closed,
         # and the picture replacing it must hand the microphone back.
@@ -963,7 +973,9 @@ class MainWindow(QMainWindow):
         if self._video_item is not None:
             self._video_item.setVisible(True)
         self._video_mute_btn.setVisible(True)
-        self._hud_cam_stack.setCurrentIndex(0)
+        previous = getattr(self, "_return_from_video", None)
+        self._return_from_video = None
+        self._hud_cam_stack.setCurrentWidget(previous or self.hud)
         self._sync_mic_for_video()      # gives the microphone back
 
     def _set_video_muted(self, muted: bool) -> None:
