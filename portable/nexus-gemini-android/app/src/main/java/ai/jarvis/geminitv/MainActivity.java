@@ -138,7 +138,7 @@ public final class MainActivity extends Activity {
         root.addView(makeText("Uyu / JARVIS uyan · Bekleme modu\nSus / Konuş · Yanıt sesi",
                 20, Color.WHITE));
 
-        root.addView(makeText("Cihaz komutları · Chrome’u aç · YouTube’da caz ara · Ayarları aç",
+        root.addView(makeText("Cihaz komutları · Chrome’u aç · Sesi yükselt · YouTube’da caz ara",
                 17, Color.LTGRAY));
 
         keyPicker = new Button(this);
@@ -559,7 +559,7 @@ public final class MainActivity extends Activity {
         DeviceCommand local = DeviceCommand.parse(utterance);
         if (local != null) {
             if (!fromMicrophone) prompt.setText("");
-            if (local.action != DeviceCommand.Action.HELP) {
+            if (local.leavesJarvis()) {
                 cancelRequest();
                 stopSpeech();
             }

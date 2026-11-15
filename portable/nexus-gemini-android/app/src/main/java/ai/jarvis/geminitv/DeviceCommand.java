@@ -6,7 +6,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class DeviceCommand {
-    enum Action { CHROME, BROWSER, WEB_SEARCH, YOUTUBE, YOUTUBE_SEARCH, APP, SETTINGS, HELP }
+    enum Action {
+        CHROME, BROWSER, WEB_SEARCH, YOUTUBE, YOUTUBE_SEARCH, YOUTUBE_PLAY, FILM, APP,
+        SETTINGS, WIFI, BLUETOOTH, DISPLAY, VOLUME_UP, VOLUME_DOWN, VOLUME_SET,
+        MEDIA_PLAY, MEDIA_PAUSE, MEDIA_NEXT, MEDIA_PREVIOUS, HELP
+    }
 
     private static final int MAX_ARGUMENT_LENGTH = 200;
     private static final int FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
@@ -15,6 +19,12 @@ final class DeviceCommand {
             "^(google|web|youtube)(?:'?(?:da|de|ta|te))? (.+) ara$", FLAGS);
     private static final Pattern SEARCH_BEFORE = Pattern.compile(
             "^(google|web|youtube)(?:'?(?:da|de|ta|te))? ara(?:[: ]+(.+))?$", FLAGS);
+    private static final Pattern YOUTUBE_PLAY = Pattern.compile(
+            "^youtube'?(?:da|de)? (.+) (?:aç|oynat|başlat)$", FLAGS);
+    private static final Pattern FILM = Pattern.compile(
+            "^(?:chrom(?:e|u)?'?(?:da|de) )?(.+?) filmi(?:ni)? (?:aç|oynat|başlat)$", FLAGS);
+    private static final Pattern VOLUME = Pattern.compile(
+            "^ses(?:i| seviyesini)? %? *(?:yüzde )?([0-9]{1,3}) *(?:ye |e |a )?(?:ayarla|yap)$");
     private static final Pattern APP = Pattern.compile(
             "^(?:uygulamayı aç(?:[: ]+(.+))?|(.+?) uygulamasını aç)$", FLAGS);
 
@@ -47,6 +57,36 @@ final class DeviceCommand {
             case "ayarlari aç":
             case "android ayarlarini aç":
                 return new DeviceCommand(Action.SETTINGS, "");
+            case "wi-fi ayarlarini aç":
+            case "wifi ayarlarini aç":
+            case "kablosuz ağ ayarlarini aç":
+                return new DeviceCommand(Action.WIFI, "");
+            case "bluetooth ayarlarini aç":
+                return new DeviceCommand(Action.BLUETOOTH, "");
+            case "ekran ayarlarini aç":
+                return new DeviceCommand(Action.DISPLAY, "");
+            case "sesi yükselt":
+            case "ses yükselt":
+            case "sesi artir":
+            case "sesi arttir":
+            case "sesi aç":
+                return new DeviceCommand(Action.VOLUME_UP, "");
+            case "sesi azalt":
+            case "ses azalt":
+            case "sesi düşür":
+            case "sesi kis":
+                return new DeviceCommand(Action.VOLUME_DOWN, "");
+            case "medyayi oynat":
+            case "videoyu devam ettir":
+            case "videoyu oynat":
+                return new DeviceCommand(Action.MEDIA_PLAY, "");
+            case "medyayi duraklat":
+            case "videoyu duraklat":
+                return new DeviceCommand(Action.MEDIA_PAUSE, "");
+            case "sonraki video":
+                return new DeviceCommand(Action.MEDIA_NEXT, "");
+            case "önceki video":
+                return new DeviceCommand(Action.MEDIA_PREVIOUS, "");
             case "cihaz komutlari":
                 return new DeviceCommand(Action.HELP, "");
             default:
@@ -54,6 +94,12 @@ final class DeviceCommand {
         }
         // A question about a command must not launch an app.
         if (plain.endsWith("?")) return null;
+        Matcher volume = VOLUME.matcher(normalize(plain).replace("'", " "));
+        if (volume.matches()) return new DeviceCommand(Action.VOLUME_SET, volume.group(1));
+        Matcher playback = YOUTUBE_PLAY.matcher(plain);
+        if (playback.matches()) return new DeviceCommand(Action.YOUTUBE_PLAY, argument(playback.group(1)));
+        Matcher film = FILM.matcher(plain);
+        if (film.matches()) return new DeviceCommand(Action.FILM, argument(film.group(1)));
         Matcher search = SEARCH_AFTER.matcher(plain);
         if (!search.matches()) search = SEARCH_BEFORE.matcher(plain);
         if (search.matches()) {
@@ -67,6 +113,22 @@ final class DeviceCommand {
             return new DeviceCommand(Action.APP, argument(name));
         }
         return null;
+    }
+
+    boolean leavesJarvis() {
+        switch (action) {
+            case HELP:
+            case VOLUME_UP:
+            case VOLUME_DOWN:
+            case VOLUME_SET:
+            case MEDIA_PLAY:
+            case MEDIA_PAUSE:
+            case MEDIA_NEXT:
+            case MEDIA_PREVIOUS:
+                return false;
+            default:
+                return true;
+        }
     }
 
     static String normalize(String label) {

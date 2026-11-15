@@ -31,7 +31,7 @@ Typing a key on the projector may require its on-screen keyboard or a USB
 keyboard. Never share or photograph the key. If an APK upgrade fails due to a
 different debug signing key, uninstalling the old app erases the saved key.
 
-## Android voice: v0.4.4 button-free foreground mode
+## Android voice: v0.4.5 button-free foreground mode
 
 - On app launch, after the first-time Android microphone permission and initial
   API key import, JARVIS greets the user using Android Turkish TTS and starts
@@ -80,7 +80,17 @@ run through Android and do not need a Gemini API key.
   handler. **Web’de hava durumu ara** opens the corresponding Google search.
 - **YouTube’u aç** prefers the installed TV/mobile app. **YouTube’da caz ara**
   opens results through an installed handler for the YouTube link.
-- **Ayarları aç** opens the Android Settings screen.
+- **YouTube’da Eşref 1. bölümü aç** opens the verified episode link.
+  A specific HTTPS YouTube video link also works. Other titles open search results.
+- **Chrome’da Endgame filmini aç** opens the official Disney+ title page.
+  Other film titles open a search for viewing options. Playback requires access
+  from the provider.
+- **Sesi yükselt**, **sesi azalt**, and **sesi yüzde 40 yap** adjust the Android
+  media stream when the device supports it. **Videoyu duraklat**, **videoyu
+  oynat**, **sonraki video**, and **önceki video** send Android media commands to
+  the active media session. The player decides how to respond.
+- **Ayarları aç**, **Wi-Fi ayarlarını aç**, **Bluetooth ayarlarını aç**, and
+  **ekran ayarlarını aç** open Android Settings screens.
 - **Netflix uygulamasını aç** opens an installed launcher app using its exact
   visible name. If multiple apps share the name, use the Android launcher.
 - **Cihaz komutları** displays the supported command examples.

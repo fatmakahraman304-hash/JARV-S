@@ -29,6 +29,38 @@ public class DeviceCommandTest {
         assertEquals("Disney+", DeviceCommand.parse("uygulamayı aç: Disney+").argument);
     }
 
+    @Test public void parsesVolumeAndMediaControls() {
+        assertEquals(DeviceCommand.Action.VOLUME_UP, DeviceCommand.parse("Jarvis, sesi yükselt").action);
+        assertEquals(DeviceCommand.Action.VOLUME_DOWN, DeviceCommand.parse("Sesi kıs.").action);
+        DeviceCommand volume = DeviceCommand.parse("Sesi yüzde 40’a ayarla");
+        assertEquals(DeviceCommand.Action.VOLUME_SET, volume.action);
+        assertEquals("40", volume.argument);
+        assertEquals(false, volume.leavesJarvis());
+        assertEquals(DeviceCommand.Action.MEDIA_PLAY, DeviceCommand.parse("Videoyu oynat").action);
+        assertEquals(DeviceCommand.Action.MEDIA_PAUSE, DeviceCommand.parse("Videoyu duraklat").action);
+        assertEquals(DeviceCommand.Action.WIFI, DeviceCommand.parse("Wi-Fi ayarlarını aç").action);
+        assertEquals(DeviceCommand.Action.BLUETOOTH, DeviceCommand.parse("Bluetooth ayarlarını aç").action);
+        assertNull(DeviceCommand.parse("Sesi nasıl yükseltirim?"));
+    }
+
+    @Test public void opensOnlyKnownTitlesAndExplicitYoutubeLinks() {
+        DeviceCommand episode = DeviceCommand.parse("YouTube’da Eşref 1. bölümü aç");
+        assertEquals(DeviceCommand.Action.YOUTUBE_PLAY, episode.action);
+        assertEquals("IWZr0PdZfSM", MediaLinks.youtubeId(episode.argument));
+        assertEquals("IWZr0PdZfSM", MediaLinks.youtubeId("https://youtu.be/IWZr0PdZfSM?si=example"));
+        assertEquals("IWZr0PdZfSM", MediaLinks.youtubeId("https://www.youtube.com/watch?v=IWZr0PdZfSM"));
+        assertNull(MediaLinks.youtubeId("https://www.youtube.com/watch?v=IWZr0PdZfSM&v=IWZr0PdZfSM"));
+        assertNull(MediaLinks.youtubeId("https://youtu.be"));
+        assertNull(MediaLinks.youtubeId("https://youtube.com.example.org/watch?v=IWZr0PdZfSM"));
+        assertNull(MediaLinks.youtubeId("https://www.youtube.com@other.example/watch?v=IWZr0PdZfSM"));
+        assertNull(MediaLinks.youtubeId("Eşref 10. bölümü"));
+        DeviceCommand film = DeviceCommand.parse("Chromuda Endgame filmini aç");
+        assertEquals(DeviceCommand.Action.FILM, film.action);
+        assertEquals("Endgame", film.argument);
+        org.junit.Assert.assertTrue(MediaLinks.officialFilm(film.argument).startsWith("https://www.disneyplus.com/"));
+        assertNull(MediaLinks.officialFilm("Başka film"));
+    }
+
     @Test public void doesNotTreatQuestionsOrQuotedInstructionsAsActions() {
         assertNull(DeviceCommand.parse("Chrome’u açabilir misin?"));
         assertNull(DeviceCommand.parse("Chrome’u aç?"));

@@ -6,8 +6,10 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.provider.Settings;
+import android.view.KeyEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -21,8 +23,25 @@ final class DeviceActions {
     static String execute(Activity activity, DeviceCommand command) {
         switch (command.action) {
             case SETTINGS:
-                return launch(activity, new Intent(Settings.ACTION_SETTINGS))
-                        ? "Android ayarları açılıyor." : "Android ayarları açılamadı.";
+                return openSettings(activity, Settings.ACTION_SETTINGS, "Android ayarları");
+            case WIFI:
+                return openSettings(activity, Settings.ACTION_WIFI_SETTINGS, "Wi-Fi ayarları");
+            case BLUETOOTH:
+                return openSettings(activity, Settings.ACTION_BLUETOOTH_SETTINGS, "Bluetooth ayarları");
+            case DISPLAY:
+                return openSettings(activity, Settings.ACTION_DISPLAY_SETTINGS, "Ekran ayarları");
+            case VOLUME_UP:
+            case VOLUME_DOWN:
+            case VOLUME_SET:
+                return changeVolume(activity, command);
+            case MEDIA_PLAY:
+                return mediaKey(activity, KeyEvent.KEYCODE_MEDIA_PLAY);
+            case MEDIA_PAUSE:
+                return mediaKey(activity, KeyEvent.KEYCODE_MEDIA_PAUSE);
+            case MEDIA_NEXT:
+                return mediaKey(activity, KeyEvent.KEYCODE_MEDIA_NEXT);
+            case MEDIA_PREVIOUS:
+                return mediaKey(activity, KeyEvent.KEYCODE_MEDIA_PREVIOUS);
             case CHROME:
                 if (launchPackage(activity, CHROME)) return "Chrome açılıyor.";
                 return openWeb(activity, Uri.parse("https://www.google.com/"),
@@ -38,19 +57,86 @@ final class DeviceActions {
                     return "YouTube açılıyor.";
                 }
                 return openWeb(activity, Uri.parse("https://www.youtube.com/"), "YouTube tarayıcıda açılıyor.");
+            case YOUTUBE_PLAY:
+                if (command.argument.isEmpty()) return "Video adını veya YouTube bağlantısını söyle ya da yaz.";
+                String video = MediaLinks.youtubeId(command.argument);
+                if (video != null) {
+                    Uri watch = Uri.parse("https://www.youtube.com/watch").buildUpon()
+                            .appendQueryParameter("v", video).build();
+                    return openYouTube(activity, watch, "YouTube videosu açılıyor.");
+                }
+                return searchYouTube(activity, command.argument,
+                        "Başlık için YouTube sonuçları açılıyor. Videoyu sonuçlardan seç.");
             case YOUTUBE_SEARCH:
                 if (command.argument.isEmpty()) return "Aranacak metni 1–200 karakterle söyle veya yaz.";
-                Uri search = Uri.parse("https://www.youtube.com/results").buildUpon()
-                        .appendQueryParameter("search_query", command.argument).build();
-                return openWeb(activity, search, "YouTube araması açılıyor.");
+                return searchYouTube(activity, command.argument, "YouTube araması açılıyor.");
+            case FILM:
+                if (command.argument.isEmpty()) return "Film adını 1–200 karakterle söyle veya yaz.";
+                String official = MediaLinks.officialFilm(command.argument);
+                if (official != null) {
+                    return openInChrome(activity, Uri.parse(official),
+                            "Disney+ film sayfası açılıyor. Oynatmak için hesabınla devam et.");
+                }
+                Uri results = Uri.parse("https://www.google.com/search").buildUpon()
+                        .appendQueryParameter("q", command.argument + " resmi izleme platformu").build();
+                return openInChrome(activity, results, "Filmin izleme seçenekleri aranıyor.");
             case APP:
                 return openNamedApp(activity, command.argument);
             case HELP:
                 return "Chrome’u aç · YouTube’u aç · YouTube’da caz ara · Web’de hava durumu ara "
-                        + "· Ayarları aç · Netflix uygulamasını aç";
+                        + "· Sesi yükselt · Sesi yüzde 40 yap · Videoyu duraklat "
+                        + "· YouTube’da Eşref 1. bölümü aç · Endgame filmini aç "
+                        + "· Wi-Fi ayarlarını aç · Netflix uygulamasını aç";
             default:
                 return "Cihaz komutu kullanılamıyor.";
         }
+    }
+
+    private static String openSettings(Activity activity, String action, String label) {
+        return launch(activity, new Intent(action)) ? label + " açılıyor." : label + " açılamadı.";
+    }
+
+    private static String changeVolume(Activity activity, DeviceCommand command) {
+        AudioManager audio = activity.getSystemService(AudioManager.class);
+        if (audio == null || audio.isVolumeFixed()) return "Bu cihazda ses seviyesi kumandadan ayarlanıyor.";
+        int stream = AudioManager.STREAM_MUSIC;
+        int max = audio.getStreamMaxVolume(stream);
+        if (max <= 0) return "Bu cihaz medya ses seviyesini bildirmiyor.";
+        if (command.action == DeviceCommand.Action.VOLUME_SET) {
+            int percentage = Integer.parseInt(command.argument);
+            if (percentage > 100) return "Ses yüzdesi 0 ile 100 arasında olmalı.";
+            audio.setStreamVolume(stream, Math.round(max * percentage / 100f), AudioManager.FLAG_SHOW_UI);
+        } else {
+            int direction = command.action == DeviceCommand.Action.VOLUME_UP
+                    ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+            audio.adjustStreamVolume(stream, direction, AudioManager.FLAG_SHOW_UI);
+        }
+        return "Medya sesi ayarlandı.";
+    }
+
+    private static String mediaKey(Activity activity, int key) {
+        AudioManager audio = activity.getSystemService(AudioManager.class);
+        if (audio == null) return "Android medya kontrolü kullanılamıyor.";
+        audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, key));
+        audio.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, key));
+        return "Medya komutu Android’e gönderildi.";
+    }
+
+    private static String searchYouTube(Activity activity, String query, String success) {
+        Uri results = Uri.parse("https://www.youtube.com/results").buildUpon()
+                .appendQueryParameter("search_query", query).build();
+        return openYouTube(activity, results, success);
+    }
+
+    private static String openYouTube(Activity activity, Uri uri, String success) {
+        if (launch(activity, webIntent(uri).setPackage(YOUTUBE_TV))
+                || launch(activity, webIntent(uri).setPackage(YOUTUBE))) return success;
+        return openWeb(activity, uri, success);
+    }
+
+    private static String openInChrome(Activity activity, Uri uri, String success) {
+        return launch(activity, webIntent(uri).setPackage(CHROME))
+                ? success : openWeb(activity, uri, success);
     }
 
     private static String openNamedApp(Activity activity, String label) {
@@ -82,8 +168,11 @@ final class DeviceActions {
     }
 
     private static String openWeb(Activity activity, Uri uri, String success) {
-        return launch(activity, new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
-                ? success : "Bu bağlantıyı açabilecek tarayıcı bulunamadı.";
+        return launch(activity, webIntent(uri)) ? success : "Bu bağlantıyı açabilecek uygulama bulunamadı.";
+    }
+
+    private static Intent webIntent(Uri uri) {
+        return new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE);
     }
 
     private static boolean launch(Activity activity, Intent intent) {
