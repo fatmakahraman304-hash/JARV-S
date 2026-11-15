@@ -2,8 +2,10 @@
 
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 import httpx
 
@@ -46,8 +48,29 @@ def verify_model(site, key, model):
         raise AuthorizationError("Model boş yanıt verdi.")
 
 
-def github_access() -> str:
+def find_github_cli() -> str | None:
     executable = shutil.which("gh")
+    if executable or sys.platform != "win32":
+        return executable
+
+    # A running process or its launcher may still have the pre-install PATH.
+    for variable, directory in (
+        ("ProgramW6432", "GitHub CLI"),
+        ("ProgramFiles", "GitHub CLI"),
+        ("ProgramFiles(x86)", "GitHub CLI"),
+        ("LOCALAPPDATA", "Microsoft/WinGet/Links"),
+        ("ProgramFiles", "WinGet/Links"),
+    ):
+        root = os.environ.get(variable)
+        if root:
+            candidate = Path(root) / directory / "gh.exe"
+            if candidate.is_absolute() and candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def github_access() -> str:
+    executable = find_github_cli()
     if not executable:
         raise AuthorizationError("GitHub CLI (gh) kurulu olmalı.")
     options = dict(

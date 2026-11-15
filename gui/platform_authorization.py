@@ -1,7 +1,6 @@
 """Explicit, user-operated platform connection dialog."""
 
 import shlex
-import shutil
 import threading
 
 from PyQt6.QtCore import QProcess, Qt, QUrl, pyqtSignal
@@ -9,7 +8,8 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
 from core.platform_authorization import (
-    AuthorizationError, GITHUB_LOGIN, GITHUB_REPOSITORY, MODEL_PLATFORMS, github_access, verify_model,
+    AuthorizationError, GITHUB_LOGIN, GITHUB_REPOSITORY, MODEL_PLATFORMS,
+    find_github_cli, github_access, verify_model,
 )
 from core.social_sites import SITES
 from gui.style import btn_css
@@ -102,7 +102,7 @@ class AuthorizationDialog(QDialog):
     def _login_github(self):
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             return
-        executable = shutil.which(GITHUB_LOGIN[0])
+        executable = find_github_cli()
         if not executable:
             self.status.setText("GitHub CLI (gh) bulunamadı. Kur ve JARVIS’i yeniden başlat.")
             return

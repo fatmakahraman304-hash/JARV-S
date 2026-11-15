@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from plugins import github_develop as g
 class PublishGuards(unittest.TestCase):
@@ -12,6 +13,21 @@ class PublishGuards(unittest.TestCase):
 
 
 class TestOutput(unittest.TestCase):
+    def test_discovered_cli_is_used_for_direct_commands_and_git_credentials(self):
+        executable = str(Path.cwd() / "GitHub CLI" / "gh.exe")
+        with patch.object(g, "find_github_cli", return_value=executable), patch.object(
+            g.subprocess, "run", return_value=g.subprocess.CompletedProcess([], 0, "", "")
+        ) as run:
+            g.command(["gh", "auth", "status"])
+            self.assertEqual(run.call_args.args[0], [executable, "auth", "status"])
+            push = [*g._GH_GIT, "push"]
+            g.command(push)
+            self.assertEqual(run.call_args.args[0], push)
+            self.assertEqual(
+                run.call_args.kwargs["env"]["PATH"].split(g.os.pathsep)[0],
+                str(Path(executable).parent),
+            )
+
     def test_failed_suite_reports_filename_and_python_error(self):
         with patch.object(g.subprocess, "run") as run:
             run.return_value = g.subprocess.CompletedProcess(

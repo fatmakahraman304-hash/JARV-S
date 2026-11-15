@@ -9,7 +9,7 @@ import time
 import tempfile
 from pathlib import Path
 
-from core.platform_authorization import GITHUB_REPOSITORY
+from core.platform_authorization import GITHUB_REPOSITORY, find_github_cli
 
 REPO = GITHUB_REPOSITORY
 # Use the user's GitHub CLI credential just for this repository and invocation.
@@ -50,6 +50,16 @@ def command(args, cwd=None, timeout=180, *, test_name=None):
         options["creationflags"] = subprocess.CREATE_NO_WINDOW
     if test_name:
         options["env"] = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONUTF8="1")
+    if args[0] == "gh" or args[:len(_GH_GIT)] == _GH_GIT:
+        executable = find_github_cli()
+        if not executable:
+            raise RuntimeError("GitHub CLI bulunamadı. Ayarlar → Platformlar → GitHub bölümünü kontrol edin.")
+        if args[0] == "gh":
+            args = [executable, *args[1:]]
+        else:
+            # The scoped Git credential helper looks up gh in its own PATH.
+            env = options.setdefault("env", dict(os.environ))
+            env["PATH"] = str(Path(executable).parent) + os.pathsep + env.get("PATH", os.defpath)
     try:
         result = subprocess.run(
             args, cwd=WORK if cwd is None else cwd, capture_output=True, text=True, encoding="utf-8",

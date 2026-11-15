@@ -32,6 +32,22 @@ class PlatformAuthorizationTests(unittest.TestCase):
             with self.assertRaisesRegex(auth.AuthorizationError, "^API anahtarı kabul edilmedi"):
                 auth.verify_model("chatgpt", "example-key", "example-model")
 
+    def test_windows_finds_installed_cli_without_updated_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for variable, directory in (
+                ("ProgramFiles", "GitHub CLI"),
+                ("LOCALAPPDATA", "Microsoft/WinGet/Links"),
+            ):
+                with self.subTest(variable=variable), patch.object(auth.sys, "platform", "win32"), patch.object(
+                    auth.shutil, "which", return_value=None
+                ), patch.dict(auth.os.environ, {variable: folder}, clear=True):
+                    executable = root / directory / "gh.exe"
+                    executable.parent.mkdir(parents=True)
+                    self.assertIsNone(auth.find_github_cli())
+                    executable.touch()
+                    self.assertEqual(auth.find_github_cli(), str(executable))
+
     def test_github_requires_authenticated_repo_write_access(self):
         with patch.object(auth.shutil, "which", return_value="gh"), patch.object(
             auth.subprocess, "run", side_effect=[
