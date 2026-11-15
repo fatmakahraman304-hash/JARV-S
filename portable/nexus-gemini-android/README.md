@@ -31,7 +31,7 @@ Typing a key on the projector may require its on-screen keyboard or a USB
 keyboard. Never share or photograph the key. If an APK upgrade fails due to a
 different debug signing key, uninstalling the old app erases the saved key.
 
-## Android voice: v0.4.3 button-free foreground mode
+## Android voice: v0.4.4 button-free foreground mode
 
 - On app launch, after the first-time Android microphone permission and initial
   API key import, JARVIS greets the user using Android Turkish TTS and starts
@@ -70,6 +70,24 @@ different debug signing key, uninstalling the old app erases the saved key.
 - Updating a debug APK may fail because debug build signing keys may differ
   across build environments. If Android reports an incompatible signature,
   uninstall the old test APK, install the new APK and enter the key again. No vault password is required.
+
+## Android device commands
+
+Speak while JARVIS is visible or type a command and press Enter. These commands
+run through Android and do not need a Gemini API key.
+
+- **Chrome’u aç** opens Chrome when available. **Tarayıcıyı aç** opens a web
+  handler. **Web’de hava durumu ara** opens the corresponding Google search.
+- **YouTube’u aç** prefers the installed TV/mobile app. **YouTube’da caz ara**
+  opens results through an installed handler for the YouTube link.
+- **Ayarları aç** opens the Android Settings screen.
+- **Netflix uygulamasını aç** opens an installed launcher app using its exact
+  visible name. If multiple apps share the name, use the Android launcher.
+- **Cihaz komutları** displays the supported command examples.
+
+When Android switches to another app, use Back or reopen JARVIS to give it
+another voice command. These commands launch activities and search results.
+Interactions with buttons and input fields in other apps remain manual.
 
 ## Security
 **The USB JSON contains the API key in PLAINTEXT.** Anybody who copies it

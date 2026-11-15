@@ -5,6 +5,17 @@
   <queries>
     <intent><action android:name="android.speech.RecognitionService"/></intent>
     <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>
+    <package android:name="com.android.chrome"/>
+    <package android:name="com.google.android.youtube"/>
+    <package android:name="com.google.android.youtube.tv"/>
+    <intent>
+      <action android:name="android.intent.action.MAIN"/>
+      <category android:name="android.intent.category.LAUNCHER"/>
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.MAIN"/>
+      <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
+    </intent>
   </queries>
   <uses-feature android:name="android.hardware.microphone" android:required="false"/>
   <uses-feature android:name="android.software.leanback" android:required="false"/>

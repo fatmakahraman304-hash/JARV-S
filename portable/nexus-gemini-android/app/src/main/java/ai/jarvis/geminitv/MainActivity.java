@@ -138,6 +138,9 @@ public final class MainActivity extends Activity {
         root.addView(makeText("Uyu / JARVIS uyan · Bekleme modu\nSus / Konuş · Yanıt sesi",
                 20, Color.WHITE));
 
+        root.addView(makeText("Cihaz komutları · Chrome’u aç · YouTube’da caz ara · Ayarları aç",
+                17, Color.LTGRAY));
+
         keyPicker = new Button(this);
         keyPicker.setText("Gemini anahtar dosyasını seç · İlk kurulum");
         keyPicker.setTextSize(19);
@@ -159,6 +162,15 @@ public final class MainActivity extends Activity {
                 | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         manualKey.setMaxLines(1);
         manualKey.setSaveEnabled(false);
+        manualKey.setOnFocusChangeListener((field, focused) -> {
+            if (focused) {
+                ui.removeCallbacks(nextListen);
+                releaseRecognizer();
+                setMic("● ANAHTAR GİRİLİRKEN MİKROFON KAPALI");
+            } else {
+                ui.post(this::ensureMicPermission);
+            }
+        });
         manualKey.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO);
         root.addView(manualKey);
         manualSave = new Button(this);
@@ -194,11 +206,11 @@ public final class MainActivity extends Activity {
         conversation.setTextIsSelectable(true);
         root.addView(conversation);
 
-        // Fallback only for TV devices lacking microphone/STT. No send button.
+        // Keyboard and remote IME input use the same command pipeline as voice.
         prompt = new EditText(this);
         prompt.setTextColor(Color.WHITE);
         prompt.setHintTextColor(Color.LTGRAY);
-        prompt.setHint("Mikrofon yoksa buraya yaz ve Enter'a bas");
+        prompt.setHint("Komutu veya soruyu yaz ve Enter’a bas");
         prompt.setTextSize(19);
         prompt.setSingleLine(true);
         prompt.setImeOptions(EditorInfo.IME_ACTION_SEND);
@@ -379,15 +391,15 @@ public final class MainActivity extends Activity {
 
     private void scheduleListen(long waitMs) {
         ui.removeCallbacks(nextListen);
-        if (!foreground || destroyed || apiKey == null || recognitionBlocked || listening) return;
+        if (!foreground || destroyed || manualKey.hasFocus() || recognitionBlocked || listening) return;
         ui.postDelayed(nextListen, waitMs);
     }
 
     private void ensureMicPermission() {
-        if (!foreground || destroyed || apiKey == null) return;
+        if (!foreground || destroyed || manualKey.hasFocus()) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            setStatus("JARVIS'in seni duyabilmesi için Android mikrofon izni gerekiyor.");
+            if (apiKey != null) setStatus("JARVIS'in seni duyabilmesi için Android mikrofon izni gerekiyor.");
             setMic("● MİKROFON İZNİ GEREKİYOR");
             if (!permissionRequested) {
                 permissionRequested = true;
@@ -404,7 +416,7 @@ public final class MainActivity extends Activity {
         if (request != MIC_PERMISSION) return;
         if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) {
             if (sleeping) showSleepStatus();
-            else setStatus("Mikrofon izni verildi. JARVIS dinlemeye başlıyor.");
+            else if (apiKey != null) setStatus("Mikrofon izni verildi. JARVIS dinlemeye başlıyor.");
             scheduleListen(300);
         } else {
             setMic("● MİKROFON İZNİ VERİLMEDİ");
@@ -413,7 +425,7 @@ public final class MainActivity extends Activity {
     }
 
     private void startRecognition() {
-        if (!foreground || destroyed || apiKey == null || listening || recognitionBlocked) return;
+        if (!foreground || destroyed || manualKey.hasFocus() || listening || recognitionBlocked) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) return;
         try {
@@ -544,6 +556,20 @@ public final class MainActivity extends Activity {
             return;
         }
         if (fromMicrophone && speaking) return;
+        DeviceCommand local = DeviceCommand.parse(utterance);
+        if (local != null) {
+            if (!fromMicrophone) prompt.setText("");
+            if (local.action != DeviceCommand.Action.HELP) {
+                cancelRequest();
+                stopSpeech();
+            }
+            try {
+                setStatus(DeviceActions.execute(this, local));
+            } catch (SecurityException denied) {
+                setStatus("Android bu cihaz komutuna izin vermedi.");
+            }
+            return;
+        }
         if (activeRequest != null) {
             setStatus("Önceki istek henüz tamamlanmadı.");
             return;
@@ -710,10 +736,8 @@ public final class MainActivity extends Activity {
         foreground = true;
         recognitionBlocked = false;
         serviceFailures = 0;
-        if (apiKey != null) {
-            maybeGreet();
-            ensureMicPermission();
-        }
+        maybeGreet();
+        ensureMicPermission();
     }
 
     @Override protected void onStop() {
