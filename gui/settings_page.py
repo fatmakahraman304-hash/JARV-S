@@ -216,14 +216,14 @@ class SettingsPage(QDialog):
         )
         platform_details = {
             'whatsapp': 'Telefonunda Bağlı cihazlar bölümünden ekrandaki QR kodu okut.',
-            'github': 'GitHub web hesabını aç. Git ile gönderim için ayrı yetki gerekir.',
+            'github': 'GitHub web hesabı tarayıcıda açılır. Kod göndermek için Yetkilendir’i kullan.',
             'chatgpt': 'ChatGPT sohbeti CORE alanında açılır. “ChatGPT’ye yaz” ile taslak yazdır.',
             'claude': 'Claude sohbeti CORE alanında açılır. “Claude’a yaz” ile taslak yazdır.',
         }
         for site, (name, _, _) in SITES.items():
             detail = platform_details.get(site, f'{name} hesabınla resmi sayfada oturum aç.')
             row = card(platforms, name, detail)
-            if site not in {'chatgpt', 'claude'}:
+            if site not in {'chatgpt', 'claude', 'github'}:
                 external = QCheckBox('Tarayıcıda aç')
                 external.setAccessibleName(f'{name} için varsayılan tarayıcıyı kullan')
                 external.setChecked(cfg.get_platform_external_browser(site))

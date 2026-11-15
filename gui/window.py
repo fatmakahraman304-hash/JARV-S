@@ -463,9 +463,13 @@ class MainWindow(QMainWindow):
             return
         from gui.social_panel import SocialPanel, open_in_browser
 
-        if site not in CHAT_HOSTS and get_platform_external_browser(site):
-            if not open_in_browser(site):
-                self._log.append_log("SYS: Varsayılan tarayıcı açılamadı.")
+        if site == "github" or (site not in CHAT_HOSTS and get_platform_external_browser(site)):
+            try:
+                opened = open_in_browser(site)
+            except (OSError, RuntimeError):
+                opened = False
+            if not opened:
+                self._log.append_log(f"SYS: Tarayıcı açılamadı. Adres {SITES[site][1]}")
             return
 
         panel = getattr(self, "_social_panel", None)

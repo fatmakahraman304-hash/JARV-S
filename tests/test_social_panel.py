@@ -62,3 +62,39 @@ class LoadFailureTests(unittest.TestCase):
         panel = Mock(_failed=set(), _blocked={"chatgpt"}, _views={"chatgpt": [None, "blocked redirect"]})
         social_panel.SocialPanel._loading_changed(panel, "chatgpt", info)
         panel._set_status.assert_called_once_with("chatgpt", "blocked redirect")
+
+
+class GoogleSignInTests(unittest.TestCase):
+    def test_external_sign_in_starts_on_chatgpt_without_reusing_redirect(self):
+        with patch.object(social_panel.QDesktopServices, "openUrl", return_value=True) as launch:
+            self.assertTrue(social_panel.open_in_browser("chatgpt", login=True))
+        launch.assert_called_once_with(QUrl("https://chatgpt.com/auth/login"))
+
+    def test_google_handoff_cancels_embedded_draft(self):
+        panel = Mock(_blocked=set(), _draft_request=object())
+        social_panel.SocialPanel._navigation_blocked(panel, "chatgpt", "accounts.google.com")
+        self.assertTrue(panel._chatgpt_google_blocked)
+        self.assertIsNone(panel._draft_request)
+        self.assertIn("ayrı tarayıcıda", panel._set_status.call_args.args[1])
+
+
+class GitHubRoutingTests(unittest.TestCase):
+    def test_github_website_uses_system_browser_without_embedded_webengine(self):
+        from gui.window import MainWindow
+
+        owner = Mock()
+        with patch.object(social_panel, "open_in_browser", return_value=True) as launch, patch.object(
+            social_panel, "SocialPanel"
+        ) as embedded:
+            MainWindow._open_social(owner, "github")
+        launch.assert_called_once_with("github")
+        embedded.assert_not_called()
+        owner._log.append_log.assert_not_called()
+
+    def test_browser_launch_error_is_reported_instead_of_escaping_qt_slot(self):
+        from gui.window import MainWindow
+
+        owner = Mock()
+        with patch.object(social_panel, "open_in_browser", side_effect=RuntimeError):
+            MainWindow._open_social(owner, "github")
+        self.assertIn("https://github.com/", owner._log.append_log.call_args.args[0])

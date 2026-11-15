@@ -29,8 +29,8 @@ def permitted_url(url, site):
     )
 
 
-def open_in_browser(site, *, edge=False):
-    address = SITES[site][1]
+def open_in_browser(site, *, edge=False, login=False):
+    address = "https://chatgpt.com/auth/login" if login and site == "chatgpt" else SITES[site][1]
     if not edge and QDesktopServices.openUrl(QUrl(address)):
         return True
     if sys.platform != "win32":
@@ -80,6 +80,7 @@ class SocialPanel(QWidget):
         QApplication.instance().aboutToQuit.connect(self._release_profiles)
         self._site = ""
         self._blocked = set()
+        self._chatgpt_google_blocked = False
         self._failed = set()
         self._draft_request = None
         layout = QVBoxLayout(self)
@@ -125,6 +126,11 @@ class SocialPanel(QWidget):
         self._chatgpt_login = self._button("ChatGPT girişini aç", self._open_chatgpt_login)
         self._chatgpt_login.hide()
         help_row.addWidget(self._chatgpt_login)
+        self._google_login = self._button(
+            "Google girişini tarayıcıda aç", lambda: self._open_external(login=True)
+        )
+        self._google_login.hide()
+        help_row.addWidget(self._google_login)
         help_row.addWidget(self._button("Adresi kopyala", self._copy_address))
         layout.addLayout(help_row)
         self._fallback = QLabel("Siteyi yeniden yükleyebilir veya adresi tarayıcıya yapıştırabilirsin.")
@@ -157,7 +163,9 @@ class SocialPanel(QWidget):
         self._link.setText(address)
         self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
-        self._chatgpt_login.setVisible(site == "chatgpt" and QWebEngineView is not None)
+        self._chatgpt_login.setVisible(site == "chatgpt" and QWebEngineView is not None
+                                       and not self._chatgpt_google_blocked)
+        self._google_login.setVisible(site == "chatgpt" and self._chatgpt_google_blocked)
         if QWebEngineView is None:
             self._status.setText("Gömülü web görünümü eksik. Tarayıcıda açabilirsin.")
             self._status.show()
@@ -184,6 +192,9 @@ class SocialPanel(QWidget):
         site = self._site
         if site not in CHAT_HOSTS:
             return False
+        if site == "chatgpt" and self._chatgpt_google_blocked:
+            self._show_draft_notice("CORE’da açık sohbet yok. Google girişini tarayıcıda tamamla.")
+            return True
         entry = self._views.get(site)
         if entry is None:
             self._show_draft_notice("Sohbet kutusu için gömülü web görünümü gerekli.")
@@ -248,9 +259,19 @@ class SocialPanel(QWidget):
         self._stack.setCurrentWidget(self._fallback if self._site in self._failed else view)
         self._status.setText(message)
         self._status.setVisible(bool(message))
+        google_blocked = self._site == "chatgpt" and self._chatgpt_google_blocked
+        self._google_login.setVisible(google_blocked)
+        self._chatgpt_login.setVisible(self._site == "chatgpt" and not google_blocked)
 
     def _navigation_blocked(self, site, host):
         self._blocked.add(site)
+        if site == "chatgpt" and host == "accounts.google.com":
+            self._chatgpt_google_blocked = True
+            self._draft_request = None
+            self._draft_notice.hide()
+            self._set_status(site, "Google girişi ayrı tarayıcıda tamamlanır. "
+                                   "Tarayıcıdaki oturum CORE’a aktarılmaz.")
+            return
         destination = f" ({host})" if host else ""
         self._set_status(site, f"Yönlendirme CORE içinde açılamadı{destination}. "
                                "Hesap girişini tarayıcıda deneyebilirsin.")
@@ -265,6 +286,8 @@ class SocialPanel(QWidget):
         status = info.status()
         state = QWebEngineLoadingInfo.LoadStatus
         if status == state.LoadStartedStatus:
+            if site == "chatgpt":
+                self._chatgpt_google_blocked = False
             self._failed.discard(site)
             self._blocked.discard(site)
             self._set_status(site, "Yükleniyor…")
@@ -312,10 +335,10 @@ class SocialPanel(QWidget):
             sip.delete(profile)
         self._views.clear()
 
-    def _open_external(self, *, edge=False):
+    def _open_external(self, *, edge=False, login=False):
         if not self._site:
             return
-        if open_in_browser(self._site, edge=edge):
+        if open_in_browser(self._site, edge=edge, login=login):
             self._show_draft_notice("Adres tarayıcıya iletildi. Açılmazsa adresi kopyalayıp tarayıcıya yapıştır.")
         else:
             self._show_draft_notice("Tarayıcı başlatılamadı. Adresi kopyalayıp tarayıcıya yapıştır.")

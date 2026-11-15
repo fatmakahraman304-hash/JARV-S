@@ -1,6 +1,7 @@
 """Explicit, user-operated platform connection dialog."""
 
 import shlex
+import shutil
 import threading
 
 from PyQt6.QtCore import QProcess, Qt, QUrl, pyqtSignal
@@ -97,6 +98,10 @@ class AuthorizationDialog(QDialog):
     def _login_github(self):
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             return
+        executable = shutil.which(GITHUB_LOGIN[0])
+        if not executable:
+            self.status.setText("GitHub CLI (gh) bulunamadı. Kurulumdan sonra tekrar dene.")
+            return
         self.device.clear()
         self._device_output = ""
         if self.process is not None:
@@ -109,7 +114,10 @@ class AuthorizationDialog(QDialog):
             lambda _: self.status.setText("GitHub CLI başlatılamadı. gh kurulumunu kontrol et.")
         )
         self.status.setText("Tarayıcıdaki GitHub onayını tamamla.")
-        self.process.start(GITHUB_LOGIN[0], list(GITHUB_LOGIN[1:]))
+        try:
+            self.process.start(executable, list(GITHUB_LOGIN[1:]))
+        except (OSError, RuntimeError):
+            self.status.setText("GitHub CLI başlatılamadı. Terminal komutunu deneyebilirsin.")
 
     def _read_device_code(self):
         import re
