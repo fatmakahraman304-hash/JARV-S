@@ -9,7 +9,10 @@ SITES = {
     "instagram": ("Instagram", "https://www.instagram.com/", {"instagram.com", "www.instagram.com"}),
     "github": ("GitHub", "https://github.com/", {"github.com", "www.github.com"}),
     "claude": ("Claude", "https://claude.ai/", {"claude.ai", "www.claude.ai"}),
-    "chatgpt": ("ChatGPT", "https://chatgpt.com/", {"chatgpt.com", "www.chatgpt.com", "auth.openai.com"}),
+    "chatgpt": ("ChatGPT", "https://chatgpt.com/", {
+        "chatgpt.com", "www.chatgpt.com", "chat.openai.com",
+        "auth.openai.com", "auth0.openai.com", "setup.auth.openai.com",
+    }),
 }
 
 _ALIASES = {

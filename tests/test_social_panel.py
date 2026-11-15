@@ -1,7 +1,30 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from PyQt6.QtCore import QUrl
+
 from gui import social_panel
+
+
+class RedirectTests(unittest.TestCase):
+    def test_chatgpt_accepts_named_openai_auth_hosts_only_over_https(self):
+        for host in ("chat.openai.com", "auth.openai.com", "auth0.openai.com",
+                     "setup.auth.openai.com"):
+            with self.subTest(host=host):
+                self.assertTrue(social_panel.permitted_url(QUrl(f"https://{host}/"), "chatgpt"))
+                self.assertFalse(social_panel.permitted_url(QUrl(f"https://{host}/"), "claude"))
+        for address in ("http://auth.openai.com", "https://auth0.openai.com:9443",
+                        "https://auth.openai.com.example.org", "https://accounts.google.com",
+                        "https://example@auth0.openai.com"):
+            with self.subTest(address=address):
+                self.assertFalse(social_panel.permitted_url(QUrl(address), "chatgpt"))
+
+    def test_chatgpt_login_uses_the_current_embedded_view(self):
+        view = Mock()
+        panel = Mock(_site="chatgpt", _views={"chatgpt": [view, ""]})
+        social_panel.SocialPanel._open_chatgpt_login(panel)
+        view.setUrl.assert_called_once_with(QUrl("https://chatgpt.com/auth/login"))
+        self.assertIsNone(panel._draft_request)
 
 
 class BrowserLaunchTests(unittest.TestCase):

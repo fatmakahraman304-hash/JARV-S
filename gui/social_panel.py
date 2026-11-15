@@ -45,7 +45,7 @@ def open_in_browser(site, *, edge=False):
 
 if QWebEngineView is not None:
     class SocialPage(QWebEnginePage):
-        blocked = pyqtSignal()
+        blocked = pyqtSignal(str)
 
         def __init__(self, profile, view, site):
             super().__init__(profile, view)
@@ -57,7 +57,7 @@ if QWebEngineView is not None:
                 return True
             if permitted_url(url, self.site):
                 return True
-            self.blocked.emit()
+            self.blocked.emit(bytes(QUrl.toAce(url.host())).decode("ascii")[:253])
             return False
 
         def _open_here(self, request):
@@ -67,7 +67,7 @@ if QWebEngineView is not None:
             if permitted_url(url, self.site):
                 self.setUrl(url)
             else:
-                self.blocked.emit()
+                self.blocked.emit(bytes(QUrl.toAce(url.host())).decode("ascii")[:253])
 
 
 class SocialPanel(QWidget):
@@ -122,6 +122,9 @@ class SocialPanel(QWidget):
         self._link.setTextFormat(Qt.TextFormat.PlainText)
         self._link.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         help_row.addWidget(self._link, 1)
+        self._chatgpt_login = self._button("ChatGPT girişini aç", self._open_chatgpt_login)
+        self._chatgpt_login.hide()
+        help_row.addWidget(self._chatgpt_login)
         help_row.addWidget(self._button("Adresi kopyala", self._copy_address))
         layout.addLayout(help_row)
         self._fallback = QLabel("Siteyi yeniden yükleyebilir veya adresi tarayıcıya yapıştırabilirsin.")
@@ -154,6 +157,7 @@ class SocialPanel(QWidget):
         self._link.setText(address)
         self._selector.setCurrentIndex(self._selector.findData(site))
         self._retry.setEnabled(QWebEngineView is not None)
+        self._chatgpt_login.setVisible(site == "chatgpt" and QWebEngineView is not None)
         if QWebEngineView is None:
             self._status.setText("Gömülü web görünümü eksik. Tarayıcıda açabilirsin.")
             self._status.show()
@@ -172,7 +176,7 @@ class SocialPanel(QWidget):
             self._stack.addWidget(view)
             self._views[site] = [view, "Yükleniyor…"]
             page.loadingChanged.connect(lambda info: self._loading_changed(site, info))
-            page.blocked.connect(lambda: self._navigation_blocked(site))
+            page.blocked.connect(lambda host: self._navigation_blocked(site, host))
             view.setUrl(QUrl(address))
         self._refresh_status()
 
@@ -245,9 +249,17 @@ class SocialPanel(QWidget):
         self._status.setText(message)
         self._status.setVisible(bool(message))
 
-    def _navigation_blocked(self, site):
+    def _navigation_blocked(self, site, host):
         self._blocked.add(site)
-        self._set_status(site, "Bu yönlendirme CORE içinde açılamadı. Hesap girişini tarayıcıda deneyebilirsin.")
+        destination = f" ({host})" if host else ""
+        self._set_status(site, f"Yönlendirme CORE içinde açılamadı{destination}. "
+                               "Hesap girişini tarayıcıda deneyebilirsin.")
+
+    def _open_chatgpt_login(self):
+        if self._site == "chatgpt" and (entry := self._views.get("chatgpt")):
+            self._draft_request = None
+            self._draft_notice.hide()
+            entry[0].setUrl(QUrl("https://chatgpt.com/auth/login"))
 
     def _loading_changed(self, site, info):
         status = info.status()
