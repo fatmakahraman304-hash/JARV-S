@@ -733,6 +733,8 @@ def _update(status: str | None = None, file: str | None = None,
             return
         if status:
             _JOB["status"] = status
+            if status in _JOB["phases"]:
+                _JOB["phase"] = status
         if file and file_state:
             _JOB["files"].setdefault(file, {})["state"] = file_state
         _JOB.update(fields)
@@ -1328,7 +1330,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     try:
         plan = _plan_changes(folder, instruction, context)
     except Exception as e:
-        return f"Planning failed, sir: {str(e)[:200]}"
+        raise RuntimeError(f"Planlama başarısız. {str(e)[:240]}") from e
 
     from core.code_checks import Protection
     protection = Protection(folder)
@@ -1555,6 +1557,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None) -> str:
     The caller must already hold `_job_lock`; it is released here."""
     def work():
         status = "done"
+        result = ""
         try:
             result = job()
             with _state_lock:
@@ -1569,8 +1572,10 @@ def _run_job(job, name: str, who: str, speak=None, player=None) -> str:
             result = f"The coding job on '{name}' failed: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
-            _job_lock.release()
-        _update(status, result=result, finished=time.time())
+            try:
+                _update(status, result=result, finished=time.time())
+            finally:
+                _job_lock.release()
         if speak:
             speak(f"[DEV_AGENT_DONE] {result[:900]} | Tell the user briefly, in one "
                   f"or two sentences, what was done. Do not read file paths aloud.")

@@ -43,8 +43,19 @@ def generate_content(prompt: str):
         except OSError:
             raise RuntimeError("Codex CLI başlatılamadı. Kurulumu kontrol et.") from None
 
-        if result.returncode or not reply.is_file():
-            raise RuntimeError("Codex yanıtı alınamadı. PowerShell’de codex login status ile hesabını kontrol et.")
+        if result.returncode:
+            diagnostics = ((result.stderr or "") + "\n" + (result.stdout or "")).casefold()
+            if any(word in diagnostics for word in ("not logged in", "401 unauthorized", "invalid_grant", "refresh token", "authentication required")):
+                raise RuntimeError("Codex oturumu doğrulanamadı. PowerShell’de codex login çalıştır ve tarayıcıdaki girişi tamamla.")
+            if "unexpected argument" in diagnostics or "unrecognized option" in diagnostics:
+                raise RuntimeError("Codex CLI sürümü JARVIS’in kullandığı komutu desteklemiyor. Codex CLI’ı güncelle.")
+            if "sandbox" in diagnostics and any(word in diagnostics for word in ("failed", "setup", "denied")):
+                raise RuntimeError("Codex çalışma ortamı başlatılamadı. PowerShell’de codex komutunu açıp Windows kurulumunu tamamla.")
+            if any(word in diagnostics for word in ("usage limit", "rate limit", "429 too many requests")):
+                raise RuntimeError("Codex kullanım sınırına ulaşıldı. Hesabındaki kullanım durumunu kontrol et.")
+            raise RuntimeError(f"Codex CLI kod {result.returncode} ile durdu. PowerShell’de codex login status ile oturumu kontrol et.")
+        if not reply.is_file():
+            raise RuntimeError("Codex tamamlandı fakat yanıt dosyası oluşmadı.")
         text = reply.read_text(encoding="utf-8").strip()
         if not text:
             raise RuntimeError("Codex boş yanıt verdi.")

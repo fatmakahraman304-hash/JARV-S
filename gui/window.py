@@ -2420,10 +2420,12 @@ class MainWindow(QMainWindow):
         # Phase strip: where in the job it is, readable at a glance.
         strip = []
         phases = list(job.get("phases") or self._JOB_PHASES)
-        here = phases.index(status) if status in phases else (
-            len(phases) if finished else -1)
+        phase = job.get("phase", status)
+        here = phases.index(phase) if phase in phases else -1
         for i, ph in enumerate(phases):
-            c = C.GREEN if i < here else (C.PRI if i == here else C.TEXT_DIM)
+            c = C.GREEN if i < here else C.TEXT_DIM
+            if i == here:
+                c = C.RED if status == "failed" else C.GREEN if finished and status == "done" else C.PRI
             mark = "●" if i <= here else "○"
             strip.append(f'<span style="color:{c};">{mark} {ph.upper()}</span>')
         if finished:
@@ -2432,9 +2434,11 @@ class MainWindow(QMainWindow):
 
         parts = [f'<div style="color:{C.TEXT}; font-family:Courier New;">',
                  f'<div style="color:{C.TEXT_DIM};">{"  ".join(strip)}'
-                 f'&nbsp;&nbsp;·&nbsp;&nbsp;{took:.0f}s</div>',
-                 f'<div style="margin-top:6px;"><span style="color:{C.TEXT_DIM};">'
-                 f'REQUEST&nbsp;</span>{e(job.get("request", ""))}</div>']
+                 f'&nbsp;&nbsp;·&nbsp;&nbsp;{took:.0f}s</div>']
+        if finished and job.get("result"):
+            parts.append(f'<div style="margin-top:6px;">{e(job["result"])}</div>')
+        parts.append(f'<div style="margin-top:6px;"><span style="color:{C.TEXT_DIM};">'
+                     f'REQUEST&nbsp;</span>{e(job.get("request", ""))}</div>')
         if job.get("summary"):
             parts.append(
                 f'<div style="color:{C.WHITE}; border-left:2px solid {C.PRI};'
@@ -2468,7 +2472,7 @@ class MainWindow(QMainWindow):
         self._content_title_lbl.setText(title)
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
         bar = self._content_display.verticalScrollBar()
-        keep = 0 if first else bar.value()
+        keep = 0 if first or (finished and status == "failed") else bar.value()
         self._content_display.setHtml("".join(parts))
         # setHtml jumps to the top; put the reader back where they were.
         bar.setValue(keep)

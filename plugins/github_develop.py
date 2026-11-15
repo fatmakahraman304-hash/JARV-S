@@ -203,6 +203,9 @@ def self_release(instruction, player):
                 open_editor=False,
             )
             dev_agent._update("finished", result=result, finished=time.time())
+        except Exception as exc:
+            dev_agent._update("failed", result=str(exc), finished=time.time())
+            raise
         finally:
             dev_agent._job_lock.release()
 
