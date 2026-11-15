@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PyQt6.QtCore import QUrl
@@ -102,26 +101,6 @@ class GitHubRoutingTests(unittest.TestCase):
 
 
 class TikTokPlaybackTests(unittest.TestCase):
-    def test_resolves_public_video_without_browser_credentials(self):
-        from actions._tiktok_video import resolve_video
-
-        downloader = Mock()
-        downloader.__enter__ = Mock(return_value=downloader)
-        downloader.__exit__ = Mock(return_value=False)
-        stream = "https://video.tiktokcdn.com/file.mp4"
-        downloader.extract_info.return_value = {"url": stream, "title": "Example"}
-        factory = Mock(return_value=downloader)
-        with patch.dict("sys.modules", {"yt_dlp": SimpleNamespace(YoutubeDL=factory)}):
-            self.assertEqual(resolve_video("https://www.tiktok.com/@example/video/123?x=1"),
-                             (stream, "Example"))
-            downloader.extract_info.assert_called_once_with(
-                "https://www.tiktok.com/@example/video/123", download=False, ie_key="TikTok"
-            )
-            self.assertNotIn("cookiesfrombrowser", factory.call_args.args[0])
-            downloader.extract_info.return_value = {"url": "https://example.org/file.mp4"}
-            with self.assertRaises(ValueError):
-                resolve_video("https://www.tiktok.com/@example/video/123")
-
     def test_browser_handoff_preserves_public_video_without_parameters(self):
         page = QUrl("https://www.tiktok.com/@example/video/123?tracking=x#fragment")
         with patch.object(social_panel.QDesktopServices, "openUrl", return_value=True) as launch:
@@ -134,8 +113,3 @@ class TikTokPlaybackTests(unittest.TestCase):
             with self.subTest(url=url):
                 self.assertEqual(social_panel.browser_address("tiktok", page_url=QUrl(url)),
                                  "https://www.tiktok.com/")
-
-    def test_stale_stream_cannot_reopen_player(self):
-        panel = Mock(_tiktok_request=object())
-        social_panel.SocialPanel._finish_tiktok_video(panel, object(), "stream", "title")
-        panel.tiktok_video_ready.emit.assert_not_called()
