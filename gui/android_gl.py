@@ -131,7 +131,7 @@ void main() {
     bool plate = front && plate_f < 0.0;
     if (plate) { alb = vec3(0.80, 0.80, 0.79); ks = 0.55; shin = 90.0; refl = 0.12; }
     bool jaw = plate && jw > 0.5;
-    if (jaw) { alb = vec3(0.76, 0.76, 0.75); ks = 0.50; shin = 85.0; }
+    if (jaw) { ks = 0.52; }
     vec2 mq = (p.xy - u_mouth_c.xy) / vec2(u_mouth_size.x * 1.18, u_mouth_size.y * 1.6 + 0.012);
     bool lips = plate && dot(mq, mq) < 1.0;
     if (lips) { alb = vec3(0.30, 0.30, 0.31); ks = 0.30; shin = 30.0; refl = 0.05; }
@@ -169,7 +169,7 @@ void main() {
     // ── seams ──────────────────────────────────────────────────────────────
     float g = 0.0, b = 0.0;
     if (front) { g = max(g, groove(plate_f * 0.6, 0.0045)); b = max(b, edge(plate_f * 0.6, 0.0045)); }
-    if (plate && !lips) g = max(g, 0.85 * groove(jw - 0.5, 0.012));
+    // (no jaw seam: the weight field contour reads as a broken line)
     if (!plate && !neck && p.y > 0.40) g = max(g, groove(p.x, 0.0035));
     if (side) {
         g = max(g, groove(er - 0.17, 0.0045)); b = max(b, edge(er - 0.17, 0.0045));
