@@ -85,12 +85,18 @@ class BookPanel(QWidget):
             self.index = target
             self._render()
 
+    def show_spread(self, index):
+        if not self.pages:
+            return
+        index = max(0, min(index, len(self.pages) - 1))
+        target = (index // 2) * 2
+        if target != self.index:
+            self.index = target
+            self._render()
+
     def _jump_to(self, page):
         if 1 <= page <= len(self.pages):
-            target = ((page - 1) // 2) * 2
-            if target != self.index:
-                self.index = target
-                self._render()
+            self.show_spread(page - 1)
 
     def _open_source(self, offset):
         index = self.index + offset
@@ -122,8 +128,21 @@ class BookPanel(QWidget):
         self.gestures.setEnabled(len(self.pages) > 2)
 
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right):
-            self.turn(1 if event.key() == Qt.Key.Key_Right else -1)
+        key = event.key()
+        if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+            self.turn(1 if key == Qt.Key.Key_Right else -1)
+            event.accept()
+        elif key == Qt.Key.Key_PageDown:
+            self.turn(1)
+            event.accept()
+        elif key == Qt.Key.Key_PageUp:
+            self.turn(-1)
+            event.accept()
+        elif key == Qt.Key.Key_Home:
+            self.show_spread(0)
+            event.accept()
+        elif key == Qt.Key.Key_End:
+            self.show_spread(len(self.pages) - 1)
             event.accept()
         else:
             super().keyPressEvent(event)
