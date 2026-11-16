@@ -290,7 +290,7 @@ uniform vec4 u_lip_ui;
 uniform vec4 u_lip_li;
 uniform vec2 u_lip_w;         // half width of the outer and inner lip outline
 
-const vec3 KEY = vec3(-0.4467, 0.5459, 0.7146);
+const vec3 KEY = vec3(-0.3693, 0.4748, 0.7989);
 const vec3 FILL = vec3(0.7700, -0.0513, 0.6365);
 const vec3 VIEW = vec3(0.0, 0.0, 1.0);
 
@@ -344,15 +344,15 @@ float shadowKey(float ndl) {
     float bias = 0.0016 + 0.0035 * (1.0 - clamp(ndl, 0.0, 1.0));
     float tx = 1.0 / 2048.0;
     float lit = 0.0;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 16; i++) {
         float a = float(i) * 2.39996;
-        float rr = 1.0 + 2.6 * sqrt(float(i) / 12.0);
+        float rr = 1.0 + 9.0 * sqrt(float(i) / 16.0);
         vec2 o = vec2(cos(a), sin(a)) * rr * tx;
         vec4 t = texture2D(u_shadow, uv + o);
         float sd = t.r + t.g / 255.0;
         lit += d - bias <= sd ? 1.0 : 0.0;
     }
-    return lit / 12.0;
+    return lit / 16.0;
 }
 
 vec3 bumpN(vec3 n, vec3 pos, float H) {
@@ -456,8 +456,8 @@ void main() {
         if (hm > 0.0) {
             vec3 nr = normalize(p - vec3(0.0, 0.10, -0.32));
             float px = p.x + 0.17;                                // side parting
-            float ps = px < 0.0 ? -1.0 : 1.0;
-            vec3 topDir = normalize(vec3(ps * (px < 0.0 ? 0.9 : 0.45), 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));
+            float ps = clamp(px / 0.05, -1.0, 1.0);
+            vec3 topDir = normalize(vec3(ps * mix(0.45, 0.9, step(px, 0.0)) * abs(ps) + 0.001, 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));
             vec3 d0 = mix(vec3(0.0, -0.75, -0.66), topDir, smoothstep(0.30, 0.72, p.y));
             float sideFade = 1.0 - smoothstep(0.05, 0.42, p.y);           // short faded sides
             float part = exp(-pow(px / 0.0030, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
@@ -470,10 +470,10 @@ void main() {
             strand = mix(0.5, f1, lod(900.0)) * 0.15 + f2 * 0.40 + cl * 0.45;
             float edgeHairs = smoothstep(0.15, 0.85, hm * 1.4 - 0.2 + 0.7 * (f1 - 0.5));
             hairC = mix(edgeHairs, 1.0, smoothstep(0.6, 1.0, hm)) * hm;
-            hairC *= 1.0 - 0.30 * sideFade * (1.0 - f1 * 0.8) - 0.18 * part;
+            hairC *= 1.0 - 0.30 * sideFade * (1.0 - f1 * 0.8);
             vec3 hcol = mix(vec3(0.020, 0.0135, 0.009), vec3(0.085, 0.056, 0.036), strand * strand * 1.2);
             alb = mix(alb, hcol, hairC);
-            H += hairC * (f1 * 0.0006 + f2 * 0.0026 + cl * 0.008) - part * 0.003;
+            H += hairC * (f1 * 0.0006 + f2 * 0.0026 + cl * 0.008);
         }
     }
 
@@ -498,7 +498,8 @@ void main() {
     float dk = dot(n, KEY), df = dot(n, FILL);
     vec3 lk = clamp((vec3(dk) + wrap) / (1.0 + wrap), 0.0, 1.0);
     float sh = shadowKey(dot(n0, KEY));
-    lk *= vec3(sh) + (1.0 - sh) * vec3(0.16, 0.06, 0.04) * sss;   // red bleed in the penumbra
+    float shk = 0.30 + 0.70 * sh;                                   // a big soft key: shadows are not black
+    lk *= vec3(shk) + (1.0 - shk) * vec3(0.20, 0.08, 0.05) * sss;  // red bleed in the penumbra
     vec3 lf = clamp((vec3(df) + wrap) / (1.0 + wrap), 0.0, 1.0);
     float amb = 0.07 + 0.12 * (0.5 + 0.5 * n.y);
     vec3 diff = vec3(amb) + lk * vec3(1.0, 0.95, 0.88) * 1.15 + lf * vec3(0.60, 0.68, 0.85) * 0.24;
@@ -644,7 +645,7 @@ void main() {
 
 
 def _light_basis():
-    ll = np.array([-0.4467, 0.5459, 0.7146])
+    ll = np.array([-0.3693, 0.4748, 0.7989])          # the human shader's KEY
     ll /= np.linalg.norm(ll)
     lu = np.cross([0.0, 1.0, 0.0], ll)
     lu /= np.linalg.norm(lu)
