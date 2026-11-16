@@ -989,6 +989,19 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
                                  QPointF(cx - s * 0.3, cy + s * 0.55), QPointF(cx - s * 0.85, cy + s * 0.8)]))
         p.drawLine(QLineF(cx - s * 0.3, cy - s * 0.8, cx - s * 0.3, cy + s * 0.55))
         p.drawLine(QLineF(cx + s * 0.3, cy - s * 0.55, cx + s * 0.3, cy + s * 0.8))
+    elif kind == "knight":
+        path = QPainterPath(QPointF(cx - s * 0.55, cy + s * 0.85))
+        path.lineTo(cx + s * 0.6, cy + s * 0.85)
+        path.lineTo(cx + s * 0.45, cy + s * 0.1)
+        path.cubicTo(QPointF(cx + s * 0.55, cy - s * 0.45), QPointF(cx + s * 0.15, cy - s * 0.85),
+                     QPointF(cx - s * 0.2, cy - s * 0.85))
+        path.lineTo(cx - s * 0.3, cy - s * 0.6)
+        path.lineTo(cx - s * 0.75, cy - s * 0.15)
+        path.lineTo(cx - s * 0.6, cy + s * 0.1)
+        path.lineTo(cx - s * 0.1, cy - s * 0.05)
+        path.lineTo(cx - s * 0.55, cy + s * 0.55)
+        path.closeSubpath()
+        p.drawPath(path)
     elif kind == "mail":
         p.drawRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.6, s * 1.7, s * 1.2), s * 0.12, s * 0.12)
         p.drawPolyline(QPolygonF([QPointF(cx - s * 0.8, cy - s * 0.5), QPointF(cx, cy + s * 0.1),

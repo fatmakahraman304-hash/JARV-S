@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
     _quiz_hide_sig  = pyqtSignal()
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
     _control_center_sig = pyqtSignal(bool)   # open / close the Control Centre
+    _chess_sig = pyqtSignal(bool)            # open / close the chess board
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -435,6 +436,7 @@ class MainWindow(QMainWindow):
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
         self._control_center_sig.connect(self._set_control_center)
+        self._chess_sig.connect(self._set_chess)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -2011,6 +2013,11 @@ class MainWindow(QMainWindow):
         self._cc_btn.setToolTip("Kontrol Merkezi — sinir ağı ve canlı etkinlik")
         self._cc_btn.clicked.connect(lambda: self._set_control_center(self._cc_btn.isChecked()))
         row.addWidget(self._cc_btn)
+        self._chess_btn = IconButton("knight", 42)
+        self._chess_btn.setCheckable(True)
+        self._chess_btn.setToolTip("Satranç — asistanla oyna")
+        self._chess_btn.clicked.connect(lambda: self._set_chess(self._chess_btn.isChecked()))
+        row.addWidget(self._chess_btn)
         attach = IconButton("attach", 42)
         attach.setToolTip("Dosya veya klasör ekle")
         attach.clicked.connect(lambda: self._drop_zone._browse())
@@ -3529,7 +3536,8 @@ class MainWindow(QMainWindow):
                 cc.talk_requested.connect(self._talk_from_control_center)
                 cc.settings_requested.connect(self._settings_for_apps)
                 self._hud_cam_stack.addWidget(cc)
-                self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
+                if self.__dict__.get("_chess_panel") is None:
+                    self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
             self._control_center.set_state(self.hud.state, self.hud.speaking, self._muted)
             self._hud_cam_stack.setCurrentWidget(self._control_center)
         elif self._hud_cam_stack.currentWidget() is getattr(self, "_control_center", None):
@@ -3537,11 +3545,36 @@ class MainWindow(QMainWindow):
         self._sync_cc_btn()
 
     def _sync_cc_btn(self, *_a) -> None:
-        if hasattr(self, "_cc_btn"):
-            on = (getattr(self, "_control_center", None) is not None
-                  and self._hud_cam_stack.currentWidget() is self._control_center)
-            if self._cc_btn.isChecked() != on:
-                self._cc_btn.setChecked(on)
+        """Keep the dock's Control Centre and chess buttons in step with what
+        the centre shows."""
+        current = self._hud_cam_stack.currentWidget()
+        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel")):
+            btn = getattr(self, btn_name, None) if btn_name in self.__dict__ else None
+            page = self.__dict__.get(page_name)
+            if btn is None:
+                continue
+            on = page is not None and current is page
+            if btn.isChecked() != on:
+                btn.setChecked(on)
+
+    # ── Chess ──────────────────────────────────────────────────────────────────
+    def _set_chess(self, opened: bool) -> None:
+        """Show the chess board where the core sits, or give the centre back."""
+        panel = self.__dict__.get("_chess_panel")
+        if opened:
+            if panel is None:
+                from gui.chess_panel import ChessPanel
+                panel = self._chess_panel = ChessPanel(self._assistant_name, self._hud_cam_stack)
+                panel.back_requested.connect(lambda: self._set_chess(False))
+                panel.assistant_moved.connect(
+                    lambda san: self._log.append_log(f"SYS: ♟ {self._assistant_name} oynadı: {san}"))
+                self._hud_cam_stack.addWidget(panel)
+                if self.__dict__.get("_control_center") is None:
+                    self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
+            self._hud_cam_stack.setCurrentWidget(panel)
+        elif panel is not None and self._hud_cam_stack.currentWidget() is panel:
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+        self._sync_cc_btn()
 
     def _settings_for_apps(self, message: str) -> None:
         self._log.append_log(f"SYS: {message}")
