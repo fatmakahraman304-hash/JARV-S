@@ -1,6 +1,7 @@
 """GitHub coding workspace and checked publication, separate from the running app."""
 import json
 import os
+import shutil
 import sys
 import re
 import subprocess
@@ -9,12 +10,31 @@ import time
 import tempfile
 from pathlib import Path
 
-from core.platform_authorization import GITHUB_REPOSITORY, find_github_cli
-
-REPO = GITHUB_REPOSITORY
+from core.app_updater import REPOSITORY as REPO
 # Use the user's GitHub CLI credential just for this repository and invocation.
 _GH_GIT = ["git", "-c", "credential.https://github.com.helper=",
            "-c", "credential.https://github.com.helper=!gh auth git-credential"]
+
+
+def find_github_cli() -> str | None:
+    executable = shutil.which("gh")
+    if executable or sys.platform != "win32":
+        return executable
+
+    # A running process or its launcher may still have the pre-install PATH.
+    for variable, directory in (
+        ("ProgramW6432", "GitHub CLI"),
+        ("ProgramFiles", "GitHub CLI"),
+        ("ProgramFiles(x86)", "GitHub CLI"),
+        ("LOCALAPPDATA", "Microsoft/WinGet/Links"),
+        ("ProgramFiles", "WinGet/Links"),
+    ):
+        root = os.environ.get(variable)
+        if root:
+            candidate = Path(root) / directory / "gh.exe"
+            if candidate.is_absolute() and candidate.is_file():
+                return str(candidate)
+    return None
 
 
 def _development_workspace(parent):
@@ -73,7 +93,7 @@ class CommandFailure(RuntimeError):
         if self.missing_identity:
             hint = "Git commit kimliğinde ad veya e-posta eksik."
         elif "authentication failed" in detail or "could not read username" in detail:
-            hint = "Ayarlar → Platformlar → GitHub üzerinden oturumu kontrol edin."
+            hint = "Terminalde gh auth status ile GitHub oturumunu kontrol edin."
         elif "could not resolve host" in detail:
             hint = "GitHub adresi çözümlenemedi. İnternet bağlantısını kontrol edin."
         elif "index.lock" in detail:
@@ -105,7 +125,7 @@ def command(args, cwd=None, timeout=180, *, test_name=None):
     if args[0] == "gh" or args[:len(_GH_GIT)] == _GH_GIT:
         executable = find_github_cli()
         if not executable:
-            raise RuntimeError("GitHub CLI bulunamadı. Ayarlar → Platformlar → GitHub bölümünü kontrol edin.")
+            raise RuntimeError("GitHub CLI (gh) bulunamadı. GitHub CLI’ı yükleyip tekrar deneyin.")
         if args[0] == "gh":
             args = [executable, *args[1:]]
         else:

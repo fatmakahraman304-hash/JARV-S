@@ -3,7 +3,6 @@ from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QAbstractButton, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
-from core.social_sites import SITES
 from gui.theme import C
 from gui.style import px_font
 
@@ -176,16 +175,14 @@ class SettingsPage(QDialog):
             control.clicked.connect(change)
             self.syncs.append(sync)
             sync()
-        def action_button(title, callback, text='Aç  →'):
-            button = QPushButton(text)
+        def action(rows, title, detail, callback):
+            button = QPushButton('Aç  →')
             button.setAccessibleName(title)
             def open_panel():
                 self.hide()
                 callback()
             button.clicked.connect(open_panel)
-            return button
-        def action(rows, title, detail, callback):
-            card(rows, title, detail).addWidget(action_button(title, callback))
+            card(rows, title, detail).addWidget(button)
         general = page('Genel', 'Başlangıç ve günlük kullanım tercihlerin.')
         update_row = card(general, 'JARVIS güncellemesi', 'GitHub’daki yeni sürümü kontrol et ve yükle.')
         update_row.addWidget(owner._build_update_button())
@@ -276,25 +273,6 @@ class SettingsPage(QDialog):
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
         action(extras, 'Eklenti ayarları', 'Eklentilere özel seçenekleri düzenle.', owner._open_plugin_settings)
         action(extras, 'Uzaktan kontrol', 'Uzaktan erişim seçeneklerini aç.', owner._open_remote)
-        platforms = page('Platformlar', 'Hesabını aç veya JARVIS için yetkilendirmeyi yönet.')
-        platform_details = {
-            'github': 'GitHub web hesabı tarayıcıda açılır. Kod göndermek için Yetkilendir’i kullan.',
-            'chatgpt': 'Mevcut ChatGPT hesabını tarayıcıda kullan. CORE görünümünü ayrıca açabilirsin.',
-            'claude': 'Claude sohbeti CORE alanında açılır. “Claude’a yaz” ile taslak yazdır.',
-        }
-        for site, (name, _, _) in SITES.items():
-            row = card(platforms, name, platform_details[site])
-            row.addWidget(action_button(
-                f'{name} hesabını aç', lambda key=site: owner._open_social(key), 'Giriş / Aç',
-            ))
-            if site == 'chatgpt':
-                row.addWidget(action_button(
-                    'ChatGPT’yi CORE’da aç', lambda: owner._open_social_in_core('chatgpt'), 'CORE’da aç',
-                ))
-            authorize = QPushButton('API yetkisi' if site == 'chatgpt' else 'Yetkilendir')
-            authorize.setAccessibleName(f'{name} için JARVIS’i yetkilendir')
-            authorize.clicked.connect(lambda checked=False, key=site: self._authorize(key))
-            row.addWidget(authorize)
         navigation.addStretch()
         self.categories[0].setChecked(True)
         self.timer = QTimer(self)
@@ -308,14 +286,6 @@ class SettingsPage(QDialog):
                 button.click()
                 return True
         return False
-
-    def _authorize(self, site):
-        from gui.platform_authorization import AuthorizationDialog
-
-        dialogs = self.__dict__.setdefault('_authorization_dialogs', {})
-        if site not in dialogs:
-            dialogs[site] = AuthorizationDialog(site, self)
-        dialogs[site].open()
 
     def refresh(self):
         if self.isVisible():

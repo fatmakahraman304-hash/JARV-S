@@ -301,7 +301,8 @@ def discover_plugins(plugins_dir: Path, core_tool_names: set[str],
 
     files = sorted(plugins_dir.glob("*.py"), key=lambda p: p.name)  # deterministic order
     for path in files:
-        if path.name.startswith("_"):
+        # An older ZIP installation may still have this removed built-in plugin.
+        if path.name.startswith("_") or path.name == "chat_draft.py":
             continue
         try:
             module_name = f"plugins.{path.stem}"

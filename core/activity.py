@@ -71,7 +71,7 @@ _TOOL_NODE = {
     "voice_prototype": "code",
     "map_route": "maps", "normal_map": "maps",
     "background_tasks": "tasks", "night_shift": "tasks", "workspace_mode": "tasks",
-    "capacity_simulation": "tasks", "chat_draft": "chat", "control_center": "tasks",
+    "capacity_simulation": "tasks", "control_center": "tasks",
 }
 
 # Readable verbs for the feed, by tool. Anything missing falls back to the name.
@@ -90,7 +90,7 @@ _TOOL_TEXT = {
     "voice_prototype": "Prototip", "map_route": "Rota", "normal_map": "Harita",
     "background_tasks": "Arka plan görevi",
     "night_shift": "Gece vardiyası", "workspace_mode": "Çalışma modu",
-    "capacity_simulation": "Kapasite simülasyonu", "chat_draft": "Sohbet taslağı",
+    "capacity_simulation": "Kapasite simülasyonu",
     "send_message": "Mesaj", "control_center": "Kontrol Merkezi", "apps": "Uygulama",
 }
 

@@ -305,13 +305,6 @@ class JarvisUI:
         """Queue an offline HTML preview on the UI thread."""
         self._win._prototype_sig.emit(html)
 
-    def write_chat_draft(self, site: str, text: str) -> None:
-        self._win._chat_draft_sig.emit(site, text)
-
-    def show_social(self, site: str) -> None:
-        """Queue an official social website in the center panel."""
-        self._win._social_sig.emit(site)
-
     def show_world_map(self, visible: bool) -> None:
         """Thread-safe: show the native world map or close it."""
         self._win._world_map_sig.emit(visible)

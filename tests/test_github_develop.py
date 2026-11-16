@@ -24,6 +24,22 @@ class TestOutput(unittest.TestCase):
         self.assertTrue(failure.exception.missing_identity)
         self.assertNotIn("private value", str(failure.exception))
 
+    def test_windows_finds_installed_cli_without_updated_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for variable, directory in (
+                ("ProgramFiles", "GitHub CLI"),
+                ("LOCALAPPDATA", "Microsoft/WinGet/Links"),
+            ):
+                with self.subTest(variable=variable), patch.object(g.sys, "platform", "win32"), patch.object(
+                    g.shutil, "which", return_value=None
+                ), patch.dict(g.os.environ, {variable: folder}, clear=True):
+                    executable = root / directory / "gh.exe"
+                    executable.parent.mkdir(parents=True)
+                    self.assertIsNone(g.find_github_cli())
+                    executable.touch()
+                    self.assertEqual(g.find_github_cli(), str(executable))
+
     def test_discovered_cli_is_used_for_direct_commands_and_git_credentials(self):
         executable = str(Path.cwd() / "GitHub CLI" / "gh.exe")
         with patch.object(g, "find_github_cli", return_value=executable), patch.object(

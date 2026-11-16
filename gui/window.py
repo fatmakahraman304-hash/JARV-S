@@ -116,8 +116,6 @@ class MainWindow(QMainWindow):
     _gesture_finished_sig = pyqtSignal(int, str)
     _scan_request_sig = pyqtSignal()
     _scan_result_sig = pyqtSignal(bytes, object)
-    _social_sig = pyqtSignal(str)
-    _chat_draft_sig = pyqtSignal(str, str)
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
@@ -412,8 +410,6 @@ class MainWindow(QMainWindow):
         self._scan_result_sig.connect(self._show_camera_scan)
         self._content_sig.connect(self._show_content)
         self._prototype_sig.connect(self._open_prototype)
-        self._social_sig.connect(self._open_social)
-        self._chat_draft_sig.connect(self._write_chat_draft)
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
         self._route_result_sig.connect(self._show_route)
@@ -473,58 +469,6 @@ class MainWindow(QMainWindow):
             self._hud_cam_stack.addWidget(panel)
         self._hud_cam_stack.setCurrentWidget(panel)
         panel.show_html(text)
-
-    def _open_social(self, site: str) -> None:
-        from core.social_sites import SITES
-
-        if site not in SITES:
-            return
-        if site in {"github", "chatgpt"}:
-            from gui.social_panel import open_in_browser
-
-            try:
-                opened = open_in_browser(site)
-            except (OSError, RuntimeError):
-                opened = False
-            if not opened:
-                self._log.append_log(f"SYS: Tarayıcı açılamadı. Adres {SITES[site][1]}")
-            return
-
-        self._open_social_in_core(site)
-
-    def _open_social_in_core(self, site: str) -> None:
-        from gui.social_panel import SocialPanel
-
-        panel = getattr(self, "_social_panel", None)
-        if panel is None:
-            panel = self._social_panel = SocialPanel(self._hud_cam_stack)
-            panel.site_requested.connect(self._open_social)
-            panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            self._hud_cam_stack.addWidget(panel)
-        self._hud_cam_stack.setCurrentWidget(panel)
-        panel.open_site(site)
-
-    def _write_chat_draft(self, site, text):
-        from core.social_sites import CHAT_DRAFT_LIMIT, CHAT_HOSTS
-
-        if not text.strip() or len(text) > CHAT_DRAFT_LIMIT:
-            self._log.append_log("SYS: En fazla 8.000 karakterlik bir sohbet taslağı yaz.")
-            return
-        panel = getattr(self, "_social_panel", None)
-        if site == "chatgpt" and (
-            panel is None or self._hud_cam_stack.currentWidget() is not panel
-            or not panel.is_chatgpt_open_in_core()
-        ):
-            QApplication.clipboard().setText(text)
-            self._log.append_log("SYS: ChatGPT taslağı kopyalandı. Tarayıcıdaki sohbet kutusuna yapıştır.")
-            self._open_social(site)
-            return
-        if site in CHAT_HOSTS:
-            self._open_social_in_core(site)
-            panel = self._social_panel
-        if (panel is None or self._hud_cam_stack.currentWidget() is not panel
-                or not panel.write_chat_draft(text)):
-            self._log.append_log("SYS: CORE alanında ChatGPT veya Claude sohbetini aç.")
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -3549,11 +3493,7 @@ class MainWindow(QMainWindow):
         self._input.clear()
         from core.camera_scan import is_scan_command
         from plugins.normal_map import map_command_for_text
-        from core.social_sites import chat_draft_command, site_for_command
 
-        if draft := chat_draft_command(txt):
-            self._write_chat_draft(*draft)
-            return
         self._log.append_log(f"You: {txt}")
 
         if txt.rstrip(".!?").casefold() in {"kitabı araştır", "bu kitabı araştır", "kitabı yansıt"}:
@@ -3565,10 +3505,6 @@ class MainWindow(QMainWindow):
         map_command = map_command_for_text(txt)
         if map_command is not None:
             self._show_world_map(map_command)
-            return
-        site = site_for_command(txt)
-        if site:
-            self._open_social(site)
             return
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
