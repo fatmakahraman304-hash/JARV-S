@@ -153,17 +153,22 @@ def status_of(result) -> str:
     return "ok"
 
 
-def record(node: str, text: str, status: str = "ok") -> None:
-    """Add one event. Never raises."""
+def record(node: str, text: str, status: str = "ok", count: bool = True) -> None:
+    """Add one event. Never raises.
+
+    count=False lists the event without counting it as use of the node — for
+    notes about a node (a login page opening, a missing key) that must not
+    light it up as if it had done work."""
     global _seq
     try:
         node = node if node in NODE_LABEL else "tasks"
         now = time.time()
         with _lock:
             _seq += 1
-            _events.append(Event(_seq, now, node, str(text or "")[:160], status))
-            _counts[node] = _counts.get(node, 0) + 1
-            _last_hit[node] = now
+            _events.append(Event(_seq, now, node, str(text or "")[:300], status))
+            if count:
+                _counts[node] = _counts.get(node, 0) + 1
+                _last_hit[node] = now
     except Exception:
         pass
 

@@ -222,19 +222,47 @@ class SettingsPage(QDialog):
         key_state.setFont(px_font(10))
         key_state.setStyleSheet(f'color: {C.PRI};')
         apps_row.addWidget(key_state)
+        key_state.setWordWrap(True)
+        key_state.setMaximumWidth(260)
+        test_result = {}
+        def show_result():
+            if 'msg' not in test_result:
+                QTimer.singleShot(300, show_result)
+                return
+            ok, msg = test_result.pop('ok'), test_result.pop('msg')
+            key_state.setText(('✓ ' if ok else '✕ ') + msg)
+            key_state.setToolTip(msg)
+            key_state.setStyleSheet(f'color: {C.GREEN if ok else C.RED};')
+        def test_key():
+            # The network check runs on a worker thread; a timer on the Qt
+            # thread picks the answer up, so no widget is touched off-thread.
+            key_state.setText('Deneniyor…')
+            key_state.setStyleSheet(f'color: {C.TEXT_DIM};')
+            import threading
+            def work():
+                ok, msg = _composio.check()
+                test_result['ok'] = ok
+                test_result['msg'] = msg
+            threading.Thread(target=work, daemon=True, name='composio-check').start()
+            QTimer.singleShot(300, show_result)
         def save_key():
             try:
                 _composio.save_api_key(key_edit.text())
-                key_state.setText('Kayıtlı' if key_edit.text().strip() else 'Silindi')
-                import threading
-                threading.Thread(target=_composio.refresh_connections, daemon=True,
-                                 name='composio-refresh').start()
+                key_edit.setText(_composio.api_key())
+                if _composio.is_configured():
+                    test_key()
+                else:
+                    key_state.setText('Silindi')
             except Exception as exc:
                 key_state.setText(f'Kaydedilemedi: {exc}'[:60])
         save_btn = QPushButton('Kaydet')
         save_btn.setAccessibleName('Composio anahtarını kaydet')
         save_btn.clicked.connect(save_key)
         apps_row.addWidget(save_btn)
+        test_btn = QPushButton('Test et')
+        test_btn.setAccessibleName('Composio anahtarını dene')
+        test_btn.clicked.connect(test_key)
+        apps_row.addWidget(test_btn)
         get_btn = QPushButton('Anahtar al')
         get_btn.setAccessibleName('Composio sitesini aç')
         def open_composio():

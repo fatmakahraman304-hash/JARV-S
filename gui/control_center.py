@@ -543,11 +543,11 @@ class ControlCenter(QWidget):
         try:
             from core import composio
         except Exception as exc:
-            activity.record(key, f"{label}: Composio modülü yüklenemedi ({exc})"[:150], "fail")
+            activity.record(key, f"{label}: Composio modülü yüklenemedi ({exc})"[:150], "fail", count=False)
             self._refresh(force=True)
             return
         if not composio.is_configured():
-            activity.record(key, f"{label}: önce Composio API anahtarını gir — Ayarlar açılıyor", "warn")
+            activity.record(key, f"{label}: önce Composio API anahtarını gir — Ayarlar açılıyor", "warn", count=False)
             self._refresh(force=True)
             self.settings_requested.emit(
                 f"{label} bağlamak için Ayarlar → Bağlantılar → Uygulamalar (Composio) satırına "
@@ -556,7 +556,7 @@ class ControlCenter(QWidget):
         if time.time() - self.network._pending.get(key, 0) < 25:
             return                                 # already opening
         self.network.set_pending(key, True)
-        activity.record(key, f"{label} için giriş sayfası açılıyor…", "info")
+        activity.record(key, f"{label} için giriş sayfası açılıyor…", "info", count=False)
         self._refresh(force=True)
 
         def work():
@@ -568,11 +568,11 @@ class ControlCenter(QWidget):
                 except Exception:
                     opened = False
                 if opened:
-                    activity.record(key, f"{label}: tarayıcıda giriş yap ve izin ver", "ok")
+                    activity.record(key, f"{label}: tarayıcıda giriş yap ve izin ver", "ok", count=False)
                 else:
-                    activity.record(key, f"{label}: tarayıcı açılamadı, bu adresi aç: {url}", "warn")
+                    activity.record(key, f"{label}: tarayıcı açılamadı, bu adresi aç: {url}", "warn", count=False)
             except Exception as exc:
-                activity.record(key, f"{label} bağlanamadı: {exc}"[:160], "fail")
+                activity.record(key, f"{label} bağlanamadı: {exc}", "fail", count=False)
                 self.network._pending.pop(key, None)
             self._next_conn_check = time.monotonic() + 15.0
         threading.Thread(target=work, daemon=True, name="composio-link").start()

@@ -118,7 +118,7 @@ class ComposioTests(unittest.TestCase):
     def test_http_errors_are_readable(self):
         self.c.save_api_key("bad")
         self.httpx.routes[("POST", "/tool_router/session")] = _Resp(401, {"error": "nope"})
-        with self.assertRaisesRegex(self.c.ComposioError, "geçersiz"):
+        with self.assertRaisesRegex(self.c.ComposioError, "kabul etmedi"):
             self.c.link("gmail")
 
     def test_apps_tool(self):
@@ -152,3 +152,41 @@ class ComposioTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyKindTests(ComposioTests):
+    def test_user_key_is_named_without_a_request(self):
+        self.c.save_api_key("uak_abc")
+        with self.assertRaisesRegex(self.c.ComposioError, "kullanıcı anahtarı"):
+            self.c.link("gmail")
+        self.assertEqual(self.httpx.calls, [])
+
+    def test_pasted_key_is_cleaned(self):
+        self.c.save_api_key(' "Bearer ak_123"\n')
+        self.assertEqual(self.c.api_key(), "ak_123")
+
+    def test_org_token_falls_back_to_org_header(self):
+        self.c.save_api_key("org_tok")
+
+        def session(body):
+            hdrs = self.httpx.calls[-1][4]
+            return (_Resp(201, {"session_id": "trs_1"}) if "x-org-api-key" in hdrs
+                    else _Resp(401, {"error": {"message": "Invalid API key"}}))
+        self.httpx.routes[("POST", "/tool_router/session")] = session
+        self.assertEqual(self.c._session(fresh=True), "trs_1")
+        self.assertEqual(self.c._header, "x-org-api-key")
+
+    def test_project_key_401_shows_server_reason_and_help(self):
+        self.c.save_api_key("ak_wrong")
+        self.httpx.routes[("POST", "/tool_router/session")] = _Resp(
+            401, {"error": {"message": "Invalid API key"}})
+        ok, msg = self.c.check()
+        self.assertFalse(ok)
+        self.assertIn("Invalid API key", msg)
+        self.assertIn("Project Settings", msg)
+        self.assertEqual(len(self.httpx.calls), 1)          # ak_ keys are not retried as org
+
+    def test_check_ok(self):
+        self.c.save_api_key("ak_ok")
+        self.httpx.routes[("GET", "/trs_1/toolkits")] = _Resp(200, {"items": []})
+        self.assertEqual(self.c.check(), (True, "Bağlantı başarılı"))

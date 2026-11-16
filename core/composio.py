@@ -34,6 +34,10 @@ _lock = threading.Lock()
 _session_id: str | None = None
 _session_key: tuple | None = None
 _connected_cache: tuple[float, set] = (0.0, set())
+_header: str = "x-api-key"     # becomes x-org-api-key if the key turns out to be an org token
+
+KEY_HELP = ("composio.dev → Settings → Project Settings → API Keys bölümündeki proje "
+            "anahtarını (ak_ ile başlar) kopyala")
 
 
 class ComposioError(RuntimeError):
@@ -58,11 +62,29 @@ def is_configured() -> bool:
 
 
 def save_api_key(key: str) -> None:
-    global _session_id, _session_key
+    global _session_id, _session_key, _header
     from memory.config_manager import save_plugin_config
-    save_plugin_config(_NS, {"api_key": str(key or "").strip()})
+    # People paste keys with quotes, a "Bearer " prefix or a trailing newline.
+    key = str(key or "").strip().strip('"').strip("'").strip()
+    if key.lower().startswith("bearer "):
+        key = key[7:].strip()
+    save_plugin_config(_NS, {"api_key": key})
     with _lock:
-        _session_id, _session_key = None, None
+        _session_id, _session_key, _header = None, None, "x-api-key"
+
+
+def check() -> tuple[bool, str]:
+    """Try the key by opening a session. (ok, short message). Never raises."""
+    if not is_configured():
+        return False, "Anahtar girilmemiş"
+    try:
+        _session(fresh=True)
+        refresh_connections()
+        return True, "Bağlantı başarılı"
+    except ComposioError as exc:
+        return False, str(exc)
+    except Exception as exc:
+        return False, f"Beklenmeyen hata: {exc}"[:200]
 
 
 def user_id() -> str:
@@ -79,15 +101,20 @@ def user_id() -> str:
 
 
 # ── http ──────────────────────────────────────────────────────────────────────
-def _request(method: str, path: str, *, body: dict | None = None, params: dict | None = None,
-             timeout: float = _TIMEOUT) -> dict:
-    key = api_key()
-    if not key:
-        raise ComposioError("Composio API anahtarı girilmemiş (Ayarlar → Bağlantılar → Uygulamalar)")
+def _server_message(data) -> str:
+    if not isinstance(data, dict):
+        return ""
+    err = data.get("error") or data.get("message") or data.get("detail") or ""
+    if isinstance(err, dict):
+        err = err.get("message") or err.get("detail") or ""
+    return str(err or "")[:200]
+
+
+def _send(method, path, key, header, body, params, timeout):
     import httpx
     try:
         r = httpx.request(method, BASE_URL + path, json=body, params=params, timeout=timeout,
-                          headers={"x-api-key": key, "Content-Type": "application/json"})
+                          headers={header: key, "Content-Type": "application/json"})
     except httpx.TimeoutException:
         raise ComposioError("Composio zamanında yanıt vermedi") from None
     except httpx.HTTPError as exc:
@@ -96,19 +123,36 @@ def _request(method: str, path: str, *, body: dict | None = None, params: dict |
         data = r.json() if r.content else {}
     except ValueError:
         data = {"raw": r.text[:300]}
+    return r, data
+
+
+def _request(method: str, path: str, *, body: dict | None = None, params: dict | None = None,
+             timeout: float = _TIMEOUT) -> dict:
+    global _header
+    key = api_key()
+    if not key:
+        raise ComposioError("Composio API anahtarı girilmemiş (Ayarlar → Bağlantılar → Uygulamalar)")
+    if key.startswith("uak_"):
+        # a CLI user key; Composio rejects it in x-api-key
+        raise ComposioError(f"Bu bir kullanıcı anahtarı (uak_), proje anahtarı değil — {KEY_HELP}")
+    r, data = _send(method, path, key, _header, body, params, timeout)
+    if r.status_code == 401 and _header == "x-api-key" and not key.startswith("ak_"):
+        # not a project key — perhaps an organization access token
+        r2, data2 = _send(method, path, key, "x-org-api-key", body, params, timeout)
+        if r2.status_code != 401:
+            _header = "x-org-api-key"
+            r, data = r2, data2
     if r.status_code == 401:
-        raise ComposioError("Composio API anahtarı geçersiz — dashboard.composio.dev → "
-                            "Settings → API Keys bölümündeki proje anahtarını kopyala")
+        why = _server_message(data)
+        raise ComposioError("Composio API anahtarını kabul etmedi"
+                            + (f" ({why})" if why else "") + f" — {KEY_HELP}")
     if r.status_code == 402:
         raise ComposioError("Composio ücretsiz aylık kullanım hakkı doldu")
     if r.status_code == 429:
         raise ComposioError("Composio hız sınırı — biraz sonra tekrar dene")
     if r.status_code >= 400:
-        msg = ""
-        if isinstance(data, dict):
-            err = data.get("error") or data.get("message") or data.get("detail") or ""
-            msg = err.get("message", "") if isinstance(err, dict) else str(err)
-        raise ComposioError(f"Composio hatası {r.status_code}: {msg[:200] or 'ayrıntı yok'}")
+        msg = _server_message(data)
+        raise ComposioError(f"Composio hatası {r.status_code}: {msg or 'ayrıntı yok'}")
     return data if isinstance(data, dict) else {"data": data}
 
 
