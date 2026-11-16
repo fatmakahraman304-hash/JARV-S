@@ -30,6 +30,57 @@ def _git(root, *args):
     return p.stdout.strip()
 
 
+def _local_changes(root):
+    """(real, eol_only): tracked files changed on disk.
+
+    Windows Git reports files whose only difference is CRLF/LF as modified;
+    those are not edits and must not block an update. Real edits are listed
+    so the user sees which files they are."""
+    if not _git(root, 'status', '--porcelain', '--untracked-files=no'):
+        return [], False
+    real = set()
+    for staged in ((), ('--cached',)):
+        # --name-only ignores whitespace options, so read the patch itself: a
+        # file counts only if it still has a hunk once CR at line end is ignored.
+        patch_text = _git(root, 'diff', *staged, '--ignore-cr-at-eol', '--no-color', '--no-ext-diff', '-U0')
+        current = None
+        for line in patch_text.splitlines():
+            if line.startswith('diff --git '):
+                current = line.split(' b/', 1)[-1]
+            elif current and (line.startswith('@@') or line.startswith('Binary files')
+                              or line.startswith(('deleted file mode', 'new file mode', 'old mode'))):
+                real.add(current)
+    return sorted(real), not real
+
+
+def _set_aside(root):
+    """Keep real local edits in a named stash so the update can proceed."""
+    label = f'jarvis-update {time.strftime("%Y-%m-%d %H:%M:%S")}'
+    _git(root, 'stash', 'push', '-m', label)
+    return label
+
+
+def _restore(root, label):
+    """Re-apply stashed edits; on conflict leave them stashed. Returns a note."""
+    ref = None
+    for line in _git(root, 'stash', 'list').splitlines():
+        if label in line:
+            ref = line.split(':', 1)[0]
+            break
+    if ref is None:
+        return ''
+    try:
+        _git(root, 'stash', 'pop', ref)
+        return ' Yerel değişikliklerin yeniden uygulandı.'
+    except RuntimeError:
+        try:
+            _git(root, 'reset', '--hard', 'HEAD')
+        except RuntimeError:
+            pass
+        return (f' Yerel değişikliklerin yeni sürümle çakıştı; kaybolmadı, "{label}" adıyla '
+                'git stash listesinde saklı.')
+
+
 def _get(url):
     req = Request(url, headers={'User-Agent': 'Jarvis-Updater', 'Accept': 'application/vnd.github+json'})
     for attempt in range(3):
@@ -179,9 +230,9 @@ def update(root=ROOT, progress=lambda message: None):
         is_git = (root / '.git').exists()
         state_file = root / '.jarvis-update.json'
         state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
+        eol_only, real_changes = False, []
         if is_git:
-            if _git(root, 'status', '--porcelain', '--untracked-files=no'):
-                raise RuntimeError('Yerel kod değişiklikleri var; üzerine yazılmadı.')
+            real_changes, eol_only = _local_changes(root)
             branch = _git(root, 'symbolic-ref', '--short', 'HEAD')
             current = _git(root, 'rev-parse', 'HEAD')
         else:
@@ -214,17 +265,35 @@ def update(root=ROOT, progress=lambda message: None):
         if old_req.replace('\r\n', '\n').rstrip() != new_req.replace('\r\n', '\n').rstrip():
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. JARVIS’i kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
         progress('Yedek alınıyor ve güncelleme uygulanıyor…')
+        note = ''
         if is_git:
             if (_git(root, 'symbolic-ref', '--short', 'HEAD') != branch
                     or _git(root, 'rev-parse', 'HEAD') != current
-                    or _git(root, 'status', '--porcelain', '--untracked-files=no')):
+                    or _local_changes(root) != (real_changes, eol_only)):
                 raise RuntimeError('Kontrol sırasında yerel kod değişti; güncelleme durduruldu.')
             _git(root, 'branch', f'jarvis-backup/{time.time_ns()}', current)
-            _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
+            label = None
+            if real_changes:
+                shown = ', '.join(real_changes[:5]) + (' …' if len(real_changes) > 5 else '')
+                progress(f'Yerel değişiklikler kenara alınıyor: {shown}')
+                label = _set_aside(root)
+            try:
+                if eol_only:
+                    # Only CRLF/LF differences: nothing to keep. The target is a
+                    # descendant (checked above), so this is a fast-forward.
+                    _git(root, 'reset', '--hard', sha)
+                else:
+                    _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
+            except RuntimeError:
+                if label:
+                    _restore(root, label)
+                raise
             if _git(root, 'rev-parse', 'HEAD') != sha:
                 raise RuntimeError('Güncelleme sonucu doğrulanamadı.')
+            if label:
+                note = _restore(root, label)
         else:
             _apply_zip(root, files, sha, branch)
-        return True, f'Güncellendi · {sha[:8]}. JARVIS otomatik yeniden başlatılıyor.'
+        return True, f'Güncellendi · {sha[:8]}. JARVIS otomatik yeniden başlatılıyor.{note}'
     finally:
         lock.unlink(missing_ok=True)

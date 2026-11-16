@@ -65,13 +65,6 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn('jarvis-backup/', git('branch', '--list'))
         self.assertEqual((self.root / 'main.py').read_bytes(), b'new')
 
-    def test_git_dirty_code_refused_before_network(self):
-        (self.root / '.git').mkdir()
-        with patch.object(u, '_git', return_value=' M main.py'), patch.object(u, '_get') as get:
-            with self.assertRaisesRegex(RuntimeError, 'Yerel kod'):
-                u.update(self.root)
-            get.assert_not_called()
-
     def test_personal_data_untouched(self):
         config = self.root / 'config/api_keys.json'
         config.parent.mkdir()
@@ -153,3 +146,73 @@ class UpdaterTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GitLocalChangesTests(unittest.TestCase):
+    """The updater on a real git checkout with local differences."""
+
+    def setUp(self):
+        import subprocess
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.sp = subprocess
+
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(self.root), *args], text=True).strip()
+        self.git = git
+        git('init', '-q', '-b', 'main')
+        git('config', 'user.email', 'tests@example.invalid')
+        git('config', 'user.name', 'Updater tests')
+        git('config', 'core.autocrlf', 'false')
+        (self.root / 'requirements.txt').write_text('test==1\n')
+        (self.root / 'main.py').write_bytes(b'line one\nline two\n')
+        (self.root / 'notes.py').write_bytes(b'a = 1\n')
+        git('add', '.')
+        git('commit', '-qm', 'old')
+        self.old = git('rev-parse', 'HEAD')
+        (self.root / 'main.py').write_bytes(b'line one\nline two\nline three\n')
+        git('commit', '-qam', 'new')
+        self.new = git('rev-parse', 'HEAD')
+        git('reset', '-q', '--hard', self.old)
+        real_git = u._git
+
+        def local_fetch(root, *args):
+            if args[0] == 'fetch':
+                return real_git(root, 'fetch', '-q', '--no-tags', str(root), self.new)
+            return real_git(root, *args)
+        self.patch = patch.object(u, '_git', side_effect=local_fetch)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    def test_line_ending_only_difference_does_not_block(self):
+        (self.root / 'main.py').write_bytes(b'line one\r\nline two\r\n')    # Windows CRLF, same text
+        (self.root / 'notes.py').write_bytes(b'a = 1\r\n')
+        self.assertEqual(u._local_changes(self.root), ([], True))
+        ok, msg = u.update(self.root)
+        self.assertTrue(ok, msg)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.new)
+        self.assertIn(b'line three', (self.root / 'main.py').read_bytes())
+        self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')
+
+    def test_real_edit_is_kept_and_reapplied(self):
+        (self.root / 'notes.py').write_bytes(b'a = 2  # my change\n')
+        self.assertEqual(u._local_changes(self.root), (['notes.py'], False))
+        ok, msg = u.update(self.root)
+        self.assertTrue(ok, msg)
+        self.assertIn('yeniden uygulandı', msg)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.new)
+        self.assertEqual((self.root / 'notes.py').read_bytes(), b'a = 2  # my change\n')
+        self.assertIn(b'line three', (self.root / 'main.py').read_bytes())
+        self.assertEqual(self.git('stash', 'list'), '')
+
+    def test_conflicting_edit_is_left_in_stash_not_lost(self):
+        (self.root / 'main.py').write_bytes(b'line one\nMY VERSION\n')
+        ok, msg = u.update(self.root)
+        self.assertTrue(ok, msg)
+        self.assertIn('stash', msg)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.new)
+        self.assertIn(b'line three', (self.root / 'main.py').read_bytes())
+        self.assertIn('jarvis-update', self.git('stash', 'list'))
+        self.assertIn('MY VERSION', self.git('stash', 'show', '-p', 'stash@{0}'))
+        self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')

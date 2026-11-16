@@ -1,0 +1,12 @@
+# Text files are stored with LF in the repository and checked out with the
+# platform's own line endings. Without this, files committed with CRLF showed
+# as "changed" on Windows and the in-app updater refused to update.
+* text=auto
+*.ico binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.wav binary
+*.mp3 binary
+*.onnx binary
+*.obj -text
