@@ -408,6 +408,8 @@ void main() {
             float ps = px < 0.0 ? -1.0 : 1.0;
             vec3 topDir = normalize(vec3(ps * (px < 0.0 ? 0.9 : 0.45), 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));
             vec3 d0 = mix(vec3(0.0, -0.75, -0.66), topDir, smoothstep(0.30, 0.72, p.y));
+            float sideFade = 1.0 - smoothstep(0.05, 0.42, p.y);           // short faded sides
+            float part = exp(-pow(px / 0.0045, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
             vec3 T = normalize(d0 - nr * dot(d0, nr));
             vec3 B = cross(nr, T);
             float a = dot(p, T), b = dot(p, B);
@@ -419,8 +421,6 @@ void main() {
             hairC = mix(edgeHairs, 1.0, smoothstep(0.6, 1.0, hm)) * hm;
             hairC *= 1.0 - 0.30 * sideFade * (1.0 - f1 * 0.8) - 0.55 * part;
             vec3 hcol = mix(vec3(0.020, 0.0135, 0.009), vec3(0.085, 0.056, 0.036), strand * strand * 1.2);
-            float sideFade = 1.0 - smoothstep(0.05, 0.42, p.y);           // short faded sides
-            float part = exp(-pow(px / 0.0045, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
             alb = mix(alb, hcol, hairC);
             H += hairC * (f1 * 0.0006 + f2 * 0.0026 + cl * 0.008) - part * 0.003;
         }
