@@ -1,6 +1,6 @@
 """gui/providers_panel.py — ENGINE & PROVIDERS — the panel that chooses what holds the conversation.
 
-Split out of ui.py in Mark LVII; behaviour unchanged."""
+Split out of ui.py; behaviour unchanged."""
 from __future__ import annotations
 
 import json

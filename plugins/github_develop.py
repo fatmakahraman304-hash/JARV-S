@@ -15,7 +15,26 @@ REPO = GITHUB_REPOSITORY
 # Use the user's GitHub CLI credential just for this repository and invocation.
 _GH_GIT = ["git", "-c", "credential.https://github.com.helper=",
            "-c", "credential.https://github.com.helper=!gh auth git-credential"]
-WORK = Path.home() / 'JarvisDevelopment' / 'Mark-LVII'
+
+
+def _development_workspace(parent):
+    preferred = parent / "Murat"
+    if preferred.exists() or not parent.is_dir():
+        return preferred
+    existing = []
+    for path in parent.iterdir():
+        if not (path / ".git").is_dir():
+            continue
+        try:
+            channel = json.loads((path / "update_channel.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(channel, dict) and channel.get("repository") == REPO:
+            existing.append(path)
+    return existing[0] if len(existing) == 1 else preferred
+
+
+WORK = _development_workspace(Path.home() / "JarvisDevelopment")
 _LOCK = threading.Lock()
 PLUGIN = {'name':'github_develop','description':
     'JARVIS GitHub development workflow. prepare clones the user JARVIS repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. self_edit is the entry point when the user asks JARVIS to change itself or add an extension: prepares the isolated repository if needed, then hands off to the code agent. Never use self_edit on other repositories. self_release prepares a benign JARVIS feature or evidenced bug fix, tests it, waits for GitHub checks, merges and updates. Use only for a concrete user request explicitly asking for code and automatic publication. Never use it for a missing third-party app, network error, security exploit, or offensive automation. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside JARVIS. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',

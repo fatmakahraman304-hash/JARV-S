@@ -51,6 +51,20 @@ class TestOutput(unittest.TestCase):
 
 
 class LocalDevelopmentCommands(unittest.TestCase):
+    def test_workspace_prefers_murat_and_keeps_a_matching_existing_checkout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.assertEqual(g._development_workspace(root), root / "Murat")
+            existing = root / "ExistingCheckout"
+            (existing / ".git").mkdir(parents=True)
+            (existing / "update_channel.json").write_text(json.dumps({"repository": g.REPO}))
+            unrelated = root / "UnrelatedCheckout"
+            (unrelated / ".git").mkdir(parents=True)
+            (unrelated / "update_channel.json").write_text(json.dumps({"repository": "test/other"}))
+            self.assertEqual(g._development_workspace(root), existing)
+            (root / "Murat").mkdir()
+            self.assertEqual(g._development_workspace(root), root / "Murat")
+
     def test_explicit_commands_work_with_turkish_caps_and_punctuation(self):
         self.assertEqual(g.local_command_mode("  GİTHUB geliştirme alanını main ile eşitle. "), "sync")
         self.assertEqual(g.local_command_mode("/git test"), "test")
