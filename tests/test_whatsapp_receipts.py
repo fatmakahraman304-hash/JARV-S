@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from actions import send_message
@@ -6,6 +7,32 @@ from core import whatsapp_receipts as wa
 
 
 class ReceiptTests(unittest.TestCase):
+    def test_reads_the_automation_id_from_released_pywinauto(self):
+        def element(name, kind, key, top, bottom, identity, children=()):
+            return SimpleNamespace(
+                name=name, control_type=kind, automation_id=key,
+                rectangle=SimpleNamespace(top=top, bottom=bottom, left=0, right=700),
+                element=SimpleNamespace(GetRuntimeId=lambda: (identity,)),
+                children=lambda **kwargs: children,
+            )
+
+        pane = element("", "Pane", "ConversationPanel", 0, 700, 1, (
+            element("Murat (Siz)", "Button", "", 25, 50, 2),
+            element("Merhaba", "Text", "", 250, 270, 3),
+            element("", "Edit", "InputBox", 640, 690, 4),
+        ))
+        self.assertEqual(wa._read_pane(pane, "Kendim", "Merhaba").messages, {(3,): "visible"})
+
+    def test_reads_a_timestamp_and_receipt_in_one_accessible_label(self):
+        nodes = [
+            wa.Node("", "Pane", "main", -1, 0, 700),
+            wa.Node("Murat (Siz)", "Button", "", 0, 30, 55),
+            wa.Node("Siz: Merhaba 20:24, Teslim edildi", "ListItem", "", 0, 180, 220),
+            wa.Node("Mesaj yazın…", "Document", "", 0, 650, 690),
+        ]
+        self.assertEqual(wa._conversation(nodes, lambda i: (i,), "Kendim", "Merhaba").messages,
+                         {(2,): "delivered"})
+
     def test_matches_only_the_chat_and_deduplicates_accessible_message_text(self):
         nodes = [
             wa.Node("", "Pane", "main", -1, 0, 700),

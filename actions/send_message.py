@@ -216,7 +216,7 @@ def _send_whatsapp(receiver: str, message: str) -> str:
         return outcome.failed("send_message", "WhatsApp marked the message as failed to send", receipt=status, **facts)
     reasons = {
         "pending": "WhatsApp shows the new message as still sending",
-        "visible": "the new outgoing message is visible in WhatsApp, but no send receipt is visible",
+        "visible": "the message text appeared as a new entry in the WhatsApp conversation; no send receipt was visible",
     }
     return outcome.unverified("send_message", reasons.get(status, "WhatsApp did not expose a receipt for this send"),
                               receipt=status or "unknown", **facts)
@@ -383,7 +383,7 @@ def _send_and_report(player, platform: str, receiver: str,
             "delivered": "Teslim edildi",
             "read": "Okundu",
             "pending": "Gönderim bekliyor",
-            "visible": "Sohbette görünüyor, gönderim onayı bekleniyor",
+            "visible": "Sohbette göründü, WhatsApp onayı görünmüyor",
             "failed": "Gönderilemedi",
             "unknown": "Gönderim doğrulanamadı",
         }

@@ -16,8 +16,11 @@ _RECEIPTS = {
 }
 _SELF = {"kendim", "kendime", "me", "myself", "you", "siz", "sen"}
 _SELF_SUFFIX = re.compile(r"\s*\((?:you|siz|sen|kendim)\)$")
-_COMPOSER = {"type a message", "mesaj yaz", "mesaj yazın", "bir mesaj yazın", "bir mesaj yaz"}
+_COMPOSER = {"type a message", "write a message", "mesaj yaz", "mesaj yazın", "bir mesaj yazın",
+             "bir mesaj yaz", "mesajınızı yazın"}
 _DIRECTION = re.compile(r"^(?:you|siz|sen): ", re.IGNORECASE)
+_TIMED_LABEL = re.compile(r"(?P<body>.+?)[, ]+\d{1,2}:\d{2}(?:\s*[ap]m)?(?:[, ]+(?P<status>[^,]+))?",
+                          re.IGNORECASE)
 
 
 def _text(value: str) -> str:
@@ -33,6 +36,9 @@ class Node:
     parent: int
     y: int
     bottom: int
+    left: int = 0
+    right: int = 0
+    help_text: str = ""
 
 
 @dataclass
@@ -84,7 +90,9 @@ def _receipt(nodes: list[Node], parents: list[list[int]], index: int) -> str:
             if not inside_message and node.kind in {"ListItem", "DataItem"}:
                 continue
             if pos != index and node.kind not in {"Edit", "Hyperlink", "Button"}:
-                status = _RECEIPTS.get(node.key.casefold()) or _RECEIPTS.get(node.name.casefold())
+                status = next((_RECEIPTS[label.casefold().rstrip(".")] for label in
+                               (node.key, node.name, node.help_text)
+                               if label.casefold().rstrip(".") in _RECEIPTS), None)
                 if status:
                     labels.add(status)
             queue.extend((child, inside_message) for child in parents[pos])
@@ -96,11 +104,14 @@ def _receipt(nodes: list[Node], parents: list[list[int]], index: int) -> str:
     return ""
 
 
-def _conversation(nodes: list[Node], runtime_ids, receiver: str, message: str) -> Conversation | None:
+def _conversation(nodes: list[Node], runtime_ids, receiver: str, message: str,
+                  *, full_document: bool = False) -> Conversation | None:
     if not nodes:
         return None
-    composer = next((node for node in reversed(nodes) if node.kind == "Edit" and
-                     (node.name.casefold() in _COMPOSER or node.key.casefold() == "inputbox")), None)
+    composer = max((node for node in nodes if node.kind in {"Edit", "Document", "Text"}
+                    and (node.name.casefold().rstrip(". …") in _COMPOSER
+                         or node.key.casefold() == "inputbox") and node.bottom > node.y),
+                   key=lambda node: (node.kind != "Text", node.y), default=None)
     if composer is None:
         return None
     target = _text(receiver).casefold()
@@ -111,11 +122,15 @@ def _conversation(nodes: list[Node], runtime_ids, receiver: str, message: str) -
             return label in _SELF or bool(_SELF_SUFFIX.search(label))
         return _SELF_SUFFIX.sub("", label) == target
 
+    def in_chat_column(node):
+        return not full_document or (composer.right > composer.left and node.right > composer.left
+                                     and node.left >= composer.left - 90)
+
     header = next((node for node in nodes[1:] if node.kind in {"Text", "Button", "Header", "Group"}
                    and node.bottom > node.y and nodes[0].y <= node.y <= nodes[0].y + 110
-                   and matches_title(node)), None)
+                   and in_chat_column(node) and matches_title(node)), None)
     if header is None:
-        return Conversation(False, {})
+        return None if full_document else Conversation(False, {})
     children = [[] for _ in nodes]
     for index, node in enumerate(nodes):
         if node.parent >= 0:
@@ -124,11 +139,16 @@ def _conversation(nodes: list[Node], runtime_ids, receiver: str, message: str) -
     body = _text(message)
     for index, node in enumerate(nodes):
         if (node.kind not in {"Text", "ListItem", "DataItem", "Group"}
-                or node.y < header.bottom or node.bottom > composer.y or node.bottom <= node.y):
+                or node.y < header.bottom or node.bottom > composer.y or node.bottom <= node.y
+                or not in_chat_column(node)):
             continue
-        outgoing = _DIRECTION.match(node.name) and _DIRECTION.sub("", node.name, count=1) == body
-        if node.name == body or outgoing:
-            candidates[index] = bool(outgoing)
+        label = _DIRECTION.sub("", node.name, count=1)
+        if node.name == body or label == body:
+            candidates[index] = None
+        elif node.kind in {"ListItem", "DataItem", "Group"}:
+            row = _TIMED_LABEL.fullmatch(label)
+            if row and row["body"] == body:
+                candidates[index] = _RECEIPTS.get((row["status"] or "").casefold().rstrip("."))
     # A single bubble can expose the text on both its wrapper and a child.
     wrappers = set()
     for index in candidates:
@@ -136,25 +156,46 @@ def _conversation(nodes: list[Node], runtime_ids, receiver: str, message: str) -
         while parent > 0:
             if parent in candidates:
                 wrappers.add(parent)
-                candidates[index] |= candidates[parent]
+                candidates[index] = candidates[index] or candidates[parent]
             parent = nodes[parent].parent
     matches = {}
-    for index, outgoing in candidates.items():
+    for index, row_status in candidates.items():
         if index in wrappers:
             continue
-        status = _receipt(nodes, children, index)
+        status = row_status or _receipt(nodes, children, index)
         identifier = runtime_ids(index)
         if identifier:
-            matches[identifier] = status or ("visible" if outgoing else "matching_text")
+            matches[identifier] = status or "visible"
     return Conversation(True, matches)
+
+
+def _read_pane(pane, receiver, message, *, full_document=False):
+    nodes = []
+    elements = []
+    for element, parent in _walk(pane, time.monotonic() + 2.5):
+        rect = element.rectangle
+        name = _text(element.name)
+        kind = element.control_type
+        help_text = _text(getattr(element.element, "CurrentHelpText", "")) if kind == "Image" else ""
+        # pywinauto 0.6.9 calls this automation_id; newer builds use auto_id.
+        key = getattr(element, "automation_id", None) or getattr(element, "auto_id", "") or ""
+        nodes.append(Node(name, kind, key, parent,
+                          rect.top, rect.bottom, rect.left, rect.right, help_text))
+        elements.append(element)
+    return _conversation(nodes, lambda index: tuple(elements[index].element.GetRuntimeId()),
+                         receiver, message, full_document=full_document)
 
 
 def read_conversation(window: int, receiver: str, message: str) -> Conversation | None:
     """Observe only the selected conversation. None means the UI is unreadable."""
     try:
         import comtypes
-        from pywinauto.uia_defines import IUIA
-        from pywinauto.uia_element_info import UIAElementInfo
+        try:
+            from pywinauto.uia_defines import IUIA
+            from pywinauto.uia_element_info import UIAElementInfo
+        except ImportError:
+            from pywinauto.windows.uia_defines import IUIA
+            from pywinauto.windows.uia_element_info import UIAElementInfo
 
         if foreground_window() != window:
             return None
@@ -162,23 +203,16 @@ def read_conversation(window: int, receiver: str, message: str) -> Conversation 
         try:
             root = UIAElementInfo(window)
             automation = IUIA()
-            for key in ("main", "ConversationPanel"):
+            for key in ("main", "ConversationPanel", "RootWebArea"):
                 condition = automation.iuia.CreatePropertyCondition(
                     automation.UIA_dll.UIA_AutomationIdPropertyId, key)
                 pane = root.element.FindFirst(automation.UIA_dll.TreeScope_Descendants, condition)
-                if pane:
-                    break
-            else:
-                return None
-            nodes = []
-            elements = []
-            for element, parent in _walk(UIAElementInfo(pane, cache_enable=True), time.monotonic() + 2):
-                rect = element.rectangle
-                nodes.append(Node(_text(element.name), element.control_type, element.auto_id,
-                                  parent, rect.top, rect.bottom))
-                elements.append(element)
-            return _conversation(nodes, lambda index: tuple(elements[index].element.GetRuntimeId()),
-                                 receiver, message)
+                if not pane:
+                    continue
+                result = _read_pane(UIAElementInfo(pane, cache_enable=True), receiver, message,
+                                    full_document=key == "RootWebArea")
+                if result is not None:
+                    return result
         finally:
             comtypes.CoUninitialize()
     except Exception:
