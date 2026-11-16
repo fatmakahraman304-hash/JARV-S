@@ -39,7 +39,7 @@ class GlobeCommandTests(unittest.TestCase):
 
 
 class GlobePanelTests(unittest.TestCase):
-    def test_local_service_opens_once_and_runs_browser_command(self):
+    def test_local_service_opens_once_without_logging_a_url_and_runs_browser_command(self):
         from PyQt6.QtWidgets import QApplication
         from gui import gods_eye_panel
 
@@ -55,9 +55,15 @@ class GlobePanelTests(unittest.TestCase):
 const http = require('node:http');
 const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
 http.createServer((req, res) => {
+    if (req.url === '/src/main.js') {
+        res.writeHead(200, {'Content-Type': 'text/javascript'});
+        res.end('');
+        return;
+    }
     res.writeHead(200, {'Content-Type': 'text/html'});
-    res.end('<script>window.__godsEyeView = {voiceCommands: {runner: async (name, args) => ({ok:true,name,query:args.query})}};</script>');
-}).listen(port, '127.0.0.1', () => console.log('http://127.0.0.1:' + port + '/'));
+    res.end(`<title>God's Eye View</title><script type="module" src="/src/main.js"></script>
+        <script>window.__godsEyeView = {voiceCommands: {runner: async (name, args) => ({ok:true,name,query:args.query})}};</script>`);
+}).listen(port, '127.0.0.1', () => console.log('Ready'));
 """, encoding="utf-8")
             with patch.object(gods_eye, "ROOT", root), patch.object(gods_eye, "read_catalog", return_value={}):
                 panel = gods_eye_panel.GodsEyePanel()

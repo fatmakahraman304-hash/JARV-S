@@ -6,9 +6,12 @@ import time
 from collections import deque
 
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from core import gods_eye
+from gui.theme import C
 
 try:
     from PyQt6.QtWebEngineCore import QWebEnginePage
@@ -72,9 +75,13 @@ class GodsEyePanel(QWidget):
         self._loaded = False
         self._ready_confirmed = False
         self._navigation_started = False
+        self._probe = None
+        self._next_probe = 0
         self._stopping = False
         self._pending_js = False
         self._output = b""
+        self._network = QNetworkAccessManager(self)
+        self._network.setProxy(QNetworkProxy(QNetworkProxy.ProxyType.NoProxy))
         self._server = QProcess(self)
         self._server.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self._server.readyReadStandardOutput.connect(self._server_output)
@@ -100,6 +107,7 @@ class GodsEyePanel(QWidget):
         if QWebEngineView is not None:
             self._view = QWebEngineView(self)
             self._view.setPage(GlobePage(self._view))
+            self._view.page().setBackgroundColor(QColor(C.BG))
             self._view.loadStarted.connect(self._page_loading)
             self._view.loadFinished.connect(self._page_loaded)
             self._view.page().renderProcessTerminated.connect(self._renderer_stopped)
@@ -133,6 +141,7 @@ class GodsEyePanel(QWidget):
         self._loaded = False
         self._ready_confirmed = False
         self._navigation_started = False
+        self._next_probe = 0
         self._stopping = False
         self._output = b""
         self._startup_deadline = time.monotonic() + 120
@@ -150,14 +159,51 @@ class GodsEyePanel(QWidget):
 
     def _server_output(self):
         self._output = (self._output + bytes(self._server.readAllStandardOutput()))[-6000:]
-        address = f"http://127.0.0.1:{self._port}/"
-        if not self._navigation_started and address.encode() in self._output:
-            # Only follow the endpoint announced by the process JARVIS launched.
-            self._navigation_started = True
-            self._view.setUrl(QUrl(address))
+
+    def _probe_server(self, now):
+        if (self._probe is not None or now < self._next_probe
+                or self._server.state() != QProcess.ProcessState.Running):
+            return
+        self._next_probe = now + .6
+        address = QUrl(f"http://127.0.0.1:{self._port}/")
+        request = QNetworkRequest(address)
+        request.setTransferTimeout(2000)
+        request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
+                             QNetworkRequest.RedirectPolicy.ManualRedirectPolicy)
+        probe = self._probe = self._network.get(request)
+        body = bytearray()
+
+        def read():
+            remaining = 32768 - len(body)
+            body.extend(bytes(probe.read(remaining)))
+            if probe.bytesAvailable():
+                probe.abort()
+
+        def finished():
+            try:
+                if self._probe is not probe:
+                    return
+                self._probe = None
+                if self._stopping or self._server.state() != QProcess.ProcessState.Running:
+                    return
+                status = probe.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+                if (probe.error() == probe.NetworkError.NoError and status == 200
+                        and b"<title>God's Eye View</title>" in body
+                        and b'/src/main.js' in body):
+                    self._navigation_started = True
+                    self._status.setText("Yerel servis hazır. Harita sayfası yükleniyor…")
+                    self._view.setUrl(address)
+            finally:
+                probe.deleteLater()
+
+        probe.readyRead.connect(read)
+        probe.finished.connect(finished)
 
     def _stop(self):
         self._stopping = True
+        if self._probe is not None:
+            probe, self._probe = self._probe, None
+            probe.abort()
         if self._server.state() != QProcess.ProcessState.NotRunning:
             self._server.kill()
             self._server.waitForFinished(1500)
@@ -238,8 +284,13 @@ class GodsEyePanel(QWidget):
             self._finish(reply, "God's Eye View komutu zaman aşımına uğradı.")
             return
         if not self._ready_confirmed and now >= self._startup_deadline:
-            self._fail_all("Harita zamanında açılmadı. Node.js ve WebGL desteğini kontrol et.")
+            message = ("Harita sayfası yanıt verdi, 3D sahne zamanında açılmadı. WebGL desteğini kontrol et."
+                       if self._navigation_started else "Yerel Node.js servisi harita sayfasına yanıt vermedi.")
+            self._fail_all(message)
             self._stop()
+            return
+        if not self._navigation_started:
+            self._probe_server(now)
             return
         if self._pending_js or not self._loaded or not self._view.page().is_globe(self._view.url()):
             return
