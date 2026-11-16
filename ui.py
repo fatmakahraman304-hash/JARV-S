@@ -306,6 +306,11 @@ class JarvisUI:
     def show_camera_scan(self, jpeg: bytes, report: dict):
         self._win._scan_result_sig.emit(jpeg, report)
 
+    def show_chess(self, opened: bool = True) -> None:
+        """Thread-safe: open (or close) the chess board. The game itself is
+        core.chess_game.get_game(), safe to use from any thread."""
+        self._win._chess_sig.emit(bool(opened))
+
     def show_control_center(self, opened: bool = True) -> None:
         """Thread-safe: open (or close) the Control Centre — Jarvis's network
         of capabilities and the live activity feed."""
