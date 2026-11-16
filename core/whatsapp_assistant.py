@@ -95,7 +95,8 @@ class Assistant:
             xml.SubElement(response, 'Hangup')
             return
         if not turn:
-            answer = 'Merhaba, ben JARVIS, otomatik sesli asistan. Size nasıl yardımcı olabilirim?'
+            answer = (f'Merhaba, ben {assistant_name()}, otomatik sesli asistan. '
+                      'Size nasıl yardımcı olabilirim?')
         else:
             match = []
             for line in faq.splitlines():
@@ -153,6 +154,15 @@ def server(assistant, port):
     return ThreadingHTTPServer(('127.0.0.1', port), Handler)
 
 
+def assistant_name():
+    """The name the user gave the assistant (Settings), for what callers hear."""
+    try:
+        from memory.config_manager import get_assistant_name
+        return (get_assistant_name() or 'JARVIS').strip() or 'JARVIS'
+    except Exception:
+        return 'JARVIS'
+
+
 def load_settings():
     from memory.config_manager import load_api_keys
     value = load_api_keys().get('whatsapp_assistant', {})
@@ -174,7 +184,7 @@ def start_listener():
                   settings.get('receiver', ''), 8769)
     if _listener:
         if _listener[0] != connection:
-            return 'Yeni bağlantı bilgilerini uygulamak için JARVIS’i yeniden başlat.'
+            return 'Yeni bağlantı bilgilerini uygulamak için uygulamayı yeniden başlat.'
         return f'Yerel dinleyici açık ({connection[3]}). Twilio bağlantısı henüz doğrulanmadı.'
     def active_settings():
         current = load_settings()

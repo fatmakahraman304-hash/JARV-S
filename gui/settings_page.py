@@ -261,7 +261,8 @@ class SettingsPage(QDialog):
             secret.setEchoMode(QLineEdit.EchoMode.Password)
             receiver = QLineEdit(settings.get('receiver', ''))
             receiver.setPlaceholderText('+90…')
-            message = QLineEdit(settings.get('message', 'Merhaba, ben JARVIS. Mesajınızı aldım.'))
+            from core.whatsapp_assistant import assistant_name
+            message = QLineEdit(settings.get('message', f'Merhaba, ben {assistant_name()}. Mesajınızı aldım.'))
             message.setMaxLength(1500)
             faq = QPlainTextEdit(settings.get('faq', ''))
             faq.setPlaceholderText('Her satıra anahtar kelimeler = cevap yaz. Örn. çalışma saatleri = Hafta içi 9–18.')

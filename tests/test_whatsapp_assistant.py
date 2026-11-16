@@ -56,3 +56,18 @@ class BusinessAssistantTests(unittest.TestCase):
         self.assertIn('Saat 9', self.event(VOICE + '?turn=1').findtext('./Gather/Say'))
         self.settings['voice_enabled'] = False
         self.assertIsNotNone(self.event(VOICE).find('Reject'))
+
+
+class AssistantNameTests(unittest.TestCase):
+    def test_greeting_uses_the_configured_name(self):
+        from unittest.mock import patch
+        from xml.etree import ElementTree as xml
+        from core import whatsapp_assistant as wa
+        with patch("memory.config_manager.get_assistant_name", return_value="Murat"):
+            self.assertEqual(wa.assistant_name(), "Murat")
+            response = xml.Element("Response")
+            fake = type("A", (), {"origin": "https://example.com"})()
+            wa.Assistant.voice(fake, response, 0, "", "")
+            self.assertIn("ben Murat", xml.tostring(response, encoding="unicode"))
+        with patch("memory.config_manager.get_assistant_name", side_effect=RuntimeError):
+            self.assertEqual(wa.assistant_name(), "JARVIS")
