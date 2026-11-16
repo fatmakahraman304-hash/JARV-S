@@ -280,7 +280,7 @@ float lod(float freq) { return 1.0 - smoothstep(0.35, 0.9, freq / max(u_scale, 1
 
 float hairline(vec3 p) {
     float ax = abs(p.x);
-    float front = 0.60 + 0.15 * (ax / 0.48) * (ax / 0.48);
+    float front = 0.53 + 0.11 * (ax / 0.48) * (ax / 0.48);
     float hl = mix(-0.44, 0.25, smoothstep(-0.74, -0.46, p.z));
     hl = mix(hl, front, smoothstep(-0.02, 0.26, p.z));
     float sb = exp(-pow((p.z + 0.165) / 0.05, 2.0)) * smoothstep(0.45, 0.6, ax);
@@ -337,7 +337,7 @@ void main() {
     alb = mix(alb, alb * vec3(1.03, 1.0, 0.92), smoothstep(0.30, 0.50, p.y) * float(front));
     float H = 0.0;                                   // bump height, head units
     float poreL = lod(420.0);
-    H += poreL * ((vnoise(p * 420.0) - 0.5) * 0.0011 + (vnoise(p * 160.0) - 0.5) * 0.0013);
+    H += poreL * ((vnoise(p * 420.0) - 0.5) * 0.00045 + (vnoise(p * 160.0) - 0.5) * 0.0005);
     float ks = 0.28, shin = 34.0, wet = 0.0, sss = 1.0;
 
     // ── ears ───────────────────────────────────────────────────────────────
@@ -350,7 +350,9 @@ void main() {
 
     // ── beard shadow (short stubble) ───────────────────────────────────────
     float bl = -0.33 - 0.12 * smoothstep(0.10, 0.28, ax) + 0.40 * smoothstep(0.34, 0.66, ax);
-    float beard = (1.0 - smoothstep(bl - 0.035, bl + 0.025, p.y)) * smoothstep(-0.26, -0.13, p.z);
+    bl += (vnoise(p * 30.0) - 0.5) * 0.05;
+    float beard = (1.0 - smoothstep(bl - 0.10, bl + 0.04, p.y)) * smoothstep(-0.26, -0.10, p.z);
+    beard *= 0.55 + 0.45 * (1.0 - smoothstep(-0.75, -0.45, p.y)) + 0.0 * float(neck);
     if (neck) beard = smoothstep(-0.97, -0.84, p.y) * smoothstep(-0.25, 0.10, p.z);
     beard *= 1.0 - earM;
 
@@ -358,27 +360,29 @@ void main() {
     float yuo = poly(u_lip_uo, ax), ylo = poly(u_lip_lo, ax);
     float yui = poly(u_lip_ui, ax), yli = poly(u_lip_li, ax);
     float lipD = min(yuo - p.y, p.y - ylo);
-    float lipM = front && ax < u_lip_w.x + 0.01 ? smoothstep(-0.002, 0.007, lipD) : 0.0;
+    float lipM = front && ax < u_lip_w.x + 0.01 ? smoothstep(-0.006, 0.012, lipD) : 0.0;
     beard *= 1.0 - smoothstep(-0.012, 0.004, lipD) * float(ax < u_lip_w.x + 0.03);
-    alb = mix(alb, vec3(0.52, 0.27, 0.25), lipM);
+    alb = mix(alb, vec3(0.50, 0.29, 0.26), lipM * 0.85);
     H += lipM * lod(380.0) * (vnoise(vec3(p.x * 380.0, p.y * 35.0, 1.0)) - 0.5) * 0.0012;
     float roll = front ? exp(-pow((yuo - p.y + 0.004) / 0.004, 2.0)) * float(ax < u_lip_w.x) : 0.0;
-    ks = mix(ks, 0.45, lipM); shin = mix(shin, 60.0, lipM);
+    ks = mix(ks, 0.34, lipM); shin = mix(shin, 44.0, lipM);
 
     // stubble is applied after the lips are cut out of it
     float dots = smoothstep(0.58, 0.82, vnoise(p * 700.0));
     float dl = lod(700.0);
-    alb = mix(alb, alb * vec3(0.58, 0.58, 0.66), beard * 0.50);
-    alb *= 1.0 - beard * 0.45 * mix(0.35, dots, dl);
+    alb = mix(alb, alb * vec3(0.70, 0.70, 0.78), beard * 0.38);
+    alb *= 1.0 - beard * 0.40 * mix(0.30, dots, dl);
     H += beard * dl * dots * 0.0007;
 
     // ── eyebrows ───────────────────────────────────────────────────────────
     float browC = 0.0;
     float bt = (ax - u_brow_x.x) / (u_brow_x.y - u_brow_x.x);
     if (front && bt > -0.1 && bt < 1.1) {
-        float yc = u_brow.x + ax * (u_brow.y + ax * u_brow.z) + 0.002;
-        float ht = mix(0.030, 0.011, smoothstep(0.05, 1.0, bt));
-        float en = (vnoise(p * 140.0) - 0.5) * 0.010;
+        float yfit = u_brow.x + ax * (u_brow.y + ax * u_brow.z);
+        float ylin = mix(0.292, 0.235, bt);
+        float yc = mix(yfit, ylin, 0.45) - 0.006;
+        float ht = mix(0.040, 0.019, smoothstep(0.10, 1.0, bt));
+        float en = (vnoise(p * 140.0) - 0.5) * 0.014 + (vnoise(p * 600.0) - 0.5) * 0.008;
         float shape = 1.0 - smoothstep(ht * 0.55, ht * 1.15 + en, abs(p.y - yc - ht * 0.15));
         shape *= smoothstep(-0.06, 0.07, bt) * (1.0 - smoothstep(0.88, 1.06, bt));
         float ang = mix(1.25, 0.20, smoothstep(0.0, 0.35, bt));
@@ -387,7 +391,7 @@ void main() {
         vec2 per = vec2(-dir.y, dir.x);
         float s1 = vnoise(vec3(dot(p.xy, per) * 1100.0, dot(p.xy, dir) * 70.0, sgn * 7.0));
         float s2 = vnoise(vec3(dot(p.xy, per) * 480.0, dot(p.xy, dir) * 32.0, 3.0));
-        float hairs = mix(0.75, clamp(0.25 + 1.5 * s1 * s2 + 0.3 * s1, 0.0, 1.0), lod(1100.0));
+        float hairs = mix(0.75, clamp(0.10 + 1.7 * s1 * s2 + 0.35 * s1, 0.0, 1.0), lod(1100.0));
         browC = clamp(shape * hairs * 1.15, 0.0, 1.0);
         alb = mix(alb, vec3(0.030, 0.022, 0.017), browC * 0.95);
         H += browC * s1 * 0.0018;
@@ -396,8 +400,8 @@ void main() {
     // ── hair ───────────────────────────────────────────────────────────────
     float hairC = 0.0, strand = 0.0;
     if (!neck) {
-        float hl = hairline(p) + (vnoise(p * 45.0) - 0.5) * 0.035 + (vnoise(p * 170.0) - 0.5) * 0.012;
-        float hm = smoothstep(hl - 0.012, hl + 0.030, p.y) * (1.0 - earM);
+        float hl = hairline(p) + (vnoise(p * 28.0) - 0.5) * 0.016 + (vnoise(p * 210.0) - 0.5) * 0.010;
+        float hm = smoothstep(hl - 0.010, hl + 0.045, p.y) * (1.0 - earM);
         if (hm > 0.0) {
             vec3 nr = normalize(p - vec3(0.0, 0.05, -0.12));
             vec3 d0 = mix(vec3(0.0, -0.75, -0.66), vec3(sgn * 0.15, 0.25, -1.0), smoothstep(0.30, 0.72, p.y));
@@ -407,12 +411,12 @@ void main() {
             float f1 = vnoise(vec3(b * 900.0, a * 40.0, 0.5));
             float f2 = vnoise(vec3(b * 260.0, a * 14.0, 2.5));
             float cl = vnoise(vec3(b * 60.0, a * 6.0, 4.5));
-            strand = mix(0.5, f1, lod(900.0)) * 0.55 + f2 * 0.30 + cl * 0.15;
+            strand = mix(0.5, f1, lod(900.0)) * 0.30 + f2 * 0.35 + cl * 0.35;
             float edgeHairs = smoothstep(0.15, 0.85, hm * 1.4 - 0.2 + 0.7 * (f1 - 0.5));
             hairC = mix(edgeHairs, 1.0, smoothstep(0.6, 1.0, hm)) * hm;
-            vec3 hcol = mix(vec3(0.020, 0.014, 0.010), vec3(0.075, 0.050, 0.034), strand);
+            vec3 hcol = mix(vec3(0.022, 0.016, 0.012), vec3(0.060, 0.042, 0.030), strand);
             alb = mix(alb, hcol, hairC);
-            H += hairC * (f1 * 0.0030 + f2 * 0.0045 + cl * 0.006);
+            H += hairC * (f1 * 0.0012 + f2 * 0.0030 + cl * 0.006);
         }
     }
 
@@ -440,6 +444,7 @@ void main() {
     float amb = 0.10 + 0.14 * (0.5 + 0.5 * n.y);
     vec3 diff = vec3(amb) + lk * vec3(1.0, 0.95, 0.88) * 1.0 + lf * vec3(0.60, 0.68, 0.85) * 0.30;
     float occ = ao * ao * (1.0 - 0.45 * earShadow);
+    if (neck) occ *= mix(0.45, 1.0, smoothstep(-0.70, -0.98, p.y));
     vec3 col = alb * diff * occ;
 
     vec3 hk = normalize(KEY + VIEW), hf = normalize(FILL + VIEW);
@@ -458,7 +463,7 @@ void main() {
     vec3 r = 2.0 * ndv * n - VIEW;
     float top = smoothstep(0.25, 0.70, r.y) * smoothstep(0.85, 0.35, abs(r.x));
     col += vec3(0.22 * top + 0.03) * fres * (1.0 - 0.8 * hairC) * (1.0 - shirt) * ao;
-    col += roll * 0.020;
+    col += roll * 0.008;
     float rim = pow(1.0 - ndv, 3.0);
     col += rim * accent * (0.16 + 0.30 * u_glow) * (1.0 - 0.5 * hairC);
 
@@ -547,11 +552,11 @@ void main() {
             float lgap = 1.0 - smoothstep(0.0, 0.003, min(ax - lb0, lb0 + 0.050 - ax));
             float loE = (0.026 - 0.005 * pow(abs(2.0 * ltl - 1.0), 3.0)) / hpx;
             float low = 1.0 - smoothstep(loE - 0.02, loE + 0.02, c);
-            vec3 tooth = vec3(0.86, 0.81, 0.71);
-            float dark = 1.0 - 0.80 * smoothstep(0.04, 0.20, ax);
-            vec3 tu = tooth * dark * (1.0 - 0.75 * gap) * mix(0.55, 1.0, smoothstep(1.0, 0.75, c));
+            vec3 tooth = vec3(0.80, 0.74, 0.62);
+            float dark = 1.0 - 0.85 * smoothstep(0.03, 0.19, ax);
+            vec3 tu = tooth * dark * (1.0 - 0.35 * gap) * mix(0.55, 1.0, smoothstep(1.0, 0.75, c));
             tu += vec3(0.45, 0.47, 0.52) * 0.15 * smoothstep(upE + 0.10, upE, c);
-            vec3 tlw = tooth * 0.8 * dark * (1.0 - 0.75 * lgap);
+            vec3 tlw = tooth * 0.72 * dark * (1.0 - 0.35 * lgap);
             m = mix(m, tlw, low);
             m = mix(m, tu, up);
             float gl = pow(max(dot(n0, hk), 0.0), 40.0) * 0.25 * (up + low) * dark;
@@ -572,7 +577,7 @@ void main() {
 def _hairline(p: np.ndarray) -> np.ndarray:
     """Same hairline as the shader (without its noise), head units."""
     ax = np.abs(p[:, 0])
-    front = 0.60 + 0.15 * (ax / 0.48) ** 2
+    front = 0.53 + 0.11 * (ax / 0.48) ** 2
     ss = lambda e0, e1, x: (lambda t: t * t * (3 - 2 * t))(np.clip((x - e0) / (e1 - e0), 0, 1))
     hl = -0.44 + (0.25 + 0.44) * ss(-0.74, -0.46, p[:, 2])
     hl = hl + (front - hl) * ss(-0.02, 0.26, p[:, 2])
