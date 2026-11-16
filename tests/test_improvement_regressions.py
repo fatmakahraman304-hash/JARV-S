@@ -10,9 +10,29 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 from urllib.error import HTTPError, URLError
 
-from core import app_updater
+from core import app_updater, code_checks
 from core.social_sites import SITES, site_for_command
 from plugins import capacity_simulation, github_develop, night_shift, normal_map
+
+
+class QtFixtureTests(unittest.TestCase):
+    def test_static_checks_allow_qapplication_in_tests_but_guard_production(self):
+        fixture = (
+            "from PyQt6.QtWidgets import QApplication\n"
+            "app = QApplication.instance() or QApplication([])\n"
+        )
+        checks = code_checks.static_problems(Path("."), {
+            "tests/test_book_panel.py": fixture,
+            "gui/book_panel.py": fixture,
+            "gui/test_book_panel.py": fixture,
+            "actions/book_panel.py": fixture,
+            "ui.py": fixture,
+        }, {"profiles": ["jarvis"]})
+        self.assertEqual(set(checks), {
+            "gui/book_panel.py", "gui/test_book_panel.py", "actions/book_panel.py",
+        })
+        self.assertIn("creates a QApplication", checks["gui/book_panel.py"])
+        self.assertIn("worker threads", checks["actions/book_panel.py"])
 
 
 class DownloadTests(unittest.TestCase):

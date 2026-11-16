@@ -618,9 +618,17 @@ class _JarvisProfile:
         return (folder / "core" / "plugin_loader.py").is_file() and (folder / "ui.py").is_file()
 
     def guide(self, folder: Path) -> str:
+        test_guide = (
+            "## Qt tests\n\n"
+            "Test modules under tests/ run in a separate test process. A Qt fixture may "
+            "use QApplication.instance() or QApplication([]) and hold the reference for "
+            "the test lifetime. Keep the production QApplication in ui.py."
+        )
         api = self._player_api(folder / "ui.py")
-        return ("## Thread-safe `player` methods (generated from ui.py)\n\n```\n"
-                + api + "\n```") if api else ""
+        if api:
+            test_guide += ("\n\n## Thread-safe `player` methods (generated from ui.py)\n\n```\n"
+                           + api + "\n```")
+        return test_guide
 
     @staticmethod
     def _player_api(ui_file: Path) -> str:
@@ -658,6 +666,7 @@ class _JarvisProfile:
             except SyntaxError:
                 continue
             is_tool = rel.startswith(self._TOOL_DIRS)
+            is_test = rel.startswith("tests/") and Path(rel).name.startswith("test_")
             for node in ast.walk(tree):
                 if is_tool and isinstance(node, (ast.Import, ast.ImportFrom)):
                     mod = (node.module or "") if isinstance(node, ast.ImportFrom) else \
@@ -672,7 +681,7 @@ class _JarvisProfile:
                                  "See AGENTS.md.")
                         break
                 if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                        and node.func.id == "QApplication" and rel != "ui.py"):
+                        and node.func.id == "QApplication" and rel != "ui.py" and not is_test):
                     add(rel, "It creates a QApplication; the app already has exactly one "
                              "(in ui.py) and a second breaks the window. Remove it.")
             if rel.startswith("plugins/") and not Path(rel).name.startswith("_"):
