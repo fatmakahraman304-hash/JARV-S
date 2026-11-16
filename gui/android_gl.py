@@ -456,9 +456,9 @@ void main() {
     float yj = -1.0 + 1.1 * ax * ax;
     float zj = 0.38 - 1.6 * ax * ax;
     float jawSide = smoothstep(0.05, 0.25, ax) * float(!neck) * smoothstep(-0.45, -0.25, p.z);
-    float underJaw = smoothstep(0.0, 0.05, yj - p.y + 0.4 * max(zj - p.z, 0.0) * 0.0) * jawSide;
+    float underJaw = smoothstep(-0.015, 0.10, yj - p.y) * jawSide;
     underJaw = max(underJaw, smoothstep(-0.45, -0.62, p.y) * smoothstep(-0.05, -0.55, n0.y) * float(!neck));
-    occ *= 1.0 - 0.55 * underJaw;
+    occ *= 1.0 - 0.42 * underJaw;
     float jawEdge = exp(-pow((p.y - yj - 0.012) / 0.010, 2.0)) * jawSide * smoothstep(0.0, 0.3, dot(n0, KEY));
     vec3 col = alb * diff * occ;
 
