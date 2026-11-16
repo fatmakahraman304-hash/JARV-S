@@ -370,7 +370,7 @@ void main() {
     // stubble is applied after the lips are cut out of it
     float dots = smoothstep(0.58, 0.82, vnoise(p * 700.0));
     float dl = lod(700.0);
-    alb = mix(alb, alb * vec3(0.70, 0.70, 0.78), beard * 0.38);
+    alb = mix(alb, alb * vec3(0.66, 0.66, 0.75), beard * 0.50);
     alb *= 1.0 - beard * 0.40 * mix(0.30, dots, dl);
     H += beard * dl * dots * 0.0007;
 
@@ -384,7 +384,7 @@ void main() {
         float ht = mix(0.040, 0.019, smoothstep(0.10, 1.0, bt));
         float en = (vnoise(p * 140.0) - 0.5) * 0.014 + (vnoise(p * 600.0) - 0.5) * 0.008;
         float shape = 1.0 - smoothstep(ht * 0.55, ht * 1.15 + en, abs(p.y - yc - ht * 0.15));
-        shape *= smoothstep(-0.06, 0.07, bt) * (1.0 - smoothstep(0.88, 1.06, bt));
+        shape *= smoothstep(-0.06, 0.10, bt + 0.04 * abs(p.y - yc) / ht) * (1.0 - smoothstep(0.88, 1.06, bt));
         float ang = mix(1.25, 0.20, smoothstep(0.0, 0.35, bt));
         ang = mix(ang, -0.30, smoothstep(0.65, 1.0, bt));
         vec2 dir = vec2(cos(ang) * sgn, sin(ang));
@@ -408,8 +408,8 @@ void main() {
             vec3 T = normalize(d0 - nr * dot(d0, nr));
             vec3 B = cross(nr, T);
             float a = dot(p, T), b = dot(p, B);
-            float f1 = vnoise(vec3(b * 900.0, a * 40.0, 0.5));
-            float f2 = vnoise(vec3(b * 260.0, a * 14.0, 2.5));
+            float f1 = vnoise(vec3(b * 900.0, a * 110.0, 0.5));
+            float f2 = vnoise(vec3(b * 260.0, a * 40.0, 2.5));
             float cl = vnoise(vec3(b * 60.0, a * 6.0, 4.5));
             strand = mix(0.5, f1, lod(900.0)) * 0.30 + f2 * 0.35 + cl * 0.35;
             float edgeHairs = smoothstep(0.15, 0.85, hm * 1.4 - 0.2 + 0.7 * (f1 - 0.5));
