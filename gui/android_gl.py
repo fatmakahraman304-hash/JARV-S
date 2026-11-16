@@ -223,18 +223,30 @@ class AndroidGL:
     """Renders the posed head into a QImage with OpenGL. Not thread-safe: use
     from the Qt thread only, like any widget painting."""
 
-    def __init__(self, faces, face_group, rest, ao, jaw, fade, landmarks):
+    def __init__(self, faces, face_group, rest, ao, jaw, fade, landmarks, subdiv: int = 2):
         self.ok = None                     # None: not tried yet
         self.error = ""
         f = np.asarray(faces, np.int32)
+        n_base = len(rest)
+        neck_face = (np.asarray(face_group) < 0.5).astype(np.float32)
+        # Loop-subdivide the mesh (fixed stencil, re-applied to the posed
+        # vertices each frame) so the silhouette and shading are smooth curved
+        # surfaces instead of visible polygons, even at 4K.
+        if subdiv > 0:
+            from core.android_render import apply_stencil, loop_subdivision
+            f, self._st_idx, self._st_w, parent = loop_subdivision(f, n_base, subdiv)
+            neck_face = neck_face[parent]
+            sub = lambda a: apply_stencil(np.asarray(a, np.float32), self._st_idx, self._st_w)
+        else:
+            self._st_idx = self._st_w = None
+            sub = lambda a: np.asarray(a, np.float32)
         self._idx = f.reshape(-1)          # expanded, non-indexed triangles
         self._n_vert = self._idx.size
-        neck_face = (np.asarray(face_group) < 0.5).astype(np.float32)
         self._static = np.zeros((self._n_vert, 7), np.float32)
-        self._static[:, 0:3] = np.asarray(rest, np.float32)[self._idx]
-        self._static[:, 3] = np.asarray(ao, np.float32)[self._idx]
-        self._static[:, 4] = np.asarray(jaw, np.float32)[self._idx]
-        self._static[:, 5] = np.asarray(fade, np.float32)[self._idx]
+        self._static[:, 0:3] = sub(rest)[self._idx]
+        self._static[:, 3] = sub(ao)[self._idx]
+        self._static[:, 4] = sub(jaw)[self._idx]
+        self._static[:, 5] = sub(fade)[self._idx]
         self._static[:, 6] = np.repeat(neck_face, 3)
         self._buf = np.zeros((self._n_vert, _STRIDE), np.float32)
         self._buf[:, 6:13] = self._static
@@ -332,6 +344,19 @@ class AndroidGL:
             prog.setUniformValue(name, float(value))
 
     # ── frame ─────────────────────────────────────────────────────────────────
+    def _dynamic(self, posed, normals, sx, sy, w, h) -> np.ndarray:
+        """Per-base-vertex clip xyz + normal, subdivided when enabled."""
+        d = np.empty((len(sx), 6), np.float32)
+        d[:, 0] = np.asarray(sx, np.float32) / w * 2.0 - 1.0
+        d[:, 1] = 1.0 - np.asarray(sy, np.float32) / h * 2.0
+        d[:, 2] = -np.asarray(posed, np.float32)[:, 2] * 0.45
+        d[:, 3:6] = normals
+        if self._st_idx is not None:
+            d = np.einsum("mk,mkd->md", self._st_w, d[self._st_idx])
+            n = d[:, 3:6]
+            n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-6)
+        return d
+
     def render(self, posed, normals, sx, sy, w: int, h: int, *, accent, eye=None, glow=0.0, t=0.0,
                mouth=0.0, muted=False, open_=1.0, gaze=(0.0, 0.0)) -> QImage | None:
         """Draw the head into a w×h image. sx, sy: vertex positions in image
@@ -347,13 +372,8 @@ class AndroidGL:
             if not ctx.makeCurrent(self._surface):
                 raise RuntimeError("OpenGL bağlamı etkinleştirilemedi")
             self._ensure_fbo(w, h)
-            idx = self._idx
-            posed = np.asarray(posed, np.float32)
             buf = self._buf
-            buf[:, 0] = np.asarray(sx, np.float32)[idx] / w * 2.0 - 1.0
-            buf[:, 1] = 1.0 - np.asarray(sy, np.float32)[idx] / h * 2.0
-            buf[:, 2] = -posed[idx, 2] * 0.45
-            buf[:, 3:6] = np.asarray(normals, np.float32)[idx]
+            buf[:, 0:6] = self._dynamic(posed, normals, sx, sy, w, h)[self._idx]
 
             self._fbo.bind()
             gl.glViewport(0, 0, w, h)
