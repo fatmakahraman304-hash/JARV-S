@@ -116,6 +116,13 @@ class JarvisUI:
         self._app.setFont(px_font(13))
         self._win = MainWindow(face_path)
         self._win._application_player = self
+        from core.whatsapp_assistant import load_settings, start_listener
+        whatsapp = load_settings()
+        if whatsapp.get('messages_enabled') or whatsapp.get('voice_enabled'):
+            try:
+                self.write_log(f'SYS: WhatsApp Business: {start_listener()}')
+            except (ValueError, OSError) as exc:
+                self.write_log(f'SYS: WhatsApp Business açılamadı: {exc}')
         self.root = _RootShim(self._app)
         self._win.show()
 

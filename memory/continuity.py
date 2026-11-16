@@ -1,6 +1,7 @@
 """Durable local history outside the installation; committed after every event."""
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timezone
@@ -11,14 +12,42 @@ def data_dir():
     return (Path(base) if base else Path.home() / ".local" / "share") / "JarvisMurat"
 
 
+_setup_lock = threading.Lock()
+_ready: set[str] = set()
+
+
+def _prepare(db, key):
+    """Switch to WAL and create the tables once per database file per process.
+
+    Doing it on every connection made concurrent writers fail: changing the
+    journal mode needs an exclusive lock and SQLite does not wait for it, so a
+    second thread got "database is locked" and the event was lost."""
+    if key in _ready:
+        return
+    with _setup_lock:
+        if key in _ready:
+            return
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, time TEXT, role TEXT, text TEXT)")
+        db.execute("CREATE TABLE IF NOT EXISTS applications (name TEXT PRIMARY KEY, status TEXT, detail TEXT, updated TEXT)")
+        db.commit()
+        _ready.add(key)
+
+
 @contextmanager
 def connect():
     path = data_dir()
     path.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path / "continuity.sqlite3", timeout=10)
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, time TEXT, role TEXT, text TEXT)")
-    db.execute("CREATE TABLE IF NOT EXISTS applications (name TEXT PRIMARY KEY, status TEXT, detail TEXT, updated TEXT)")
+    file = path / "continuity.sqlite3"
+    key = str(file.resolve())
+    if not file.exists():
+        _ready.discard(key)          # a new or deleted file needs its tables again
+    db = sqlite3.connect(file, timeout=10)
+    try:
+        _prepare(db, key)
+    except Exception:
+        db.close()
+        raise
     try:
         with db:
             yield db

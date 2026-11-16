@@ -82,3 +82,30 @@ class ApplicationTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ContinuitySetupTests(unittest.TestCase):
+    def test_tables_come_back_after_the_file_is_deleted(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import memory.continuity as cont
+        with tempfile.TemporaryDirectory() as tmp, patch.object(cont, 'data_dir', lambda: Path(tmp)):
+            cont.record('Kullanıcı', 'ilk')
+            for extra in ('', '-wal', '-shm'):
+                p = Path(tmp) / f'continuity.sqlite3{extra}'
+                if p.exists():
+                    p.unlink()
+            cont.record('Kullanıcı', 'ikinci')
+            self.assertEqual([r[2] for r in cont.recent()], ['ikinci'])
+
+    def test_many_threads_write_without_losing_events(self):
+        import tempfile
+        from concurrent.futures import ThreadPoolExecutor
+        from pathlib import Path
+        from unittest.mock import patch
+        import memory.continuity as cont
+        with tempfile.TemporaryDirectory() as tmp, patch.object(cont, 'data_dir', lambda: Path(tmp)):
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(lambda i: cont.record('Kullanıcı', f'olay {i}'), range(80)))
+            self.assertEqual(len(cont.recent(100)), 80)
