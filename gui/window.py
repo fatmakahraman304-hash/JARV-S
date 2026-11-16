@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
-    _osiris_command_sig = pyqtSignal(object)
+    _gods_eye_sig = pyqtSignal(object, object)
     _route_choices_sig = pyqtSignal(object)
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
@@ -115,7 +115,6 @@ class MainWindow(QMainWindow):
     _scan_result_sig = pyqtSignal(bytes, object)
     _social_sig = pyqtSignal(str)
     _chat_draft_sig = pyqtSignal(str, str)
-    _osiris_sig     = pyqtSignal(str)        # map URL — worker thread -> Qt UI thread
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
@@ -175,7 +174,7 @@ class MainWindow(QMainWindow):
         self._muted            = False
         self._current_file: str | None = None
         self._remote_overlay: RemoteKeyOverlay | None = None
-        self._osiris_window = None  # lazily created after first voice request
+        self._gods_eye_panel = None
         self._customize_overlay: CustomizeOverlay | None = None
 
         central = QWidget()
@@ -393,14 +392,13 @@ class MainWindow(QMainWindow):
         self._scan_request_sig.connect(self._start_camera_scan)
         self._scan_result_sig.connect(self._show_camera_scan)
         self._content_sig.connect(self._show_content)
-        self._osiris_sig.connect(self._open_osiris)
         self._prototype_sig.connect(self._open_prototype)
         self._social_sig.connect(self._open_social)
         self._chat_draft_sig.connect(self._write_chat_draft)
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
         self._route_result_sig.connect(self._show_route)
-        self._osiris_command_sig.connect(self._control_osiris)
+        self._gods_eye_sig.connect(self._control_gods_eye)
         self._codejob_sig.connect(self._show_code_job)
         self._reconfig_sig.connect(self._show_setup)
         self._camera_sig.connect(self._show_camera_frame)
@@ -442,7 +440,7 @@ class MainWindow(QMainWindow):
         sc_intr = QShortcut(QKeySequence("Escape"), self)
         sc_intr.activated.connect(self._do_interrupt)
         sc_world = QShortcut(QKeySequence("Ctrl+Shift+O"), self)
-        sc_world.activated.connect(self._open_default_osiris)
+        sc_world.activated.connect(lambda: self._control_gods_eye({"kind": "open"}))
 
     def _open_prototype(self, text: str) -> None:
         from gui.prototype_panel import PrototypePanel
@@ -507,44 +505,22 @@ class MainWindow(QMainWindow):
                 or not panel.write_chat_draft(text)):
             self._log.append_log("SYS: CORE alanında ChatGPT veya Claude sohbetini aç.")
 
-    def _open_osiris(self, url: str) -> None:
-        """Qt-thread slot: keep a single OSIRIS window and reuse it for commands."""
-        from gui.osiris_window import OsirisWindow
-        if self._osiris_window is None:
-            self._osiris_window = OsirisWindow(self._hud_cam_stack, embedded=True)
-            self._hud_cam_stack.addWidget(self._osiris_window)
-            self._osiris_window.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            self._osiris_window.result.connect(self._osiris_result)
-        if self._osiris_window.navigate(url):
-            self._hud_cam_stack.setCurrentWidget(self._osiris_window)
-
-    def _open_default_osiris(self) -> None:
-        from plugins.osiris_world import build_url, DEFAULT_LAYERS
-        try:
-            self._open_osiris(build_url(DEFAULT_LAYERS))
-        except ValueError as exc:
-            self._log.append_log("OSIRIS: " + str(exc))
-
-    def _control_osiris(self, command: dict) -> None:
-        if command.get("kind") == "close":
-            if self._osiris_window is not None and self._hud_cam_stack.currentWidget() is self._osiris_window:
+    def _control_gods_eye(self, payload, reply=None):
+        if payload.get("kind") == "close":
+            if self._hud_cam_stack.currentWidget() is self._gods_eye_panel:
                 self._hud_cam_stack.setCurrentWidget(self.hud)
-                self._log.append_log("OSIRIS: CORE görünümüne dönüldü.")
+            if reply is not None:
+                reply.finish("God's Eye View paneli kapatıldı.")
             return
-        if self._osiris_window is None:
-            self._open_default_osiris()
-        if self._osiris_window is not None:
-            accepted = self._osiris_window.command(command)
-            if accepted:
-                self._hud_cam_stack.setCurrentWidget(self._osiris_window)
-            else:
-                self._log.append_log("OSIRIS: Harita komutu kabul edilmedi.")
+        if self._gods_eye_panel is None:
+            from gui.gods_eye_panel import GodsEyePanel
 
-    def _osiris_result(self, result: dict) -> None:
-        # Results are map state confirmations, never claims about live data accuracy.
-        status = result.get("status", "unverified")
-        self._log.append_log("OSIRIS [" + status + "]: " +
-                             json.dumps(result, ensure_ascii=False)[:1800])
+            panel = self._gods_eye_panel = GodsEyePanel(self._hud_cam_stack)
+            self._hud_cam_stack.addWidget(panel)
+            panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentWidget(self.hud))
+            panel.result.connect(lambda message: self._log.append_log("GOD'S EYE VIEW: " + message))
+        self._hud_cam_stack.setCurrentWidget(self._gods_eye_panel)
+        self._gods_eye_panel.submit(payload, reply)
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -1660,7 +1636,7 @@ class MainWindow(QMainWindow):
     def _restart_after_update(self):
         """An update restarts JARVIS automatically, after its process exits.
 
-        A supervised OSIRIS launch uses exit code 75; a normal launch uses a
+        A supervised launch uses exit code 75; a normal launch uses a
         separate helper. Never close the current GUI if the helper cannot
         start, so users can still see the error and restart manually.
         """
@@ -3421,6 +3397,7 @@ class MainWindow(QMainWindow):
         if not txt: return
         self._input.clear()
         from core.camera_scan import is_scan_command
+        from core.gods_eye import globe_command_for_text
         from core.social_sites import chat_draft_command, site_for_command
 
         if draft := chat_draft_command(txt):
@@ -3433,6 +3410,10 @@ class MainWindow(QMainWindow):
             return
         if is_scan_command(txt):
             self._start_camera_scan()
+            return
+        globe_command = globe_command_for_text(txt)
+        if globe_command:
+            self._control_gods_eye({"kind": globe_command})
             return
         site = site_for_command(txt)
         if site:

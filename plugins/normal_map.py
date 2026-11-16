@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 PLUGIN = {
     'name': 'normal_map',
-    'description': 'Open a requested city, country, street, landmark or address in the normal 2D street map INSIDE JARVIS. Use for all ordinary haritada aç/göster, orası nerede, go to place requests. Prefer this over OSIRIS or a browser unless the user explicitly asks for OSIRIS, globe, flights or special layers. Include known country/city context in place; never invent coordinates.',
+    'description': 'Open a requested city, country, street, landmark or address in the normal 2D street map INSIDE JARVIS. Use for all ordinary haritada aç/göster, orası nerede, go to place requests. Prefer this for ordinary requests; use gods_eye_view when the user explicitly asks for the 3D globe or its layers. Include known country/city context in place; never invent coordinates.',
     'parameters': {'type':'OBJECT', 'properties': {'place': {'type':'STRING', 'description':'Place or full address, with city/country when provided.'}}, 'required':['place']}}
 _lock = threading.Lock()
 _cache = {}

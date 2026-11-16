@@ -205,6 +205,8 @@ class SettingsPage(QDialog):
         action(brain, 'Motor ve sağlayıcılar', 'Yapay zekâ modelleri ve bağlantı ayarları.', owner._open_providers)
         action(brain, 'Hafıza', 'Kaydedilmiş bilgileri görüntüle ve düzenle.', owner._open_memory_panel)
         extras = page('Bağlantılar', 'Ek yetenekler ve uzaktan erişim.')
+        action(extras, "God's Eye View", '3D küreyi CORE alanında aç.',
+               lambda: owner._control_gods_eye({"kind": "open"}))
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
         action(extras, 'Eklenti ayarları', 'Eklentilere özel seçenekleri düzenle.', owner._open_plugin_settings)
         action(extras, 'Uzaktan kontrol', 'Uzaktan erişim seçeneklerini aç.', owner._open_remote)

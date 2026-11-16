@@ -29,11 +29,6 @@ Normal başlatma:
 3. Yardımcı, önceki sürecin kapanmasını bekler ve yeni `main.py`
    sürecini aynı Python ortamıyla başlatır.
 
-Yerel OSIRIS yöneticisi üzerinden başlatıldığında:
-1. JARVIS yeniden başlatma işaretiyle kapanır (çıkış kodu 75).
-2. `tools/start_with_osiris.py` JARVIS'i aynı OSIRIS oturumunda yeniden
-   açar; ikinci bir bağımsız JARVIS örneği başlatılmaz.
-
 Yardımcı çalıştırılamazsa JARVIS kendiliğinden kapanmaz; ekranda hata
 gösterilir ve elle kapatıp açmak gerektiği açıklanır.
 
@@ -45,5 +40,5 @@ Hiç yeni sürüm yoksa yeniden başlatma yapılmaz.
 
 CI testleri, otomatik restart planlaması ve yerleşim kodunu Windows ve
 Linux üzerinde doğrular. Gerçek Windows ekranında ölçeklendirme, menü
-konumları ve mikrofon/OSIRIS ile birlikte yeniden başlatma ayrıca
+konumları ve mikrofon ve 3D harita ile birlikte yeniden başlatma ayrıca
 kontrol edilmelidir.

@@ -300,16 +300,9 @@ class JarvisUI:
         """Queue an official social website in the center panel."""
         self._win._social_sig.emit(site)
 
-    def show_osiris(self, url: str) -> None:
-        """Thread-safe: queue an OSIRIS map URL to the main Qt GUI thread.
-
-        Returning does not guarantee that the remote page finished loading.
-        """
-        self._win._osiris_sig.emit(str(url))
-
-    def control_osiris(self, command: dict) -> None:
-        """Thread-safe; map results are reported asynchronously in the activity log."""
-        self._win._osiris_command_sig.emit(dict(command))
+    def control_gods_eye(self, payload: dict, reply) -> None:
+        """Thread-safe: open or control the local 3D globe on the Qt thread."""
+        self._win._gods_eye_sig.emit(dict(payload), reply)
 
     def show_code_job(self, job: dict) -> None:
         """Thread-safe: draw the coding agent's live progress in the panel."""
