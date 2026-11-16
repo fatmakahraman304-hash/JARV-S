@@ -3591,6 +3591,7 @@ class MainWindow(QMainWindow):
                 cc = self._control_center = ControlCenter(self._hud_cam_stack)
                 cc.back_requested.connect(lambda: self._set_control_center(False))
                 cc.talk_requested.connect(self._talk_from_control_center)
+                cc.settings_requested.connect(self._settings_for_apps)
                 self._hud_cam_stack.addWidget(cc)
                 self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
             self._control_center.set_state(self.hud.state, self.hud.speaking, self._muted)
@@ -3605,6 +3606,13 @@ class MainWindow(QMainWindow):
                   and self._hud_cam_stack.currentWidget() is self._control_center)
             if self._cc_btn.isChecked() != on:
                 self._cc_btn.setChecked(on)
+
+    def _settings_for_apps(self, message: str) -> None:
+        self._log.append_log(f"SYS: {message}")
+        self._open_settings_page()
+        page = getattr(self, "_settings_page", None)
+        if page is not None and hasattr(page, "show_category"):
+            page.show_category("Bağlantılar")
 
     def _talk_from_control_center(self) -> None:
         if self._muted:

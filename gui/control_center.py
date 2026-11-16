@@ -69,6 +69,7 @@ class NetworkCanvas(QWidget):
         self._counts: dict[str, int] = {}
         self._hits: dict[str, float] = {}
         self._connected: set[str] = set()
+        self._pending: dict[str, float] = {}     # app nodes whose login page is opening
         self._caption = ""
         self._t = 0.0
 
@@ -116,10 +117,21 @@ class NetworkCanvas(QWidget):
             self._pos[k] = QPointF(cx + math.cos(a) * r2x, cy + math.sin(a) * r2y)
 
     def _node_at(self, pt: QPointF) -> str:
+        """The node under the pointer: its circle, or the name and the "bağla"
+        line under it — people click the words as often as the circle."""
         for k, c in self._pos.items():
             if (pt.x() - c.x()) ** 2 + (pt.y() - c.y()) ** 2 <= 26 ** 2:
                 return k
+            if abs(pt.x() - c.x()) <= 60 and c.y() + 18 <= pt.y() <= c.y() + 56:
+                return k
         return ""
+
+    def set_pending(self, key: str, on: bool) -> None:
+        if on:
+            self._pending[key] = time.time()
+        else:
+            self._pending.pop(key, None)
+        self.update()
 
     # ── input ─────────────────────────────────────────────────────────────────
     def mouseMoveEvent(self, e):
@@ -268,10 +280,11 @@ class NetworkCanvas(QWidget):
             p.setPen(QPen(with_alpha(C.TEXT if on else C.TEXT_DIM, alpha)))
             p.drawText(QRectF(c.x() - 70, c.y() + r + 4, 140, 16), Qt.AlignmentFlag.AlignHCenter, label)
             if self._is_app_off(k):
-                p.setFont(px_font(9))
-                p.setPen(QPen(with_alpha(C.TEXT_DIM, 0.7 * alpha)))
-                p.drawText(QRectF(c.x() - 70, c.y() + r + 19, 140, 13),
-                           Qt.AlignmentFlag.AlignHCenter, "bağla")
+                pending = time.time() - self._pending.get(k, 0) < 25
+                p.setFont(px_font(10, QFont.Weight.DemiBold))
+                p.setPen(QPen(with_alpha(C.ACC if pending else C.PRI, alpha)))
+                p.drawText(QRectF(c.x() - 70, c.y() + r + 19, 140, 14),
+                           Qt.AlignmentFlag.AlignHCenter, "bağlanıyor…" if pending else "bağla ›")
             if n:
                 txt = str(n) if n < 100 else "99+"
                 p.setFont(px_font(10, QFont.Weight.Bold))
@@ -393,6 +406,7 @@ class ControlCenter(QWidget):
 
     back_requested = pyqtSignal()
     talk_requested = pyqtSignal()
+    settings_requested = pyqtSignal(str)   # open Settings, with a line for the log
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -509,29 +523,46 @@ class ControlCenter(QWidget):
         threading.Thread(target=work, daemon=True, name="composio-refresh").start()
 
     def _connect_app(self, key: str) -> None:
-        """Open the login page for one app, off the Qt thread."""
+        """Open the login page for one app. The network work runs on a worker
+        thread; every outcome is written to the feed so a click is never silent."""
         import threading
         import webbrowser
         label = activity.NODE_LABEL.get(key, key)
         try:
             from core import composio
-        except Exception:
-            composio = None
-        if composio is None or not composio.is_configured():
-            activity.record(key, f"{label}: önce Ayarlar → Bağlantılar'a Composio anahtarını gir", "warn")
+        except Exception as exc:
+            activity.record(key, f"{label}: Composio modülü yüklenemedi ({exc})"[:150], "fail")
             self._refresh(force=True)
             return
+        if not composio.is_configured():
+            activity.record(key, f"{label}: önce Composio API anahtarını gir — Ayarlar açılıyor", "warn")
+            self._refresh(force=True)
+            self.settings_requested.emit(
+                f"{label} bağlamak için Ayarlar → Bağlantılar → Uygulamalar (Composio) satırına "
+                f"API anahtarını yapıştırıp Kaydet'e bas.")
+            return
+        if time.time() - self.network._pending.get(key, 0) < 25:
+            return                                 # already opening
+        self.network.set_pending(key, True)
         activity.record(key, f"{label} için giriş sayfası açılıyor…", "info")
         self._refresh(force=True)
 
         def work():
             try:
                 url = composio.link(key)
-                webbrowser.open(url)
-                activity.record(key, f"{label}: tarayıcıda giriş yap, sonra burada yeşerecek", "info")
+                opened = False
+                try:
+                    opened = bool(webbrowser.open(url))
+                except Exception:
+                    opened = False
+                if opened:
+                    activity.record(key, f"{label}: tarayıcıda giriş yap ve izin ver", "ok")
+                else:
+                    activity.record(key, f"{label}: tarayıcı açılamadı, bu adresi aç: {url}", "warn")
             except Exception as exc:
-                activity.record(key, f"{label} bağlanamadı: {exc}"[:150], "fail")
-            self._next_conn_check = time.monotonic() + 20.0
+                activity.record(key, f"{label} bağlanamadı: {exc}"[:160], "fail")
+                self.network._pending.pop(key, None)
+            self._next_conn_check = time.monotonic() + 15.0
         threading.Thread(target=work, daemon=True, name="composio-link").start()
 
     def _tick(self) -> None:

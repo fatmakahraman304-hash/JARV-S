@@ -272,6 +272,14 @@ class SettingsPage(QDialog):
         self.timer.timeout.connect(self.refresh)
         self.timer.start(700)
 
+    def show_category(self, name):
+        """Switch to a category by its title (e.g. 'Bağlantılar')."""
+        for button in self.categories:
+            if button.text() == name:
+                button.click()
+                return True
+        return False
+
     def _authorize(self, site):
         from gui.platform_authorization import AuthorizationDialog
 
