@@ -1,3 +1,5 @@
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +15,15 @@ class PublishGuards(unittest.TestCase):
 
 
 class TestOutput(unittest.TestCase):
+    def test_git_failure_names_operation_without_echoing_command_output(self):
+        with patch.object(g.subprocess, "run", return_value=g.subprocess.CompletedProcess(
+            [], 128, "", "fatal: unable to auto-detect email address (private value)"
+        )):
+            with self.assertRaisesRegex(g.CommandFailure, r"git commit başarısız \(kod 128\)") as failure:
+                g.command(["git", "-c", "user.name=Example", "commit", "-m", "A change"])
+        self.assertTrue(failure.exception.missing_identity)
+        self.assertNotIn("private value", str(failure.exception))
+
     def test_discovered_cli_is_used_for_direct_commands_and_git_credentials(self):
         executable = str(Path.cwd() / "GitHub CLI" / "gh.exe")
         with patch.object(g, "find_github_cli", return_value=executable), patch.object(
@@ -51,3 +62,40 @@ class LocalDevelopmentCommands(unittest.TestCase):
     def test_other_requests_are_not_local_commands(self):
         self.assertIsNone(g.local_command_mode("GitHub geliştirme alanını main ile eşitleme"))
         self.assertIsNone(g.local_command_mode("/git publish"))
+
+
+class PublishRecoveryTests(unittest.TestCase):
+    def test_retry_commits_staged_files_with_github_identity_when_git_has_none(self):
+        error = g.CommandFailure("git var", g.subprocess.CompletedProcess(
+            [], 128, "", "Author identity unknown"
+        ))
+        with patch.object(g, "command", side_effect=[
+            error, json.dumps({"login": "example-user", "id": 123}), "gui/book_panel.py\0", "",
+        ]) as command:
+            g._commit_selected(set(), {"gui/book_panel.py"}, "Book shortcuts")
+        self.assertEqual(command.call_args.args[0], [
+            "git", "-c", "user.name=example-user", "-c",
+            "user.email=123+example-user@users.noreply.github.com", "commit", "-m", "Book shortcuts",
+        ])
+
+    def test_retry_pushes_existing_scoped_commit_and_reports_pending_checks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / ".git").mkdir()
+            scope = ["gui/book_panel.py", "tests/test_book_panel.py"]
+            files = "\0".join(scope) + "\0"
+            with patch.object(g, "WORK", root), patch.object(g, "tests"), patch.object(
+                g, "command", side_effect=[
+                    "jarvis-dev/book", "", "", "base", files, "", "", "head", files, "",
+                    '[{"number": 42}]',
+                    json.dumps({"headRefOid": "head", "baseRefName": "main", "state": "OPEN",
+                                "statusCheckRollup": [{"status": "IN_PROGRESS", "conclusion": None}],
+                                "url": "https://github.com/example/example/pull/42"}),
+                ]
+            ) as command:
+                result = g.workflow("publish", "Book shortcuts", scope)
+            self.assertIn("/pull/42", result)
+            self.assertTrue(any("head:refs/heads/jarvis-dev/book" in call.args[0]
+                                for call in command.call_args_list))
+            self.assertFalse(any("commit" in call.args[0] or "merge" in call.args[0]
+                                 for call in command.call_args_list))
