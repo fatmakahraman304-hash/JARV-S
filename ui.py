@@ -115,6 +115,7 @@ class JarvisUI:
         from gui.style import px_font
         self._app.setFont(px_font(13))
         self._win = MainWindow(face_path)
+        self._win._application_player = self
         self.root = _RootShim(self._app)
         self._win.show()
 
@@ -268,6 +269,12 @@ class JarvisUI:
         self._win._state_sig.emit(state)
 
     def write_log(self, text: str):
+        if str(text).startswith(('GELİŞTİRME:', '[msg]')):
+            try:
+                from memory.continuity import record
+                record('İşlem sonucu', text)
+            except Exception as exc:
+                self._win._log_sig.emit(f'SYS: İşlem hafızaya kaydedilemedi: {exc}')
         self._win._log_sig.emit(text)
 
     def wait_for_api_key(self):

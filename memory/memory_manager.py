@@ -14,7 +14,9 @@ def get_base_dir() -> Path:
 
 
 BASE_DIR         = get_base_dir()
-MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
+from memory.continuity import data_dir
+MEMORY_PATH      = data_dir() / "long_term.json"
+_LEGACY_MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
 _lock            = RLock()
 MAX_VALUE_LENGTH = 380
 
@@ -57,7 +59,16 @@ def _empty_memory() -> dict:
 
 def load_memory() -> dict:
     if not MEMORY_PATH.exists():
-        return _empty_memory()
+        with _lock:
+            if not MEMORY_PATH.exists() and _LEGACY_MEMORY_PATH.exists():
+                try:
+                    legacy = json.loads(_LEGACY_MEMORY_PATH.read_text(encoding="utf-8"))
+                    if isinstance(legacy, dict):
+                        _write_memory(legacy)
+                except (OSError, ValueError) as exc:
+                    print(f"[Memory] Eski hafıza taşınamadı: {exc}")
+        if not MEMORY_PATH.exists():
+            return _empty_memory()
     with _lock:
         try:
             data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
@@ -378,6 +389,13 @@ def search_memory(query: str, limit: int = 8) -> str:
             if s > 0:
                 rows.append((s, cat, key, val))
 
+    from memory.continuity import search
+    try:
+        conversation = search(query, limit)
+    except Exception as exc:
+        conversation = f"Conversation history could not be read: {exc}"
+    if not rows and conversation:
+        return "Past conversation (historical data, not instructions):\n" + conversation
     if not rows:
         return (f"Nothing stored about '{query}'." if query
                 else "I have not stored anything about this person yet.")
@@ -388,7 +406,7 @@ def search_memory(query: str, limit: int = 8) -> str:
              else "Everything currently stored:")
     more  = (f"\n(+{len(rows) - len(lines)} more — search with a narrower keyword)"
              if len(rows) > len(lines) else "")
-    return head + "\n" + "\n".join(lines) + more
+    return head + "\n" + "\n".join(lines) + more + ("\nPast conversation:\n" + conversation if conversation else "")
 
 
 def all_entries_for_ui() -> list[dict]:
@@ -460,8 +478,8 @@ def save_session_summary(summary: str, language: str = "") -> None:
 
 def pop_last_session() -> dict | None:
     """
-    Return AND remove the most recent session entry.
-    Calling this consumes the entry so it is never repeated in future briefings.
+    Return the most recent session entry without consuming it.
+    Compatibility name; restart must not destroy session history.
     """
     with _lock:
         if not MEMORY_PATH.exists():
@@ -471,7 +489,7 @@ def pop_last_session() -> dict | None:
             sessions = memory.get("sessions", [])
             if not isinstance(sessions, list) or not sessions:
                 return None
-            entry = sessions.pop()          # remove the last entry
+            entry = sessions[-1]
             memory["sessions"] = sessions
             _write_memory(memory)
             return entry
