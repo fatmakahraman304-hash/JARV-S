@@ -103,6 +103,13 @@ class JarvisUI:
         _apply_ui_scale()
         if QApplication.instance() is None:
             QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+            # Exact fractional scaling (125 %, 150 %, 4K at 200 %…) instead of
+            # rounding to whole steps, so painted lines stay crisp on 4K screens.
+            try:
+                QApplication.setHighDpiScaleFactorRoundingPolicy(
+                    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+            except Exception:
+                pass
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
         from gui.style import px_font

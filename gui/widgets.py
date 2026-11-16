@@ -441,13 +441,13 @@ class _DropCanvas(QWidget):
         p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.4))
         p.setPen(QPen(qcol(C.TEXT) if hover else qcol(C.TEXT_MED)))
         p.drawText(QRectF(36, 0, W - 44, H), Qt.AlignmentFlag.AlignVCenter,
-                   p.fontMetrics().elidedText("DROP A FILE OR FOLDER  ·  OR CLICK",
+                   p.fontMetrics().elidedText("DOSYA YA DA KLASÖR SÜRÜKLE  ·  YA DA TIKLA",
                                               Qt.TextElideMode.ElideRight, int(W - 44)))
 
     def _paint_drag_over(self, p, W, H):
         p.setFont(px_font(12, QFont.Weight.DemiBold, spacing=2))
         p.setPen(QPen(qcol(C.PRI)))
-        p.drawText(QRectF(0, 0, W, H), Qt.AlignmentFlag.AlignCenter, "RELEASE TO LOAD")
+        p.drawText(QRectF(0, 0, W, H), Qt.AlignmentFlag.AlignCenter, "YÜKLEMEK İÇİN BIRAK")
 
     def _paint_file(self, p, W, H):
         path = Path(self._z._current_file)
@@ -566,18 +566,26 @@ class _CameraPreview(QWidget):
 # re-themes live with the accent picker at no cost.
 
 class HoloPanel(QWidget):
-    """A glass "screen": a translucent panel with two cut corners, lit edges and
-    a header strip carrying a title and a short code. Children go in `body`;
-    small buttons can sit at the right of the header (add_header_widget)."""
+    """A glass card: a translucent rounded panel with a softly lit edge and a
+    header carrying a title and a short code. Children go in `body`; small
+    buttons can sit at the right of the header (add_header_widget).
 
-    HEADER = 36
+    flat=True draws only the header and a hairline — a section inside a card,
+    so cards never stack glass on glass."""
 
-    def __init__(self, title: str = "", code: str = "", parent=None, pad: int = 10):
+    HEADER = 34
+    RADIUS = 16
+
+    def __init__(self, title: str = "", code: str = "", parent=None, pad: int = 12,
+                 flat: bool = False):
         super().__init__(parent)
         self._title, self._code = str(title or ""), str(code or "")
+        self._flat = bool(flat)
         self._header_widgets: list[QWidget] = []
         self.body = QVBoxLayout(self)
-        top = self.HEADER + 5 if title else pad
+        if self._flat:
+            pad = 2
+        top = self.HEADER + 4 if title else pad
         self.body.setContentsMargins(pad + 2, top, pad + 2, pad + 2)
         self.body.setSpacing(8)
 
@@ -607,12 +615,12 @@ class HoloPanel(QWidget):
         return x
 
     def _place_header(self) -> None:
-        x = self.width() - 14
+        x = self.width() - (6 if self._flat else 14)
         for w in reversed(self._header_widgets):
             if w.isHidden():
                 continue
             x -= w.width()
-            w.move(int(x), int((self.HEADER - w.height()) / 2 + 2))
+            w.move(int(x), int((self.HEADER - w.height()) / 2 + 1))
             x -= 6
 
     def paintEvent(self, _):
@@ -621,40 +629,54 @@ class HoloPanel(QWidget):
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
-        cut = 11
-        g = QLinearGradient(0, 0, 0, H)
-        g.setColorAt(0.0, qcol(C.PANEL2))
-        g.setColorAt(0.18, qcol(C.PANEL))
-        g.setColorAt(1.0, qcol(C.DARK))
-        p.setBrush(QBrush(g))
-        p.setPen(QPen(blend(C.PRI, 0.24), 1))
-        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 10, 10)
-        # Signature accent, painted from the live palette.
-        p.setPen(QPen(qcol(C.ACC), 2))
-        p.drawLine(QLineF(18, 1, 58, 1))
+        x0 = 4.0 if self._flat else 16.0
+        if not self._flat:
+            rect = QRectF(0.5, 0.5, W - 1, H - 1)
+            g = QLinearGradient(0, 0, 0, H)
+            g.setColorAt(0.0, with_alpha(C.PANEL2, 0.86))
+            g.setColorAt(1.0, with_alpha(C.DARK, 0.80))
+            p.setBrush(QBrush(g))
+            edge = QLinearGradient(0, 0, 0, H)
+            edge.setColorAt(0.0, with_alpha(C.PRI, 0.50))
+            edge.setColorAt(0.35, with_alpha(C.PRI, 0.16))
+            edge.setColorAt(1.0, with_alpha(C.PRI, 0.08))
+            p.setPen(QPen(QBrush(edge), 1))
+            p.drawRoundedRect(rect, self.RADIUS, self.RADIUS)
+            # a soft highlight along the top edge, brightest in the middle
+            hl = QLinearGradient(0, 0, W, 0)
+            hl.setColorAt(0.0, with_alpha(C.ACC, 0.0))
+            hl.setColorAt(0.5, with_alpha(C.ACC, 0.55))
+            hl.setColorAt(1.0, with_alpha(C.ACC, 0.0))
+            p.setPen(QPen(QBrush(hl), 1.2))
+            p.drawLine(QLineF(self.RADIUS, 1, W - self.RADIUS, 1))
         if self._title:
+            cy = self.HEADER / 2 + 1
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(qcol(C.ACC)))
-            p.drawRect(QRectF(12, 11, 3, 10))
+            dot = QRadialGradient(x0 + 3, cy, 7)
+            dot.setColorAt(0.0, with_alpha(C.PRI, 0.9))
+            dot.setColorAt(1.0, with_alpha(C.PRI, 0.0))
+            p.setBrush(QBrush(dot))
+            p.drawEllipse(QPointF(x0 + 3, cy), 7, 7)
+            p.setBrush(QBrush(qcol(C.ACC2)))
+            p.drawEllipse(QPointF(x0 + 3, cy), 2.4, 2.4)
             right = self._header_right()
             code_w = 0.0
             if self._code:
-                p.setFont(px_font(10, mono=True))
+                p.setFont(px_font(10, QFont.Weight.Medium, mono=True))
                 code_w = p.fontMetrics().horizontalAdvance(self._code) + 8
-                p.setPen(QPen(blend(C.PRI, 0.5)))
-                p.drawText(QRectF(right - code_w, 6, code_w, 20),
+                p.setPen(QPen(qcol(C.PRI_DIM)))
+                p.drawText(QRectF(right - code_w, cy - 10, code_w, 20),
                            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, self._code)
-            p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.8))
-            p.setPen(QPen(qcol(C.PRI)))
-            room = max(10.0, right - code_w - 26)
-            p.drawText(QRectF(21, 6, room, 20), Qt.AlignmentFlag.AlignVCenter,
+            p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2.2))
+            p.setPen(QPen(qcol(C.TEXT_MED)))
+            room = max(10.0, right - code_w - x0 - 16)
+            p.drawText(QRectF(x0 + 14, cy - 10, room, 20), Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(self._title, Qt.TextElideMode.ElideRight, int(room)))
-            lg = QLinearGradient(12, 0, W - 12, 0)
-            lg.setColorAt(0.0, with_alpha(C.PRI, 0.55))
-            lg.setColorAt(0.6, with_alpha(C.PRI, 0.12))
+            lg = QLinearGradient(x0, 0, W - x0, 0)
+            lg.setColorAt(0.0, with_alpha(C.PRI, 0.35))
             lg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
             p.setPen(QPen(QBrush(lg), 1))
-            p.drawLine(QLineF(12, self.HEADER, W - 12, self.HEADER))
+            p.drawLine(QLineF(x0, self.HEADER, W - x0, self.HEADER))
         p.end()
 
 
@@ -889,6 +911,31 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
                                  QPointF(cx, cy - s * 0.7), QPointF(cx, cy + s * 0.7),
                                  QPointF(cx - s * 0.4, cy + s * 0.3), QPointF(cx - s * 0.8, cy + s * 0.3)]))
         p.drawArc(QRectF(cx - s * 0.3, cy - s * 0.5, s * 0.8, s * 1.0), -60 * 16, 120 * 16)
+    elif kind == "chat":
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.7, s * 1.7, s * 1.15), s * 0.3, s * 0.3)
+        p.drawPath(path)
+        p.drawPolyline(QPolygonF([QPointF(cx - s * 0.35, cy + s * 0.45),
+                                  QPointF(cx - s * 0.55, cy + s * 0.85),
+                                  QPointF(cx + s * 0.05, cy + s * 0.45)]))
+    elif kind == "pulse":
+        p.drawPolyline(QPolygonF([QPointF(cx - s * 0.9, cy), QPointF(cx - s * 0.45, cy),
+                                  QPointF(cx - s * 0.2, cy - s * 0.65), QPointF(cx + s * 0.15, cy + s * 0.65),
+                                  QPointF(cx + s * 0.4, cy), QPointF(cx + s * 0.9, cy)]))
+    elif kind == "attach":
+        path = QPainterPath(QPointF(cx + s * 0.45, cy - s * 0.15))
+        path.lineTo(cx - s * 0.15, cy + s * 0.45)
+        path.arcTo(QRectF(cx - s * 0.65, cy + s * 0.05, s * 0.6, s * 0.6), 45, 180)
+        path.lineTo(cx + s * 0.35, cy - s * 0.75)
+        path.arcTo(QRectF(cx + s * 0.1, cy - s * 0.95, s * 0.6, s * 0.6), 225, -180)
+        path.lineTo(cx - s * 0.2, cy + s * 0.15)
+        p.drawPath(path)
+    elif kind == "grid":
+        for gx in (-1, 1):
+            for gy in (-1, 1):
+                p.drawRoundedRect(QRectF(cx + (0.1 if gx > 0 else -0.8) * s,
+                                         cy + (0.1 if gy > 0 else -0.8) * s,
+                                         s * 0.7, s * 0.7), s * 0.12, s * 0.12)
 
 
 class IconButton(QPushButton):
@@ -944,18 +991,29 @@ class IconButton(QPushButton):
         col = qcol(_pal(self._colour) or C.PRI)
         if not self.isEnabled():
             col = qcol(C.TEXT_DIM)
-        hot = self.underMouse() or self.isChecked() or self.isDown()
-        p.setBrush(QBrush(blend(col, 0.20 if self.isDown() else 0.15 if hot else 0.06)))
-        p.setPen(QPen(blend(col, 0.8 if hot else 0.42), 1))
-        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 7, 7)
+        hot = self.underMouse() or self.isDown()
+        on = self.isChecked()
+        rad = H / 2.0
+        rect = QRectF(0.5, 0.5, W - 1, H - 1)
+        if on or hot:
+            glow = QRadialGradient(W / 2, H / 2, max(W, H) * 0.75)
+            glow.setColorAt(0.0, with_alpha(col, 0.30 if on else 0.18))
+            glow.setColorAt(1.0, with_alpha(col, 0.0))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(glow))
+            p.drawRoundedRect(rect, rad, rad)
+        p.setBrush(QBrush(with_alpha(col, 0.28 if self.isDown() else 0.16 if on else 0.08 if hot else 0.04)))
+        p.setPen(QPen(with_alpha(col, 0.95 if on else 0.70 if hot else 0.30), 1))
+        p.drawRoundedRect(rect, rad, rad)
+        icol = qcol(C.WHITE) if (on or hot) else col
         if self._compact:
-            paint_icon(p, self._kind, QRectF(W * 0.26, H * 0.26, W * 0.48, H * 0.48), col)
+            paint_icon(p, self._kind, QRectF(W * 0.28, H * 0.28, W * 0.44, H * 0.44), icol)
         else:
-            paint_icon(p, self._kind, QRectF(11, (H - 15) / 2, 15, 15), col)
+            paint_icon(p, self._kind, QRectF(14, (H - 15) / 2, 15, 15), icol)
             p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.6))
-            p.setPen(QPen(col))
-            room = max(10, W - 44)
-            p.drawText(QRectF(34, 0, room, H), Qt.AlignmentFlag.AlignVCenter,
+            p.setPen(QPen(icol))
+            room = max(10, W - 50)
+            p.drawText(QRectF(38, 0, room, H), Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(self._label, Qt.TextElideMode.ElideRight, room))
         p.end()
 
@@ -994,15 +1052,18 @@ class ArcLogo(QWidget):
 
 
 class StateChip(QWidget):
-    """What the assistant is doing, in the middle of the header."""
+    """What the assistant is doing: a glass pill with a glowing status dot."""
 
     _COLOURS = {"LISTENING": "GREEN", "SPEAKING": "ACC", "THINKING": "ACC2",
                 "PROCESSING": "ACC2", "MUTED": "MUTED_C"}
+    _TR = {"LISTENING": "DİNLİYOR", "SPEAKING": "KONUŞUYOR", "THINKING": "DÜŞÜNÜYOR",
+           "PROCESSING": "İŞLİYOR", "MUTED": "SESSİZ", "INITIALISING": "BAŞLATILIYOR",
+           "ONLINE": "HAZIR", "IDLE": "HAZIR", "SLEEPING": "UYKUDA"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._state = "INITIALISING"
-        self.setFixedSize(196, 34)
+        self.setFixedSize(220, 36)
 
     def set_state(self, state: str) -> None:
         state = str(state or "").upper()
@@ -1017,27 +1078,29 @@ class StateChip(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
         col = qcol(getattr(C, self._COLOURS.get(self._state, "PRI")))
-        p.setBrush(QBrush(blend(col, 0.10)))
-        p.setPen(QPen(blend(col, 0.55), 1))
-        p.drawPolygon(chamfer(QRectF(0.5, 0.5, W - 1, H - 1), 9, ("tl", "tr", "br", "bl")))
-        g = QRadialGradient(22, H / 2, 10)
-        g.setColorAt(0, with_alpha(col, 0.9))
+        rect = QRectF(0.5, 0.5, W - 1, H - 1)
+        p.setBrush(QBrush(with_alpha(col, 0.08)))
+        p.setPen(QPen(with_alpha(col, 0.45), 1))
+        p.drawRoundedRect(rect, H / 2, H / 2)
+        g = QRadialGradient(22, H / 2, 11)
+        g.setColorAt(0, with_alpha(col, 0.85))
         g.setColorAt(1, with_alpha(col, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(g))
-        p.drawEllipse(QPointF(22, H / 2), 10, 10)
-        p.setBrush(QBrush(col))
-        p.drawEllipse(QPointF(22, H / 2), 3.5, 3.5)
-        p.setFont(px_font(12, QFont.Weight.DemiBold, spacing=2.6))
+        p.drawEllipse(QPointF(22, H / 2), 11, 11)
+        p.setBrush(QBrush(qcol(C.WHITE)))
+        p.drawEllipse(QPointF(22, H / 2), 3.2, 3.2)
+        text = self._TR.get(self._state, self._state)
+        p.setFont(px_font(12, QFont.Weight.DemiBold, spacing=3.0))
         p.setPen(QPen(col))
-        p.drawText(QRectF(38, 0, W - 44, H), Qt.AlignmentFlag.AlignVCenter,
-                   p.fontMetrics().elidedText(self._state, Qt.TextElideMode.ElideRight, int(W - 44)))
+        p.drawText(QRectF(40, 0, W - 52, H), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter,
+                   p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(W - 52)))
         p.end()
 
 
 class HeaderBar(QWidget):
-    """The header's ground: a faint wash, and a bright rule along the bottom
-    that is brightest in the middle, under the state chip."""
+    """The top bar's ground: pure black fading out, with one hairline of warm
+    light along the bottom that is brightest in the middle."""
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -1045,17 +1108,65 @@ class HeaderBar(QWidget):
             return
         W, H = self.width(), self.height()
         g = QLinearGradient(0, 0, 0, H)
-        g.setColorAt(0, blend(C.PRI, 0.06))
+        g.setColorAt(0, qcol(C.DARK))
         g.setColorAt(1, qcol(C.BG))
         p.fillRect(self.rect(), QBrush(g))
         lg = QLinearGradient(0, 0, W, 0)
-        lg.setColorAt(0.0, with_alpha(C.PRI, 0.05))
-        lg.setColorAt(0.5, with_alpha(C.PRI, 0.9))
-        lg.setColorAt(1.0, with_alpha(C.PRI, 0.05))
+        lg.setColorAt(0.0, with_alpha(C.PRI, 0.0))
+        lg.setColorAt(0.5, with_alpha(C.PRI, 0.55))
+        lg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
         p.setPen(QPen(QBrush(lg), 1))
-        p.drawLine(QLineF(0, H - 1.5, W, H - 1.5))
-        p.setPen(QPen(qcol(C.PRI), 2))
-        p.drawLine(QLineF(W / 2 - 70, H - 1.5, W / 2 + 70, H - 1.5))
+        p.drawLine(QLineF(0, H - 0.5, W, H - 0.5))
+        p.end()
+
+
+class DockBar(QWidget):
+    """The floating command dock at the bottom: a glass capsule with a warm
+    glow under it. Children are laid out by the caller."""
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        if not p.isActive():
+            return
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+        rad = H / 2.0
+        glow = QRadialGradient(W / 2, H * 0.9, W * 0.5)
+        glow.setColorAt(0.0, with_alpha(C.PRI, 0.10))
+        glow.setColorAt(1.0, with_alpha(C.PRI, 0.0))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(glow))
+        p.drawRoundedRect(QRectF(0, 0, W, H), rad, rad)
+        g = QLinearGradient(0, 0, 0, H)
+        g.setColorAt(0.0, with_alpha(C.PANEL2, 0.92))
+        g.setColorAt(1.0, with_alpha(C.DARK, 0.92))
+        p.setBrush(QBrush(g))
+        edge = QLinearGradient(0, 0, 0, H)
+        edge.setColorAt(0.0, with_alpha(C.PRI, 0.55))
+        edge.setColorAt(1.0, with_alpha(C.PRI, 0.12))
+        p.setPen(QPen(QBrush(edge), 1))
+        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), rad, rad)
+        p.end()
+
+
+class DockDivider(QWidget):
+    """A short vertical hairline between groups in the dock."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(9, 26)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        if not p.isActive():
+            return
+        g = QLinearGradient(0, 0, 0, self.height())
+        g.setColorAt(0.0, with_alpha(C.PRI, 0.0))
+        g.setColorAt(0.5, with_alpha(C.PRI, 0.45))
+        g.setColorAt(1.0, with_alpha(C.PRI, 0.0))
+        p.setPen(QPen(QBrush(g), 1))
+        x = self.width() / 2
+        p.drawLine(QLineF(x, 0, x, self.height()))
         p.end()
 
 
@@ -1139,9 +1250,9 @@ class CommandFrame(QWidget):
         W, H = self.width(), self.height()
         fw = QApplication.focusWidget()
         focus = fw is not None and self.isAncestorOf(fw)
-        p.setBrush(QBrush(blend(C.PRI, 0.10 if focus else 0.06)))
-        p.setPen(QPen(blend(C.PRI, 0.95 if focus else 0.5), 1))
-        p.drawPolygon(chamfer(QRectF(0.5, 0.5, W - 1, H - 1), 8))
+        p.setBrush(QBrush(with_alpha(C.PRI, 0.07 if focus else 0.03)))
+        p.setPen(QPen(with_alpha(C.PRI, 0.85 if focus else 0.22), 1))
+        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), H / 2, H / 2)
         p.end()
 
 

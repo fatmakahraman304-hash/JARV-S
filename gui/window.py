@@ -89,12 +89,14 @@ from gui.providers_panel import (
 
 from gui.style import DISPLAY_CSS, btn_css, hud_font, px_font, scroll_css
 from gui.location_map import LocationPanel
-from gui.widgets import (ArcLogo, CommandFrame, DataRow, HeaderBar, HoloPanel, IconButton,
-                         PanelText, RingGauge, RoutineRow, Sparkline, StatusStrip,
-                         TaskRow)
+from gui.widgets import (ArcLogo, CommandFrame, DataRow, DockBar, DockDivider, HeaderBar,
+                         HoloPanel, IconButton, PanelText, RingGauge, RoutineRow, Sparkline,
+                         StateChip, StatusStrip, TaskRow)
 
 
 class MainWindow(QMainWindow):
+    _DOCK_H = 62          # height of the floating command dock
+    _CARD_GAP = 22        # space between floating cards and the window edge
     _request_update_sig = pyqtSignal()
     _update_progress_sig = pyqtSignal(str)
     _update_done_sig = pyqtSignal(bool, str)
@@ -146,7 +148,9 @@ class MainWindow(QMainWindow):
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
         _ui_color = (_cfg.get("ui_color") or "").strip()
-        if _ui_color and _ui_color.lower() != DEFAULT_UI_COLOR:
+        # "#28e0ff" was the old cyan default; a saved copy of it is not a
+        # choice the user made, so it no longer overrides the orange look.
+        if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#28e0ff"):
             apply_ui_accent(_ui_color)
 
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
@@ -186,13 +190,17 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
         root.addWidget(self._build_header())
 
+        # The centre takes the whole width. The old side columns are floating
+        # glass cards now (systems on the left, conversation on the right) and
+        # the command line lives in a dock at the bottom; the bottom margin
+        # keeps the dock from covering the content panel.
         body = QHBoxLayout()
-        body.setContentsMargins(18, 18, 18, 18)
-        body.setSpacing(16)
+        self._body_lay = body
+        body.setContentsMargins(28, 14, 28, self._DOCK_H + 40)
+        body.setSpacing(0)
 
-        # Original left sidebar: systems, telemetry, status and tasks.
+        # Systems, telemetry, status and tasks: a card that floats on the left.
         self._left_panel = self._build_left_panel()
-        body.addWidget(self._left_panel, stretch=0)
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
@@ -346,12 +354,22 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(0, False)
         body.addWidget(self._center_split, stretch=5)
 
-        # Original right sidebar: conversations, command input and microphone.
+        # Conversation log and file drop: a card that floats on the right.
         self._right_panel = self._build_right_panel()
-        body.addWidget(self._right_panel, stretch=0)
 
         root.addLayout(body, stretch=1)
-        root.addWidget(self._build_footer())
+        # The status strip is still built (other code updates it) but the
+        # dock and the top bar carry what it used to say.
+        self._build_footer().hide()
+
+        # Floating layer: cards and the dock sit above the centre.
+        for card in (self._left_panel, self._right_panel):
+            card.setParent(central)
+        self._dock = self._build_dock()
+        self._dock.setParent(central)
+        self._set_card_open(self._left_panel, False)
+        self._set_card_open(self._right_panel, True)
+        self._dock.show()
 
         # Quick-access drawer (floating overlay, built after central widget layout is done)
         self._quick_drawer = self._build_quick_drawer()
@@ -529,8 +547,8 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height()
         self._cam_preview.setGeometry(
-            cw.width() - self._right_panel.width() - pw - 22,
-            cw.height() - ph - 28,
+            cw.width() - self._right_inset() - pw - 22,
+            cw.height() - ph - self._DOCK_H - 44,
             pw, ph,
         )
 
@@ -1470,8 +1488,8 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height() or _CameraPreview._H
         self._cam_preview.setGeometry(
-            cw.width() - self._right_panel.width() - pw - 22,
-            cw.height() - ph - 28,
+            cw.width() - self._right_inset() - pw - 22,
+            cw.height() - ph - self._DOCK_H - 44,
             pw, ph,
         )
         # Clipboard panel — bottom-center
@@ -1524,61 +1542,71 @@ class MainWindow(QMainWindow):
             self._row_proc.set_value("--")
 
     def _build_header(self) -> QWidget:
+        """The top bar: the mark and the name on the left, what the assistant is
+        doing in the middle, the time and the settings on the right."""
         w = HeaderBar()
-        w.setFixedHeight(78)
+        w.setFixedHeight(66)
         self._header = w
         grid = QGridLayout(w)
-        grid.setContentsMargins(22, 12, 22, 12)
+        grid.setContentsMargins(26, 10, 26, 10)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(2, 1)
+
         left = QWidget(w)
         left_lay = QHBoxLayout(left)
         left_lay.setContentsMargins(0, 0, 0, 0)
-        left_lay.setSpacing(8)
+        left_lay.setSpacing(12)
+        left_lay.addWidget(ArcLogo(left))
+        name_col = QVBoxLayout()
+        name_col.setSpacing(0)
+        display = self._assistant_name.upper()
+        wordmark = "J.A.R.V.I.S" if display.replace(".", "") == "JARVIS" else display
+        self._title_lbl = QLabel(wordmark)
+        self._title_lbl.setFont(px_font(20, QFont.Weight.Light, spacing=7))
+        self._title_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        name_col.addWidget(self._title_lbl)
+        sub = QLabel(f"{self._subtitle(display).upper()}  ·  {APP_VERSION}")
+        sub.setFont(px_font(9, QFont.Weight.DemiBold, spacing=2.2))
+        sub.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        name_col.addWidget(sub)
+        left_lay.addLayout(name_col)
+        left_lay.addStretch()
+
+        self._state_chip = StateChip(w)
+
         right = QWidget(w)
         lay = QHBoxLayout(right)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        lay.setSpacing(18)
         lay.addStretch()
-        self._title_lbl = QLabel("J.A.R.V.I.S")
-        self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_lbl.setFont(px_font(27, QFont.Weight.DemiBold, spacing=5))
-        self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        grid.addWidget(left, 0, 0)
-        grid.addWidget(self._title_lbl, 0, 1)
-        grid.addWidget(right, 0, 2)
-
-        # Two drawers, and the split is by how often a thing is touched: the
-        # ones you set once behind the gear, the everyday switches behind the
-        # sliders. Separating them is what keeps each list short enough to
-        # read at a glance.
-        self._drawer_btn = QPushButton("⚙  AYARLAR")
-        self._drawer_btn.setStyleSheet(btn_css("primary"))
-        self._drawer_btn.setMinimumHeight(36)
-        self._drawer_btn.setFont(px_font(12, QFont.Weight.DemiBold))
-        self._drawer_btn.setCheckable(True)
-        self._drawer_btn.setToolTip("Setup — things you set once")
-        self._drawer_btn.clicked.connect(self._open_settings_page)
-        left_lay.addWidget(self._drawer_btn)
-        self._ctrl_btn = IconButton("sliders", 32)
-        self._ctrl_btn.setCheckable(True)
-        self._ctrl_btn.setToolTip("Controls — the everyday switches")
-        self._ctrl_btn.clicked.connect(self._toggle_controls)
-        self._ctrl_btn.hide()
         clock_col = QVBoxLayout()
         clock_col.setSpacing(0)
-        self._clock_lbl = QLabel("00:00:00")
-        self._clock_lbl.setFont(px_font(22, QFont.Weight.Light, mono=True, spacing=1))
+        self._clock_lbl = QLabel("00:00")
+        self._clock_lbl.setFont(px_font(24, QFont.Weight.Light, mono=True, spacing=2))
         self._clock_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         self._clock_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._clock_lbl)
         self._date_lbl = QLabel("")
-        self._date_lbl.setFont(px_font(9, QFont.Weight.DemiBold, spacing=1.6))
+        self._date_lbl.setFont(px_font(9, QFont.Weight.DemiBold, spacing=2))
         self._date_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._date_lbl)
         lay.addLayout(clock_col)
-        left_lay.addStretch()
+
+        # The settings page: everything you set once.
+        self._drawer_btn = QPushButton("AYARLAR")
+        self._drawer_btn.setStyleSheet(btn_css("primary", align="center"))
+        self._drawer_btn.setFixedSize(112, 38)
+        self._drawer_btn.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2))
+        self._drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._drawer_btn.setCheckable(True)
+        self._drawer_btn.setToolTip("Ayarlar — bir kez yapılandırılan her şey")
+        self._drawer_btn.clicked.connect(self._open_settings_page)
+        lay.addWidget(self._drawer_btn)
+
+        grid.addWidget(left, 0, 0)
+        grid.addWidget(self._state_chip, 0, 1, Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(right, 0, 2)
         return w
 
     def _build_update_button(self):
@@ -1662,8 +1690,12 @@ class MainWindow(QMainWindow):
             )
 
     def _tick_clock(self):
-        self._clock_lbl.setText(time.strftime("%H:%M:%S"))
-        self._date_lbl.setText(time.strftime("%a %d %b %Y"))
+        self._clock_lbl.setText(time.strftime("%H:%M"))
+        days = ("PZT", "SAL", "ÇAR", "PER", "CUM", "CMT", "PAZ")
+        months = ("OCA", "ŞUB", "MAR", "NİS", "MAY", "HAZ",
+                  "TEM", "AĞU", "EYL", "EKİ", "KAS", "ARA")
+        now = time.localtime()
+        self._date_lbl.setText(f"{days[now.tm_wday]}  {now.tm_mday:02d} {months[now.tm_mon - 1]} {now.tm_year}")
 
     @staticmethod
     def _subtitle(display: str) -> str:
@@ -1671,18 +1703,49 @@ class MainWindow(QMainWindow):
                 if display.replace(".", "") == "JARVIS" else "Personal AI Assistant")
 
     def _fit_side_columns(self) -> None:
-        """Side columns grow with the window, within limits, so the centre keeps
-        the space a larger window was opened for."""
-        W = self.width()
-        if hasattr(self, "_left_panel"):
-            self._left_panel.setFixedWidth(max(190, min(300, int(W * 0.18))))
-        if hasattr(self, "_right_panel"):
-            self._right_panel.setFixedWidth(max(290, min(460, int(W * 0.27))))
-        # The network graph is the first thing to give up its space: below this
-        # height the gauges and the task list need it more, and the rate itself
-        # is still in STATUS.
+        """Lay out the floating layer: the dock along the bottom, the systems
+        card on the left and the conversation card on the right, both between
+        the top bar and the dock. Called on every resize."""
+        cw = self.centralWidget()
+        if cw is None or not hasattr(self, "_dock"):
+            return
+        W, H = cw.width(), cw.height()
+        gap = self._CARD_GAP
+        dock_w = max(560, min(1040, W - 2 * gap))
+        dock_y = H - self._DOCK_H - 20
+        self._dock.setGeometry(int((W - dock_w) / 2), int(dock_y), int(dock_w), self._DOCK_H)
+        top = (self._header.height() if hasattr(self, "_header") else 66) + gap
+        bottom = dock_y - gap
+        card_h = max(220, int(bottom - top))
+        left_w = max(250, min(330, int(W * 0.20)))
+        right_w = max(300, min(440, int(W * 0.25)))
+        self._left_panel.setGeometry(gap, int(top), left_w, card_h)
+        self._right_panel.setGeometry(int(W - gap - right_w), int(top), right_w, card_h)
+        # The centre makes room for whichever cards are open, so a card never
+        # covers the briefing panel; the core stays centred between them.
+        if hasattr(self, "_body_lay"):
+            lm = left_w + 2 * gap if self._left_panel.isVisible() else 28
+            rm = right_w + 2 * gap if self._right_panel.isVisible() else 28
+            self._body_lay.setContentsMargins(int(lm), 14, int(rm), self._DOCK_H + 40)
+        # The network graph is the first thing to give up its space.
         if hasattr(self, "_net_panel"):
-            self._net_panel.setVisible(self.height() >= 820)
+            self._net_panel.setVisible(card_h >= 700)
+        for wdg in (self._left_panel, self._right_panel, self._dock):
+            wdg.raise_()
+
+    def _set_card_open(self, card: QWidget, opened: bool) -> None:
+        card.setVisible(bool(opened))
+        btn = {id(self._left_panel): getattr(self, "_sys_btn", None),
+               id(self._right_panel): getattr(self, "_chat_btn", None)}.get(id(card))
+        if btn is not None and btn.isChecked() != bool(opened):
+            btn.setChecked(bool(opened))
+        self._fit_side_columns()
+
+    def _right_inset(self) -> int:
+        """How much of the right edge the conversation card covers right now."""
+        if hasattr(self, "_right_panel") and self._right_panel.isVisible():
+            return self._right_panel.width() + self._CARD_GAP
+        return 0
 
     def _refresh_identity_rows(self) -> None:
         """Engine and voice, read from config — on start and whenever they change."""
@@ -1710,14 +1773,15 @@ class MainWindow(QMainWindow):
         ])
 
     def _build_left_panel(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        w.setFixedWidth(200)
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        w = HoloPanel("SİSTEM", "CANLI", pad=14)
+        lay = w.body
+        lay.setSpacing(12)
+        close = IconButton("close", 24)
+        close.setToolTip("Kapat")
+        close.clicked.connect(lambda: self._set_card_open(w, False))
+        w.add_header_widget(close)
 
-        sysp = HoloPanel("SYSTEMS", "LIVE")
+        sysp = HoloPanel("DONANIM", "", flat=True)
         grid_w = QWidget()
         grid_w.setStyleSheet("background: transparent;")
         grid = QGridLayout(grid_w)
@@ -1732,12 +1796,12 @@ class MainWindow(QMainWindow):
         sysp.body.addWidget(grid_w)
         lay.addWidget(sysp)
 
-        self._net_panel = HoloPanel("NETWORK", "--")
+        self._net_panel = HoloPanel("AĞ", "--", flat=True)
         self._net_spark = Sparkline(samples=60, floor=0.25)
         self._net_panel.body.addWidget(self._net_spark)
         lay.addWidget(self._net_panel)
 
-        stp = HoloPanel("STATUS", "")
+        stp = HoloPanel("DURUM", "", flat=True)
         os_name = {"Windows": "WINDOWS", "Darwin": "MACOS", "Linux": "LINUX"}.get(_OS, _OS.upper())
         self._row_uptime = DataRow("UPTIME", "--:--", "GREEN")
         self._row_proc = DataRow("PROCESSES", "--")
@@ -1752,7 +1816,7 @@ class MainWindow(QMainWindow):
 
         # Background tasks (core/tasks). Read from the engine every two seconds —
         # an in-memory list, no disk — and hidden rows cost nothing to paint.
-        self._tasks_panel = HoloPanel("KONUM", "")
+        self._tasks_panel = HoloPanel("KONUM", "", flat=True)
         rows_box = QWidget()
         rows_box.setStyleSheet("background: transparent;")
         rows_lay = QVBoxLayout(rows_box)
@@ -1973,45 +2037,69 @@ class MainWindow(QMainWindow):
         self._show_content("BACKGROUND TASK", body[:4000])
 
     def _build_right_panel(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        w.setFixedWidth(300)
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        w = HoloPanel("SOHBET", "KAYIT", pad=14)
+        close = IconButton("close", 24)
+        close.setToolTip("Kapat")
+        close.clicked.connect(lambda: self._set_card_open(w, False))
+        w.add_header_widget(close)
 
-        comm = HoloPanel("COMMUNICATIONS", "LOG")
         self._log = LogWidget()
-        comm.body.addWidget(self._log)
-        lay.addWidget(comm, stretch=1)
+        w.body.addWidget(self._log, stretch=1)
 
-        cmd = HoloPanel("COMMAND", "INPUT")
         self._drop_zone = FileDropZone()
         self._drop_zone.file_selected.connect(self._on_file_selected)
-        cmd.body.addWidget(self._drop_zone)
+        w.body.addWidget(self._drop_zone)
 
-        self._file_hint = QLabel("No file loaded")
+        self._file_hint = QLabel("Dosya yüklenmedi")
         self._file_hint.setFont(px_font(10))
         self._file_hint.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._file_hint.setWordWrap(True)
-        cmd.body.addWidget(self._file_hint)
+        w.body.addWidget(self._file_hint)
+        return w
 
-        cmd.body.addWidget(self._build_input_row())
-
-        row = QHBoxLayout()
+    def _build_dock(self) -> QWidget:
+        """The floating command dock: card switches on the left, the command
+        line in the middle, the microphone, interrupt and everyday controls on
+        the right."""
+        dock = DockBar()
+        row = QHBoxLayout(dock)
+        row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(8)
-        self._mute_btn = IconButton("mic", 38, "MIC ACTIVE", "GREEN")
-        self._mute_btn.setToolTip("Mute or unmute the microphone  [F4]")
+
+        self._sys_btn = IconButton("pulse", 42)
+        self._sys_btn.setCheckable(True)
+        self._sys_btn.setToolTip("Sistem kartı")
+        self._sys_btn.toggled.connect(lambda on: self._set_card_open(self._left_panel, on))
+        row.addWidget(self._sys_btn)
+        self._chat_btn = IconButton("chat", 42)
+        self._chat_btn.setCheckable(True)
+        self._chat_btn.setToolTip("Sohbet kartı")
+        self._chat_btn.toggled.connect(lambda on: self._set_card_open(self._right_panel, on))
+        row.addWidget(self._chat_btn)
+        attach = IconButton("attach", 42)
+        attach.setToolTip("Dosya veya klasör ekle")
+        attach.clicked.connect(lambda: self._drop_zone._browse())
+        row.addWidget(attach)
+        row.addWidget(DockDivider())
+
+        row.addWidget(self._build_input_row(), stretch=1)
+        row.addWidget(DockDivider())
+
+        self._mute_btn = IconButton("mic", 42, "", "GREEN")
+        self._mute_btn.setToolTip("Mikrofonu aç / kapat  [F4]")
         self._mute_btn.clicked.connect(self._toggle_mute)
         self._style_mute_btn()
-        row.addWidget(self._mute_btn, 1)
-        self._interrupt_btn = IconButton("stop", 38, "INTERRUPT", "MUTED_C")
-        self._interrupt_btn.setToolTip("Stop the assistant mid-sentence  [ESC]")
+        row.addWidget(self._mute_btn)
+        self._interrupt_btn = IconButton("stop", 42, "", "MUTED_C")
+        self._interrupt_btn.setToolTip("Asistanı sözünün ortasında durdur  [ESC]")
         self._interrupt_btn.clicked.connect(self._do_interrupt)
-        row.addWidget(self._interrupt_btn, 1)
-        cmd.body.addLayout(row)
-        lay.addWidget(cmd)
-        return w
+        row.addWidget(self._interrupt_btn)
+        self._ctrl_btn = IconButton("sliders", 42)
+        self._ctrl_btn.setCheckable(True)
+        self._ctrl_btn.setToolTip("Kontroller — her gün kullanılan anahtarlar")
+        self._ctrl_btn.clicked.connect(self._toggle_controls)
+        row.addWidget(self._ctrl_btn)
+        return dock
 
     def _build_quick_drawer(self) -> QWidget:
         """Floating panel under the gear: the things you set once."""
@@ -2242,13 +2330,17 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_ctrl_btn"):
             self._ctrl_btn.setChecked(False)
 
-    def _place_drawer(self, drawer, left: int):
-        _W = 250
+    def _place_drawer(self, drawer, left: int, above_dock: bool = False):
+        _W = 270
         drawer.setFixedWidth(_W)
         drawer.adjustSize()
-        top = self._header.height() + 2 if hasattr(self, "_header") else 60
+        h = drawer.sizeHint().height()
+        if above_dock and hasattr(self, "_dock"):
+            top = self._dock.y() - h - 12
+        else:
+            top = self._header.height() + 8 if hasattr(self, "_header") else 60
         x = max(12, min(int(left), max(12, self.centralWidget().width() - _W - 12)))
-        drawer.setGeometry(x, top, _W, drawer.sizeHint().height())
+        drawer.setGeometry(x, int(top), _W, h)
 
     def _position_quick_drawer(self):
         if hasattr(self, "_quick_drawer"):
@@ -2260,24 +2352,25 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_ctrl_drawer"):
             left = 12
             try:
-                left = max(12, self._ctrl_btn.mapTo(self.centralWidget(),
-                                                    QPoint(0, 0)).x() - 8)
+                btn_x = self._ctrl_btn.mapTo(self.centralWidget(), QPoint(0, 0)).x()
+                left = max(12, btn_x + self._ctrl_btn.width() - 270)
             except Exception:
                 pass
-            self._place_drawer(self._ctrl_drawer, left)
+            self._place_drawer(self._ctrl_drawer, left, above_dock=True)
 
     def _build_input_row(self) -> QWidget:
         box = CommandFrame()
+        box.setFixedHeight(42)
         row = QHBoxLayout(box)
-        row.setContentsMargins(12, 0, 4, 0)
-        row.setSpacing(6)
+        row.setContentsMargins(18, 0, 4, 0)
+        row.setSpacing(8)
         prompt = QLabel("›")
-        prompt.setFont(px_font(20, QFont.Weight.Light))
+        prompt.setFont(px_font(22, QFont.Weight.Light))
         prompt.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         row.addWidget(prompt)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Type a command or question…")
+        self._input.setPlaceholderText(f"{self._assistant_name}'e bir şey yaz ya da sor…")
         self._input.setFont(px_font(15))
         self._input.setStyleSheet(f"""
             QLineEdit {{
@@ -2289,8 +2382,8 @@ class MainWindow(QMainWindow):
         self._input.returnPressed.connect(self._send)
         row.addWidget(self._input, stretch=1)
 
-        send = IconButton("send", 32)
-        send.setToolTip("Send  [Enter]")
+        send = IconButton("send", 34)
+        send.setToolTip("Gönder  [Enter]")
         send.clicked.connect(self._send)
         row.addWidget(send)
         return box
@@ -3351,7 +3444,7 @@ class MainWindow(QMainWindow):
         pw = ClipboardPanel._W
         ph = self._clipboard_panel.sizeHint().height() or ClipboardPanel._H
         x = (cw.width() - pw) // 2
-        y = cw.height() - ph - 6
+        y = cw.height() - ph - self._DOCK_H - 32
         self._clipboard_panel.setGeometry(x, y, pw, ph)
         self._clipboard_panel.raise_()
 

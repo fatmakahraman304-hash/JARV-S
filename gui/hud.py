@@ -200,14 +200,14 @@ class HudCanvas(QWidget):
             self._live_amp = lv
 
     def _make_grid(self, W: int, H: int) -> QPixmap:
-        """Pre-render the static backdrop — atmosphere, workshop floor, bokeh
-        and the screen frame — once per size and theme, so paintEvent blits one
-        pixmap instead of redrawing a scene every frame.
+        """Pre-render the static backdrop once per size and theme, so paintEvent
+        blits one pixmap instead of redrawing a scene every frame.
 
-        The floor is a perspective grid receding to a horizon with two rows of
-        lights along it, after the workshop the HUD is modelled on; the bokeh
-        are out-of-focus lights, mostly cool with a few warm. The layout is
-        seeded, so it is the same scene on every launch."""
+        Deep black, a warm glow behind the core, a faint dot grid that fades
+        out towards the edges, two thin orbit rings on the floor of the scene
+        and a soft vignette. Quiet on purpose: the core is the only bright
+        thing on the screen. Painted at the device pixel ratio, so a 4K screen
+        gets a 4K backdrop."""
         W, H = max(1, W), max(1, H)
         dpr = self.devicePixelRatioF()
         pm = QPixmap(round(W * dpr), round(H * dpr))
@@ -215,80 +215,55 @@ class HudCanvas(QWidget):
         pm.fill(qcol(C.BG))
         p = QPainter(pm)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        cx = W / 2
+        cx, cy = W / 2, H * 0.44
 
-        g = QRadialGradient(cx, H * 0.42, max(W, H) * 0.62)
-        g.setColorAt(0.0, blend(C.PRI, 0.10))
-        g.setColorAt(0.55, blend(C.PRI, 0.035))
-        g.setColorAt(1.0, qcol(C.BG))
+        # warm light behind the core
+        g = QRadialGradient(cx, cy, max(W, H) * 0.55)
+        g.setColorAt(0.0, with_alpha(C.PRI, 0.13))
+        g.setColorAt(0.35, with_alpha(C.PRI, 0.045))
+        g.setColorAt(1.0, with_alpha(C.PRI, 0.0))
         p.fillRect(QRectF(0, 0, W, H), QBrush(g))
 
-        hy, vy = H * 0.70, H * 0.52
-        p.save()
-        p.setClipRect(QRectF(0, hy, W, H - hy))
-        for i in range(-14, 15):
-            x = cx + i * W * 0.11
-            p.setPen(QPen(blend(C.PRI, 0.10 * (1 - abs(i) / 16)), 1))
-            p.drawLine(QLineF(cx + (x - cx) * 0.05, vy, x, H))
-        y, step = hy, 5.0
+        # dot grid, fading with distance from the centre
+        step = 34.0
+        reach = max(W, H) * 0.62
+        p.setPen(Qt.PenStyle.NoPen)
+        y = (H / 2) % step
         while y < H:
-            k = (y - hy) / max(1.0, H - hy)
-            p.setPen(QPen(blend(C.PRI, 0.03 + 0.09 * k), 1))
-            p.drawLine(QLineF(0, y, W, y))
+            x = (W / 2) % step
+            while x < W:
+                d = math.hypot(x - cx, y - cy) / reach
+                if d < 1.0:
+                    p.setBrush(QBrush(with_alpha(C.PRI, 0.16 * (1.0 - d) ** 1.6)))
+                    p.drawEllipse(QPointF(x, y), 1.05, 1.05)
+                x += step
             y += step
-            step *= 1.28
-        p.setPen(Qt.PenStyle.NoPen)
-        for side in (-1, 1):
-            for j in range(3, 12):
-                t = j / 11
-                x = cx + side * (W * 0.16 + t * t * W * 0.26)
-                yy = hy + (H - hy) * t * t
-                rr = (0.6 + 1.4 * t) * 3
-                gg = QRadialGradient(x, yy, rr)
-                gg.setColorAt(0.0, with_alpha(C.WHITE, 0.30 * (0.3 + t)))
-                gg.setColorAt(0.35, with_alpha(C.PRI, 0.12 * (0.3 + t)))
-                gg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
-                p.setBrush(QBrush(gg))
-                p.drawEllipse(QPointF(x, yy), rr, rr)
-        p.restore()
 
-        lg = QLinearGradient(0, 0, W, 0)
-        lg.setColorAt(0.0, with_alpha(C.PRI, 0.0))
-        lg.setColorAt(0.5, with_alpha(C.PRI, 0.35))
-        lg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
-        p.setPen(QPen(QBrush(lg), 1))
-        p.drawLine(QLineF(0, hy, W, hy))
+        # two thin orbit rings lying on the floor of the scene
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for rr, a in ((0.46, 0.14), (0.62, 0.07)):
+            rx = min(W, H) * rr
+            p.setPen(QPen(with_alpha(C.PRI, a), 1))
+            p.drawEllipse(QPointF(cx, cy + min(W, H) * 0.30), rx, rx * 0.16)
 
+        # a few dim embers, seeded so the scene is the same on every launch
         rnd = random.Random(57)
-        p.setPen(Qt.PenStyle.NoPen)
-        for _ in range(int(W * H / 9000)):
-            x, yy = rnd.uniform(0, W), rnd.uniform(0, H * 0.72)
-            rr = rnd.uniform(0.8, 3.2) * 3
-            warm = rnd.random() < 0.12
-            c = C.ACC2 if warm else (C.WHITE if rnd.random() < 0.3 else C.PRI)
-            a = rnd.uniform(0.08, 0.40)
+        for _ in range(int(W * H / 26000)):
+            x, yy = rnd.uniform(0, W), rnd.uniform(0, H)
+            rr = rnd.uniform(1.5, 6.0)
             gg = QRadialGradient(x, yy, rr)
-            gg.setColorAt(0.0, with_alpha(c, a))
-            gg.setColorAt(1.0, with_alpha(c, 0.0))
+            gg.setColorAt(0.0, with_alpha(C.ACC if rnd.random() < 0.3 else C.PRI,
+                                          rnd.uniform(0.06, 0.22)))
+            gg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
+            p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QBrush(gg))
             p.drawEllipse(QPointF(x, yy), rr, rr)
 
-        # the screen's edge: a thin chamfered frame with lit corners
-        m, cut, arm = 6, 16, 46
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(blend(C.PRI, 0.20), 1))
-        p.drawPolygon(chamfer(QRectF(m, m, W - 2 * m, H - 2 * m), cut, ("tl", "tr", "br", "bl")))
-        p.setPen(QPen(blend(C.PRI, 0.9), 1.8))
-        for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
-            x0 = m if sx > 0 else W - m
-            y0 = m if sy > 0 else H - m
-            p.drawLine(QLineF(x0, y0 + sy * (cut + arm), x0, y0 + sy * cut))
-            p.drawLine(QLineF(x0, y0 + sy * cut, x0 + sx * cut, y0))
-        p.setFont(px_font(10, QFont.Weight.DemiBold, spacing=2.2))
-        p.setPen(QPen(blend(C.PRI, 0.55)))
-        p.drawText(QRectF(m + 24, m + 8, 260, 16), Qt.AlignmentFlag.AlignVCenter, "VOICE INTERFACE")
+        # vignette
+        v = QRadialGradient(cx, H / 2, max(W, H) * 0.75)
+        v.setColorAt(0.55, with_alpha(C.BG, 0.0))
+        v.setColorAt(1.0, with_alpha(C.BG, 0.85))
+        p.fillRect(QRectF(0, 0, W, H), QBrush(v))
         p.end()
         return pm
 
@@ -641,53 +616,59 @@ class HudCanvas(QWidget):
             r = min(W * 0.46, band_h / 2.0)
             self._paint_core_classic(p, cx, band_t + band_h / 2.0, r, W, band_h)
 
-        # state line: spaced capitals between two fading rules that pulse
+        # state line: a quiet caption under the core, in the state's colour
+        tr = {"MUTED": "SESSİZ", "SPEAKING": "KONUŞUYOR", "THINKING": "DÜŞÜNÜYOR",
+              "PROCESSING": "İŞLİYOR", "LISTENING": "DİNLİYOR"}
         if self.muted:
-            txt, col = "MUTED", qcol(C.MUTED_C)
+            key, col = "MUTED", qcol(C.MUTED_C)
         elif self.speaking:
-            txt, col = "SPEAKING", qcol(C.ACC)
+            key, col = "SPEAKING", qcol(C.ACC)
         elif self.state in ("THINKING", "PROCESSING"):
-            txt, col = self.state, qcol(C.ACC2)
+            key, col = self.state, qcol(C.ACC2)
         elif self.state == "LISTENING":
-            txt, col = "LISTENING", qcol(C.GREEN)
+            key, col = "LISTENING", qcol(C.GREEN)
         else:
-            txt, col = str(self.state), qcol(C.PRI)
-        p.setFont(px_font(13, QFont.Weight.DemiBold, spacing=5))
-        tw = p.fontMetrics().horizontalAdvance(txt)
-        p.setPen(QPen(col))
+            key, col = str(self.state), qcol(C.PRI)
+        txt = tr.get(key, key)
+        p.setFont(px_font(12, QFont.Weight.DemiBold, spacing=6))
+        p.setPen(QPen(with_alpha(col, 0.85)))
         p.drawText(QRectF(0, sy, W, 22), Qt.AlignmentFlag.AlignCenter, txt)
-        pulse = 0.85 if (self._blink or self.speaking or self.muted) else 0.40
-        rule = min(110.0, W * 0.12)
-        for sgn in (-1, 1):
-            x0 = cx + sgn * (tw / 2 + 14)
-            lg = QLinearGradient(x0, 0, x0 + sgn * rule, 0)
-            lg.setColorAt(0.0, with_alpha(col, pulse))
-            lg.setColorAt(1.0, with_alpha(col, 0.0))
-            p.setPen(QPen(QBrush(lg), 1))
-            p.drawLine(QLineF(x0, sy + 11, x0 + sgn * rule, sy + 11))
 
-        # waveform — the real audio level (the mic while listening, the voice
-        # while speaking), mirrored below its baseline like a reflection
+        # voice line: a smooth glowing curve, still while idle, alive with the
+        # real audio level (the mic while listening, the voice while speaking)
         wy = sy + 50
-        N = 48
-        span = min(W * 0.60, 420.0)
-        bw = span / N
+        span = min(W * 0.55, 560.0)
         amp = self._amp_disp
-        mid = (N - 1) / 2.0
-        wx0 = cx - span / 2
-        for i in range(N):
+        x0 = cx - span / 2
+        n = 96
+        base_col = qcol(C.MUTED_C) if self.muted else (col if amp > 0.05 else qcol(C.PRI))
+        path = QPainterPath()
+        for i in range(n + 1):
+            u = i / n
+            env = math.sin(math.pi * u) ** 1.5
             if self.muted:
-                hgt, c = 1.5, qcol(C.MUTED_C)
+                yv = 0.0
             else:
-                env = (1.0 - abs(i - mid) / mid) ** 0.7      # centre-weighted hump
-                shimmer = 0.55 + 0.45 * math.sin(self._tick * 0.18 + i * 0.7)
-                idle = 2.0 + 1.5 * math.sin(self._tick * 0.09 + i * 0.6)
-                hgt = max(1.5, min(24.0, idle + amp * 22.0 * env * shimmer))
-                c = (blend(col, 0.35 + 0.65 * env) if amp > 0.05
-                     else blend(C.PRI, 0.28 + 0.2 * env))
-            x = wx0 + i * bw
-            w = max(1.5, bw - 2.0)
-            p.fillRect(QRectF(x, wy - hgt, w, hgt), c)
-            p.fillRect(QRectF(x, wy + 1.5, w, hgt * 0.45), blend(c, 0.30))
+                wave = (math.sin(u * 22.0 + self._tick * 0.21) * 0.6
+                        + math.sin(u * 37.0 - self._tick * 0.13) * 0.4)
+                yv = env * (1.2 + amp * 26.0) * wave
+            pt = QPointF(x0 + span * u, wy + yv)
+            if i == 0:
+                path.moveTo(pt)
+            else:
+                path.lineTo(pt)
+        line_g = QLinearGradient(x0, 0, x0 + span, 0)
+        line_g.setColorAt(0.0, with_alpha(base_col, 0.0))
+        line_g.setColorAt(0.5, with_alpha(base_col, 0.95))
+        line_g.setColorAt(1.0, with_alpha(base_col, 0.0))
+        glow_g = QLinearGradient(x0, 0, x0 + span, 0)
+        glow_g.setColorAt(0.0, with_alpha(base_col, 0.0))
+        glow_g.setColorAt(0.5, with_alpha(base_col, 0.18 + 0.25 * amp))
+        glow_g.setColorAt(1.0, with_alpha(base_col, 0.0))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QBrush(glow_g), 7.0))
+        p.drawPath(path)
+        p.setPen(QPen(QBrush(line_g), 1.6))
+        p.drawPath(path)
 
         p.end()   # end deterministically so the backing store never flushes an active painter
