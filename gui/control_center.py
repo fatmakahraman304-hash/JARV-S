@@ -54,6 +54,7 @@ class NetworkCanvas(QWidget):
 
     node_clicked = pyqtSignal(str)     # node key, or "" to clear the filter
     core_clicked = pyqtSignal()
+    connect_requested = pyqtSignal(str)   # an app node that is not connected yet
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -67,12 +68,22 @@ class NetworkCanvas(QWidget):
         self._filter = ""
         self._counts: dict[str, int] = {}
         self._hits: dict[str, float] = {}
+        self._connected: set[str] = set()
         self._caption = ""
         self._t = 0.0
 
     # ── data ──────────────────────────────────────────────────────────────────
-    def set_data(self, counts, hits, caption: str) -> None:
+    def set_data(self, counts, hits, caption: str, connected=None) -> None:
         self._counts, self._hits, self._caption = counts, hits, caption
+        if connected is not None:
+            self._connected = set(connected)
+
+    def _is_app_off(self, key: str) -> bool:
+        """An app reached through Composio whose account is not connected."""
+        return key in activity.APP_NODES and key not in self._connected
+
+    def _is_on(self, key: str) -> bool:
+        return bool(self._counts.get(key)) or (key in activity.APP_NODES and key in self._connected)
 
     def set_filter(self, key: str) -> None:
         self._filter = key
@@ -118,7 +129,10 @@ class NetworkCanvas(QWidget):
             self.setCursor(Qt.CursorShape.PointingHandCursor if k else Qt.CursorShape.ArrowCursor)
             if k:
                 n = self._counts.get(k, 0)
-                self.setToolTip(f"{activity.NODE_LABEL[k]} · bu oturumda {n} işlem")
+                if self._is_app_off(k):
+                    self.setToolTip(f"{activity.NODE_LABEL[k]} · bağlı değil — bağlamak için tıkla")
+                else:
+                    self.setToolTip(f"{activity.NODE_LABEL[k]} · bu oturumda {n} işlem")
             else:
                 self.setToolTip("")
 
@@ -126,6 +140,9 @@ class NetworkCanvas(QWidget):
         pt = e.position()
         k = self._node_at(pt)
         if k:
+            if self._is_app_off(k):
+                self.connect_requested.emit(k)
+                return
             self.node_clicked.emit("" if k == self._filter else k)
             return
         dx, dy = pt.x() - self._core.x(), pt.y() - self._core.y()
@@ -165,14 +182,14 @@ class NetworkCanvas(QWidget):
             y += step
 
         # header: title, active links
-        active = sum(1 for k, *_r in activity.NODES if self._counts.get(k))
+        active = sum(1 for k, *_r in activity.NODES if self._is_on(k))
         p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2.4))
         p.setPen(QPen(qcol(C.TEXT_DIM)))
         p.drawText(QRectF(24, 18, 300, 18), Qt.AlignmentFlag.AlignVCenter, "SİNİR AĞI")
         p.setFont(px_font(13))
         p.setPen(QPen(qcol(C.TEXT_MED)))
         p.drawText(QRectF(24, 38, 400, 20), Qt.AlignmentFlag.AlignVCenter,
-                   f"{active} / {len(activity.NODES)} bağlantı bu oturumda aktif")
+                   f"{active} / {len(activity.NODES)} bağlantı aktif")
 
         # mesh: faint links between neighbouring outer nodes
         outer = [k for k, _l, _i, ring in activity.NODES if ring == 1]
@@ -187,7 +204,7 @@ class NetworkCanvas(QWidget):
             c = self._pos[k]
             n = self._counts.get(k, 0)
             dim = self._filter and self._filter != k
-            if n:
+            if n or self._is_on(k):
                 g = QLinearGradient(core, c)
                 g.setColorAt(0.0, with_alpha(C.PRI, 0.10 if dim else 0.55))
                 g.setColorAt(1.0, with_alpha(C.ACC, 0.15 if dim else 0.85))
@@ -231,7 +248,7 @@ class NetworkCanvas(QWidget):
             hot = k == self._hover or k == self._filter
             dim = bool(self._filter) and self._filter != k
             r = 22.0 if ring == 0 else 20.0
-            on = n > 0
+            on = self._is_on(k)
             base = qcol(C.PRI) if on else qcol(C.TEXT_DIM)
             alpha = 0.35 if dim else 1.0
             if on and not dim:
@@ -250,6 +267,11 @@ class NetworkCanvas(QWidget):
             p.setFont(px_font(11, QFont.Weight.Medium))
             p.setPen(QPen(with_alpha(C.TEXT if on else C.TEXT_DIM, alpha)))
             p.drawText(QRectF(c.x() - 70, c.y() + r + 4, 140, 16), Qt.AlignmentFlag.AlignHCenter, label)
+            if self._is_app_off(k):
+                p.setFont(px_font(9))
+                p.setPen(QPen(with_alpha(C.TEXT_DIM, 0.7 * alpha)))
+                p.drawText(QRectF(c.x() - 70, c.y() + r + 19, 140, 13),
+                           Qt.AlignmentFlag.AlignHCenter, "bağla")
             if n:
                 txt = str(n) if n < 100 else "99+"
                 p.setFont(px_font(10, QFont.Weight.Bold))
@@ -417,6 +439,8 @@ class ControlCenter(QWidget):
 
         self.network.node_clicked.connect(self._filter)
         self.network.core_clicked.connect(self.talk_requested.emit)
+        self.network.connect_requested.connect(self._connect_app)
+        self._next_conn_check = 0.0
 
         self._seq = -1
         self._last = time.monotonic()
@@ -439,6 +463,7 @@ class ControlCenter(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self._next_conn_check = 0.0
         self._last = time.monotonic()
         self._tmr.start(33)
         self._refresh(force=True)
@@ -457,12 +482,60 @@ class ControlCenter(QWidget):
                 if e.node == "voice" and "yanıtladı:" in e.text:
                     caption = e.text.split("yanıtladı:", 1)[1].strip()
                     break
-            self.network.set_data(activity.counts(), activity.last_hit(), caption)
+            self.network.set_data(activity.counts(), activity.last_hit(), caption,
+                                  activity.connected())
             self.feed.set_events(events)
         else:
             self.feed.update()      # keeps the "x sn" ages fresh
 
+    def _check_connections(self) -> None:
+        """Every 30 s while visible, ask Composio which apps are connected —
+        on a worker thread; the result lands in core.activity."""
+        now = time.monotonic()
+        if now < self._next_conn_check:
+            return
+        self._next_conn_check = now + 30.0
+        try:
+            from core import composio
+        except Exception:
+            return
+        if not composio.is_configured():
+            return
+        import threading
+
+        def work():
+            composio.refresh_connections()
+            activity.bump()
+        threading.Thread(target=work, daemon=True, name="composio-refresh").start()
+
+    def _connect_app(self, key: str) -> None:
+        """Open the login page for one app, off the Qt thread."""
+        import threading
+        import webbrowser
+        label = activity.NODE_LABEL.get(key, key)
+        try:
+            from core import composio
+        except Exception:
+            composio = None
+        if composio is None or not composio.is_configured():
+            activity.record(key, f"{label}: önce Ayarlar → Bağlantılar'a Composio anahtarını gir", "warn")
+            self._refresh(force=True)
+            return
+        activity.record(key, f"{label} için giriş sayfası açılıyor…", "info")
+        self._refresh(force=True)
+
+        def work():
+            try:
+                url = composio.link(key)
+                webbrowser.open(url)
+                activity.record(key, f"{label}: tarayıcıda giriş yap, sonra burada yeşerecek", "info")
+            except Exception as exc:
+                activity.record(key, f"{label} bağlanamadı: {exc}"[:150], "fail")
+            self._next_conn_check = time.monotonic() + 20.0
+        threading.Thread(target=work, daemon=True, name="composio-link").start()
+
     def _tick(self) -> None:
+        self._check_connections()
         now = time.monotonic()
         dt, self._last = min(0.1, now - self._last), now
         state, speaking, muted = self._state

@@ -2,7 +2,7 @@
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QAbstractButton, QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
+    QLabel, QLineEdit, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
 from core.social_sites import SITES
 from gui.theme import C
 from gui.style import px_font
@@ -205,6 +205,43 @@ class SettingsPage(QDialog):
         action(brain, 'Motor ve sağlayıcılar', 'Yapay zekâ modelleri ve bağlantı ayarları.', owner._open_providers)
         action(brain, 'Hafıza', 'Kaydedilmiş bilgileri görüntüle ve düzenle.', owner._open_memory_panel)
         extras = page('Bağlantılar', 'Ek yetenekler ve uzaktan erişim.')
+        # Composio: 1000+ apps (Gmail, Google Takvim/Drive/Docs/Sheets, Notion…)
+        apps_row = card(extras, 'Uygulamalar (Composio)',
+                        'Gmail, Google Takvim, Drive, Docs, Sheets, Notion ve 1000+ uygulama. '
+                        'composio.dev’de ücretsiz hesap aç, API anahtarını buraya yapıştır; '
+                        'sonra Kontrol Merkezi’nde gri bir uygulamaya tıklayarak bağla.')
+        from core import composio as _composio
+        key_edit = QLineEdit()
+        key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        key_edit.setPlaceholderText('Composio API anahtarı')
+        key_edit.setMinimumWidth(220)
+        key_edit.setText(_composio.api_key())
+        key_edit.setAccessibleName('Composio API anahtarı')
+        apps_row.addWidget(key_edit)
+        key_state = QLabel('Kayıtlı' if _composio.is_configured() else '')
+        key_state.setFont(px_font(10))
+        key_state.setStyleSheet(f'color: {C.PRI};')
+        apps_row.addWidget(key_state)
+        def save_key():
+            try:
+                _composio.save_api_key(key_edit.text())
+                key_state.setText('Kayıtlı' if key_edit.text().strip() else 'Silindi')
+                import threading
+                threading.Thread(target=_composio.refresh_connections, daemon=True,
+                                 name='composio-refresh').start()
+            except Exception as exc:
+                key_state.setText(f'Kaydedilemedi: {exc}'[:60])
+        save_btn = QPushButton('Kaydet')
+        save_btn.setAccessibleName('Composio anahtarını kaydet')
+        save_btn.clicked.connect(save_key)
+        apps_row.addWidget(save_btn)
+        get_btn = QPushButton('Anahtar al')
+        get_btn.setAccessibleName('Composio sitesini aç')
+        def open_composio():
+            import webbrowser
+            webbrowser.open('https://dashboard.composio.dev')
+        get_btn.clicked.connect(open_composio)
+        apps_row.addWidget(get_btn)
         action(extras, "God's Eye View", '3D küreyi CORE alanında aç.',
                lambda: owner._control_gods_eye({"kind": "open"}))
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)

@@ -40,8 +40,20 @@ NODES: tuple[tuple[str, str, str, int], ...] = (
     ("code",      "Kod",          "code",     1),
     ("maps",      "Harita",       "map",      1),
     ("tasks",     "Görevler",     "grid",     1),
+    ("gmail",     "Gmail",        "mail",     1),
+    ("googlecalendar", "Google Takvim", "calendar", 1),
+    ("googledrive", "Google Drive", "folder", 1),
+    ("googledocs", "Google Docs",  "doc",      1),
+    ("googlesheets", "Google Sheets", "sheet", 1),
+    ("notion",    "Notion",       "doc",      1),
+    ("apps",      "Diğer uygulamalar", "plus", 1),
 )
 NODE_LABEL = {k: label for k, label, _i, _r in NODES}
+
+# Nodes that are apps reached through Composio, keyed by their toolkit slug.
+# They are drawn grey until the user connects the account; "apps" stands for
+# every other one of the 1000+ toolkits.
+APP_NODES = {"gmail", "googlecalendar", "googledrive", "googledocs", "googlesheets", "notion"}
 
 _TOOL_NODE = {
     "web_search": "web", "browser_control": "web", "flight_finder": "web",
@@ -79,7 +91,7 @@ _TOOL_TEXT = {
     "gods_eye_view": "God's Eye View", "background_tasks": "Arka plan görevi",
     "night_shift": "Gece vardiyası", "workspace_mode": "Çalışma modu",
     "capacity_simulation": "Kapasite simülasyonu", "chat_draft": "Sohbet taslağı",
-    "send_message": "Mesaj", "control_center": "Kontrol Merkezi",
+    "send_message": "Mesaj", "control_center": "Kontrol Merkezi", "apps": "Uygulama",
 }
 
 
@@ -93,15 +105,28 @@ class Event:
 
 
 _lock = threading.Lock()
+_connected: set[str] = set()
 _events: deque[Event] = deque(maxlen=400)
 _counts: dict[str, int] = {}
 _last_hit: dict[str, float] = {}
 _seq = 0
 
 
+def node_for_toolkit(toolkit: str) -> str:
+    t = str(toolkit or "").strip().lower()
+    return t if t in APP_NODES else "apps"
+
+
 def node_for_tool(name: str, args: dict | None = None) -> str:
     """Which node a tool call belongs to."""
     name = str(name or "")
+    if name == "apps":
+        a = args or {}
+        tk = str(a.get("toolkit") or "").strip()
+        if not tk and a.get("tool_slug"):
+            slug = str(a["tool_slug"]).lower()
+            tk = next((n for n in APP_NODES if slug.startswith(n + "_")), "")
+        return node_for_toolkit(tk)
     if name == "send_message":
         platform = str((args or {}).get("platform") or "").lower()
         for key, words in (("whatsapp", ("whatsapp", "wp", "wapp")),
@@ -120,8 +145,10 @@ def status_of(result) -> str:
         return "fail"
     if text.startswith(("status=unverified", "status=ask")):
         return "warn"
-    low = text[:40].lower()
+    low = text[:80].lower()
     if low.startswith(("error", "err:", "hata", "failed", "could not")):
+        return "fail"
+    if low.startswith("tool '") and "' failed:" in low:      # main.py's exception wrapper
         return "fail"
     return "ok"
 
@@ -152,6 +179,24 @@ def record_tool(name: str, args: dict | None, result=None, error: BaseException 
         detail = ""
     elif name == "web_search":
         detail = str((args or {}).get("query") or "").strip()
+    elif name == "apps":
+        a = args or {}
+        act = str(a.get("action") or "").lower()
+        base = {"search": "Uygulama aracı arandı", "connect": "Bağlantı sayfası açıldı",
+                "connected": "Bağlı uygulamalar okundu"}.get(act, "")
+        slug = str(a.get("tool_slug") or "").strip()
+        if act == "run" and slug:
+            node = node_for_tool("apps", a)
+            words = slug.lower()
+            if node in APP_NODES and words.startswith(node + "_"):
+                words = words[len(node) + 1:]
+            elif node == "apps" and "_" in words:
+                words = words.split("_", 1)[1]
+            base = NODE_LABEL.get(node, "Uygulama") if node != "apps" else slug.split("_")[0].title()
+            detail = words.replace("_", " ")[:60]
+        else:
+            base = base or "Uygulama"
+            detail = str(a.get("toolkit") or a.get("use_case") or "").strip()[:60]
     elif name == "open_app":
         detail = str((args or {}).get("app_name") or (args or {}).get("app") or "").strip()
     if detail:
@@ -166,6 +211,28 @@ def record_tool(name: str, args: dict | None, result=None, error: BaseException 
         record(node, f"Doğrulanamadı: {base}", "warn")
     else:
         record(node, base, "ok")
+
+
+def set_connected(slugs) -> None:
+    """The toolkits Composio reports as connected (lower-case slugs)."""
+    global _connected, _seq
+    with _lock:
+        new = {str(x).lower() for x in (slugs or ())}
+        if new != _connected:
+            _connected = new
+            _seq += 1
+
+
+def bump() -> None:
+    """Mark a change that is not an event (e.g. new connections) so readers refresh."""
+    global _seq
+    with _lock:
+        _seq += 1
+
+
+def connected() -> set[str]:
+    with _lock:
+        return set(_connected)
 
 
 def since(seq: int) -> list[Event]:

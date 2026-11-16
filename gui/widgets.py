@@ -989,6 +989,21 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
                                  QPointF(cx - s * 0.3, cy + s * 0.55), QPointF(cx - s * 0.85, cy + s * 0.8)]))
         p.drawLine(QLineF(cx - s * 0.3, cy - s * 0.8, cx - s * 0.3, cy + s * 0.55))
         p.drawLine(QLineF(cx + s * 0.3, cy - s * 0.55, cx + s * 0.3, cy + s * 0.8))
+    elif kind == "mail":
+        p.drawRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.6, s * 1.7, s * 1.2), s * 0.12, s * 0.12)
+        p.drawPolyline(QPolygonF([QPointF(cx - s * 0.8, cy - s * 0.5), QPointF(cx, cy + s * 0.1),
+                                  QPointF(cx + s * 0.8, cy - s * 0.5)]))
+    elif kind == "doc":
+        p.drawPolygon(QPolygonF([QPointF(cx - s * 0.6, cy - s * 0.85), QPointF(cx + s * 0.25, cy - s * 0.85),
+                                 QPointF(cx + s * 0.6, cy - s * 0.5), QPointF(cx + s * 0.6, cy + s * 0.85),
+                                 QPointF(cx - s * 0.6, cy + s * 0.85)]))
+        for k in (-0.2, 0.15, 0.5):
+            p.drawLine(QLineF(cx - s * 0.35, cy + s * k, cx + s * 0.35, cy + s * k))
+    elif kind == "sheet":
+        p.drawRoundedRect(QRectF(cx - s * 0.75, cy - s * 0.8, s * 1.5, s * 1.6), s * 0.1, s * 0.1)
+        p.drawLine(QLineF(cx - s * 0.75, cy - s * 0.25, cx + s * 0.75, cy - s * 0.25))
+        p.drawLine(QLineF(cx - s * 0.75, cy + s * 0.25, cx + s * 0.75, cy + s * 0.25))
+        p.drawLine(QLineF(cx - s * 0.15, cy - s * 0.8, cx - s * 0.15, cy + s * 0.8))
     elif kind == "grid":
         for gx in (-1, 1):
             for gy in (-1, 1):
