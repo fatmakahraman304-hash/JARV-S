@@ -930,6 +930,65 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
         path.arcTo(QRectF(cx + s * 0.1, cy - s * 0.95, s * 0.6, s * 0.6), 225, -180)
         path.lineTo(cx - s * 0.2, cy + s * 0.15)
         p.drawPath(path)
+    elif kind == "globe":
+        p.drawEllipse(QPointF(cx, cy), s * 0.85, s * 0.85)
+        p.drawEllipse(QPointF(cx, cy), s * 0.38, s * 0.85)
+        p.drawLine(QLineF(cx - s * 0.85, cy, cx + s * 0.85, cy))
+    elif kind == "folder":
+        p.drawPolygon(QPolygonF([QPointF(cx - s * 0.85, cy - s * 0.55), QPointF(cx - s * 0.3, cy - s * 0.55),
+                                 QPointF(cx - s * 0.15, cy - s * 0.35), QPointF(cx + s * 0.85, cy - s * 0.35),
+                                 QPointF(cx + s * 0.85, cy + s * 0.65), QPointF(cx - s * 0.85, cy + s * 0.65)]))
+    elif kind == "brain":
+        p.drawEllipse(QPointF(cx - s * 0.32, cy), s * 0.48, s * 0.68)
+        p.drawEllipse(QPointF(cx + s * 0.32, cy), s * 0.48, s * 0.68)
+        p.drawLine(QLineF(cx, cy - s * 0.6, cx, cy + s * 0.6))
+    elif kind == "play":
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.6, s * 1.7, s * 1.2), s * 0.3, s * 0.3)
+        p.drawPath(path)
+        p.drawPolygon(QPolygonF([QPointF(cx - s * 0.22, cy - s * 0.3), QPointF(cx + s * 0.35, cy),
+                                 QPointF(cx - s * 0.22, cy + s * 0.3)]))
+    elif kind == "camera":
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(cx - s * 0.8, cy - s * 0.8, s * 1.6, s * 1.6), s * 0.45, s * 0.45)
+        p.drawPath(path)
+        p.drawEllipse(QPointF(cx, cy), s * 0.38, s * 0.38)
+        p.drawPoint(QPointF(cx + s * 0.45, cy - s * 0.45))
+    elif kind == "calendar":
+        p.drawRoundedRect(QRectF(cx - s * 0.8, cy - s * 0.65, s * 1.6, s * 1.45), s * 0.15, s * 0.15)
+        p.drawLine(QLineF(cx - s * 0.8, cy - s * 0.25, cx + s * 0.8, cy - s * 0.25))
+        p.drawLine(QLineF(cx - s * 0.4, cy - s * 0.85, cx - s * 0.4, cy - s * 0.5))
+        p.drawLine(QLineF(cx + s * 0.4, cy - s * 0.85, cx + s * 0.4, cy - s * 0.5))
+    elif kind == "cloud":
+        path = QPainterPath(QPointF(cx - s * 0.55, cy + s * 0.45))
+        path.arcTo(QRectF(cx - s * 0.95, cy - s * 0.15, s * 0.8, s * 0.6), 270, -180)
+        path.arcTo(QRectF(cx - s * 0.5, cy - s * 0.6, s * 0.9, s * 0.9), 160, -150)
+        path.arcTo(QRectF(cx + s * 0.1, cy - s * 0.15, s * 0.8, s * 0.6), 90, -180)
+        path.closeSubpath()
+        p.drawPath(path)
+    elif kind == "monitor":
+        p.drawRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.65, s * 1.7, s * 1.1), s * 0.1, s * 0.1)
+        p.drawLine(QLineF(cx, cy + s * 0.45, cx, cy + s * 0.75))
+        p.drawLine(QLineF(cx - s * 0.4, cy + s * 0.75, cx + s * 0.4, cy + s * 0.75))
+    elif kind == "eye":
+        path = QPainterPath(QPointF(cx - s * 0.9, cy))
+        path.quadTo(QPointF(cx, cy - s * 0.85), QPointF(cx + s * 0.9, cy))
+        path.quadTo(QPointF(cx, cy + s * 0.85), QPointF(cx - s * 0.9, cy))
+        p.drawPath(path)
+        p.drawEllipse(QPointF(cx, cy), s * 0.25, s * 0.25)
+    elif kind == "code":
+        p.drawPolyline(QPolygonF([QPointF(cx - s * 0.35, cy - s * 0.55), QPointF(cx - s * 0.85, cy),
+                                  QPointF(cx - s * 0.35, cy + s * 0.55)]))
+        p.drawPolyline(QPolygonF([QPointF(cx + s * 0.35, cy - s * 0.55), QPointF(cx + s * 0.85, cy),
+                                  QPointF(cx + s * 0.35, cy + s * 0.55)]))
+        p.drawLine(QLineF(cx + s * 0.15, cy - s * 0.7, cx - s * 0.15, cy + s * 0.7))
+    elif kind == "map":
+        p.drawPolygon(QPolygonF([QPointF(cx - s * 0.85, cy - s * 0.55), QPointF(cx - s * 0.3, cy - s * 0.8),
+                                 QPointF(cx + s * 0.3, cy - s * 0.55), QPointF(cx + s * 0.85, cy - s * 0.8),
+                                 QPointF(cx + s * 0.85, cy + s * 0.55), QPointF(cx + s * 0.3, cy + s * 0.8),
+                                 QPointF(cx - s * 0.3, cy + s * 0.55), QPointF(cx - s * 0.85, cy + s * 0.8)]))
+        p.drawLine(QLineF(cx - s * 0.3, cy - s * 0.8, cx - s * 0.3, cy + s * 0.55))
+        p.drawLine(QLineF(cx + s * 0.3, cy - s * 0.55, cx + s * 0.3, cy + s * 0.8))
     elif kind == "grid":
         for gx in (-1, 1):
             for gy in (-1, 1):

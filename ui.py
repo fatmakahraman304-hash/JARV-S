@@ -292,6 +292,11 @@ class JarvisUI:
     def show_camera_scan(self, jpeg: bytes, report: dict):
         self._win._scan_result_sig.emit(jpeg, report)
 
+    def show_control_center(self, opened: bool = True) -> None:
+        """Thread-safe: open (or close) the Control Centre — Jarvis's network
+        of capabilities and the live activity feed."""
+        self._win._control_center_sig.emit(bool(opened))
+
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])

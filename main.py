@@ -1246,6 +1246,9 @@ class JarvisLive:
                 getattr(self._dashboard, "_bind_error", "") or "")
 
     def _on_text_command(self, text: str):
+        if not str(text).startswith("["):          # internal notes ([FILE_UPLOADED] …) are not chat
+            from core import activity as _activity
+            _activity.record("chat", f"Yazdın: {str(text)[:80]}", "info")
         if is_close_command(text):
             self.ui.close_assistant()
             return
@@ -1627,6 +1630,24 @@ class JarvisLive:
         return out
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
+        """Run a tool and record what happened in the Control Centre's live
+        activity log — the real outcome, read from the tool's own result."""
+        from core import activity
+        args = dict(fc.args or {})
+        try:
+            resp = await self._execute_tool_inner(fc)
+        except BaseException as exc:
+            if not isinstance(exc, asyncio.CancelledError):
+                activity.record_tool(fc.name, args, error=exc)
+            raise
+        try:
+            result = (getattr(resp, "response", None) or {}).get("result", "")
+        except Exception:
+            result = ""
+        activity.record_tool(fc.name, args, result=result)
+        return resp
+
+    async def _execute_tool_inner(self, fc) -> types.FunctionResponse:
         name = fc.name
         if name == "shutdown_jarvis":
             return types.FunctionResponse(
@@ -2098,6 +2119,8 @@ class JarvisLive:
                             if full_in:
                                 self._last_out_logged = ""   # new exchange
                                 self.ui.write_log(f"You: {full_in}")
+                                from core import activity as _activity
+                                _activity.record("voice", f"Jarvis'le konuştun: {full_in[:80]}", "info")
                                 self._session_log.append(f"User: {full_in}")
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
@@ -2117,6 +2140,8 @@ class JarvisLive:
                             if full_out and self._awake:
                                 self._last_out_logged = full_out
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
+                                from core import activity as _activity
+                                _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({

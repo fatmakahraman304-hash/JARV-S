@@ -1,0 +1,193 @@
+"""core/activity.py — the live activity log behind the Control Centre.
+
+Every tool call, every spoken turn and every typed command is recorded here as
+one short event: which node of the network it belongs to (web, files, YouTube,
+WhatsApp…), a line of text, and whether it worked. The Control Centre reads it
+on a timer from the Qt thread; everything else only ever calls `record()`.
+
+Thread safety is a lock around a bounded deque. `record()` is cheap and never
+raises, so it can be called from the voice loop, a tool thread or a plugin
+without anyone needing to guard it.
+
+Nodes are a fixed catalogue so the network keeps its shape: five inner
+capabilities around the core, and the apps and tools Jarvis actually drives on
+the outer ring. A node lights up and counts once something in this session has
+gone through it — the count is real activity, never decoration.
+"""
+from __future__ import annotations
+
+import threading
+import time
+from collections import deque
+from dataclasses import dataclass
+
+# (key, label, icon, ring). Ring 0 is the inner circle of capabilities.
+NODES: tuple[tuple[str, str, str, int], ...] = (
+    ("voice",     "Ses",          "mic",      0),
+    ("chat",      "Sohbet",       "chat",     0),
+    ("web",       "Web",          "globe",    0),
+    ("files",     "Dosyalar",     "folder",   0),
+    ("memory",    "Hafıza",       "brain",    0),
+    ("youtube",   "YouTube",      "play",     1),
+    ("whatsapp",  "WhatsApp",     "send",     1),
+    ("instagram", "Instagram",    "camera",   1),
+    ("telegram",  "Telegram",     "send",     1),
+    ("messages",  "Mesajlar",     "chat",     1),
+    ("reminders", "Hatırlatıcı",  "calendar", 1),
+    ("weather",   "Hava",         "cloud",    1),
+    ("computer",  "Bilgisayar",   "monitor",  1),
+    ("vision",    "Ekran & Kamera", "eye",    1),
+    ("code",      "Kod",          "code",     1),
+    ("maps",      "Harita",       "map",      1),
+    ("tasks",     "Görevler",     "grid",     1),
+)
+NODE_LABEL = {k: label for k, label, _i, _r in NODES}
+
+_TOOL_NODE = {
+    "web_search": "web", "browser_control": "web", "flight_finder": "web",
+    "file_controller": "files", "file_processor": "files",
+    "save_memory": "memory", "recall_memory": "memory", "undo": "memory",
+    "youtube_video": "youtube", "video_player": "youtube",
+    "reminder": "reminders", "routines": "reminders",
+    "weather_report": "weather",
+    "computer_control": "computer", "computer_settings": "computer",
+    "desktop_control": "computer", "open_app": "computer", "system_status": "computer",
+    "manage_monitor": "computer", "game_updater": "computer",
+    "screen_process": "vision", "close_camera": "vision", "camera_scan": "vision",
+    "scan_research": "vision",
+    "code_helper": "code", "dev_agent": "code", "github_develop": "code",
+    "voice_prototype": "code",
+    "map_route": "maps", "normal_map": "maps", "gods_eye_view": "maps",
+    "background_tasks": "tasks", "night_shift": "tasks", "workspace_mode": "tasks",
+    "capacity_simulation": "tasks", "chat_draft": "chat", "control_center": "tasks",
+}
+
+# Readable verbs for the feed, by tool. Anything missing falls back to the name.
+_TOOL_TEXT = {
+    "web_search": "Web araması", "browser_control": "Tarayıcı", "flight_finder": "Uçuş araması",
+    "file_controller": "Dosya işlemi", "file_processor": "Dosya analizi",
+    "save_memory": "Hafızaya kayıt", "recall_memory": "Hafızadan hatırlama", "undo": "Geri alma",
+    "youtube_video": "YouTube", "video_player": "Video oynatma",
+    "reminder": "Hatırlatıcı", "routines": "Rutin", "weather_report": "Hava durumu",
+    "computer_control": "Bilgisayar kontrolü", "computer_settings": "Bilgisayar ayarı",
+    "desktop_control": "Masaüstü", "open_app": "Uygulama açma", "system_status": "Sistem durumu",
+    "manage_monitor": "Ekran ayarı", "game_updater": "Oyun güncellemesi",
+    "screen_process": "Ekran / kamera görüntüsü", "close_camera": "Kamerayı kapatma",
+    "camera_scan": "Kamera taraması", "scan_research": "Tarama araştırması",
+    "code_helper": "Kod yardımı", "dev_agent": "Kodlama görevi", "github_develop": "GitHub geliştirme",
+    "voice_prototype": "Prototip", "map_route": "Rota", "normal_map": "Harita",
+    "gods_eye_view": "God's Eye View", "background_tasks": "Arka plan görevi",
+    "night_shift": "Gece vardiyası", "workspace_mode": "Çalışma modu",
+    "capacity_simulation": "Kapasite simülasyonu", "chat_draft": "Sohbet taslağı",
+    "send_message": "Mesaj", "control_center": "Kontrol Merkezi",
+}
+
+
+@dataclass(frozen=True)
+class Event:
+    seq: int
+    ts: float
+    node: str
+    text: str
+    status: str          # "ok" | "warn" | "fail" | "info"
+
+
+_lock = threading.Lock()
+_events: deque[Event] = deque(maxlen=400)
+_counts: dict[str, int] = {}
+_last_hit: dict[str, float] = {}
+_seq = 0
+
+
+def node_for_tool(name: str, args: dict | None = None) -> str:
+    """Which node a tool call belongs to."""
+    name = str(name or "")
+    if name == "send_message":
+        platform = str((args or {}).get("platform") or "").lower()
+        for key, words in (("whatsapp", ("whatsapp", "wp", "wapp")),
+                           ("instagram", ("instagram", "insta", "ig")),
+                           ("telegram", ("telegram", "tg"))):
+            if any(w in platform for w in words):
+                return key
+        return "messages"
+    return _TOOL_NODE.get(name, "tasks")
+
+
+def status_of(result) -> str:
+    """'fail', 'warn' or 'ok' from a tool's result, using core.outcome's lines."""
+    text = str(result or "").lstrip()
+    if text.startswith("status=failed"):
+        return "fail"
+    if text.startswith(("status=unverified", "status=ask")):
+        return "warn"
+    low = text[:40].lower()
+    if low.startswith(("error", "err:", "hata", "failed", "could not")):
+        return "fail"
+    return "ok"
+
+
+def record(node: str, text: str, status: str = "ok") -> None:
+    """Add one event. Never raises."""
+    global _seq
+    try:
+        node = node if node in NODE_LABEL else "tasks"
+        now = time.time()
+        with _lock:
+            _seq += 1
+            _events.append(Event(_seq, now, node, str(text or "")[:160], status))
+            _counts[node] = _counts.get(node, 0) + 1
+            _last_hit[node] = now
+    except Exception:
+        pass
+
+
+def record_tool(name: str, args: dict | None, result=None, error: BaseException | None = None) -> None:
+    """Record a finished tool call with a readable line and its real outcome."""
+    node = node_for_tool(name, args)
+    base = _TOOL_TEXT.get(name, name.replace("_", " ").capitalize())
+    detail = ""
+    if name == "send_message":
+        detail = str((args or {}).get("receiver") or "").strip()
+        base = f"Mesaj → {detail}" if detail else base
+        detail = ""
+    elif name == "web_search":
+        detail = str((args or {}).get("query") or "").strip()
+    elif name == "open_app":
+        detail = str((args or {}).get("app_name") or (args or {}).get("app") or "").strip()
+    if detail:
+        base = f"{base}: {detail}"
+    if error is not None:
+        record(node, f"Yapılamadı: {base}", "fail")
+        return
+    st = status_of(result)
+    if st == "fail":
+        record(node, f"Yapılamadı: {base}", "fail")
+    elif st == "warn":
+        record(node, f"Doğrulanamadı: {base}", "warn")
+    else:
+        record(node, base, "ok")
+
+
+def since(seq: int) -> list[Event]:
+    with _lock:
+        return [e for e in _events if e.seq > seq]
+
+
+def recent(limit: int = 60) -> list[Event]:
+    with _lock:
+        return list(_events)[-limit:]
+
+
+def counts() -> dict[str, int]:
+    with _lock:
+        return dict(_counts)
+
+
+def last_hit() -> dict[str, float]:
+    with _lock:
+        return dict(_last_hit)
+
+
+def last_seq() -> int:
+    with _lock:
+        return _seq

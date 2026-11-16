@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
     _quiz_sig       = pyqtSignal(str, object, object)  # (topic, questions, grader)
     _quiz_hide_sig  = pyqtSignal()
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
+    _control_center_sig = pyqtSignal(bool)   # open / close the Control Centre
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -436,6 +437,7 @@ class MainWindow(QMainWindow):
         self._quiz_sig.connect(self._show_quiz)
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
+        self._control_center_sig.connect(self._set_control_center)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -2076,6 +2078,11 @@ class MainWindow(QMainWindow):
         self._chat_btn.setToolTip("Sohbet kartı")
         self._chat_btn.toggled.connect(lambda on: self._set_card_open(self._right_panel, on))
         row.addWidget(self._chat_btn)
+        self._cc_btn = IconButton("grid", 42)
+        self._cc_btn.setCheckable(True)
+        self._cc_btn.setToolTip("Kontrol Merkezi — sinir ağı ve canlı etkinlik")
+        self._cc_btn.clicked.connect(lambda: self._set_control_center(self._cc_btn.isChecked()))
+        row.addWidget(self._cc_btn)
         attach = IconButton("attach", 42)
         attach.setToolTip("Dosya veya klasör ekle")
         attach.clicked.connect(lambda: self._drop_zone._browse())
@@ -2860,6 +2867,8 @@ class MainWindow(QMainWindow):
     def _on_file_selected(self, path: str):
         self._current_file = path
         p    = Path(path)
+        from core import activity
+        activity.record("files", f"Dosya yüklendi: {p.name}", "ok")
         cat  = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         if cat == "folder":
@@ -3520,6 +3529,38 @@ class MainWindow(QMainWindow):
         self.hud.speaking = (state == "SPEAKING")
         if hasattr(self, "_state_chip"):
             self._state_chip.set_state(state)
+        if getattr(self, "_control_center", None) is not None:
+            self._control_center.set_state(state, state == "SPEAKING", self._muted)
+
+    # ── Control Centre ─────────────────────────────────────────────────────────
+    def _set_control_center(self, opened: bool) -> None:
+        """Show the Control Centre (network + live activity) where the core
+        sits, or give the centre back to the core."""
+        if opened:
+            if getattr(self, "_control_center", None) is None:
+                from gui.control_center import ControlCenter
+                cc = self._control_center = ControlCenter(self._hud_cam_stack)
+                cc.back_requested.connect(lambda: self._set_control_center(False))
+                cc.talk_requested.connect(self._talk_from_control_center)
+                self._hud_cam_stack.addWidget(cc)
+                self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
+            self._control_center.set_state(self.hud.state, self.hud.speaking, self._muted)
+            self._hud_cam_stack.setCurrentWidget(self._control_center)
+        elif self._hud_cam_stack.currentWidget() is getattr(self, "_control_center", None):
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+        self._sync_cc_btn()
+
+    def _sync_cc_btn(self, *_a) -> None:
+        if hasattr(self, "_cc_btn"):
+            on = (getattr(self, "_control_center", None) is not None
+                  and self._hud_cam_stack.currentWidget() is self._control_center)
+            if self._cc_btn.isChecked() != on:
+                self._cc_btn.setChecked(on)
+
+    def _talk_from_control_center(self) -> None:
+        if self._muted:
+            self._toggle_mute()
+        self._log.append_log("SYS: Dinliyorum — konuşabilirsin.")
 
     def _check_config(self) -> bool:
         d = _read_full_config()
