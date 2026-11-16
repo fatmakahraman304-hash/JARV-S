@@ -39,7 +39,9 @@ GL_FLOAT = 0x1406
 GL_COLOR_BUFFER_BIT = 0x4000
 GL_DEPTH_BUFFER_BIT = 0x0100
 
-_STRIDE = 13          # clip xyz, normal xyz, rest xyz, ao, jaw, fade, neck
+_STRIDE = 16          # clip xyz, normal xyz, rest xyz, ao, jaw, fade, neck, posed xyz
+_SHADOW = 2048        # shadow map size
+_SH_EXT = 1.8         # half extent of the shadow map's view, head units
 
 VERT = """
 #version 120
@@ -47,18 +49,48 @@ attribute vec3 a_clip;
 attribute vec3 a_n;
 attribute vec3 a_rest;
 attribute vec4 a_misc;
+attribute vec3 a_pos;
+uniform vec3 u_lu;            // light space basis (key light)
+uniform vec3 u_lv;
+uniform vec3 u_ll;
 uniform vec2 u_px;            // half the image size in pixels
 uniform float u_scale;        // pixels per head unit
 varying vec3 v_n;
 varying vec3 v_rest;
 varying vec4 v_misc;
 varying vec3 v_pos;
+varying vec3 v_lp;
 void main() {
     gl_Position = vec4(a_clip, 1.0);
+    v_lp = vec3(dot(a_pos, u_lu), dot(a_pos, u_lv), -dot(a_pos, u_ll)) / 1.8;
     v_pos = vec3(a_clip.x * u_px.x, a_clip.y * u_px.y, -a_clip.z / 0.45 * u_scale);
     v_n = a_n;
     v_rest = a_rest;
     v_misc = a_misc;
+}
+"""
+
+VERT_SHADOW = """
+#version 120
+attribute vec3 a_pos;
+uniform vec3 u_lu;
+uniform vec3 u_lv;
+uniform vec3 u_ll;
+varying float v_d;
+void main() {
+    float z = -dot(a_pos, u_ll) / 1.8;
+    gl_Position = vec4(dot(a_pos, u_lu) / 1.8, dot(a_pos, u_lv) / 1.8, z, 1.0);
+    v_d = z * 0.5 + 0.5;
+}
+"""
+
+FRAG_SHADOW = """
+#version 120
+varying float v_d;
+void main() {
+    vec2 e = fract(vec2(1.0, 255.0) * clamp(v_d, 0.0, 0.999));
+    e.x -= e.y / 255.0;
+    gl_FragColor = vec4(e, 0.0, 1.0);
 }
 """
 
@@ -234,6 +266,8 @@ varying vec3 v_n;
 varying vec3 v_rest;
 varying vec4 v_misc;          // ao, jaw weight, fade, neck
 varying vec3 v_pos;           // image-space position in pixels (for bump mapping)
+varying vec3 v_lp;            // position in the key light's shadow map space
+uniform sampler2D u_shadow;   // key light depth, packed in red/green
 
 uniform vec3 u_accent;        // theme colour: a faint rim light only
 uniform vec3 u_eyecol;
@@ -302,6 +336,23 @@ float ear(vec3 p, out float r) {
     float concha = exp(-(pow((u - 0.18) / 0.36, 2.0) + pow((v + 0.10) / 0.34, 2.0)));
     float tragus = exp(-(pow((u - 0.80) / 0.12, 2.0) + pow((v + 0.08) / 0.14, 2.0)));
     return side * (base + 0.020 * helix + 0.010 * anti - 0.030 * concha * inside + 0.010 * tragus);
+}
+
+float shadowKey(float ndl) {
+    vec2 uv = v_lp.xy * 0.5 + 0.5;
+    float d = v_lp.z * 0.5 + 0.5;
+    float bias = 0.0016 + 0.0035 * (1.0 - clamp(ndl, 0.0, 1.0));
+    float tx = 1.0 / 2048.0;
+    float lit = 0.0;
+    for (int i = 0; i < 12; i++) {
+        float a = float(i) * 2.39996;
+        float rr = 1.0 + 2.6 * sqrt(float(i) / 12.0);
+        vec2 o = vec2(cos(a), sin(a)) * rr * tx;
+        vec4 t = texture2D(u_shadow, uv + o);
+        float sd = t.r + t.g / 255.0;
+        lit += d - bias <= sd ? 1.0 : 0.0;
+    }
+    return lit / 12.0;
 }
 
 vec3 bumpN(vec3 n, vec3 pos, float H) {
@@ -446,9 +497,11 @@ void main() {
     vec3 wrap = vec3(0.50, 0.26, 0.18) * sss;
     float dk = dot(n, KEY), df = dot(n, FILL);
     vec3 lk = clamp((vec3(dk) + wrap) / (1.0 + wrap), 0.0, 1.0);
+    float sh = shadowKey(dot(n0, KEY));
+    lk *= vec3(sh) + (1.0 - sh) * vec3(0.16, 0.06, 0.04) * sss;   // red bleed in the penumbra
     vec3 lf = clamp((vec3(df) + wrap) / (1.0 + wrap), 0.0, 1.0);
-    float amb = 0.10 + 0.14 * (0.5 + 0.5 * n.y);
-    vec3 diff = vec3(amb) + lk * vec3(1.0, 0.95, 0.88) * 1.0 + lf * vec3(0.60, 0.68, 0.85) * 0.30;
+    float amb = 0.07 + 0.12 * (0.5 + 0.5 * n.y);
+    vec3 diff = vec3(amb) + lk * vec3(1.0, 0.95, 0.88) * 1.15 + lf * vec3(0.60, 0.68, 0.85) * 0.24;
     float occ = ao * ao * (1.0 - 0.45 * earShadow);
     if (neck) occ *= mix(0.40, 1.0, smoothstep(-0.70, -0.98, p.y));
     // jawline: the mandible edge runs y ≈ -1 + 1.1x² from the chin to under the
@@ -465,7 +518,7 @@ void main() {
     vec3 hk = normalize(KEY + VIEW), hf = normalize(FILL + VIEW);
     float nh = max(dot(n, hk), 0.0), nhf = max(dot(n, hf), 0.0);
     float oily = 1.0 + 0.6 * float(front) * (nose + smoothstep(0.3, 0.5, p.y));
-    float spec = ks * oily * (0.55 * pow(nh, shin) + 0.25 * pow(nh, shin * 0.3)) + 0.12 * ks * pow(nhf, shin * 0.5);
+    float spec = ks * oily * (0.55 * pow(nh, shin) + 0.25 * pow(nh, shin * 0.3)) * sh + 0.12 * ks * pow(nhf, shin * 0.5);
     float hs = 0.0;
     if (hairC > 0.0) {
         hs = (0.22 * pow(nh, 26.0) + 0.06 * pow(nh, 6.0)) * (0.35 + 0.9 * strand);
@@ -498,7 +551,7 @@ void main() {
             vec3 nb = normalize(n0 + vec3(d, 0.0) * 1.3);
             vec2 q = p.xy - ec - u_gaze * vec2(0.032, 0.018);
             float rr = length(q) / 0.042;
-            vec3 sc = vec3(0.80, 0.75, 0.70);
+            vec3 sc = vec3(0.72, 0.67, 0.62);
             sc = mix(sc, vec3(0.74, 0.46, 0.42), 0.55 * smoothstep(0.62, 1.0, abs(t - 0.45) * 1.9));
             sc *= 1.0 - 0.05 * vnoise(vec3(p.xy * 300.0, 2.0));
             float a = atan(q.y, q.x);
@@ -514,9 +567,9 @@ void main() {
             float shade = mix(0.30, 1.0, smoothstep(0.0, 0.030, lid - p.y));
             shade *= mix(0.65, 1.0, smoothstep(0.0, 0.012, p.y - yl));
             shade *= 1.0 - 0.35 * smoothstep(0.55, 1.0, abs(t - 0.45) * 2.0);
-            float ed = max(dot(nb, KEY), 0.0) * 0.75 + 0.30;
+            float ed = max(dot(nb, KEY), 0.0) * 0.75 * (0.25 + 0.75 * sh) + 0.22;
             vec3 eyeC = ecol * ed * shade;
-            float hl1 = pow(max(dot(nb, hk), 0.0), 900.0) * 2.2;
+            float hl1 = pow(max(dot(nb, hk), 0.0), 900.0) * 2.2 * (0.3 + 0.7 * sh);
             float hl2 = pow(max(dot(nb, hf), 0.0), 400.0) * 0.5;
             eyeC += vec3(1.0, 0.98, 0.95) * (hl1 + hl2) * shade;
             float fe = pow(1.0 - clamp(nb.z, 0.0, 1.0), 4.0);
@@ -588,6 +641,18 @@ void main() {
     gl_FragColor = vec4(col * al, al);
 }
 """
+
+
+def _light_basis():
+    ll = np.array([-0.4467, 0.5459, 0.7146])
+    ll /= np.linalg.norm(ll)
+    lu = np.cross([0.0, 1.0, 0.0], ll)
+    lu /= np.linalg.norm(lu)
+    lv = np.cross(ll, lu)
+    return lu, lv, ll
+
+
+_LIGHT_BASIS = _light_basis()
 
 
 def _hairline(p: np.ndarray) -> np.ndarray:
@@ -691,6 +756,7 @@ class AndroidGL:
         self._human = _human_params(np.asarray(rest, np.float32), landmarks)
         self._buf = np.zeros((self._n_vert, _STRIDE), np.float32)
         self._buf[:, 6:13] = self._static
+        self._sfbo = self._sprog = None
         rest = np.asarray(rest, np.float32)
 
         def ellipse(ring):
@@ -738,10 +804,19 @@ class AndroidGL:
             frag = FRAG_HUMAN if self.look == "human" else FRAG
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, frag):
                 raise RuntimeError("piksel gölgelendiricisi: " + prog.log())
-            for i, name in enumerate(("a_clip", "a_n", "a_rest", "a_misc")):
+            for i, name in enumerate(("a_clip", "a_n", "a_rest", "a_misc", "a_pos")):
                 prog.bindAttributeLocation(name, i)
             if not prog.link():
                 raise RuntimeError("gölgelendirici bağlanamadı: " + prog.log())
+            if self.look == "human":
+                sp = QOpenGLShaderProgram()
+                if not (sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERT_SHADOW)
+                        and sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAG_SHADOW)):
+                    raise RuntimeError("gölge gölgelendiricisi: " + sp.log())
+                sp.bindAttributeLocation("a_pos", 4)
+                if not sp.link():
+                    raise RuntimeError("gölge gölgelendiricisi bağlanamadı: " + sp.log())
+                self._sprog = sp
             vbo = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
             vbo.create()
             vbo.setUsagePattern(QOpenGLBuffer.UsagePattern.DynamicDraw)
@@ -759,6 +834,37 @@ class AndroidGL:
         except Exception as exc:
             self.error = f"{type(exc).__name__}: {exc}"[:400]
             return False
+
+    def _shadow_pass(self) -> None:
+        """Depth of the posed head seen from the key light, so the nose, brows,
+        ears, hair and jaw cast real soft shadows in the main pass."""
+        from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+        gl, sp = self._gl, self._sprog
+        if self._sfbo is None:
+            fmt = QOpenGLFramebufferObjectFormat()
+            fmt.setAttachment(QOpenGLFramebufferObject.Attachment.Depth)
+            self._sfbo = QOpenGLFramebufferObject(QSize(_SHADOW, _SHADOW), fmt)
+            if not self._sfbo.isValid():
+                raise RuntimeError("gölge arabelleği oluşturulamadı")
+        self._sfbo.bind()
+        gl.glViewport(0, 0, _SHADOW, _SHADOW)
+        gl.glClearColor(1.0, 1.0, 1.0, 1.0)
+        gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        gl.glEnable(GL_DEPTH_TEST)
+        gl.glDepthFunc(GL_LEQUAL)
+        gl.glDisable(GL_CULL_FACE)
+        gl.glDisable(GL_BLEND)
+        sp.bind()
+        self._vbo.bind()
+        sp.enableAttributeArray(4)
+        sp.setAttributeBuffer(4, GL_FLOAT, 13 * 4, 3, _STRIDE * 4)
+        for name, value in zip(("u_lu", "u_lv", "u_ll"), _LIGHT_BASIS):
+            sp.setUniformValue(name, QVector3D(*[float(x) for x in value]))
+        gl.glDrawArrays(GL_TRIANGLES, 0, self._n_vert)
+        sp.disableAttributeArray(4)
+        self._vbo.release()
+        sp.release()
+        self._sfbo.release()
 
     def _ensure_fbo(self, w: int, h: int) -> None:
         from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
@@ -789,11 +895,12 @@ class AndroidGL:
     # ── frame ─────────────────────────────────────────────────────────────────
     def _dynamic(self, posed, normals, sx, sy, w, h) -> np.ndarray:
         """Per-base-vertex clip xyz + normal, subdivided when enabled."""
-        d = np.empty((len(sx), 6), np.float32)
+        d = np.empty((len(sx), 9), np.float32)
         d[:, 0] = np.asarray(sx, np.float32) / w * 2.0 - 1.0
         d[:, 1] = 1.0 - np.asarray(sy, np.float32) / h * 2.0
         d[:, 2] = -np.asarray(posed, np.float32)[:, 2] * 0.45
         d[:, 3:6] = normals
+        d[:, 6:9] = posed
         if self._st_idx is not None:
             d = np.einsum("mk,mkd->md", self._st_w, d[self._st_idx])
             n = d[:, 3:6]
@@ -807,6 +914,7 @@ class AndroidGL:
             d[:, 0] += d[:, 3] * k / (w * 0.5)
             d[:, 1] += d[:, 4] * k / (h * 0.5)
             d[:, 2] -= d[:, 5] * self._disp * 0.45
+            d[:, 6:9] += d[:, 3:6] * self._disp[:, None]
         return d
 
     def render(self, posed, normals, sx, sy, w: int, h: int, *, accent, eye=None, glow=0.0, t=0.0,
@@ -825,7 +933,14 @@ class AndroidGL:
                 raise RuntimeError("OpenGL bağlamı etkinleştirilemedi")
             self._ensure_fbo(w, h)
             buf = self._buf
-            buf[:, 0:6] = self._dynamic(posed, normals, sx, sy, w, h)[self._idx]
+            dyn = self._dynamic(posed, normals, sx, sy, w, h)[self._idx]
+            buf[:, 0:6] = dyn[:, 0:6]
+            buf[:, 13:16] = dyn[:, 6:9]
+            self._vbo.bind()
+            self._vbo.write(0, buf.tobytes(), buf.nbytes)
+            self._vbo.release()
+            if self.look == "human":
+                self._shadow_pass()
 
             self._fbo.bind()
             gl.glViewport(0, 0, w, h)
@@ -838,9 +953,8 @@ class AndroidGL:
 
             prog.bind()
             self._vbo.bind()
-            self._vbo.write(0, buf.tobytes(), buf.nbytes)
             stride = _STRIDE * 4
-            for loc, (off, size) in enumerate(((0, 3), (3, 3), (6, 3), (9, 4))):
+            for loc, (off, size) in enumerate(((0, 3), (3, 3), (6, 3), (9, 4), (13, 3))):
                 prog.enableAttributeArray(loc)
                 prog.setAttributeBuffer(loc, GL_FLOAT, off * 4, size, stride)
             self._uniform("u_accent", accent)
@@ -861,8 +975,17 @@ class AndroidGL:
             if self.look == "human":
                 for name, value in self._human.items():
                     self._uniform(name, value)
+                for name, value in zip(("u_lu", "u_lv", "u_ll"), _LIGHT_BASIS):
+                    self._uniform(name, value)
+                gl.glActiveTexture(0x84C0)                         # GL_TEXTURE0
+                gl.glBindTexture(0x0DE1, self._sfbo.texture())     # GL_TEXTURE_2D
+                for pname in (0x2801, 0x2800):                     # min / mag: nearest
+                    gl.glTexParameteri(0x0DE1, pname, 0x2600)
+                for pname in (0x2802, 0x2803):                     # clamp to edge
+                    gl.glTexParameteri(0x0DE1, pname, 0x812F)
+                prog.setUniformValue("u_shadow", 0)
             gl.glDrawArrays(GL_TRIANGLES, 0, self._n_vert)
-            for loc in range(4):
+            for loc in range(5):
                 prog.disableAttributeArray(loc)
             self._vbo.release()
             prog.release()
