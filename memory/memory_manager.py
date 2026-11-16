@@ -7,6 +7,19 @@ from pathlib import Path
 import sys
 
 
+def _log(message):
+    """A console encoding or pythonw must not break a completed memory write."""
+    stream = sys.stdout
+    if stream is None:
+        return
+    try:
+        encoding = getattr(stream, "encoding", None) or "utf-8"
+        safe = str(message).encode(encoding, errors="backslashreplace").decode(encoding)
+        stream.write(safe + "\n")
+    except (OSError, UnicodeError, ValueError):
+        pass
+
+
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
@@ -66,7 +79,7 @@ def load_memory() -> dict:
                     if isinstance(legacy, dict):
                         _write_memory(legacy)
                 except (OSError, ValueError) as exc:
-                    print(f"[Memory] Eski hafıza taşınamadı: {exc}")
+                    _log(f"[Memory] Eski hafıza taşınamadı: {exc}")
         if not MEMORY_PATH.exists():
             return _empty_memory()
     with _lock:
@@ -80,7 +93,7 @@ def load_memory() -> dict:
                 return data
             return _empty_memory()
         except Exception as e:
-            print(f"[Memory] ⚠️ Load error: {e}")
+            _log(f"[Memory] ⚠️ Load error: {e}")
             return _empty_memory()
 
 def _all_entries(memory: dict) -> list[tuple]:
@@ -116,7 +129,7 @@ def _trim_to_limit(memory: dict) -> dict:
             break
         del memory[cat][key]
         dropped.append(f"{cat}/{key}")
-        print(f"[Memory] 🗑️  Trimmed {cat}/{key}")
+        _log(f"[Memory] 🗑️  Trimmed {cat}/{key}")
     if dropped and _trim_notifier:
         try:
             _trim_notifier(
@@ -184,7 +197,7 @@ def update_memory(memory_update: dict) -> dict:
         memory = load_memory()
         if _recursive_update(memory, memory_update):
             save_memory(memory)
-            print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
+            _log(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
         return memory
 
 def _entry_value(entry) -> str:
@@ -473,7 +486,7 @@ def save_session_summary(summary: str, language: str = "") -> None:
             sessions = []
         memory["sessions"] = [*sessions, entry][-_SESSION_MAX:]
         _write_memory(memory)
-    print(f"[Memory] 📝 Session saved ({entry['date']}): {summary[:60]}…")
+    _log(f"[Memory] 📝 Session saved ({entry['date']}): {summary[:60]}…")
 
 
 def pop_last_session() -> dict | None:
@@ -494,5 +507,5 @@ def pop_last_session() -> dict | None:
             _write_memory(memory)
             return entry
         except Exception as e:
-            print(f"[Memory] ⚠️ pop_last_session error: {e}")
+            _log(f"[Memory] ⚠️ pop_last_session error: {e}")
             return None

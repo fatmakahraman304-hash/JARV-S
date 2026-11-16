@@ -35,6 +35,19 @@ class ContinuityTests(unittest.TestCase):
             self.assertEqual(m.pop_last_session(), m.pop_last_session())
         self.assertTrue(old.exists())
 
+    def test_windows_console_encoding_does_not_break_save(self):
+        import io
+        output = io.BytesIO()
+        stream = io.TextIOWrapper(output, encoding='cp1252')
+        with patch.object(m, 'MEMORY_PATH', self.root/'memory.json'), patch.object(m.sys, 'stdout', stream):
+            m.save_session_summary('Türkçe konuşma ve emoji 🌍')
+            self.assertIn('Türkçe', m.pop_last_session()['summary'])
+        stream.flush()
+        self.assertTrue(output.getvalue())
+        with patch.object(m, 'MEMORY_PATH', self.root/'memory.json'), patch.object(m.sys, 'stdout', None):
+            m.save_session_summary('pythonw ile çalışıyor')
+            self.assertEqual(m.pop_last_session()['summary'], 'pythonw ile çalışıyor')
+
 
 class ApplicationTests(unittest.TestCase):
     def test_plugin_validates_without_starting(self):
