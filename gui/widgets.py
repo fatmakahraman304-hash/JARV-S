@@ -1,6 +1,6 @@
 """gui/widgets.py — Small building blocks of the HUD: metric bars, the activity log, file drop, camera preview.
 
-Split out of ui.py in Mark LVII; behaviour unchanged."""
+Split out of ui.py; behaviour unchanged."""
 from __future__ import annotations
 
 import json
@@ -559,7 +559,7 @@ class _CameraPreview(QWidget):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  Mark LVII building blocks
+#  JARVIS interface building blocks
 # ═════════════════════════════════════════════════════════════════════════════
 # All painted rather than styled: a stylesheet cannot cut a corner or light an
 # edge, and painting reads the palette at paint time, so every one of these

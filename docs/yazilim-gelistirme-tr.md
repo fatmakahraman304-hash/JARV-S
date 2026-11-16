@@ -1,8 +1,8 @@
 # JARVIS yazılım geliştirme
 
 Mevcut `dev_agent` yeni proje oluşturur, yerel projeleri geliştirir ve hata
-kontrolleri yapar. `github_develop` kişisel Mark-LVII deposunu ayrı
-`~/JarvisDevelopment/Mark-LVII` klasörüne alır.
+kontrolleri yapar. `github_develop` Murat uyarlamasının GitHub deposunu ayrı
+`~/JarvisDevelopment/Murat` klasörüne alır.
 
 Komut akışı: geliştirme alanını hazırla → incele → istenen değişikliği geliştir
 → test et → seçilen kaynak dosyalarını yayınla → kontroller bittiyse main'e al.

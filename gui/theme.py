@@ -1,6 +1,6 @@
 """gui/theme.py — Palette, typography and the configuration values every part of the HUD reads.
 
-Split out of ui.py in Mark LVII; behaviour unchanged."""
+Split out of ui.py; behaviour unchanged."""
 from __future__ import annotations
 
 import json
@@ -85,8 +85,8 @@ def _read_full_config() -> dict:
 
 # Single source of truth for the release name — the window title, the header
 # badge and the readme must never disagree again.
-APP_VERSION  = "MARK LVII"
-APP_PROTOCOL = APP_VERSION.split()[-1]
+APP_VERSION  = "MURAT"
+APP_PROTOCOL = APP_VERSION
 
 _DEFAULT_W, _DEFAULT_H = 1760, 960
 _MIN_W,     _MIN_H     = 820, 580

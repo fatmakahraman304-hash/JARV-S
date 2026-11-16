@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from gui.style import px_font
 from gui.theme import C
 
-USER_AGENT = b"JarvisMuratMap/1.0 (+https://github.com/fatmakahraman304-hash/Mark-LVII)"
+USER_AGENT = b"JarvisMuratMap/1.0 (+https://github.com/fatmakahraman304-hash/JARV-S)"
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 LOCATION_URL = "https://ipwho.is/"
 

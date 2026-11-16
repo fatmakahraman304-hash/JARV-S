@@ -41,7 +41,7 @@ def search(place):
         _last_request = time.monotonic()
         endpoint = os.environ.get('JARVIS_GEOCODER_URL', 'https://nominatim.openstreetmap.org/search')
         request = Request(endpoint + '?' + urlencode({'q':place, 'format':'jsonv2', 'limit':5, 'accept-language':'tr'}),
-            headers={'User-Agent':'JarvisPersonalMap/1.0 (https://github.com/fatmakahraman304-hash/Mark-LVII)'})
+            headers={'User-Agent':'JarvisPersonalMap/1.0 (https://github.com/fatmakahraman304-hash/JARV-S)'})
         with urlopen(request, timeout=12) as response:
             values = json.loads(response.read(200000))
         if not isinstance(values, list):

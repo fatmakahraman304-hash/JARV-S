@@ -1,6 +1,6 @@
 """gui/window.py — MainWindow — lays the HUD out and owns every signal the rest of the app talks to.
 
-Split out of ui.py in Mark LVII; behaviour unchanged."""
+Split out of ui.py; behaviour unchanged."""
 from __future__ import annotations
 
 import json
@@ -307,7 +307,7 @@ class MainWindow(QMainWindow):
         # STILL PICTURE needs a scene and a view and nothing else. A Qt
         # install without the multimedia plugins can still put a photo where
         # the avatar sits, and `generate_image` has been looking for somewhere
-        # to show its own output since Mark LV.
+        # to show its own output since an earlier release.
         self._video_scene = QGraphicsScene(self)
         self._image_item = QGraphicsPixmapItem()
         self._image_item.setTransformationMode(
