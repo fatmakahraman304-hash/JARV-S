@@ -1,28 +1,19 @@
-"""gui/reactor.py — the reactor core, drawn in three dimensions.
+"""gui/reactor.py — the reactor core: a burning particle star.
 
-The flat ring stack it replaces was a picture of a machine; this is a small
-model of one. A holographic sphere sits above a projector platform, two
-gyroscope rings turn through it on different axes, and an orbit ring carries
-three tracers round the equator. Everything is projected from real 3-D points
-through a camera tilted down at the scene, so the rings foreshorten into
-ellipses, pass behind the sphere and come out in front of it.
+A white-hot heart sits inside a shell of glowing particles. A tangle of orbit
+lines winds through the shell on random axes, a dusty ring of sparks circles
+it face-on, and long light rays shoot out from the centre. Everything is
+projected from real 3-D points through a perspective camera, so particles and
+orbits on the far side are dimmer and smaller than the ones in front.
 
-Depth is what sells it, and depth is cheap: every line segment knows how far
-it is from the camera. Segments behind the sphere are drawn before it and
-dimmer; segments in front are drawn after it and brighter. That ordering and
-that falloff are the whole trick — no z-buffer, no GPU, no new dependency.
+It is software QPainter only (no GPU, no new dependency). Light is added with
+the Plus composition mode, so overlapping particles and rays brighten each
+other the way real glow does. Everything that moves means something: the spin
+rate is the assistant's state, and the heart, the rays and the sparks swell
+with the real audio level.
 
-What does not move is not redrawn. The platform's rings and the globe's lines
-of latitude turn about the vertical axis, and a circle turned about its own
-axis is the same circle — so they are drawn once into two cached layers and
-blitted every frame after that. Only the gyroscope rings, the meridians and
-the things that follow the voice are drawn per frame. Measured on the first
-version, which redrew everything, this halves the cost of a frame.
-
-Like the face in core/avatar.py it is software QPainter, it takes its colours
-as arguments so the accent picker retints it, and everything that moves means
-something: the spin rate is the assistant's state, the sphere's inner light
-and the platform's spectrum ticks are the real audio level.
+The palette is a fixed fire-orange so the core always looks like a star; when
+the assistant is muted it falls back to the muted colour handed in by the HUD.
 """
 from __future__ import annotations
 
@@ -30,18 +21,24 @@ import math
 
 import numpy as np
 from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
-from PyQt6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap,
+from PyQt6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPainter, QPen, QPolygonF,
                          QRadialGradient)
 
 _DISPLAY = ["Bahnschrift", "Segoe UI", "SF Pro Display", "Helvetica Neue",
             "Noto Sans", "DejaVu Sans"]
 
-_PITCH = math.radians(17.0)     # the camera looks down at the platform
-_CAM_D = 4.2                    # perspective distance, in core radii
-_N_RING = 72                    # points on a ring
-_N_GLOBE = 44                   # points on a globe line
-_FLOOR_Y = -1.02                # the platform, below the sphere's centre
-_SPHERE = 0.46                  # sphere radius, in core radii
+_CAM_D = 4.2            # perspective distance, in core radii
+_N_ORBIT = 96           # points on an orbit line
+_N_SHELL = 700          # particles in the spherical shell
+_N_DUST = 700           # particles in the outer ring
+_N_ORBITS = 16          # tangled orbit lines
+_N_RAYS = 24            # light rays
+
+# fire palette
+_HOT = QColor("#fff6d8")
+_GOLD = QColor("#ffb43a")
+_ORANGE = QColor("#ff8414")
+_EMBER = QColor("#ff5200")
 
 
 def _rx(a):
@@ -65,262 +62,188 @@ def _with_alpha(col: QColor, a: float) -> QColor:
     return c
 
 
+def _unit_vectors(rng, n):
+    v = rng.normal(size=(3, n))
+    return v / np.linalg.norm(v, axis=0)
+
+
 class Reactor3D:
     """State + renderer. `step()` advances it, `paint()` draws a frame."""
 
-    # Vertical extent in core radii: the highest mote above the centre, and the
-    # bottom of the name below it. Measured through the projection, not guessed —
-    # the platform's front edge is nearer the camera, so perspective enlarges it.
-    TOP = 1.05
-    BOTTOM = 2.05
+    # Vertical extent in core radii: the tip of the longest ray above the
+    # centre, and the bottom of the name below it.
+    TOP = 1.45
+    BOTTOM = 1.80
 
     def __init__(self):
-        t = np.linspace(0.0, 2 * math.pi, _N_RING, endpoint=False)
-        self._ring = np.vstack([np.cos(t), np.zeros_like(t), np.sin(t)])   # unit circle, XZ plane
-        g = np.linspace(0.0, 2 * math.pi, _N_GLOBE, endpoint=False)
-        self._glat = []
-        for lat in (-58, -30, 0, 30, 58):
-            la = math.radians(lat)
-            self._glat.append(np.vstack([np.cos(g) * math.cos(la),
-                                         np.full_like(g, math.sin(la)),
-                                         np.sin(g) * math.cos(la)]))
-        self._glon = []
-        for k in range(6):
-            lo = k * math.pi / 6
-            self._glon.append(np.vstack([np.cos(g) * math.cos(lo),
-                                         np.sin(g),
-                                         np.cos(g) * math.sin(lo)]))
         rng = np.random.default_rng(57)
-        self._motes = [(float(rng.uniform(1.18, 1.55)), float(rng.uniform(0, 2 * math.pi)),
-                        float(rng.uniform(-0.55, 0.55)), float(rng.uniform(0.25, 0.9)))
-                       for _ in range(22)]
+
+        # the shell: mostly near the surface, a few deeper inside
+        u = rng.uniform(0.0, 1.0, _N_SHELL)
+        rad = 0.58 + 0.40 * np.sqrt(u)
+        self._shell = _unit_vectors(rng, _N_SHELL) * rad
+        self._shell_ph = rng.uniform(0, 2 * math.pi, _N_SHELL)
+        self._shell_sp = rng.uniform(1.5, 5.0, _N_SHELL)
+
+        # the dust ring: a thin, slightly puffy disc around the shell
+        a = rng.uniform(0, 2 * math.pi, _N_DUST)
+        rr = 0.96 + 0.24 * rng.beta(2.0, 3.0, _N_DUST)
+        self._dust = np.vstack([np.cos(a) * rr, np.sin(a) * rr,
+                                rng.normal(0.0, 0.035, _N_DUST)])
+        self._dust_ph = rng.uniform(0, 2 * math.pi, _N_DUST)
+
+        # tangled orbit lines on random axes
+        t = np.linspace(0.0, 2 * math.pi, _N_ORBIT, endpoint=False)
+        circle = np.vstack([np.cos(t), np.sin(t), np.zeros_like(t)])
+        self._orbits = []
+        for _ in range(_N_ORBITS):
+            R = (_rz(rng.uniform(0, 2 * math.pi)) @ _rx(rng.uniform(0, math.pi))
+                 @ _ry(rng.uniform(0, 2 * math.pi)))
+            sx, sy = rng.uniform(0.62, 0.98), rng.uniform(0.62, 0.98)
+            pts = circle.copy()
+            pts[0] *= sx
+            pts[1] *= sy
+            self._orbits.append((R @ pts, float(rng.uniform(-0.5, 0.5)),
+                                 float(rng.uniform(0.25, 0.65))))
+
+        # rays: angle on screen, base length, width, flicker phase/speed
+        self._rays = [(float(rng.uniform(0, 2 * math.pi)), float(rng.uniform(0.85, 1.45)),
+                       float(rng.uniform(1.8, 3.4)), float(rng.uniform(0, 2 * math.pi)),
+                       float(rng.uniform(0.8, 2.6)))
+                      for _ in range(_N_RAYS)]
+
         self.spin = 0.0
-        self._view = _rx(_PITCH)
-        self._cache_key = None
-        self._under: QPixmap | None = None      # platform + back half of the latitudes
-        self._lat_front: QPixmap | None = None  # front half of the latitudes
-        self._box = QRectF()
+        self.t = 0.0
 
     # ── motion ────────────────────────────────────────────────────────────────
     def step(self, dt: float, speaking: bool, thinking: bool, muted: bool) -> None:
         dt = min(0.10, max(0.0, dt))
-        rate = 0.12 if muted else 0.38 + (1.5 if thinking else 0.0) + (0.8 if speaking else 0.0)
+        rate = 0.10 if muted else 0.32 + (1.3 if thinking else 0.0) + (0.6 if speaking else 0.0)
         self.spin += dt * rate
+        self.t += dt
 
     # ── projection ────────────────────────────────────────────────────────────
-    def _project(self, pts, cx, cy, r):
-        v = self._view @ pts
-        s = _CAM_D / (_CAM_D - v[2])
-        return cx + v[0] * s * r, cy - v[1] * s * r, v[2], s
+    @staticmethod
+    def _project(pts, cx, cy, r):
+        s = _CAM_D / (_CAM_D - pts[2])
+        return cx + pts[0] * s * r, cy - pts[1] * s * r, pts[2], s
 
     @staticmethod
-    def _cued(p, X, Y, Z, col, a_front, a_back, width, part):
-        """Draw one side of a closed polyline — the half behind the depth plane
-        or the half in front of it — in three brightness buckets."""
+    def _points(p, X, Y, alpha, size, col, buckets=4):
+        """Draw a cloud of dots, grouped into brightness buckets so each group
+        is one drawPoints call."""
+        if len(X) == 0:
+            return
+        lv = np.clip((alpha * buckets).astype(np.int16), 0, buckets - 1)
+        for k in range(buckets):
+            idx = np.flatnonzero(lv == k)
+            if idx.size == 0:
+                continue
+            poly = QPolygonF([QPointF(x, y) for x, y in zip(X[idx].tolist(), Y[idx].tolist())])
+            pen = QPen(_with_alpha(col, (k + 1) / buckets), size * (0.75 + 0.25 * k))
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawPoints(poly)
+
+    @staticmethod
+    def _polyline(p, X, Y, Z, col, a, width):
+        """A closed orbit, dimmer where it runs behind the centre."""
         zm = (Z + np.roll(Z, -1)) * 0.5
-        if part == "back":
-            mask = zm < 0
-            if not mask.any():
-                return
-            alpha = a_back * (0.35 + 0.65 * np.maximum(1.0 + zm, 0.0))
-        else:
-            mask = zm >= 0
-            if not mask.any():
-                return
-            alpha = a_front * (0.55 + 0.45 * np.minimum(zm, 1.0))
-        idx = np.flatnonzero(mask)
-        av = alpha[idx]
-        top = float(av.max())
-        levels = np.minimum((av * (2.999 / max(1e-6, top))).astype(np.int8), 2).tolist()
-        xs, ys = X[idx].tolist(), Y[idx].tolist()
-        xe, ye = np.roll(X, -1)[idx].tolist(), np.roll(Y, -1)[idx].tolist()
-        buckets = ([], [], [])
-        for i, lv in enumerate(levels):
-            buckets[lv].append(QLineF(xs[i], ys[i], xe[i], ye[i]))
-        for k, lines in enumerate(buckets):
+        xs, ys = X.tolist(), Y.tolist()
+        xe, ye = np.roll(X, -1).tolist(), np.roll(Y, -1).tolist()
+        back, front = [], []
+        for i, z in enumerate(zm.tolist()):
+            (front if z >= 0 else back).append(QLineF(xs[i], ys[i], xe[i], ye[i]))
+        for lines, k in ((back, 0.35), (front, 1.0)):
             if lines:
-                pen = QPen(_with_alpha(col, top * (0.45 + 0.275 * k)), width)
+                pen = QPen(_with_alpha(col, a * k), width)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 p.setPen(pen)
                 p.drawLines(lines)
 
-    # ── the parts that never change shape, drawn once ─────────────────────────
-    def _layer(self, dpr: float) -> tuple[QPixmap, QPainter]:
-        pm = QPixmap(max(1, int(self._box.width() * dpr)), max(1, int(self._box.height() * dpr)))
-        pm.setDevicePixelRatio(dpr)
-        pm.fill(Qt.GlobalColor.transparent)
-        lp = QPainter(pm)
-        lp.setRenderHint(QPainter.RenderHint.Antialiasing)
-        lp.translate(-self._box.left(), -self._box.top())
-        return pm, lp
-
-    def _build_layers(self, cx, cy, r, main, dpr) -> None:
-        self._box = QRectF(cx - r * 2.1, cy - r * 1.3, r * 4.2, r * 3.4)
-
-        pm, p = self._layer(dpr)
-        fx, fy, _, _ = self._project(np.array([[0.0], [_FLOOR_Y], [0.0]]), cx, cy, r)
-        fx, fy = float(fx[0]), float(fy[0])
-        # the lit disc of the platform
-        p.save()
-        p.translate(fx, fy)
-        p.scale(1.0, math.sin(_PITCH) * 1.25)
-        glow_r = r * 1.3
-        g = QRadialGradient(0, 0, glow_r)
-        g.setColorAt(0.0, _with_alpha(main, 0.24))
-        g.setColorAt(0.45, _with_alpha(main, 0.08))
-        g.setColorAt(1.0, _with_alpha(main, 0.0))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(g))
-        p.drawEllipse(QPointF(0, 0), glow_r, glow_r)
-        p.restore()
-        # its rings
-        for rr, a, w in ((1.20, 0.55, 1.4), (1.02, 0.32, 1.0), (0.74, 0.40, 1.2), (0.46, 0.22, 1.0)):
-            pts = self._ring * rr
-            pts[1] += _FLOOR_Y
-            X, Y, Z, _ = self._project(pts, cx, cy, r)
-            self._cued(p, X, Y, Z, main, a, a * 0.75, w, "back")
-            self._cued(p, X, Y, Z, main, a, a * 0.75, w, "front")
-        # the far half of the globe's latitudes
-        lats = [self._project(pts * _SPHERE, cx, cy, r) for pts in self._glat]
-        for X, Y, Z, _ in lats:
-            self._cued(p, X, Y, Z, main, 0.5, 0.16, 1.0, "back")
-        p.end()
-        self._under = pm
-
-        pm, p = self._layer(dpr)
-        for X, Y, Z, _ in lats:
-            self._cued(p, X, Y, Z, main, 0.46, 0.16, 1.0, "front")
-        p.end()
-        self._lat_front = pm
-
     # ── frame ─────────────────────────────────────────────────────────────────
     def paint(self, p: QPainter, cx: float, cy: float, r: float, main: QColor, acc: QColor,
-              white: QColor, amp: float, live: bool, name: str = "") -> None:
-        spin = self.spin
+              white: QColor, amp: float, live: bool, name: str = "",
+              muted: bool = False) -> None:
+        spin, t = self.spin, self.t
         amp = max(0.0, min(1.0, amp))
-        dev = p.device()
-        dpr = float(dev.devicePixelRatioF()) if dev is not None else 1.0
-        key = (round(cx), round(cy), round(r, 1), main.rgba(), dpr)
-        if key != self._cache_key or self._under is None:
-            self._build_layers(cx, cy, r, main, dpr)
-            self._cache_key = key
+        if muted:
+            hot, gold, orange, ember = QColor(white), QColor(main), QColor(main), QColor(main)
+            dim = 0.55
+        else:
+            hot, gold, orange, ember = _HOT, _GOLD, _ORANGE, _EMBER
+            dim = 1.0
+        energy = 0.75 + 0.55 * amp + (0.1 if live else 0.0)
 
         p.save()
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.drawPixmap(self._box.topLeft(), self._under)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
 
-        # spectrum ticks on the platform rim: the voice, standing up off the floor
-        n_t = 64
-        ang = np.linspace(0, 2 * math.pi, n_t, endpoint=False) + spin * 0.25
-        wob = 0.5 + 0.5 * np.sin(ang * 5.0 + spin * 6.0) * np.cos(ang * 3.0 - spin * 2.3)
-        h = 0.03 + (0.20 * amp * wob if live else 0.0)
-        base = np.vstack([np.cos(ang) * 1.20, np.full(n_t, _FLOOR_Y), np.sin(ang) * 1.20])
-        tip = base.copy()
-        tip[1] += h
-        bX, bY, bZ, _ = self._project(base, cx, cy, r)
-        tX, tY, _, _ = self._project(tip, cx, cy, r)
-        bXl, bYl, tXl, tYl = bX.tolist(), bY.tolist(), tX.tolist(), tY.tolist()
-        front = (bZ >= 0).tolist()
-        col_t = acc if live else main
-        for want, a in ((False, 0.25), (True, 0.65)):
-            lines = [QLineF(bXl[i], bYl[i], tXl[i], tYl[i]) for i in range(n_t) if front[i] == want]
-            if lines:
-                p.setPen(QPen(_with_alpha(col_t, a * (0.5 + amp)), 1.4))
-                p.drawLines(lines)
-
-        # light beam from the platform up into the core: bright on its axis,
-        # fading to nothing at its sides and towards the top
-        fx, fy, _, _ = self._project(np.array([[0.0], [_FLOOR_Y], [0.0]]), cx, cy, r)
-        fx, fy = float(fx[0]), float(fy[0])
-        beam_w = r * 0.30
-        top = cy - r * 0.05
-        hg = QLinearGradient(fx - beam_w, 0, fx + beam_w, 0)
-        hg.setColorAt(0.0, _with_alpha(main, 0.0))
-        hg.setColorAt(0.5, _with_alpha(main, 0.16 + 0.22 * amp))
-        hg.setColorAt(1.0, _with_alpha(main, 0.0))
-        p.save()
+        # 1. the atmosphere: a wide soft body of light behind everything
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(hg))
-        steps, hgt = 8, fy - top
-        for k in range(steps):
-            p.setOpacity(((k + 1) / steps) ** 1.6)
-            p.drawRect(QRectF(fx - beam_w, top + hgt * k / steps, beam_w * 2, hgt / steps + 0.5))
-        p.restore()
+        halo = QRadialGradient(cx, cy, r * 1.35)
+        halo.setColorAt(0.0, _with_alpha(orange, 0.30 * dim * energy))
+        halo.setColorAt(0.40, _with_alpha(ember, 0.12 * dim * energy))
+        halo.setColorAt(1.0, _with_alpha(ember, 0.0))
+        p.setBrush(QBrush(halo))
+        p.drawEllipse(QPointF(cx, cy), r * 1.35, r * 1.35)
 
-        # the rings: two gyroscope rings and the equatorial orbit
-        rings = (
-            (self._project(_ry(spin * 0.9) @ _rz(math.radians(64)) @ (self._ring * 0.90), cx, cy, r),
-             acc, 0.80, 1.7),
-            (self._project(_ry(-spin * 1.25) @ _rx(math.radians(58)) @ (self._ring * 0.78), cx, cy, r),
-             main, 0.62, 1.3),
-            (self._project(self._ring * 1.08, cx, cy, r), main, 0.45, 1.1),
-        )
-        # meridians turn with the globe; the latitudes are in the cached layers
-        spin_g = _ry(spin * 0.6)
-        meridians = [self._project(spin_g @ (pts * _SPHERE), cx, cy, r) for pts in self._glon]
+        # 2. rays shooting out of the heart
+        rot = spin * 0.15
+        for ang, ln, w, ph, sp in self._rays:
+            flick = 0.65 + 0.35 * math.sin(t * sp + ph)
+            L = r * ln * (0.80 + 0.45 * amp) * (0.85 + 0.25 * flick)
+            a = ang + rot
+            ca, sa = math.cos(a), math.sin(a)
+            x0, y0 = cx + ca * r * 0.08, cy + sa * r * 0.08
+            x1, y1 = cx + ca * L, cy + sa * L
+            g = QLinearGradient(x0, y0, x1, y1)
+            g.setColorAt(0.0, _with_alpha(gold, 0.80 * dim * flick))
+            g.setColorAt(0.25, _with_alpha(orange, 0.75 * dim * flick))
+            g.setColorAt(0.75, _with_alpha(ember, 0.40 * dim * flick))
+            g.setColorAt(1.0, _with_alpha(ember, 0.0))
+            pen = QPen(QBrush(g), w * (0.9 + 0.4 * amp))
+            pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+            p.setPen(pen)
+            p.drawLine(QLineF(x0, y0, x1, y1))
 
-        for (X, Y, Z, _s), col, a, w in rings:
-            self._cued(p, X, Y, Z, col, a, a * 0.55, w, "back")
-        for X, Y, Z, _s in meridians:
-            self._cued(p, X, Y, Z, main, 0.5, 0.16, 1.0, "back")
+        # 3. tangled orbit lines winding through the shell
+        R_all = _ry(spin * 0.55) @ _rx(spin * 0.21)
+        for pts, own, a in self._orbits:
+            v = R_all @ _rz(spin * own) @ pts
+            X, Y, Z, _ = self._project(v, cx, cy, r)
+            self._polyline(p, X, Y, Z, orange, a * dim * energy, 1.1)
 
-        # the sphere — lit from the upper left, translucent like a hologram
-        sr = r * _SPHERE
-        shade = QRadialGradient(QPointF(cx, cy), sr, QPointF(cx - sr * 0.38, cy - sr * 0.42))
-        shade.setColorAt(0.0, _with_alpha(white, 0.55 + 0.3 * amp))
-        shade.setColorAt(0.18, _with_alpha(main, 0.55 + 0.25 * amp))
-        shade.setColorAt(0.70, _with_alpha(main, 0.16))
-        shade.setColorAt(1.0, _with_alpha(main, 0.05))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(shade))
-        p.drawEllipse(QPointF(cx, cy), sr, sr)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(_with_alpha(main, 0.65), 1.3))
-        p.drawEllipse(QPointF(cx, cy), sr, sr)
-        # the heart: brightens and swells with the voice
-        hr = sr * (0.20 + 0.16 * amp) * 2.4
+        # 4. the particle shell, twinkling, dimmer at the back
+        v = R_all @ self._shell
+        X, Y, Z, s = self._project(v, cx, cy, r)
+        tw = 0.55 + 0.45 * np.sin(self._shell_ph + t * self._shell_sp)
+        alpha = np.clip((0.25 + 0.75 * (Z + 1.0) * 0.5) * tw * dim * min(1.0, energy), 0, 1)
+        self._points(p, X, Y, alpha, max(1.4, r * 0.012), orange)
+
+        # 5. the dust ring, face-on and gently tilted, turning about its axis
+        Rd = _rx(0.28 + 0.06 * math.sin(spin * 0.3)) @ _ry(0.18) @ _rz(spin * 0.35)
+        v = Rd @ self._dust
+        X, Y, Z, _ = self._project(v, cx, cy, r)
+        tw = 0.5 + 0.5 * np.sin(self._dust_ph + t * 2.2)
+        alpha = np.clip((0.40 + 0.6 * tw) * dim * min(1.0, energy), 0, 1)
+        self._points(p, X, Y, alpha, max(1.2, r * 0.010), gold)
+
+        # 6. the heart: white-hot, swelling with the voice
+        hr = r * (0.30 + 0.18 * amp)
         heart = QRadialGradient(cx, cy, hr)
-        heart.setColorAt(0.0, _with_alpha(white, 0.95))
-        heart.setColorAt(0.25, _with_alpha(acc if live else main, 0.75))
-        heart.setColorAt(1.0, _with_alpha(main, 0.0))
+        heart.setColorAt(0.0, _with_alpha(hot, 1.0 * dim))
+        heart.setColorAt(0.22, _with_alpha(hot, 0.95 * dim))
+        heart.setColorAt(0.45, _with_alpha(gold, 0.70 * dim))
+        heart.setColorAt(1.0, _with_alpha(orange, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(heart))
         p.drawEllipse(QPointF(cx, cy), hr, hr)
 
-        p.drawPixmap(self._box.topLeft(), self._lat_front)
-        for X, Y, Z, _s in meridians:
-            self._cued(p, X, Y, Z, main, 0.46, 0.16, 1.0, "front")
-        for (X, Y, Z, _s), col, a, w in rings:
-            self._cued(p, X, Y, Z, col, a, a * 0.55, w, "front")
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
 
-        # tracers riding the orbit ring
-        (X, Y, Z, _s), _c, _a, _w = rings[2]
-        p.setPen(Qt.PenStyle.NoPen)
-        for k in range(3):
-            i = int((k * _N_RING / 3 + spin * 7.0) % _N_RING)
-            depth = float(Z[i])
-            rad = (2.2 + 1.6 * max(0.0, depth)) * 3
-            x, y = float(X[i]), float(Y[i])
-            tg = QRadialGradient(x, y, rad)
-            tg.setColorAt(0.0, _with_alpha(white, 0.9 if depth >= 0 else 0.35))
-            tg.setColorAt(0.35, _with_alpha(acc, 0.6 if depth >= 0 else 0.2))
-            tg.setColorAt(1.0, _with_alpha(acc, 0.0))
-            p.setBrush(QBrush(tg))
-            p.drawEllipse(QPointF(x, y), rad, rad)
-
-        # drifting motes around the core
-        a = np.array([ph + spin * sp for _r0, ph, _y, sp in self._motes])
-        r0 = np.array([m[0] for m in self._motes])
-        pts = np.vstack([np.cos(a) * r0, np.array([m[2] for m in self._motes]), np.sin(a) * r0])
-        MX, MY, MZ, _ = self._project(pts, cx, cy, r)
-        for x, y, d in zip(MX.tolist(), MY.tolist(), MZ.tolist()):
-            d = max(0.0, d)
-            p.setBrush(QBrush(_with_alpha(main, 0.25 + 0.35 * d)))
-            p.drawEllipse(QPointF(x, y), 1.1 + 0.8 * d, 1.1 + 0.8 * d)
-
-        # the name, standing on the front edge of the platform
+        # the name, under the star
         if name:
-            nx, ny, _, _ = self._project(np.array([[0.0], [_FLOOR_Y], [1.2]]), cx, cy, r)
             f = QFont()
             f.setFamilies(_DISPLAY)
             px = max(10, int(r * 0.11))
@@ -329,6 +252,6 @@ class Reactor3D:
             f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, max(2.0, round(r * 0.035)))
             p.setFont(f)
             p.setPen(QPen(_with_alpha(white, 0.78 + 0.2 * min(1.0, amp * 2))))
-            p.drawText(QRectF(cx - r * 1.6, float(ny[0]) + r * 0.10, r * 3.2, px * 1.8),
+            p.drawText(QRectF(cx - r * 1.6, cy + r * 1.42, r * 3.2, px * 1.8),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, name)
         p.restore()
