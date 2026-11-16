@@ -411,12 +411,12 @@ void main() {
             float f1 = vnoise(vec3(b * 900.0, a * 110.0, 0.5));
             float f2 = vnoise(vec3(b * 260.0, a * 40.0, 2.5));
             float cl = vnoise(vec3(b * 60.0, a * 6.0, 4.5));
-            strand = mix(0.5, f1, lod(900.0)) * 0.30 + f2 * 0.35 + cl * 0.35;
+            strand = mix(0.5, f1, lod(900.0)) * 0.15 + f2 * 0.40 + cl * 0.45;
             float edgeHairs = smoothstep(0.15, 0.85, hm * 1.4 - 0.2 + 0.7 * (f1 - 0.5));
             hairC = mix(edgeHairs, 1.0, smoothstep(0.6, 1.0, hm)) * hm;
             vec3 hcol = mix(vec3(0.022, 0.016, 0.012), vec3(0.060, 0.042, 0.030), strand);
             alb = mix(alb, hcol, hairC);
-            H += hairC * (f1 * 0.0012 + f2 * 0.0030 + cl * 0.006);
+            H += hairC * (f1 * 0.0006 + f2 * 0.0024 + cl * 0.006);
         }
     }
 

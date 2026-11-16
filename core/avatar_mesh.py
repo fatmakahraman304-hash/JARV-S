@@ -185,7 +185,7 @@ def _add_cranium(verts: np.ndarray, faces: np.ndarray):
 #   height y:            crown ......................................... nape
 _SKULL_Y = np.array([1.00, 0.95, 0.80, 0.60, 0.40, 0.20, 0.00, -0.20, -0.40, -0.60])
 _SKULL_FZ = np.array([1.90, 1.90, 1.75, 1.60, 1.62, 1.57, 1.42, 1.30, 1.20, 1.00])  # depth behind _SKULL_ZC
-_SKULL_FX = np.array([1.40, 1.40, 1.36, 1.12, 1.05, 1.00, 1.00, 1.00, 1.00, 1.00])  # width
+_SKULL_FX = np.array([1.26, 1.26, 1.24, 1.10, 1.05, 1.00, 1.00, 1.00, 1.00, 1.00])  # width
 _SKULL_ZC = -0.15
 
 
