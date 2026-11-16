@@ -874,7 +874,6 @@ Murat/
 │   ├── _template.py          # Copy this to write a new skill — one file, drop in, done
 │   │                         #   A file starting with _ is a shared driver, not a skill:
 │   │                         #   the loader skips it, and the skills beside it import it.
-│   ├── _whatsapp_core.py     # Shared WhatsApp driver — desktop app or Web, all three OSes
 │   ├── whatsapp_call.py      # Place and end WhatsApp voice / video calls
 │   ├── whatsapp_guard.py     # Answer, decline or auto-reply to INCOMING WhatsApp calls
 │   ├── telegram_remote.py    # Drive JARVIS from anywhere over Telegram
