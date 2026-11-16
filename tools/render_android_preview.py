@@ -63,10 +63,43 @@ def main() -> int:
         dt = (time.perf_counter() - t0) / n
         p.end()
         print(f"frame {label}: {dt * 1000:.1f} ms")
+    if "--log-preview" in sys.argv:
+        _log_images(out, size)
     gl = av._gl
     print("renderer:", getattr(gl, "renderer_name", "?"), "| first frames ms:",
           [round(x * 1000) for x in times])
     return 0
+
+
+def _log_images(out: Path, size: int) -> None:
+    """Print a contact sheet and a full-resolution face crop into the log as
+    base64 JPEG, for when CI artifacts cannot be downloaded."""
+    import base64
+    from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, QRect, Qt
+    from PyQt6.QtGui import QImage, QPainter
+
+    files = sorted(out.glob("*.png"))
+    tiles = [QImage(str(f)) for f in files]
+    cw, ch = int(size * 0.62), int(size * 0.80)
+    x0, y0 = (size - cw) // 2, int(size * 0.07)
+    tw, th = 420, int(420 * ch / cw)
+    sheet = QImage(tw * len(tiles), th, QImage.Format.Format_RGB32)
+    p = QPainter(sheet)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    for i, im in enumerate(tiles):
+        p.drawImage(QRect(i * tw, 0, tw, th), im, QRect(x0, y0, cw, ch))
+    p.end()
+    crop = tiles[0].copy(QRect(int(size * 0.30), int(size * 0.18), int(size * 0.40), int(size * 0.44)))
+    for label, im, q in (("SHEET", sheet, 82), ("CROP", crop, 88)):
+        ba = QByteArray()
+        buf = QBuffer(ba)
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        im.save(buf, "JPG", q)
+        data = base64.b64encode(bytes(ba)).decode()
+        print(f"=====BEGIN {label}=====")
+        for i in range(0, len(data), 3000):
+            print(data[i:i + 3000])
+        print(f"=====END {label}=====")
 
 
 if __name__ == "__main__":
