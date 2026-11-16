@@ -1,0 +1,46 @@
+name: Android head render check
+on:
+  push:
+    branches: [feature/android-face]
+  pull_request:
+    paths: ["gui/android_gl.py", "core/avatar.py", "core/android_render.py",
+            "tools/render_android_preview.py", ".github/workflows/android-avatar.yml"]
+permissions:
+  contents: read
+jobs:
+  render:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Linux display and Mesa OpenGL
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libopengl0 libglx-mesa0 \
+            libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 libxcb-xkb1 libfontconfig1
+      - name: Install
+        run: python -m pip install "PyQt6>=6.6,<7" numpy
+      - name: Render (Linux, Mesa)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: xcb
+        run: xvfb-run -s "-screen 0 1920x1080x24" python tools/render_android_preview.py out --size 2160
+      - name: Render (Windows, Qt software OpenGL)
+        if: runner.os == 'Windows'
+        env:
+          QT_OPENGL: software
+        run: python tools/render_android_preview.py out --size 2160
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-head-${{ matrix.os }}
+          path: out/
