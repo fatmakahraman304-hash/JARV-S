@@ -457,7 +457,7 @@ void main() {
             vec3 nr = normalize(p - vec3(0.0, 0.10, -0.32));
             float px = p.x + 0.17;                                // side parting
             float ps = clamp(px / 0.05, -1.0, 1.0);
-            vec3 topDir = normalize(vec3(ps * mix(0.45, 0.9, step(px, 0.0)) * abs(ps) + 0.001, 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));
+            vec3 topDir = normalize(vec3(0.38 + 0.0 * ps, 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));   // swept back and to one side
             vec3 d0 = mix(vec3(0.0, -0.75, -0.66), topDir, smoothstep(0.30, 0.72, p.y));
             float sideFade = 1.0 - smoothstep(0.05, 0.42, p.y);           // short faded sides
             float part = exp(-pow(px / 0.0030, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
