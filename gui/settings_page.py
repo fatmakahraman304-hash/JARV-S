@@ -208,7 +208,8 @@ class SettingsPage(QDialog):
         # Composio: 1000+ apps (Gmail, Google Takvim/Drive/Docs/Sheets, Notion…)
         apps_row = card(extras, 'Uygulamalar (Composio)',
                         'Gmail, Google Takvim, Drive, Docs, Sheets, Notion ve 1000+ uygulama. '
-                        'composio.dev’de ücretsiz hesap aç, API anahtarını buraya yapıştır; '
+                        'composio.dev’de ücretsiz hesap aç, Settings → Sessions & API Key’deki '
+                        'ck_ anahtarını (ya da geliştirici panelindeki ak_ anahtarını) buraya yapıştır; '
                         'sonra Kontrol Merkezi’nde gri bir uygulamaya tıklayarak bağla.')
         from core import composio as _composio
         key_edit = QLineEdit()

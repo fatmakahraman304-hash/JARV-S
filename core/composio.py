@@ -36,8 +36,8 @@ _session_key: tuple | None = None
 _connected_cache: tuple[float, set] = (0.0, set())
 _header: str = "x-api-key"     # becomes x-org-api-key if the key turns out to be an org token
 
-KEY_HELP = ("composio.dev → Settings → Project Settings → API Keys bölümündeki proje "
-            "anahtarını (ak_ ile başlar) kopyala")
+KEY_HELP = ("composio.dev → Settings → Sessions & API Key bölümündeki ck_ anahtarını ya da "
+            "geliştirici panelinde Project Settings → API Keys'teki ak_ anahtarını kopyala")
 
 
 class ComposioError(RuntimeError):
@@ -69,8 +69,10 @@ def save_api_key(key: str) -> None:
     if key.lower().startswith("bearer "):
         key = key[7:].strip()
     save_plugin_config(_NS, {"api_key": key})
+    global _mcp
     with _lock:
         _session_id, _session_key, _header = None, None, "x-api-key"
+        _mcp = None
 
 
 def check() -> tuple[bool, str]:
@@ -78,6 +80,12 @@ def check() -> tuple[bool, str]:
     if not is_configured():
         return False, "Anahtar girilmemiş"
     try:
+        if is_consumer():
+            names = _c(lambda cc, cl: cl.tools())
+            if "COMPOSIO_SEARCH_TOOLS" not in names:
+                return False, "Composio Connect açıldı ama uygulama araçları listelenmedi"
+            refresh_connections()
+            return True, "Bağlantı başarılı (Composio Connect)"
         _session(fresh=True)
         refresh_connections()
         return True, "Bağlantı başarılı"
@@ -197,9 +205,9 @@ def _schema_summary(schema: dict, limit: int = 12) -> str:
     return "; ".join(parts)
 
 
-def search(use_case: str) -> dict:
-    """Tools that fit a task, with their inputs and the app's connection status."""
-    data = _in_session("POST", "/search", body={"queries": [{"use_case": str(use_case)[:500]}]})
+def _parse_search(data) -> dict:
+    if not isinstance(data, dict):
+        raise ComposioError(f"Composio araması beklenmeyen yanıt verdi: {str(data)[:160]}")
     if data.get("success") is False and data.get("error"):
         raise ComposioError(str(data["error"])[:200])
     res = (data.get("results") or [{}])[0] or {}
@@ -224,8 +232,12 @@ def search(use_case: str) -> dict:
             "pitfalls": [str(p)[:160] for p in (res.get("known_pitfalls") or [])[:3]]}
 
 
-def link(toolkit: str) -> str:
-    """A login page URL that connects the user's account for one app."""
+def _p_search(use_case: str) -> dict:
+    return _parse_search(_in_session("POST", "/search",
+                                     body={"queries": [{"use_case": str(use_case)[:500]}]}))
+
+
+def _p_link(toolkit: str) -> str:
     data = _in_session("POST", "/link", body={"toolkit": str(toolkit).strip().lower()})
     url = str(data.get("redirect_url") or "")
     if not url:
@@ -233,8 +245,7 @@ def link(toolkit: str) -> str:
     return url
 
 
-def execute(tool_slug: str, arguments: dict | None = None) -> dict:
-    """Run one tool. Returns {'ok': bool, 'data': ..., 'error': str}."""
+def _p_execute(tool_slug: str, arguments: dict | None = None) -> dict:
     data = _in_session("POST", "/execute",
                        body={"tool_slug": str(tool_slug).strip(), "arguments": arguments or {}},
                        timeout=60.0)
@@ -244,7 +255,7 @@ def execute(tool_slug: str, arguments: dict | None = None) -> dict:
             "result_type": data.get("result_type", "")}
 
 
-def toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50) -> list[dict]:
+def _p_toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50) -> list[dict]:
     params = {"limit": max(1, min(50, int(limit)))}
     if connected_only:
         params["is_connected"] = "true"
@@ -259,6 +270,111 @@ def toolkits(connected_only: bool = False, search_text: str = "", limit: int = 5
     if connected_only or not search_text:
         _remember_connected({t["slug"].lower() for t in out if t["connected"]})
     return out
+
+
+# ── Composio Connect (ck_ consumer keys) over MCP ─────────────────────────────
+_mcp = None
+
+
+def is_consumer() -> bool:
+    return api_key().startswith("ck_")
+
+
+def _client():
+    global _mcp
+    from core import composio_connect as cc
+    key = api_key()
+    with _lock:
+        if _mcp is None or _mcp.key != key:
+            _mcp = cc.McpClient(key)
+        return _mcp
+
+
+def _c(fn):
+    """Run a Connect call, turning its errors into ComposioError."""
+    from core import composio_connect as cc
+    try:
+        return fn(cc, _client())
+    except cc.ConnectError as exc:
+        raise ComposioError(str(exc)) from None
+
+
+def _c_search(use_case: str) -> dict:
+    def go(cc, cl):
+        data = cl.call("COMPOSIO_SEARCH_TOOLS", cc.search_args(cl, str(use_case)[:500]))
+        sess = (data.get("session") or {}) if isinstance(data, dict) else {}
+        if isinstance(sess, dict) and sess.get("id"):
+            cl.search_session = str(sess["id"])
+        return data
+    data = _c(go)
+    return _parse_search(data)
+
+
+def _c_link(toolkit: str) -> str:
+    tk = str(toolkit).strip().lower()
+
+    def go(cc, cl):
+        return cl.call("COMPOSIO_MANAGE_CONNECTIONS", cc.manage_args(cl, tk, "add"))
+    data = _c(go)
+    from core import composio_connect as cc
+    url = cc.find_url(data)
+    if not url:
+        st = cc.connection_statuses(data)
+        if st.get(tk):
+            _remember_connected({tk}, merge=True)
+            return ""                                   # already connected
+        raise ComposioError(f"Composio bağlantı sayfası vermedi: {str(data)[:160]}")
+    return url
+
+
+def _c_execute(tool_slug: str, arguments: dict | None = None) -> dict:
+    def go(cc, cl):
+        return cl.call("COMPOSIO_MULTI_EXECUTE_TOOL",
+                       cc.execute_args(cl, str(tool_slug).strip(), arguments or {}))
+    data = _c(go)
+    item = data
+    if isinstance(data, dict) and isinstance(data.get("results"), list) and data["results"]:
+        item = data["results"][0]
+    resp = item.get("response", item) if isinstance(item, dict) else item
+    if isinstance(resp, dict):
+        err = resp.get("error") or (item.get("error") if isinstance(item, dict) else None)
+        failed = resp.get("successful") is False or resp.get("success") is False or bool(err)
+        return {"ok": not failed, "data": resp.get("data", resp), "error": str(err or "")[:400],
+                "result_type": "error" if failed else "completed"}
+    return {"ok": True, "data": resp, "error": "", "result_type": "completed"}
+
+
+def _c_toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50) -> list[dict]:
+    def go(cc, cl):
+        return cl.call("COMPOSIO_MANAGE_CONNECTIONS", cc.manage_args(cl, None, "list"))
+    data = _c(go)
+    from core import composio_connect as cc
+    st = cc.connection_statuses(data)
+    _remember_connected({k for k, v in st.items() if v})
+    items = [{"slug": k, "name": k, "connected": v} for k, v in sorted(st.items())]
+    return [t for t in items if t["connected"]] if connected_only else items
+
+
+# ── public operations: Connect for ck_ keys, the project API otherwise ────────
+def search(use_case: str) -> dict:
+    """Tools that fit a task, with their inputs and the app's connection status."""
+    return _c_search(use_case) if is_consumer() else _p_search(use_case)
+
+
+def link(toolkit: str) -> str:
+    """A login page URL for one app, or "" when it is already connected."""
+    return _c_link(toolkit) if is_consumer() else _p_link(toolkit)
+
+
+def execute(tool_slug: str, arguments: dict | None = None) -> dict:
+    """Run one tool. Returns {'ok': bool, 'data': ..., 'error': str}."""
+    return _c_execute(tool_slug, arguments) if is_consumer() else _p_execute(tool_slug, arguments)
+
+
+def toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50) -> list[dict]:
+    if is_consumer():
+        return _c_toolkits(connected_only, search_text, limit)
+    return _p_toolkits(connected_only, search_text, limit)
 
 
 # ── connection cache for the Control Centre ───────────────────────────────────

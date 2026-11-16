@@ -562,6 +562,11 @@ class ControlCenter(QWidget):
         def work():
             try:
                 url = composio.link(key)
+                if not url:
+                    activity.record(key, f"{label} zaten bağlı", "ok", count=False)
+                    self.network._pending.pop(key, None)
+                    activity.bump()
+                    return
                 opened = False
                 try:
                     opened = bool(webbrowser.open(url))

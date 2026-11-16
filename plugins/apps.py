@@ -90,6 +90,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             if not toolkit:
                 return outcome.failed("apps", "toolkit is empty")
             url = composio.link(toolkit)
+            if not url:
+                return outcome.done("apps", toolkit=toolkit, already_connected=True)
             opened = False
             try:
                 opened = webbrowser.open(url)

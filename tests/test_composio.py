@@ -37,7 +37,7 @@ class FakeHttpx(types.ModuleType):
         return _Resp(404, {"error": "not found"})
 
 
-class ComposioTests(unittest.TestCase):
+class _Setup:
     def setUp(self):
         self.store = {}
         self.httpx = FakeHttpx()
@@ -58,6 +58,9 @@ class ComposioTests(unittest.TestCase):
     def tearDown(self):
         for p in reversed(self.patches):
             p.stop()
+
+
+class ComposioTests(_Setup, unittest.TestCase):
 
     def test_no_key_is_a_clear_error(self):
         self.assertFalse(self.c.is_configured())
@@ -154,7 +157,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class KeyKindTests(ComposioTests):
+class KeyKindTests(_Setup, unittest.TestCase):
     def test_user_key_is_named_without_a_request(self):
         self.c.save_api_key("uak_abc")
         with self.assertRaisesRegex(self.c.ComposioError, "kullanıcı anahtarı"):
@@ -190,3 +193,151 @@ class KeyKindTests(ComposioTests):
         self.c.save_api_key("ak_ok")
         self.httpx.routes[("GET", "/trs_1/toolkits")] = _Resp(200, {"items": []})
         self.assertEqual(self.c.check(), (True, "Bağlantı başarılı"))
+
+
+class _McpResp:
+    def __init__(self, status=200, data=None, sse=False, headers=None):
+        self.status_code = status
+        self.headers = dict(headers or {})
+        if data is None:
+            self.text = ""
+        elif sse:
+            self.headers.setdefault("content-type", "text/event-stream")
+            self.text = "event: message\ndata: " + json.dumps(data) + "\n\n"
+        else:
+            self.headers.setdefault("content-type", "application/json")
+            self.text = json.dumps(data)
+
+    def json(self):
+        return json.loads(self.text)
+
+
+class FakeMcpServer:
+    """Answers like connect.composio.dev/mcp."""
+
+    TOOLS = [
+        {"name": "COMPOSIO_SEARCH_TOOLS", "inputSchema": {
+            "type": "object", "properties": {"queries": {"type": "array"}, "session": {"type": "object"}},
+            "required": ["queries"]}},
+        {"name": "COMPOSIO_MANAGE_CONNECTIONS", "inputSchema": {
+            "type": "object", "properties": {"toolkits": {"type": "array"},
+                                             "action": {"type": "string", "enum": ["add", "list", "remove"]},
+                                             "session_id": {"type": "string"}},
+            "required": ["toolkits"]}},
+        {"name": "COMPOSIO_MULTI_EXECUTE_TOOL", "inputSchema": {
+            "type": "object", "properties": {"tools": {"type": "array"}, "thought": {"type": "string"},
+                                             "sync_response_to_workbench": {"type": "boolean"},
+                                             "session_id": {"type": "string"}},
+            "required": ["tools", "thought", "sync_response_to_workbench"]}},
+    ]
+
+    def __init__(self):
+        self.calls = []
+        self.headers_seen = []
+
+    def __call__(self, url, json=None, headers=None, timeout=None):
+        self.headers_seen.append(dict(headers or {}))
+        if headers.get("x-consumer-api-key") != "ck_good":
+            return _McpResp(401, {"error": "unauthorized"})
+        m = json.get("method")
+        rid = json.get("id")
+        if m == "initialize":
+            return _McpResp(200, {"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "2025-03-26"}},
+                            sse=True, headers={"mcp-session-id": "mcp_s1"})
+        if headers.get("Mcp-Session-Id") != "mcp_s1":
+            return _McpResp(400, {"error": "no session"})
+        if m == "notifications/initialized":
+            return _McpResp(202)
+        if m == "tools/list":
+            return _McpResp(200, {"jsonrpc": "2.0", "id": rid, "result": {"tools": self.TOOLS}})
+        if m == "tools/call":
+            name, args = json["params"]["name"], json["params"]["arguments"]
+            self.calls.append((name, args))
+            payload = self.answer(name, args)
+            return _McpResp(200, {"jsonrpc": "2.0", "id": rid, "result": {
+                "content": [{"type": "text", "text": __import__("json").dumps(payload)}]}}, sse=True)
+        return _McpResp(400, {"error": "?"})
+
+    def answer(self, name, args):
+        if name == "COMPOSIO_SEARCH_TOOLS":
+            return {"data": {"results": [{"primary_tool_slugs": ["GOOGLECALENDAR_CREATE_EVENT"]}],
+                             "tool_schemas": {"GOOGLECALENDAR_CREATE_EVENT": {
+                                 "toolkit": "googlecalendar", "description": "Create event",
+                                 "input_schema": {"properties": {"summary": {"type": "string"}},
+                                                  "required": ["summary"]}}},
+                             "toolkit_connection_statuses": [
+                                 {"toolkit": "googlecalendar", "has_active_connection": False}],
+                             "session": {"id": "srch_9"}},
+                    "successful": True}
+        if name == "COMPOSIO_MANAGE_CONNECTIONS":
+            if args.get("action") == "list":
+                return {"data": {"results": {"gmail": {"toolkit": "gmail", "status": "ACTIVE"},
+                                             "notion": {"toolkit": "notion", "status": "INITIATED"}}},
+                        "successful": True}
+            tk = args["toolkits"][0]
+            if tk == "gmail":
+                return {"data": {"results": {"gmail": {"toolkit": "gmail", "status": "ACTIVE"}}},
+                        "successful": True}
+            return {"data": {"results": {tk: {"toolkit": tk, "status": "initiated",
+                                              "redirect_url": f"https://connect.composio.dev/link/{tk}"}}},
+                    "successful": True}
+        if name == "COMPOSIO_MULTI_EXECUTE_TOOL":
+            slug = args["tools"][0]["tool_slug"]
+            if slug == "BAD_TOOL":
+                return {"data": {"results": [{"tool_slug": slug, "response": {
+                    "successful": False, "data": {}, "error": "Invalid arguments"}}]}, "successful": True}
+            return {"data": {"results": [{"tool_slug": slug, "response": {
+                "successful": True, "data": {"id": "evt_42"}, "error": None}}]}, "successful": True}
+        return {}
+
+
+class ConnectTests(_Setup, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.server = FakeMcpServer()
+        self.httpx.post = self.server
+        self.c.save_api_key("ck_good")
+
+    def test_check_and_session_header(self):
+        self.assertTrue(self.c.is_consumer())
+        ok, msg = self.c.check()
+        self.assertTrue(ok, msg)
+        self.assertIn("Connect", msg)
+        self.assertTrue(any(h.get("Mcp-Session-Id") == "mcp_s1" for h in self.server.headers_seen))
+        from core import activity
+        self.assertIn("gmail", activity.connected())          # from the list call in check()
+        self.assertEqual(self.httpx.calls, [])                # never touched the project API
+
+    def test_search_link_execute(self):
+        r = self.c.search("yarın 18:30 takvime toplantı ekle")
+        self.assertEqual(r["tools"][0]["slug"], "GOOGLECALENDAR_CREATE_EVENT")
+        self.assertIn("summary*", r["tools"][0]["inputs"])
+        self.assertFalse(r["connections"][0]["connected"])
+        self.assertEqual(self.c.link("GoogleCalendar"), "https://connect.composio.dev/link/googlecalendar")
+        add = [a for n, a in self.server.calls if n == "COMPOSIO_MANAGE_CONNECTIONS"][-1]
+        self.assertEqual(add["action"], "add")
+        self.assertEqual(add["session_id"], "srch_9")          # search session carried over
+        self.assertEqual(self.c.link("gmail"), "")              # already connected
+        out = self.c.execute("GOOGLECALENDAR_CREATE_EVENT", {"summary": "Toplantı"})
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["data"], {"id": "evt_42"})
+        ex = [a for n, a in self.server.calls if n == "COMPOSIO_MULTI_EXECUTE_TOOL"][-1]
+        self.assertFalse(ex["sync_response_to_workbench"])
+        self.assertTrue(ex["thought"])                          # required field filled
+        bad = self.c.execute("BAD_TOOL", {})
+        self.assertFalse(bad["ok"])
+        self.assertIn("Invalid arguments", bad["error"])
+
+    def test_bad_consumer_key(self):
+        self.c.save_api_key("ck_wrong")
+        ok, msg = self.c.check()
+        self.assertFalse(ok)
+        self.assertIn("ck_", msg)
+
+    def test_apps_tool_with_consumer_key(self):
+        from plugins import apps
+        out = apps.run({"action": "connect", "toolkit": "gmail"})
+        self.assertIn("already_connected=true", out.lower())
+        out = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
+                        "arguments": '{"summary": "x"}'})
+        self.assertIn("evt_42", out)
