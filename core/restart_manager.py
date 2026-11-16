@@ -1,6 +1,6 @@
 """Start a reliable post-update JARVIS relaunch without Qt imports.
 
-When JARVIS was started by the local OSIRIS supervisor, return control to
+When JARVIS was started by a supervisor, return control to
 that supervisor (which restarts on main.py's exit code 75). Otherwise launch
 a detached helper that waits for the running process to release audio/Qt
 resources before opening the updated main.py.
@@ -24,7 +24,7 @@ def schedule_restart(project_root: Path, current_pid: int,
         raise ValueError("JARVIS yeniden başlatma PID değeri geçersiz.")
 
     if os.environ.get("JARVIS_MANAGED_RESTART") == "1":
-        # tools/start_with_osiris.py will restart exit code 75.
+        # A supervisor from a previous installation restarts on exit code 75.
         return "managed"
 
     project = Path(project_root).resolve()

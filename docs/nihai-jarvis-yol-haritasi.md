@@ -1,6 +1,9 @@
 # JARVIS — Nihai Seviye Teknik Yol Haritası
 
-**Proje:** fatmakahraman304-hash/Mark-LVII (FatihMakes MARK LVII çatallaması)  
+> Arşiv. Güncel Dünya Haritası JARVIS’in Bağlantılar menüsünden açılır.
+
+**Proje:** Murat — J.A.R.V.I.S.
+
 **Amaç:** Sesli, görsel, güvenli ve güvenilir kişisel asistan + OSIRIS Dünya
 Komuta Merkezi. Gerçek olmayan bilimkurgu yetenekleri sunulmayacak.
 
@@ -16,7 +19,7 @@ Komuta Merkezi. Gerçek olmayan bilimkurgu yetenekleri sunulmayacak.
 5. **Modülerlik:** Ses/LLM, OSIRIS, görev ajanları, hafıza ve UI ayrı modüllerdir.
 6. **Performans:** Konuşma ve mikrofon asla harita veya araştırma API'si için
    bloklanmaz; işe özel zaman ve çağrı bütçeleri tanımlanır.
-7. **Sahiplik/lisans:** Orijinal MARK LVII kodu CC BY-NC 4.0 altında kalır;
+7. **Sahiplik/lisans:** Özgün JARVIS kodu CC BY-NC 4.0 altında kalır;
    OSIRIS MIT'dir. Kaynak ve atıflar korunur. Ticari yeniden lisanslama
    otomatik olarak mümkün değildir.
 
@@ -29,7 +32,7 @@ Komuta Merkezi. Gerçek olmayan bilimkurgu yetenekleri sunulmayacak.
 - [x] Açık kaynaklı OSIRIS istatistik/deprem API'lerini yalnızca okuma
 - [x] Veri kaynağı, zaman damgası ve veri kesinliği açıklaması
 - [x] İnternet bağımlılığı olmayan, mock'lanmış otomatik testler
-- [ ] MARK LVII mikrofonu ve GUI'si üzerinde gerçek Windows uçtan uca test
+- [ ] JARVIS mikrofonu ve GUI'si üzerinde gerçek Windows uçtan uca test
 - [ ] Testleri geçen, güvenli ana dal birleştirmesi
 
 **Aşama bitiş kriteri:** "Dünya haritasını aç / depremleri göster / son

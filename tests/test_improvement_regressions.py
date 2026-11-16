@@ -10,9 +10,28 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 from urllib.error import HTTPError, URLError
 
-from core import app_updater
-from core.social_sites import SITES, site_for_command
+from core import app_updater, code_checks
 from plugins import capacity_simulation, github_develop, night_shift, normal_map
+
+
+class QtFixtureTests(unittest.TestCase):
+    def test_static_checks_allow_qapplication_in_tests_but_guard_production(self):
+        fixture = (
+            "from PyQt6.QtWidgets import QApplication\n"
+            "app = QApplication.instance() or QApplication([])\n"
+        )
+        checks = code_checks.static_problems(Path("."), {
+            "tests/test_book_panel.py": fixture,
+            "gui/book_panel.py": fixture,
+            "gui/test_book_panel.py": fixture,
+            "actions/book_panel.py": fixture,
+            "ui.py": fixture,
+        }, {"profiles": ["jarvis"]})
+        self.assertEqual(set(checks), {
+            "gui/book_panel.py", "gui/test_book_panel.py", "actions/book_panel.py",
+        })
+        self.assertIn("creates a QApplication", checks["gui/book_panel.py"])
+        self.assertIn("worker threads", checks["actions/book_panel.py"])
 
 
 class DownloadTests(unittest.TestCase):
@@ -87,20 +106,6 @@ class SearchTests(unittest.TestCase):
 
 
 class CommandTests(unittest.TestCase):
-    def test_platform_commands_with_names_and_suffixes(self):
-        self.assertEqual(set(SITES), {'github', 'claude', 'chatgpt'})
-        for command, site in [
-            ('Jarvis, GitHub’ı aç', 'github'),
-            ('Friday ChatGPT’yi aç', 'chatgpt'),
-            ('claudeyi aç', 'claude'),
-        ]:
-            self.assertEqual(site_for_command(command), site)
-        for command in [
-            'Instagramı aç', 'TikTok’u aç', 'Facebook aç', 'WhatsApp aç', 'WPyi aç',
-            'Claude’u açma', 'GitHub kodunu aç',
-        ]:
-            self.assertIsNone(site_for_command(command))
-
     def test_failed_worker_start_releases_github_lock(self):
         with patch.object(github_develop.threading.Thread, 'start', side_effect=RuntimeError('thread unavailable')):
             result = github_develop.run({'mode': 'inspect'}, player=Mock())
@@ -157,6 +162,28 @@ class SleepTests(unittest.TestCase):
 
 
 class MapNavigationTests(unittest.TestCase):
+    def test_world_map_command_routes_without_a_geocoding_request(self):
+        player = Mock()
+        self.assertIs(normal_map.map_command_for_text("JARVIS, Dünya haritasını aç."), True)
+        self.assertIs(normal_map.map_command_for_text("Haritayı kapat"), False)
+        self.assertIsNone(normal_map.map_command_for_text("Gazimağusa’yı haritada aç"))
+        with patch.object(normal_map, "search") as search:
+            normal_map.run({"action": "open"}, player)
+            player.show_world_map.assert_called_once_with(True)
+            search.assert_not_called()
+
+    def test_world_overview_centers_native_map_without_location(self):
+        from gui.location_map import tile_position
+        from gui.window import MainWindow
+        view = Mock(zoom=15, route_points=[[1, 2], [3, 4]])
+        owner = SimpleNamespace(_city_explorer=object(), _large_city_map=view,
+                                _hud_cam_stack=Mock(), _map_place_label=Mock())
+        MainWindow._explore_city_map(owner, world=True)
+        self.assertEqual(view.zoom, 2)
+        self.assertEqual(view.center, tile_position(20, 0, 2))
+        self.assertEqual(view.route_points, [])
+        self.assertFalse(view.show_center_marker)
+
     def test_reopening_explorer_preserves_view_and_route(self):
         from gui.window import MainWindow
         map_view = Mock(center=(12, 20), zoom=15, route_points=[[1, 2], [3, 4]])

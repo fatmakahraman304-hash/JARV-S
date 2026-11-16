@@ -1,0 +1,239 @@
+"""Read WhatsApp Desktop's Windows accessibility tree without changing the chat."""
+from collections import deque
+from dataclasses import dataclass
+import re
+import time
+import unicodedata
+
+
+_RECEIPTS = {
+    "sent": "sent", "gönderildi": "sent", "msg-check": "sent",
+    "delivered": "delivered", "teslim edildi": "delivered", "msg-dblcheck": "delivered",
+    "read": "read", "okundu": "read",
+    "pending": "pending", "sending": "pending", "gönderiliyor": "pending", "msg-time": "pending",
+    "failed to send": "failed", "couldn't send": "failed", "gönderilemedi": "failed",
+    "msg-error": "failed",
+}
+_SELF = {"kendim", "kendime", "me", "myself", "you", "siz", "sen"}
+_SELF_SUFFIX = re.compile(r"\s*\((?:you|siz|sen|kendim)\)$")
+_COMPOSER = {"type a message", "write a message", "mesaj yaz", "mesaj yazın", "bir mesaj yazın",
+             "bir mesaj yaz", "mesajınızı yazın"}
+_DIRECTION = re.compile(r"^(?:you|siz|sen): ", re.IGNORECASE)
+_TIMED_LABEL = re.compile(r"(?P<body>.+?)[, ]+\d{1,2}:\d{2}(?:\s*[ap]m)?(?:[, ]+(?P<status>[^,]+))?",
+                          re.IGNORECASE)
+
+
+def _text(value: str) -> str:
+    value = unicodedata.normalize("NFC", value or "")
+    return " ".join(value.translate(dict.fromkeys(map(ord, "\u200e\u200f\u200b\u2066\u2067\u2068\u2069"))).split())
+
+
+@dataclass
+class Node:
+    name: str
+    kind: str
+    key: str
+    parent: int
+    y: int
+    bottom: int
+    left: int = 0
+    right: int = 0
+    help_text: str = ""
+
+
+@dataclass
+class Conversation:
+    matches_recipient: bool
+    messages: dict[tuple[int, ...], str]
+
+
+def foreground_window() -> int | None:
+    from core.screenview import _foreground_windows
+
+    process, _title, _pid, handle = _foreground_windows()
+    if process.casefold() in {"whatsapp.exe", "whatsapp.root.exe", "whatsappdesktop.exe"}:
+        return handle
+    return None
+
+
+def _walk(root, deadline):
+    queue = deque([(root, -1)])
+    index = 0
+    while queue and index < 1600:
+        if time.monotonic() >= deadline:
+            raise TimeoutError("WhatsApp accessibility scan timed out")
+        node, parent = queue.popleft()
+        yield node, parent
+        queue.extend((child, index) for child in node.children(cache_enable=True))
+        index += 1
+    if queue:
+        raise TimeoutError("WhatsApp accessibility tree exceeded the scan limit")
+
+
+def _receipt(nodes: list[Node], parents: list[list[int]], index: int) -> str:
+    body = nodes[index]
+    parent = body.parent
+    branch = index
+    for _ in range(5):
+        if parent <= 0:
+            break
+        # Inspect this message's nearby accessibility labels, not the whole chat.
+        queue = deque((pos, pos == branch) for pos in parents[parent])
+        labels = set()
+        for _ in range(40):
+            if not queue:
+                break
+            pos, inside_message = queue.popleft()
+            node = nodes[pos]
+            if node.y > body.bottom + 45 or node.bottom < body.y - 10:
+                continue
+            if not inside_message and node.kind in {"ListItem", "DataItem"}:
+                continue
+            if pos != index and node.kind not in {"Edit", "Hyperlink", "Button"}:
+                status = next((_RECEIPTS[label.casefold().rstrip(".")] for label in
+                               (node.key, node.name, node.help_text)
+                               if label.casefold().rstrip(".") in _RECEIPTS), None)
+                if status:
+                    labels.add(status)
+            queue.extend((child, inside_message) for child in parents[pos])
+        if len(labels) == 1:
+            return labels.pop()
+        if labels or nodes[parent].kind in {"ListItem", "DataItem"}:
+            break
+        branch, parent = parent, nodes[parent].parent
+    return ""
+
+
+def _conversation(nodes: list[Node], runtime_ids, receiver: str, message: str,
+                  *, full_document: bool = False) -> Conversation | None:
+    if not nodes:
+        return None
+    composer = max((node for node in nodes if node.kind in {"Edit", "Document", "Text"}
+                    and (node.name.casefold().rstrip(". …") in _COMPOSER
+                         or node.key.casefold() == "inputbox") and node.bottom > node.y),
+                   key=lambda node: (node.kind != "Text", node.y), default=None)
+    if composer is None:
+        return None
+    target = _text(receiver).casefold()
+
+    def matches_title(node):
+        label = node.name.casefold()
+        if target in _SELF:
+            return label in _SELF or bool(_SELF_SUFFIX.search(label))
+        return _SELF_SUFFIX.sub("", label) == target
+
+    def in_chat_column(node):
+        return not full_document or (composer.right > composer.left and node.right > composer.left
+                                     and node.left >= composer.left - 90)
+
+    header = next((node for node in nodes[1:] if node.kind in {"Text", "Button", "Header", "Group"}
+                   and node.bottom > node.y and nodes[0].y <= node.y <= nodes[0].y + 110
+                   and in_chat_column(node) and matches_title(node)), None)
+    if header is None:
+        return None if full_document else Conversation(False, {})
+    children = [[] for _ in nodes]
+    for index, node in enumerate(nodes):
+        if node.parent >= 0:
+            children[node.parent].append(index)
+    candidates = {}
+    body = _text(message)
+    for index, node in enumerate(nodes):
+        if (node.kind not in {"Text", "ListItem", "DataItem", "Group"}
+                or node.y < header.bottom or node.bottom > composer.y or node.bottom <= node.y
+                or not in_chat_column(node)):
+            continue
+        label = _DIRECTION.sub("", node.name, count=1)
+        if node.name == body or label == body:
+            candidates[index] = None
+        elif node.kind in {"ListItem", "DataItem", "Group"}:
+            row = _TIMED_LABEL.fullmatch(label)
+            if row and row["body"] == body:
+                candidates[index] = _RECEIPTS.get((row["status"] or "").casefold().rstrip("."))
+    # A single bubble can expose the text on both its wrapper and a child.
+    wrappers = set()
+    for index in candidates:
+        parent = nodes[index].parent
+        while parent > 0:
+            if parent in candidates:
+                wrappers.add(parent)
+                candidates[index] = candidates[index] or candidates[parent]
+            parent = nodes[parent].parent
+    matches = {}
+    for index, row_status in candidates.items():
+        if index in wrappers:
+            continue
+        status = row_status or _receipt(nodes, children, index)
+        identifier = runtime_ids(index)
+        if identifier:
+            matches[identifier] = status or "visible"
+    return Conversation(True, matches)
+
+
+def _read_pane(pane, receiver, message, *, full_document=False):
+    nodes = []
+    elements = []
+    for element, parent in _walk(pane, time.monotonic() + 2.5):
+        rect = element.rectangle
+        name = _text(element.name)
+        kind = element.control_type
+        help_text = _text(getattr(element.element, "CurrentHelpText", "")) if kind == "Image" else ""
+        # pywinauto 0.6.9 calls this automation_id; newer builds use auto_id.
+        key = getattr(element, "automation_id", None) or getattr(element, "auto_id", "") or ""
+        nodes.append(Node(name, kind, key, parent,
+                          rect.top, rect.bottom, rect.left, rect.right, help_text))
+        elements.append(element)
+    return _conversation(nodes, lambda index: tuple(elements[index].element.GetRuntimeId()),
+                         receiver, message, full_document=full_document)
+
+
+def read_conversation(window: int, receiver: str, message: str) -> Conversation | None:
+    """Observe only the selected conversation. None means the UI is unreadable."""
+    try:
+        import comtypes
+        try:
+            from pywinauto.uia_defines import IUIA
+            from pywinauto.uia_element_info import UIAElementInfo
+        except ImportError:
+            from pywinauto.windows.uia_defines import IUIA
+            from pywinauto.windows.uia_element_info import UIAElementInfo
+
+        if foreground_window() != window:
+            return None
+        comtypes.CoInitializeEx()
+        try:
+            root = UIAElementInfo(window)
+            automation = IUIA()
+            for key in ("main", "ConversationPanel", "RootWebArea"):
+                condition = automation.iuia.CreatePropertyCondition(
+                    automation.UIA_dll.UIA_AutomationIdPropertyId, key)
+                pane = root.element.FindFirst(automation.UIA_dll.TreeScope_Descendants, condition)
+                if not pane:
+                    continue
+                result = _read_pane(UIAElementInfo(pane, cache_enable=True), receiver, message,
+                                    full_document=key == "RootWebArea")
+                if result is not None:
+                    return result
+        finally:
+            comtypes.CoUninitialize()
+    except Exception:
+        return None
+
+
+def wait_for_receipt(window, receiver, message, before, *, timeout=8.0) -> str:
+    """Require a new matching row in this chat before trusting a receipt."""
+    if before is None or not before.matches_recipient:
+        return ""
+    deadline = time.monotonic() + timeout
+    best = ""
+    while time.monotonic() < deadline and foreground_window() == window:
+        after = read_conversation(window, receiver, message)
+        if after and after.matches_recipient and len(after.messages) > len(before.messages):
+            new = {key: value for key, value in after.messages.items() if key not in before.messages}
+            if len(new) == 1:
+                status = next(iter(new.values()))
+                if status in {"delivered", "read", "failed"}:
+                    return status
+                if status == "sent" or (status in {"pending", "visible"} and best != "sent"):
+                    best = status
+        time.sleep(0.4)
+    return best

@@ -1,4 +1,4 @@
-"""gui/style.py — the Mark LVII look: type, colour mixing, shapes, button styles.
+"""gui/style.py — the Reactor look: type, colour mixing, shapes, button styles.
 
 Everything visual that more than one panel needs lives here, so the HUD has
 one voice instead of forty slightly different ones.
@@ -21,11 +21,11 @@ from PyQt6.QtGui import QColor, QFont, QPolygonF
 
 from gui.theme import C
 
-DISPLAY_FAMILIES = ["Segoe UI", "Bahnschrift", "SF Pro Display", "Helvetica Neue",
+DISPLAY_FAMILIES = ["Segoe UI Variable Display", "Segoe UI", "Inter", "Bahnschrift", "SF Pro Display", "Helvetica Neue",
                     "Noto Sans", "DejaVu Sans"]
 MONO_FAMILIES = ["Cascadia Mono", "Consolas", "SF Mono", "Menlo", "DejaVu Sans Mono",
                  "Courier New"]
-DISPLAY_CSS = ("'Segoe UI', 'Bahnschrift', 'SF Pro Display', 'Helvetica Neue', "
+DISPLAY_CSS = ("'Segoe UI Variable Display', 'Segoe UI', 'Inter', 'Bahnschrift', 'SF Pro Display', 'Helvetica Neue', "
                "'Noto Sans', 'DejaVu Sans', sans-serif")
 MONO_CSS = "'Cascadia Mono', 'Consolas', 'SF Mono', 'Menlo', 'DejaVu Sans Mono', monospace"
 
@@ -112,42 +112,43 @@ def chamfer(r: QRectF, cut: float, corners=("tl", "br")) -> QPolygonF:
 
 
 def btn_css(kind: str = "dim", align: str = "left") -> str:
-    """Stylesheet for a drawer/panel button.
+    """Stylesheet for a drawer/panel button: a rounded glass pill.
 
     kind: "primary" (the main action), "dim" (ordinary), "on" / "off" (a switch),
     "choice" (one of two equal options — neither reads as disabled)."""
-    pad = "padding: 0 10px;" if align == "left" else "padding: 0 6px;"
-    base = f"text-align: {align}; {pad} border-radius: 6px;"
+    pad = "padding: 0 14px;" if align == "left" else "padding: 0 8px;"
+    base = f"text-align: {align}; {pad} border-radius: 10px;"
     if kind == "primary":
         return f"""
-            QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI};
-                border: 1px solid {C.PRI_DIM}; border-left: 3px solid {C.PRI}; {base} }}
-            QPushButton:hover {{ border-color: {C.PRI}; color: {C.WHITE}; }}
+            QPushButton {{ background: {C.PRI_GHO}; color: {C.ACC2};
+                border: 1px solid {C.BORDER_B}; {base} }}
+            QPushButton:hover {{ border-color: {C.PRI}; color: {C.WHITE}; background: {C.BORDER_A}; }}
+            QPushButton:pressed {{ background: {C.BORDER_B}; }}
             QPushButton:disabled {{ color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}"""
     if kind == "on":
         return f"""
             QPushButton {{ background: {C.PANEL2}; color: {C.GREEN};
-                border: 1px solid {C.GREEN_D}; border-left: 3px solid {C.GREEN}; {base} }}
-            QPushButton:hover {{ border-color: {C.GREEN}; }}
+                border: 1px solid {C.GREEN_D}; {base} }}
+            QPushButton:hover {{ border-color: {C.GREEN}; color: {C.WHITE}; }}
             QPushButton:disabled {{ color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}"""
     if kind == "choice":
         return f"""
             QPushButton {{ background: {C.PANEL2}; color: {C.PRI};
-                border: 1px solid {C.BORDER_A}; border-left: 3px solid {C.PRI_DIM}; {base} }}
-            QPushButton:hover {{ color: {C.WHITE}; border-color: {C.BORDER_B}; }}"""
+                border: 1px solid {C.BORDER_A}; {base} }}
+            QPushButton:hover {{ color: {C.WHITE}; border-color: {C.PRI}; }}"""
     # "dim" and "off"
     return f"""
         QPushButton {{ background: {C.PANEL}; color: {C.TEXT_MED if kind == 'dim' else C.TEXT_DIM};
-            border: 1px solid {C.BORDER}; border-left: 3px solid {C.BORDER_A}; {base} }}
-        QPushButton:hover {{ color: {C.PRI}; border-color: {C.BORDER_B};
-            border-left: 3px solid {C.PRI_DIM}; }}
+            border: 1px solid {C.BORDER}; {base} }}
+        QPushButton:hover {{ color: {C.WHITE}; border-color: {C.BORDER_B}; background: {C.PANEL2}; }}
+        QPushButton:pressed {{ background: {C.PRI_GHO}; }}
         QPushButton:disabled {{ color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}"""
 
 
 def scroll_css() -> str:
     return f"""
-        QScrollBar:vertical {{ background: transparent; width: 6px; border: none; margin: 2px 0; }}
-        QScrollBar::handle:vertical {{ background: {C.BORDER_B}; min-height: 20px; }}
+        QScrollBar:vertical {{ background: transparent; width: 6px; border: none; margin: 4px 0; }}
+        QScrollBar::handle:vertical {{ background: {C.BORDER_A}; min-height: 24px; border-radius: 3px; }}
         QScrollBar::handle:vertical:hover {{ background: {C.PRI_DIM}; }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; border: none; }}
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}

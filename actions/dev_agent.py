@@ -20,10 +20,11 @@ API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
 PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
-from core import gemini
+from core import claude_coding, codex_coding, gemini
 
 MODEL_PLANNER    = gemini.SMART
 MODEL_WRITER     = gemini.SMART
+EXPLICIT_CODING_PROVIDERS = {"openai_compat@openai", "openai_compat@anthropic"}
 
 def _get_api_key() -> str:
     with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -48,12 +49,18 @@ def _get_model(model_name: str = gemini.SMART):
     it writes, and a whole file from one routinely takes past a minute."""
     provider = _coding_provider()
 
+    if provider == codex_coding.PROVIDER_ID:
+        return codex_coding
+
     class _W:
         def generate_content(self, contents):
             resp = gemini.call(contents, tier=model_name,
                                timeout_ms=180000 if provider else 60000,
-                               provider=provider)
+                               provider=provider,
+                               provider_only=provider in EXPLICIT_CODING_PROVIDERS)
             if resp is None:
+                if provider in EXPLICIT_CODING_PROVIDERS:
+                    raise RuntimeError(f"{provider.split('@', 1)[-1]} kodlama modeli yanıt vermedi. API ayarlarını kontrol et.")
                 raise RuntimeError("every model on the ladder failed")
             return resp
 
@@ -475,8 +482,11 @@ def _build_project(
         _log(player, msg)
 
     provider = _coding_provider()
-    log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
-        if provider else "Coding with the background-request models.")
+    if provider in {codex_coding.PROVIDER_ID, claude_coding.PROVIDER_ID} or provider in EXPLICIT_CODING_PROVIDERS:
+        log(f"Coding with {provider.partition('@')[2] or provider}.")
+    else:
+        log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
+            if provider else "Coding with the background-request models.")
     _update("planning")
     log("Planning project structure...")
     try:
@@ -723,6 +733,8 @@ def _update(status: str | None = None, file: str | None = None,
             return
         if status:
             _JOB["status"] = status
+            if status in _JOB["phases"]:
+                _JOB["phase"] = status
         if file and file_state:
             _JOB["files"].setdefault(file, {})["state"] = file_state
         _JOB.update(fields)
@@ -1227,15 +1239,19 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
             problems[rel] = (problems.get(rel, "") + " " + p).strip()
         if stack.get("test_cmd") and not problems:
             _log(player, f"Running the project's own tests ({stack['test_name']})…")
-            broke = test_regressions(baseline, run_tests(folder, stack))
+            after = run_tests(folder, stack)
+            broke = ("The project test command could not start." if after is None
+                     else test_regressions(baseline, after))
             if broke:
                 for rel in _blame(broke, written):
                     problems[rel] = (problems.get(rel, "") + " " + broke).strip()
+            elif after["ok"]:
+                _log(player, "The project's tests passed.")
             else:
-                _log(player, "The project's tests pass as they did before.")
+                _log(player, "The project has pre-existing test failures. No new failures were detected.")
         problems = {r: p for r, p in problems.items() if r in written}
         if not problems:
-            _log(player, "All changed files passed their tests.")
+            _log(player, "Checks found no new failures in the changed files.")
             return {}
         for rel, p in problems.items():
             _update(file=rel, file_state="broken")
@@ -1318,7 +1334,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     try:
         plan = _plan_changes(folder, instruction, context)
     except Exception as e:
-        return f"Planning failed, sir: {str(e)[:200]}"
+        raise RuntimeError(f"Planlama başarısız. {str(e)[:240]}") from e
 
     from core.code_checks import Protection
     protection = Protection(folder)
@@ -1498,7 +1514,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         msg += (" These still fail their test and need a look: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + ".")
     elif written:
-        msg += " Every changed file loaded and passed its test."
+        msg += " Checks completed without a new test failure."
     if edited:
         msg += f" Originals are in {_BACKUP_DIR}/{stamp}; say 'undo' to restore them."
     else:
@@ -1527,7 +1543,8 @@ def _start_improve(folder_raw: str, instruction: str, speak=None, player=None) -
         return f"I am still working on '{_job_name}', sir. One folder at a time."
     _job_name = folder.name
 
-    who = _coding_provider().partition("@")[2] or "the coding model"
+    provider = _coding_provider()
+    who = provider.partition("@")[2] or provider or "the coding model"
     _new_job(folder, who, instruction, player, kind="improve")
     return _run_job(lambda: _improve_folder(folder, instruction, player),
                     folder.name, who, speak, player)
@@ -1544,6 +1561,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None) -> str:
     The caller must already hold `_job_lock`; it is released here."""
     def work():
         status = "done"
+        result = ""
         try:
             result = job()
             with _state_lock:
@@ -1558,8 +1576,10 @@ def _run_job(job, name: str, who: str, speak=None, player=None) -> str:
             result = f"The coding job on '{name}' failed: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
-            _job_lock.release()
-        _update(status, result=result, finished=time.time())
+            try:
+                _update(status, result=result, finished=time.time())
+            finally:
+                _job_lock.release()
         if speak:
             speak(f"[DEV_AGENT_DONE] {result[:900]} | Tell the user briefly, in one "
                   f"or two sentences, what was done. Do not read file paths aloud.")
@@ -1581,7 +1601,8 @@ def _start_build(description: str, language: str, project_name: str,
         return f"I am still working on '{_job_name}', sir. One job at a time."
     name = re.sub(r"[^\w\-]", "_", project_name) if project_name else "new project"
     _job_name = name
-    who = _coding_provider().partition("@")[2] or "the coding model"
+    provider = _coding_provider()
+    who = provider.partition("@")[2] or provider or "the coding model"
     _new_job(PROJECTS_DIR / name, who, description, player, kind="build")
     return _run_job(lambda: _build_project(description, language, project_name,
                                            timeout, speak=None, player=player),

@@ -1,6 +1,6 @@
 """gui/overlays.py — Panels that open over the HUD: setup, customise, plugins, confirm, audio, memory, remote.
 
-Split out of ui.py in Mark LVII; behaviour unchanged."""
+Split out of ui.py; behaviour unchanged."""
 from __future__ import annotations
 
 import json
@@ -1003,7 +1003,7 @@ class AudioDeviceOverlay(_HudOverlay):
 
         Both calls block for seconds — recording waits for the user to speak,
         the tone waits for itself — and doing that on the Qt thread freezes the
-        HUD, which is the mistake Mark LV already paid for once with a 2.1
+        HUD, which is a mistake made in an earlier release with a 2.1
         second wake-word import in the settings drawer.
 
         Results come back by signal, not by timer. See the note on
@@ -1179,9 +1179,9 @@ class MemoryOverlay(_HudOverlay):
 
         rows = all_entries_for_ui()
 
-        cap = QLabel(f"{len(rows)} stored facts — newest first. "
-                     f"Nothing here is sent anywhere; it lives in "
-                     f"memory/long_term.json on this machine.")
+        cap = QLabel(f"{len(rows)} kayıtlı bilgi — en yeni üstte. "
+                     "Bilgiler kurulumdan ayrı kullanıcı veri klasöründe saklanır. "
+                     "İlgili bilgiler yanıt oluşturması için seçili modele gönderilir.")
         cap.setWordWrap(True)
         cap.setFont(hud_font(7))
         cap.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")

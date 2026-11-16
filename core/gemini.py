@@ -155,7 +155,7 @@ PROVIDER_PREFIX = "prov:"
 # real quota when they are healthy, and a rung that is down is set aside by the
 # cooldown after one attempt instead of being paid for on every call.
 #
-# Re-measured for Mark LVII (2026-09-15), same key:
+# Re-measured on 2026-09-15, same key:
 #     gemini-2.5-flash / -lite   404 "no longer available to new users"
 #     gemini-3.5-flash-lite      0.56s      gemini-flash-lite-latest  0.59s
 #     gemini-3.6-flash           2.52s, then a 504 after 19s
@@ -713,7 +713,7 @@ def _provider_call(model: str, contents, config, timeout_ms: int):
 
 def call(contents, tier: str = FAST, config=None,
          timeout_ms: int = DEFAULT_TIMEOUT_MS, key: str = "",
-         provider: str = ""):
+         provider: str = "", *, provider_only: bool = False):
     """Run one generation, walking the ladder until one answers.
 
     Returns the SDK's own response object, so callers that need more than the
@@ -722,6 +722,11 @@ def call(contents, tier: str = FAST, config=None,
     a silent None during a session nobody can debug is how the original problem
     stayed hidden.
     """
+    from core import claude_coding
+
+    if provider == claude_coding.PROVIDER_ID:
+        return claude_coding.generate_content(contents)
+
     # `tier` is normally FAST or SMART. Anything else is taken to be an explicit
     # model name — screen_agent lets the user pick one in its settings — and it
     # is tried first, with the reasoning ladder behind it. So a user's choice is
@@ -746,7 +751,9 @@ def call(contents, tier: str = FAST, config=None,
     if provider:
         chosen = PROVIDER_PREFIX + provider
         rungs = (chosen,) + tuple(r for r in rungs if r != chosen)
-        ladder = (chosen,) + tuple(m for m in ladder if m != chosen)
+        ladder = (chosen,) if provider_only else (chosen,) + tuple(m for m in ladder if m != chosen)
+        if provider_only:
+            rungs = ladder
 
     resolved_key = key or api_key()
     if not resolved_key:

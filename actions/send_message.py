@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import outcome
+from core import activity, outcome
 from core.lazyimport import LazyModule, installed
 
 # Imported on first USE, not at launch — see core/lazyimport.py. PAUSE is 0.06
@@ -13,6 +13,7 @@ from core.lazyimport import LazyModule, installed
 # somebody else's chat window wants a little more room than a hotkey does.
 _PYAUTOGUI = installed("pyautogui")
 _PYPERCLIP = installed("pyperclip")
+_SEND_LOCK = threading.Lock()
 
 
 def _configure_pyautogui(module) -> None:
@@ -178,52 +179,48 @@ def _desktop_send(app_name: str, receiver: str, message: str) -> str:
     )
 
 def _send_whatsapp(receiver: str, message: str) -> str:
-    """WhatsApp goes through the verified driver when there is one.
+    if sys.platform != "win32":
+        return _desktop_send("WhatsApp", receiver, message)
 
-    _desktop_send below is a sequence of keystrokes with sleeps between them:
-    it presses Win, types the app name, presses Ctrl+F, types the contact,
-    presses Enter twice and reports success — without ever reading back which
-    window received any of that. When the machine is a second slower than the
-    sleeps assume, the whole sequence lands somewhere else and the user is
-    still told the message was sent.
+    from core import whatsapp_receipts as receipts
 
-    plugins/_whatsapp_core.py already drives WhatsApp properly for the calling
-    plugins: it finds the real window, opens the conversation, checks the
-    conversation is the right person's, types, and confirms the box emptied
-    before it says "sent". Using it here costs nothing and removes the one
-    failure that matters — a message reported as delivered that never left.
+    facts = {"platform": "WhatsApp", "to": receiver}
+    if not _open_app("WhatsApp") or not (window := receipts.foreground_window()):
+        return outcome.failed("send_message", "WhatsApp could not be brought to the foreground", **facts)
+    _search_in_app(receiver)
+    if receipts.foreground_window() != window:
+        return outcome.failed("send_message", "WhatsApp lost focus during contact search", **facts)
+    pyautogui.press("enter")
+    time.sleep(0.8)
 
-    The blind path stays as the fallback for a machine where the driver cannot
-    run at all (the plugin file removed, a missing dependency, no WhatsApp).
-    But once the driver HAS run, its answer stands: falling back after it
-    refused to send is how a message ends up typed into the wrong
-    conversation, which is worse than not sending it.
-    """
+    before = receipts.read_conversation(window, receiver, message)
+    if before is not None and not before.matches_recipient:
+        return outcome.failed("send_message", "the open WhatsApp chat does not match the requested contact", **facts)
+    if receipts.foreground_window() != window:
+        return outcome.failed("send_message", "WhatsApp lost focus before typing", **facts)
+    _paste_text(message)
+    time.sleep(0.2)
+    if receipts.foreground_window() != window:
+        return outcome.failed("send_message", "WhatsApp lost focus before sending", **facts)
+    pyautogui.press("enter")
+
+    # A read-back error after pressing Enter must never cause another send.
     try:
-        from plugins import _whatsapp_core as wa
-    except Exception as e:
-        print(f"[SendMessage] WhatsApp driver unavailable ({e}) — typing blind.")
-        return _desktop_send("WhatsApp", receiver, message)
+        status = receipts.wait_for_receipt(window, receiver, message, before)
+    except Exception as exc:
+        print(f"[SendMessage] WhatsApp receipt read failed: {type(exc).__name__}")
+        status = ""
+    if status in {"sent", "delivered", "read"}:
+        return outcome.done("send_message", verified=True, receipt=status, **facts)
+    if status == "failed":
+        return outcome.failed("send_message", "WhatsApp marked the message as failed to send", receipt=status, **facts)
+    reasons = {
+        "pending": "WhatsApp shows the new message as still sending",
+        "visible": "the message text appeared as a new entry in the WhatsApp conversation; no send receipt was visible",
+    }
+    return outcome.unverified("send_message", reasons.get(status, "WhatsApp did not expose a receipt for this send"),
+                              receipt=status or "unknown", **facts)
 
-    try:
-        transport, why = wa.get()
-    except Exception as e:
-        print(f"[SendMessage] WhatsApp driver failed to start ({e}) — typing blind.")
-        return _desktop_send("WhatsApp", receiver, message)
-
-    if transport is None:
-        print(f"[SendMessage] {why} — typing blind.")
-        return _desktop_send("WhatsApp", receiver, message)
-
-    sent, failure = transport.send_message_to(receiver, message)
-    if sent:
-        # The one platform that can say `done`: the driver opened the
-        # conversation, proved it was the right person's, typed, and confirmed
-        # the box emptied.
-        return outcome.done("send_message", platform="WhatsApp",
-                            to=receiver, verified=True)
-    return outcome.failed("send_message", failure,
-                          platform="WhatsApp", to=receiver)
 
 def _send_telegram(receiver: str, message: str) -> str:
     return _desktop_send("Telegram", receiver, message)
@@ -339,8 +336,7 @@ def send_message(
             to=receiver, platform=platform,
         )
 
-    preview = message_text[:50] + ("…" if len(message_text) > 50 else "")
-    print(f"[SendMessage] 📨 {platform} → {receiver}: {preview}")
+    print(f"[SendMessage] {platform} -> {receiver}")
     if player:
         player.write_log(f"[msg] {platform} → {receiver}")   # the message itself IS the news
 
@@ -367,40 +363,45 @@ def _send_and_report(player, platform: str, receiver: str,
     thing this rewrite exists to stop.
     """
     try:
-        result = _resolve_platform(platform)(receiver, message_text)
+        with _SEND_LOCK:
+            result = _resolve_platform(platform)(receiver, message_text)
     except Exception as exc:
         print(f"[SendMessage] {type(exc).__name__}: {exc}")
         result = outcome.failed("send_message", f"it failed: {exc}",
                                 to=receiver, platform=platform)
 
-    # A prefix test on a fixed vocabulary, not a search for the word "sent".
-    # The old check was `"sent" in text and "not sent" not in text`, which is
-    # one careless rewording away from putting a tick next to a message that
-    # never went.
+    print(f"[SendMessage] {result[:200]}")
+    node = activity.node_for_tool("send_message", {"platform": platform})
     verified = result.startswith(f"status={outcome.DONE} ")
+    if node == "whatsapp":
+        fields = result.split(maxsplit=4)[2:4]
+        if fields[:1] == ["verified=true"]:
+            fields = fields[1:]
+        receipt = fields[0][8:] if fields and fields[0].startswith("receipt=") else "unknown"
+        labels = {
+            "sent": "Gönderildi",
+            "delivered": "Teslim edildi",
+            "read": "Okundu",
+            "pending": "Gönderim bekliyor",
+            "visible": "Sohbette göründü, WhatsApp onayı görünmüyor",
+            "failed": "Gönderilemedi",
+            "unknown": "Gönderim doğrulanamadı",
+        }
+        if receipt == "unknown" and result.startswith(f"status={outcome.FAILED} "):
+            receipt = "failed"
+        line = f"WhatsApp → {receiver} · {labels.get(receipt, labels['unknown'])}"
+        activity.record(node, line, activity.status_of(result), count=False)
+        if player:
+            player.write_log(f"[msg] {line}")
+    elif player and outcome.is_problem(result):
+        player.write_log(f"[msg] {receiver} için mesaj gönderimi doğrulanamadı.")
 
-    # The full status line goes to the TERMINAL, where a developer reads it.
-    # The activity log beside the assistant's own sentences is for the
-    # conversation and for things that went wrong — a line reading
-    # `status=done action=send_message verified=true` there is machinery
-    # showing through, and it was reported as exactly that.
-    print(f"[SendMessage] {'✅' if verified else '⚠️'} {result[:160]}")
-    if player and outcome.is_problem(result):
-        player.write_log(f"[msg] could not confirm the message to {receiver} — "
-                         f"see the terminal")
-
-    if verified:
-        # It went, and the user asked for it to go. Announcing a success they
-        # already expect is noise — the log and the panel carry the record.
-        return
-
-    if player and hasattr(player, "request_say"):
+    if player and hasattr(player, "request_say") and (node == "whatsapp" or not verified):
         try:
             player.request_say(
-                "Tell the user, in one or two short sentences in their own "
-                "language, exactly what this says happened — and if it says "
-                "the message was not sent or not confirmed, say that plainly "
-                "rather than claiming it was sent: " + result
+                "Tell the user the result in their language. WhatsApp receipt=sent means sent, "
+                "receipt=delivered means delivered, and receipt=read means read. Report only "
+                "the observed status and do not send or retry anything: " + result
             )
         except Exception:
             pass
@@ -412,14 +413,14 @@ TOOL = {
     "description": (
         "Sends a text message via WhatsApp, Telegram, or another messaging "
         "platform. Write 'message_text' in the USER'S OWN LANGUAGE, exactly "
-        "what they asked to be said. "
+        "what they asked to be said. Only send on an explicit request with a recipient and message. "
+        "A request to connect or configure messaging does not request a test message. "
         "This tool answers immediately and sends in the background. On "
         "status=started say only that you are sending it, never that it is "
-        "sent. The result follows separately: status=done means it was "
-        "confirmed delivered to the conversation, status=unverified means the "
-        "keystrokes went out and NOBODY can confirm it arrived - say exactly "
-        "that - and status=failed means it did not go. Never tell the user a "
-        "message was sent unless the result said status=done."
+        "sent. The result follows separately. For WhatsApp, status=done carries the exact "
+        "receipt: sent, delivered or read. Status=unverified means the send is pending "
+        "or a receipt could not be checked. Status=failed means the send failed. "
+        "Never claim that a message was delivered unless the receipt confirms it."
     ),
     "tier": "core",
     "parameters": {

@@ -272,7 +272,7 @@ def _load_error(path: Path, plugins_dir: Path, exc: Exception) -> str:
                 # advice. These names belong to this project, and telling
                 # somebody to install a same-named stranger from an index is a
                 # supply-chain hazard dressed up as a fix. A plugin written
-                # against a newer Mark reaches this line, and the honest answer
+                # against a newer JARVIS version reaches this line, and the honest answer
                 # is that the app is behind the plugin, not that a package is
                 # absent.
                 needed = "/".join(missing) + ".py"
@@ -301,7 +301,8 @@ def discover_plugins(plugins_dir: Path, core_tool_names: set[str],
 
     files = sorted(plugins_dir.glob("*.py"), key=lambda p: p.name)  # deterministic order
     for path in files:
-        if path.name.startswith("_"):
+        # An older ZIP installation may still have this removed built-in plugin.
+        if path.name.startswith("_") or path.name == "chat_draft.py":
             continue
         try:
             module_name = f"plugins.{path.stem}"

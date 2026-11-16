@@ -1,6 +1,6 @@
 """gui/window.py — MainWindow — lays the HUD out and owns every signal the rest of the app talks to.
 
-Split out of ui.py in Mark LVII; behaviour unchanged."""
+Split out of ui.py; behaviour unchanged."""
 from __future__ import annotations
 
 import json
@@ -89,12 +89,14 @@ from gui.providers_panel import (
 
 from gui.style import DISPLAY_CSS, btn_css, hud_font, px_font, scroll_css
 from gui.location_map import LocationPanel
-from gui.widgets import (ArcLogo, CommandFrame, DataRow, HeaderBar, HoloPanel, IconButton,
-                         PanelText, RingGauge, RoutineRow, Sparkline, StatusStrip,
-                         TaskRow)
+from gui.widgets import (ArcLogo, CommandFrame, DataRow, DockBar, DockDivider, HeaderBar,
+                         HoloPanel, IconButton, PanelText, RingGauge, RoutineRow, Sparkline,
+                         StateChip, StatusStrip, TaskRow)
 
 
 class MainWindow(QMainWindow):
+    _DOCK_H = 62          # height of the floating command dock
+    _CARD_GAP = 22        # space between floating cards and the window edge
     _request_update_sig = pyqtSignal()
     _update_progress_sig = pyqtSignal(str)
     _update_done_sig = pyqtSignal(bool, str)
@@ -102,7 +104,8 @@ class MainWindow(QMainWindow):
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
-    _osiris_command_sig = pyqtSignal(object)
+    _world_map_sig = pyqtSignal(bool)
+    _map_search_sig = pyqtSignal(object, str)
     _route_choices_sig = pyqtSignal(object)
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
@@ -113,9 +116,6 @@ class MainWindow(QMainWindow):
     _gesture_finished_sig = pyqtSignal(int, str)
     _scan_request_sig = pyqtSignal()
     _scan_result_sig = pyqtSignal(bytes, object)
-    _social_sig = pyqtSignal(str)
-    _chat_draft_sig = pyqtSignal(str, str)
-    _osiris_sig     = pyqtSignal(str)        # map URL — worker thread -> Qt UI thread
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
     _quiz_sig       = pyqtSignal(str, object, object)  # (topic, questions, grader)
     _quiz_hide_sig  = pyqtSignal()
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
+    _control_center_sig = pyqtSignal(bool)   # open / close the Control Centre
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -147,7 +148,9 @@ class MainWindow(QMainWindow):
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
         _ui_color = (_cfg.get("ui_color") or "").strip()
-        if _ui_color and _ui_color.lower() != DEFAULT_UI_COLOR:
+        # "#28e0ff" was the old cyan default; a saved copy of it is not a
+        # choice the user made, so it no longer overrides the orange look.
+        if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#28e0ff"):
             apply_ui_accent(_ui_color)
 
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
@@ -175,7 +178,6 @@ class MainWindow(QMainWindow):
         self._muted            = False
         self._current_file: str | None = None
         self._remote_overlay: RemoteKeyOverlay | None = None
-        self._osiris_window = None  # lazily created after first voice request
         self._customize_overlay: CustomizeOverlay | None = None
 
         central = QWidget()
@@ -187,13 +189,17 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
         root.addWidget(self._build_header())
 
+        # The centre takes the whole width. The old side columns are floating
+        # glass cards now (systems on the left, conversation on the right) and
+        # the command line lives in a dock at the bottom; the bottom margin
+        # keeps the dock from covering the content panel.
         body = QHBoxLayout()
-        body.setContentsMargins(18, 18, 18, 18)
-        body.setSpacing(16)
+        self._body_lay = body
+        body.setContentsMargins(28, 14, 28, self._DOCK_H + 40)
+        body.setSpacing(0)
 
-        # Original left sidebar: systems, telemetry, status and tasks.
+        # Systems, telemetry, status and tasks: a card that floats on the left.
         self._left_panel = self._build_left_panel()
-        body.addWidget(self._left_panel, stretch=0)
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
@@ -299,7 +305,7 @@ class MainWindow(QMainWindow):
         # STILL PICTURE needs a scene and a view and nothing else. A Qt
         # install without the multimedia plugins can still put a photo where
         # the avatar sits, and `generate_image` has been looking for somewhere
-        # to show its own output since Mark LV.
+        # to show its own output since an earlier release.
         self._video_scene = QGraphicsScene(self)
         self._image_item = QGraphicsPixmapItem()
         self._image_item.setTransformationMode(
@@ -347,12 +353,22 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(0, False)
         body.addWidget(self._center_split, stretch=5)
 
-        # Original right sidebar: conversations, command input and microphone.
+        # Conversation log and file drop: a card that floats on the right.
         self._right_panel = self._build_right_panel()
-        body.addWidget(self._right_panel, stretch=0)
 
         root.addLayout(body, stretch=1)
-        root.addWidget(self._build_footer())
+        # The status strip is still built (other code updates it) but the
+        # dock and the top bar carry what it used to say.
+        self._build_footer().hide()
+
+        # Floating layer: cards and the dock sit above the centre.
+        for card in (self._left_panel, self._right_panel):
+            card.setParent(central)
+        self._dock = self._build_dock()
+        self._dock.setParent(central)
+        self._set_card_open(self._left_panel, False)
+        self._set_card_open(self._right_panel, True)
+        self._dock.show()
 
         # Quick-access drawer (floating overlay, built after central widget layout is done)
         self._quick_drawer = self._build_quick_drawer()
@@ -393,14 +409,12 @@ class MainWindow(QMainWindow):
         self._scan_request_sig.connect(self._start_camera_scan)
         self._scan_result_sig.connect(self._show_camera_scan)
         self._content_sig.connect(self._show_content)
-        self._osiris_sig.connect(self._open_osiris)
         self._prototype_sig.connect(self._open_prototype)
-        self._social_sig.connect(self._open_social)
-        self._chat_draft_sig.connect(self._write_chat_draft)
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
         self._route_result_sig.connect(self._show_route)
-        self._osiris_command_sig.connect(self._control_osiris)
+        self._world_map_sig.connect(self._show_world_map)
+        self._map_search_sig.connect(self._finish_map_search)
         self._codejob_sig.connect(self._show_code_job)
         self._reconfig_sig.connect(self._show_setup)
         self._camera_sig.connect(self._show_camera_frame)
@@ -420,6 +434,7 @@ class MainWindow(QMainWindow):
         self._quiz_sig.connect(self._show_quiz)
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
+        self._control_center_sig.connect(self._set_control_center)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -442,7 +457,7 @@ class MainWindow(QMainWindow):
         sc_intr = QShortcut(QKeySequence("Escape"), self)
         sc_intr.activated.connect(self._do_interrupt)
         sc_world = QShortcut(QKeySequence("Ctrl+Shift+O"), self)
-        sc_world.activated.connect(self._open_default_osiris)
+        sc_world.activated.connect(lambda: self._show_world_map(True))
 
     def _open_prototype(self, text: str) -> None:
         from gui.prototype_panel import PrototypePanel
@@ -455,97 +470,6 @@ class MainWindow(QMainWindow):
         self._hud_cam_stack.setCurrentWidget(panel)
         panel.show_html(text)
 
-    def _open_social(self, site: str) -> None:
-        from core.social_sites import SITES
-
-        if site not in SITES:
-            return
-        if site in {"github", "chatgpt"}:
-            from gui.social_panel import open_in_browser
-
-            try:
-                opened = open_in_browser(site)
-            except (OSError, RuntimeError):
-                opened = False
-            if not opened:
-                self._log.append_log(f"SYS: Tarayıcı açılamadı. Adres {SITES[site][1]}")
-            return
-
-        self._open_social_in_core(site)
-
-    def _open_social_in_core(self, site: str) -> None:
-        from gui.social_panel import SocialPanel
-
-        panel = getattr(self, "_social_panel", None)
-        if panel is None:
-            panel = self._social_panel = SocialPanel(self._hud_cam_stack)
-            panel.site_requested.connect(self._open_social)
-            panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            self._hud_cam_stack.addWidget(panel)
-        self._hud_cam_stack.setCurrentWidget(panel)
-        panel.open_site(site)
-
-    def _write_chat_draft(self, site, text):
-        from core.social_sites import CHAT_DRAFT_LIMIT, CHAT_HOSTS
-
-        if not text.strip() or len(text) > CHAT_DRAFT_LIMIT:
-            self._log.append_log("SYS: En fazla 8.000 karakterlik bir sohbet taslağı yaz.")
-            return
-        panel = getattr(self, "_social_panel", None)
-        if site == "chatgpt" and (
-            panel is None or self._hud_cam_stack.currentWidget() is not panel
-            or not panel.is_chatgpt_open_in_core()
-        ):
-            QApplication.clipboard().setText(text)
-            self._log.append_log("SYS: ChatGPT taslağı kopyalandı. Tarayıcıdaki sohbet kutusuna yapıştır.")
-            self._open_social(site)
-            return
-        if site in CHAT_HOSTS:
-            self._open_social_in_core(site)
-            panel = self._social_panel
-        if (panel is None or self._hud_cam_stack.currentWidget() is not panel
-                or not panel.write_chat_draft(text)):
-            self._log.append_log("SYS: CORE alanında ChatGPT veya Claude sohbetini aç.")
-
-    def _open_osiris(self, url: str) -> None:
-        """Qt-thread slot: keep a single OSIRIS window and reuse it for commands."""
-        from gui.osiris_window import OsirisWindow
-        if self._osiris_window is None:
-            self._osiris_window = OsirisWindow(self._hud_cam_stack, embedded=True)
-            self._hud_cam_stack.addWidget(self._osiris_window)
-            self._osiris_window.back_requested.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            self._osiris_window.result.connect(self._osiris_result)
-        if self._osiris_window.navigate(url):
-            self._hud_cam_stack.setCurrentWidget(self._osiris_window)
-
-    def _open_default_osiris(self) -> None:
-        from plugins.osiris_world import build_url, DEFAULT_LAYERS
-        try:
-            self._open_osiris(build_url(DEFAULT_LAYERS))
-        except ValueError as exc:
-            self._log.append_log("OSIRIS: " + str(exc))
-
-    def _control_osiris(self, command: dict) -> None:
-        if command.get("kind") == "close":
-            if self._osiris_window is not None and self._hud_cam_stack.currentWidget() is self._osiris_window:
-                self._hud_cam_stack.setCurrentWidget(self.hud)
-                self._log.append_log("OSIRIS: CORE görünümüne dönüldü.")
-            return
-        if self._osiris_window is None:
-            self._open_default_osiris()
-        if self._osiris_window is not None:
-            accepted = self._osiris_window.command(command)
-            if accepted:
-                self._hud_cam_stack.setCurrentWidget(self._osiris_window)
-            else:
-                self._log.append_log("OSIRIS: Harita komutu kabul edilmedi.")
-
-    def _osiris_result(self, result: dict) -> None:
-        # Results are map state confirmations, never claims about live data accuracy.
-        status = result.get("status", "unverified")
-        self._log.append_log("OSIRIS [" + status + "]: " +
-                             json.dumps(result, ensure_ascii=False)[:1800])
-
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
         self._cam_preview.show_frame(img_bytes)
@@ -553,8 +477,8 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height()
         self._cam_preview.setGeometry(
-            cw.width() - self._right_panel.width() - pw - 22,
-            cw.height() - ph - 28,
+            cw.width() - self._right_inset() - pw - 22,
+            cw.height() - ph - self._DOCK_H - 44,
             pw, ph,
         )
 
@@ -1494,8 +1418,8 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height() or _CameraPreview._H
         self._cam_preview.setGeometry(
-            cw.width() - self._right_panel.width() - pw - 22,
-            cw.height() - ph - 28,
+            cw.width() - self._right_inset() - pw - 22,
+            cw.height() - ph - self._DOCK_H - 44,
             pw, ph,
         )
         # Clipboard panel — bottom-center
@@ -1548,61 +1472,71 @@ class MainWindow(QMainWindow):
             self._row_proc.set_value("--")
 
     def _build_header(self) -> QWidget:
+        """The top bar: the mark and the name on the left, what the assistant is
+        doing in the middle, the time and the settings on the right."""
         w = HeaderBar()
-        w.setFixedHeight(78)
+        w.setFixedHeight(66)
         self._header = w
         grid = QGridLayout(w)
-        grid.setContentsMargins(22, 12, 22, 12)
+        grid.setContentsMargins(26, 10, 26, 10)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(2, 1)
+
         left = QWidget(w)
         left_lay = QHBoxLayout(left)
         left_lay.setContentsMargins(0, 0, 0, 0)
-        left_lay.setSpacing(8)
+        left_lay.setSpacing(12)
+        left_lay.addWidget(ArcLogo(left))
+        name_col = QVBoxLayout()
+        name_col.setSpacing(0)
+        display = self._assistant_name.upper()
+        wordmark = "J.A.R.V.I.S" if display.replace(".", "") == "JARVIS" else display
+        self._title_lbl = QLabel(wordmark)
+        self._title_lbl.setFont(px_font(20, QFont.Weight.Light, spacing=7))
+        self._title_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        name_col.addWidget(self._title_lbl)
+        sub = QLabel(f"{self._subtitle(display).upper()}  ·  {APP_VERSION}")
+        sub.setFont(px_font(9, QFont.Weight.DemiBold, spacing=2.2))
+        sub.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        name_col.addWidget(sub)
+        left_lay.addLayout(name_col)
+        left_lay.addStretch()
+
+        self._state_chip = StateChip(w)
+
         right = QWidget(w)
         lay = QHBoxLayout(right)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        lay.setSpacing(18)
         lay.addStretch()
-        self._title_lbl = QLabel("J.A.R.V.I.S")
-        self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_lbl.setFont(px_font(27, QFont.Weight.DemiBold, spacing=5))
-        self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        grid.addWidget(left, 0, 0)
-        grid.addWidget(self._title_lbl, 0, 1)
-        grid.addWidget(right, 0, 2)
-
-        # Two drawers, and the split is by how often a thing is touched: the
-        # ones you set once behind the gear, the everyday switches behind the
-        # sliders. Separating them is what keeps each list short enough to
-        # read at a glance.
-        self._drawer_btn = QPushButton("⚙  AYARLAR")
-        self._drawer_btn.setStyleSheet(btn_css("primary"))
-        self._drawer_btn.setMinimumHeight(36)
-        self._drawer_btn.setFont(px_font(12, QFont.Weight.DemiBold))
-        self._drawer_btn.setCheckable(True)
-        self._drawer_btn.setToolTip("Setup — things you set once")
-        self._drawer_btn.clicked.connect(self._open_settings_page)
-        left_lay.addWidget(self._drawer_btn)
-        self._ctrl_btn = IconButton("sliders", 32)
-        self._ctrl_btn.setCheckable(True)
-        self._ctrl_btn.setToolTip("Controls — the everyday switches")
-        self._ctrl_btn.clicked.connect(self._toggle_controls)
-        self._ctrl_btn.hide()
         clock_col = QVBoxLayout()
         clock_col.setSpacing(0)
-        self._clock_lbl = QLabel("00:00:00")
-        self._clock_lbl.setFont(px_font(22, QFont.Weight.Light, mono=True, spacing=1))
+        self._clock_lbl = QLabel("00:00")
+        self._clock_lbl.setFont(px_font(24, QFont.Weight.Light, mono=True, spacing=2))
         self._clock_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         self._clock_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._clock_lbl)
         self._date_lbl = QLabel("")
-        self._date_lbl.setFont(px_font(9, QFont.Weight.DemiBold, spacing=1.6))
+        self._date_lbl.setFont(px_font(9, QFont.Weight.DemiBold, spacing=2))
         self._date_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._date_lbl)
         lay.addLayout(clock_col)
-        left_lay.addStretch()
+
+        # The settings page: everything you set once.
+        self._drawer_btn = QPushButton("AYARLAR")
+        self._drawer_btn.setStyleSheet(btn_css("primary", align="center"))
+        self._drawer_btn.setFixedSize(112, 38)
+        self._drawer_btn.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2))
+        self._drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._drawer_btn.setCheckable(True)
+        self._drawer_btn.setToolTip("Ayarlar — bir kez yapılandırılan her şey")
+        self._drawer_btn.clicked.connect(self._open_settings_page)
+        lay.addWidget(self._drawer_btn)
+
+        grid.addWidget(left, 0, 0)
+        grid.addWidget(self._state_chip, 0, 1, Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(right, 0, 2)
         return w
 
     def _build_update_button(self):
@@ -1660,7 +1594,7 @@ class MainWindow(QMainWindow):
     def _restart_after_update(self):
         """An update restarts JARVIS automatically, after its process exits.
 
-        A supervised OSIRIS launch uses exit code 75; a normal launch uses a
+        A supervised launch uses exit code 75; a normal launch uses a
         separate helper. Never close the current GUI if the helper cannot
         start, so users can still see the error and restart manually.
         """
@@ -1686,8 +1620,12 @@ class MainWindow(QMainWindow):
             )
 
     def _tick_clock(self):
-        self._clock_lbl.setText(time.strftime("%H:%M:%S"))
-        self._date_lbl.setText(time.strftime("%a %d %b %Y"))
+        self._clock_lbl.setText(time.strftime("%H:%M"))
+        days = ("PZT", "SAL", "ÇAR", "PER", "CUM", "CMT", "PAZ")
+        months = ("OCA", "ŞUB", "MAR", "NİS", "MAY", "HAZ",
+                  "TEM", "AĞU", "EYL", "EKİ", "KAS", "ARA")
+        now = time.localtime()
+        self._date_lbl.setText(f"{days[now.tm_wday]}  {now.tm_mday:02d} {months[now.tm_mon - 1]} {now.tm_year}")
 
     @staticmethod
     def _subtitle(display: str) -> str:
@@ -1695,18 +1633,49 @@ class MainWindow(QMainWindow):
                 if display.replace(".", "") == "JARVIS" else "Personal AI Assistant")
 
     def _fit_side_columns(self) -> None:
-        """Side columns grow with the window, within limits, so the centre keeps
-        the space a larger window was opened for."""
-        W = self.width()
-        if hasattr(self, "_left_panel"):
-            self._left_panel.setFixedWidth(max(190, min(300, int(W * 0.18))))
-        if hasattr(self, "_right_panel"):
-            self._right_panel.setFixedWidth(max(290, min(460, int(W * 0.27))))
-        # The network graph is the first thing to give up its space: below this
-        # height the gauges and the task list need it more, and the rate itself
-        # is still in STATUS.
+        """Lay out the floating layer: the dock along the bottom, the systems
+        card on the left and the conversation card on the right, both between
+        the top bar and the dock. Called on every resize."""
+        cw = self.centralWidget()
+        if cw is None or not hasattr(self, "_dock"):
+            return
+        W, H = cw.width(), cw.height()
+        gap = self._CARD_GAP
+        dock_w = max(560, min(1040, W - 2 * gap))
+        dock_y = H - self._DOCK_H - 20
+        self._dock.setGeometry(int((W - dock_w) / 2), int(dock_y), int(dock_w), self._DOCK_H)
+        top = (self._header.height() if hasattr(self, "_header") else 66) + gap
+        bottom = dock_y - gap
+        card_h = max(220, int(bottom - top))
+        left_w = max(250, min(330, int(W * 0.20)))
+        right_w = max(300, min(440, int(W * 0.25)))
+        self._left_panel.setGeometry(gap, int(top), left_w, card_h)
+        self._right_panel.setGeometry(int(W - gap - right_w), int(top), right_w, card_h)
+        # The centre makes room for whichever cards are open, so a card never
+        # covers the briefing panel; the core stays centred between them.
+        if hasattr(self, "_body_lay"):
+            lm = left_w + 2 * gap if self._left_panel.isVisible() else 28
+            rm = right_w + 2 * gap if self._right_panel.isVisible() else 28
+            self._body_lay.setContentsMargins(int(lm), 14, int(rm), self._DOCK_H + 40)
+        # The network graph is the first thing to give up its space.
         if hasattr(self, "_net_panel"):
-            self._net_panel.setVisible(self.height() >= 820)
+            self._net_panel.setVisible(card_h >= 700)
+        for wdg in (self._left_panel, self._right_panel, self._dock):
+            wdg.raise_()
+
+    def _set_card_open(self, card: QWidget, opened: bool) -> None:
+        card.setVisible(bool(opened))
+        btn = {id(self._left_panel): getattr(self, "_sys_btn", None),
+               id(self._right_panel): getattr(self, "_chat_btn", None)}.get(id(card))
+        if btn is not None and btn.isChecked() != bool(opened):
+            btn.setChecked(bool(opened))
+        self._fit_side_columns()
+
+    def _right_inset(self) -> int:
+        """How much of the right edge the conversation card covers right now."""
+        if hasattr(self, "_right_panel") and self._right_panel.isVisible():
+            return self._right_panel.width() + self._CARD_GAP
+        return 0
 
     def _refresh_identity_rows(self) -> None:
         """Engine and voice, read from config — on start and whenever they change."""
@@ -1734,14 +1703,15 @@ class MainWindow(QMainWindow):
         ])
 
     def _build_left_panel(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        w.setFixedWidth(200)
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        w = HoloPanel("SİSTEM", "CANLI", pad=14)
+        lay = w.body
+        lay.setSpacing(12)
+        close = IconButton("close", 24)
+        close.setToolTip("Kapat")
+        close.clicked.connect(lambda: self._set_card_open(w, False))
+        w.add_header_widget(close)
 
-        sysp = HoloPanel("SYSTEMS", "LIVE")
+        sysp = HoloPanel("DONANIM", "", flat=True)
         grid_w = QWidget()
         grid_w.setStyleSheet("background: transparent;")
         grid = QGridLayout(grid_w)
@@ -1756,12 +1726,12 @@ class MainWindow(QMainWindow):
         sysp.body.addWidget(grid_w)
         lay.addWidget(sysp)
 
-        self._net_panel = HoloPanel("NETWORK", "--")
+        self._net_panel = HoloPanel("AĞ", "--", flat=True)
         self._net_spark = Sparkline(samples=60, floor=0.25)
         self._net_panel.body.addWidget(self._net_spark)
         lay.addWidget(self._net_panel)
 
-        stp = HoloPanel("STATUS", "")
+        stp = HoloPanel("DURUM", "", flat=True)
         os_name = {"Windows": "WINDOWS", "Darwin": "MACOS", "Linux": "LINUX"}.get(_OS, _OS.upper())
         self._row_uptime = DataRow("UPTIME", "--:--", "GREEN")
         self._row_proc = DataRow("PROCESSES", "--")
@@ -1776,7 +1746,7 @@ class MainWindow(QMainWindow):
 
         # Background tasks (core/tasks). Read from the engine every two seconds —
         # an in-memory list, no disk — and hidden rows cost nothing to paint.
-        self._tasks_panel = HoloPanel("KONUM", "")
+        self._tasks_panel = HoloPanel("KONUM", "", flat=True)
         rows_box = QWidget()
         rows_box.setStyleSheet("background: transparent;")
         rows_lay = QVBoxLayout(rows_box)
@@ -1997,45 +1967,74 @@ class MainWindow(QMainWindow):
         self._show_content("BACKGROUND TASK", body[:4000])
 
     def _build_right_panel(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        w.setFixedWidth(300)
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        w = HoloPanel("SOHBET", "KAYIT", pad=14)
+        close = IconButton("close", 24)
+        close.setToolTip("Kapat")
+        close.clicked.connect(lambda: self._set_card_open(w, False))
+        w.add_header_widget(close)
 
-        comm = HoloPanel("COMMUNICATIONS", "LOG")
         self._log = LogWidget()
-        comm.body.addWidget(self._log)
-        lay.addWidget(comm, stretch=1)
+        w.body.addWidget(self._log, stretch=1)
 
-        cmd = HoloPanel("COMMAND", "INPUT")
         self._drop_zone = FileDropZone()
         self._drop_zone.file_selected.connect(self._on_file_selected)
-        cmd.body.addWidget(self._drop_zone)
+        w.body.addWidget(self._drop_zone)
 
-        self._file_hint = QLabel("No file loaded")
+        self._file_hint = QLabel("Dosya yüklenmedi")
         self._file_hint.setFont(px_font(10))
         self._file_hint.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._file_hint.setWordWrap(True)
-        cmd.body.addWidget(self._file_hint)
+        w.body.addWidget(self._file_hint)
+        return w
 
-        cmd.body.addWidget(self._build_input_row())
-
-        row = QHBoxLayout()
+    def _build_dock(self) -> QWidget:
+        """The floating command dock: card switches on the left, the command
+        line in the middle, the microphone, interrupt and everyday controls on
+        the right."""
+        dock = DockBar()
+        row = QHBoxLayout(dock)
+        row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(8)
-        self._mute_btn = IconButton("mic", 38, "MIC ACTIVE", "GREEN")
-        self._mute_btn.setToolTip("Mute or unmute the microphone  [F4]")
+
+        self._sys_btn = IconButton("pulse", 42)
+        self._sys_btn.setCheckable(True)
+        self._sys_btn.setToolTip("Sistem kartı")
+        self._sys_btn.toggled.connect(lambda on: self._set_card_open(self._left_panel, on))
+        row.addWidget(self._sys_btn)
+        self._chat_btn = IconButton("chat", 42)
+        self._chat_btn.setCheckable(True)
+        self._chat_btn.setToolTip("Sohbet kartı")
+        self._chat_btn.toggled.connect(lambda on: self._set_card_open(self._right_panel, on))
+        row.addWidget(self._chat_btn)
+        self._cc_btn = IconButton("grid", 42)
+        self._cc_btn.setCheckable(True)
+        self._cc_btn.setToolTip("Kontrol Merkezi — sinir ağı ve canlı etkinlik")
+        self._cc_btn.clicked.connect(lambda: self._set_control_center(self._cc_btn.isChecked()))
+        row.addWidget(self._cc_btn)
+        attach = IconButton("attach", 42)
+        attach.setToolTip("Dosya veya klasör ekle")
+        attach.clicked.connect(lambda: self._drop_zone._browse())
+        row.addWidget(attach)
+        row.addWidget(DockDivider())
+
+        row.addWidget(self._build_input_row(), stretch=1)
+        row.addWidget(DockDivider())
+
+        self._mute_btn = IconButton("mic", 42, "", "GREEN")
+        self._mute_btn.setToolTip("Mikrofonu aç / kapat  [F4]")
         self._mute_btn.clicked.connect(self._toggle_mute)
         self._style_mute_btn()
-        row.addWidget(self._mute_btn, 1)
-        self._interrupt_btn = IconButton("stop", 38, "INTERRUPT", "MUTED_C")
-        self._interrupt_btn.setToolTip("Stop the assistant mid-sentence  [ESC]")
+        row.addWidget(self._mute_btn)
+        self._interrupt_btn = IconButton("stop", 42, "", "MUTED_C")
+        self._interrupt_btn.setToolTip("Asistanı sözünün ortasında durdur  [ESC]")
         self._interrupt_btn.clicked.connect(self._do_interrupt)
-        row.addWidget(self._interrupt_btn, 1)
-        cmd.body.addLayout(row)
-        lay.addWidget(cmd)
-        return w
+        row.addWidget(self._interrupt_btn)
+        self._ctrl_btn = IconButton("sliders", 42)
+        self._ctrl_btn.setCheckable(True)
+        self._ctrl_btn.setToolTip("Kontroller — her gün kullanılan anahtarlar")
+        self._ctrl_btn.clicked.connect(self._toggle_controls)
+        row.addWidget(self._ctrl_btn)
+        return dock
 
     def _build_quick_drawer(self) -> QWidget:
         """Floating panel under the gear: the things you set once."""
@@ -2187,24 +2186,53 @@ class MainWindow(QMainWindow):
             chosen = places[labels.index(label)]
         self._explore_city_map()
         self._large_city_map.route_points = []
+        self._large_city_map.show_center_marker = True
         self._large_city_map.zoom = chosen['zoom']
         self._large_city_map.set_location(chosen['lat'], chosen['lon'])
         self._map_place_label.setText(chosen['name'])
         self._log.append_log('HARİTA: ' + chosen['name'])
 
-    def _explore_city_map(self):
-        from gui.location_map import CityMap
+    def _show_world_map(self, visible):
+        if visible:
+            self._explore_city_map(world=True)
+        elif self._hud_cam_stack.currentWidget() is getattr(self, "_city_explorer", None):
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+
+    def _explore_city_map(self, *, world=False):
+        from gui.location_map import CityMap, tile_position
         if not hasattr(self, '_city_explorer'):
             self._city_explorer = QWidget()
             layout = QVBoxLayout(self._city_explorer)
+            layout.setContentsMargins(10, 8, 10, 6)
             toolbar = QHBoxLayout()
-            back = QPushButton('CORE’a dön')
-            back.clicked.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            toolbar.addWidget(back)
-            toolbar.addStretch()
-            locate = QPushButton('Konumuma dön')
-            locate.clicked.connect(self._center_city_map)
-            toolbar.addWidget(locate)
+            name = QLabel("Dünya Haritası")
+            name.setFont(px_font(16, QFont.Weight.DemiBold))
+            toolbar.addWidget(name)
+
+            self._map_search_input = QLineEdit()
+            self._map_search_input.setPlaceholderText("Şehir, adres veya yer ara")
+            self._map_search_input.setAccessibleName("Haritada yer ara")
+            self._map_search_input.setMaxLength(500)
+            self._map_search_input.setStyleSheet(
+                f"QLineEdit {{ color: {C.WHITE}; background: {C.DARK}; "
+                f"border: 1px solid {C.PRI_DIM}; border-radius: 6px; padding: 6px 9px; }}"
+            )
+            self._map_search_input.returnPressed.connect(self._search_city_map)
+            toolbar.addWidget(self._map_search_input, 1)
+
+            def button(label, callback):
+                widget = QPushButton(label)
+                widget.setStyleSheet(btn_css("dim", align="center"))
+                widget.clicked.connect(callback)
+                toolbar.addWidget(widget)
+                return widget
+
+            self._map_search_button = button("Ara", self._search_city_map)
+            button("−", lambda: self._large_city_map.zoom_by(-1)).setAccessibleName("Uzaklaştır")
+            button("+", lambda: self._large_city_map.zoom_by(1)).setAccessibleName("Yakınlaştır")
+            button("Dünya", lambda: self._explore_city_map(world=True))
+            button("Konumum", self._center_city_map)
+            button("CORE’a dön", lambda: self._show_world_map(False))
             layout.addLayout(toolbar)
             self._map_place_label = QLabel('Haritayı sürükleyerek gezin · Tekerlekle yakınlaştırın')
             self._map_place_label.setWordWrap(True)
@@ -2214,14 +2242,49 @@ class MainWindow(QMainWindow):
             self._large_city_map.interactive = True
             self._large_city_map.setCursor(Qt.CursorShape.OpenHandCursor)
             layout.addWidget(self._large_city_map, 1)
-            layout.addWidget(QLabel('© OpenStreetMap contributors · Konum IP üzerinden yaklaşıktır'))
+            attribution = QLabel('<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap katkıcıları</a>')
+            attribution.setOpenExternalLinks(True)
+            layout.addWidget(attribution)
             self._hud_cam_stack.addWidget(self._city_explorer)
             small = self._location_panel.map
             self._large_city_map.zoom = small.zoom
             self._large_city_map.center = small.center or (2 ** small.zoom / 2, 2 ** small.zoom / 2)
+        if world:
+            self._large_city_map.route_points = []
+            self._large_city_map.show_center_marker = False
+            self._large_city_map.zoom = 2
+            self._large_city_map.center = tile_position(20, 0, 2)
+            self._map_place_label.setText("Haritayı sürükleyerek gezin · Tekerlekle yakınlaştırın")
         self._hud_cam_stack.setCurrentWidget(self._city_explorer)
         self._large_city_map.load_tiles()
         self._large_city_map.update()
+
+    def _search_city_map(self):
+        place = self._map_search_input.text().strip()
+        if not place or not self._map_search_button.isEnabled():
+            return
+        self._map_search_button.setEnabled(False)
+        self._map_place_label.setText("Yer aranıyor…")
+
+        def work():
+            from plugins.normal_map import search
+            try:
+                results = search(place)
+                self._map_search_sig.emit(results, "" if results else "Yer bulunamadı. Şehir veya ülkeyi de yazın.")
+            except Exception:
+                self._map_search_sig.emit([], "Yer arama servisine ulaşılamadı. Tekrar deneyin.")
+
+        threading.Thread(target=work, daemon=True, name="jarvis-map-search").start()
+
+    def _finish_map_search(self, places, message):
+        self._map_search_button.setEnabled(True)
+        if self._hud_cam_stack.currentWidget() is not self._city_explorer:
+            return
+        if places:
+            self._map_place_label.clear()
+            self._show_map_places(places)
+        else:
+            self._map_place_label.setText(message)
 
     def _center_city_map(self):
         small = self._location_panel.map
@@ -2229,6 +2292,7 @@ class MainWindow(QMainWindow):
             self._log.append_log('HARİTA: Güncel konum henüz alınamadı.')
             return
         self._large_city_map.route_points = []
+        self._large_city_map.show_center_marker = True
         self._large_city_map.zoom = small.zoom
         self._large_city_map.center = small.center
         self._map_place_label.setText(self._location_panel.city.text() + ' · Yaklaşık konum')
@@ -2266,13 +2330,17 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_ctrl_btn"):
             self._ctrl_btn.setChecked(False)
 
-    def _place_drawer(self, drawer, left: int):
-        _W = 250
+    def _place_drawer(self, drawer, left: int, above_dock: bool = False):
+        _W = 270
         drawer.setFixedWidth(_W)
         drawer.adjustSize()
-        top = self._header.height() + 2 if hasattr(self, "_header") else 60
+        h = drawer.sizeHint().height()
+        if above_dock and hasattr(self, "_dock"):
+            top = self._dock.y() - h - 12
+        else:
+            top = self._header.height() + 8 if hasattr(self, "_header") else 60
         x = max(12, min(int(left), max(12, self.centralWidget().width() - _W - 12)))
-        drawer.setGeometry(x, top, _W, drawer.sizeHint().height())
+        drawer.setGeometry(x, int(top), _W, h)
 
     def _position_quick_drawer(self):
         if hasattr(self, "_quick_drawer"):
@@ -2284,24 +2352,25 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_ctrl_drawer"):
             left = 12
             try:
-                left = max(12, self._ctrl_btn.mapTo(self.centralWidget(),
-                                                    QPoint(0, 0)).x() - 8)
+                btn_x = self._ctrl_btn.mapTo(self.centralWidget(), QPoint(0, 0)).x()
+                left = max(12, btn_x + self._ctrl_btn.width() - 270)
             except Exception:
                 pass
-            self._place_drawer(self._ctrl_drawer, left)
+            self._place_drawer(self._ctrl_drawer, left, above_dock=True)
 
     def _build_input_row(self) -> QWidget:
         box = CommandFrame()
+        box.setFixedHeight(42)
         row = QHBoxLayout(box)
-        row.setContentsMargins(12, 0, 4, 0)
-        row.setSpacing(6)
+        row.setContentsMargins(18, 0, 4, 0)
+        row.setSpacing(8)
         prompt = QLabel("›")
-        prompt.setFont(px_font(20, QFont.Weight.Light))
+        prompt.setFont(px_font(22, QFont.Weight.Light))
         prompt.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         row.addWidget(prompt)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Type a command or question…")
+        self._input.setPlaceholderText(f"{self._assistant_name}'e bir şey yaz ya da sor…")
         self._input.setFont(px_font(15))
         self._input.setStyleSheet(f"""
             QLineEdit {{
@@ -2313,8 +2382,8 @@ class MainWindow(QMainWindow):
         self._input.returnPressed.connect(self._send)
         row.addWidget(self._input, stretch=1)
 
-        send = IconButton("send", 32)
-        send.setToolTip("Send  [Enter]")
+        send = IconButton("send", 34)
+        send.setToolTip("Gönder  [Enter]")
         send.clicked.connect(self._send)
         row.addWidget(send)
         return box
@@ -2420,10 +2489,12 @@ class MainWindow(QMainWindow):
         # Phase strip: where in the job it is, readable at a glance.
         strip = []
         phases = list(job.get("phases") or self._JOB_PHASES)
-        here = phases.index(status) if status in phases else (
-            len(phases) if finished else -1)
+        phase = job.get("phase", status)
+        here = phases.index(phase) if phase in phases else -1
         for i, ph in enumerate(phases):
-            c = C.GREEN if i < here else (C.PRI if i == here else C.TEXT_DIM)
+            c = C.GREEN if i < here else C.TEXT_DIM
+            if i == here:
+                c = C.RED if status == "failed" else C.GREEN if finished and status == "done" else C.PRI
             mark = "●" if i <= here else "○"
             strip.append(f'<span style="color:{c};">{mark} {ph.upper()}</span>')
         if finished:
@@ -2432,9 +2503,11 @@ class MainWindow(QMainWindow):
 
         parts = [f'<div style="color:{C.TEXT}; font-family:Courier New;">',
                  f'<div style="color:{C.TEXT_DIM};">{"  ".join(strip)}'
-                 f'&nbsp;&nbsp;·&nbsp;&nbsp;{took:.0f}s</div>',
-                 f'<div style="margin-top:6px;"><span style="color:{C.TEXT_DIM};">'
-                 f'REQUEST&nbsp;</span>{e(job.get("request", ""))}</div>']
+                 f'&nbsp;&nbsp;·&nbsp;&nbsp;{took:.0f}s</div>']
+        if finished and job.get("result"):
+            parts.append(f'<div style="margin-top:6px;">{e(job["result"])}</div>')
+        parts.append(f'<div style="margin-top:6px;"><span style="color:{C.TEXT_DIM};">'
+                     f'REQUEST&nbsp;</span>{e(job.get("request", ""))}</div>')
         if job.get("summary"):
             parts.append(
                 f'<div style="color:{C.WHITE}; border-left:2px solid {C.PRI};'
@@ -2468,7 +2541,7 @@ class MainWindow(QMainWindow):
         self._content_title_lbl.setText(title)
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
         bar = self._content_display.verticalScrollBar()
-        keep = 0 if first else bar.value()
+        keep = 0 if first or (finished and status == "failed") else bar.value()
         self._content_display.setHtml("".join(parts))
         # setHtml jumps to the top; put the reader back where they were.
         bar.setValue(keep)
@@ -2787,6 +2860,8 @@ class MainWindow(QMainWindow):
     def _on_file_selected(self, path: str):
         self._current_file = path
         p    = Path(path)
+        from core import activity
+        activity.record("files", f"Dosya yüklendi: {p.name}", "ok")
         cat  = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         if cat == "folder":
@@ -3371,7 +3446,7 @@ class MainWindow(QMainWindow):
         pw = ClipboardPanel._W
         ph = self._clipboard_panel.sizeHint().height() or ClipboardPanel._H
         x = (cw.width() - pw) // 2
-        y = cw.height() - ph - 6
+        y = cw.height() - ph - self._DOCK_H - 32
         self._clipboard_panel.setGeometry(x, y, pw, ph)
         self._clipboard_panel.raise_()
 
@@ -3417,11 +3492,8 @@ class MainWindow(QMainWindow):
         if not txt: return
         self._input.clear()
         from core.camera_scan import is_scan_command
-        from core.social_sites import chat_draft_command, site_for_command
+        from plugins.normal_map import map_command_for_text
 
-        if draft := chat_draft_command(txt):
-            self._write_chat_draft(*draft)
-            return
         self._log.append_log(f"You: {txt}")
 
         if txt.rstrip(".!?").casefold() in {"kitabı araştır", "bu kitabı araştır", "kitabı yansıt"}:
@@ -3430,9 +3502,9 @@ class MainWindow(QMainWindow):
         if is_scan_command(txt):
             self._start_camera_scan()
             return
-        site = site_for_command(txt)
-        if site:
-            self._open_social(site)
+        map_command = map_command_for_text(txt)
+        if map_command is not None:
+            self._show_world_map(map_command)
             return
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
@@ -3442,6 +3514,46 @@ class MainWindow(QMainWindow):
         self.hud.speaking = (state == "SPEAKING")
         if hasattr(self, "_state_chip"):
             self._state_chip.set_state(state)
+        if getattr(self, "_control_center", None) is not None:
+            self._control_center.set_state(state, state == "SPEAKING", self._muted)
+
+    # ── Control Centre ─────────────────────────────────────────────────────────
+    def _set_control_center(self, opened: bool) -> None:
+        """Show the Control Centre (network + live activity) where the core
+        sits, or give the centre back to the core."""
+        if opened:
+            if getattr(self, "_control_center", None) is None:
+                from gui.control_center import ControlCenter
+                cc = self._control_center = ControlCenter(self._hud_cam_stack)
+                cc.back_requested.connect(lambda: self._set_control_center(False))
+                cc.talk_requested.connect(self._talk_from_control_center)
+                cc.settings_requested.connect(self._settings_for_apps)
+                self._hud_cam_stack.addWidget(cc)
+                self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
+            self._control_center.set_state(self.hud.state, self.hud.speaking, self._muted)
+            self._hud_cam_stack.setCurrentWidget(self._control_center)
+        elif self._hud_cam_stack.currentWidget() is getattr(self, "_control_center", None):
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+        self._sync_cc_btn()
+
+    def _sync_cc_btn(self, *_a) -> None:
+        if hasattr(self, "_cc_btn"):
+            on = (getattr(self, "_control_center", None) is not None
+                  and self._hud_cam_stack.currentWidget() is self._control_center)
+            if self._cc_btn.isChecked() != on:
+                self._cc_btn.setChecked(on)
+
+    def _settings_for_apps(self, message: str) -> None:
+        self._log.append_log(f"SYS: {message}")
+        self._open_settings_page()
+        page = getattr(self, "_settings_page", None)
+        if page is not None and hasattr(page, "show_category"):
+            page.show_category("Bağlantılar")
+
+    def _talk_from_control_center(self) -> None:
+        if self._muted:
+            self._toggle_mute()
+        self._log.append_log("SYS: Dinliyorum — konuşabilirsin.")
 
     def _check_config(self) -> bool:
         d = _read_full_config()

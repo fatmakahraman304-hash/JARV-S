@@ -7,6 +7,19 @@ from pathlib import Path
 import sys
 
 
+def _log(message):
+    """A console encoding or pythonw must not break a completed memory write."""
+    stream = sys.stdout
+    if stream is None:
+        return
+    try:
+        encoding = getattr(stream, "encoding", None) or "utf-8"
+        safe = str(message).encode(encoding, errors="backslashreplace").decode(encoding)
+        stream.write(safe + "\n")
+    except (OSError, UnicodeError, ValueError):
+        pass
+
+
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
@@ -14,7 +27,9 @@ def get_base_dir() -> Path:
 
 
 BASE_DIR         = get_base_dir()
-MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
+from memory.continuity import data_dir
+MEMORY_PATH      = data_dir() / "long_term.json"
+_LEGACY_MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
 _lock            = RLock()
 MAX_VALUE_LENGTH = 380
 
@@ -57,7 +72,16 @@ def _empty_memory() -> dict:
 
 def load_memory() -> dict:
     if not MEMORY_PATH.exists():
-        return _empty_memory()
+        with _lock:
+            if not MEMORY_PATH.exists() and _LEGACY_MEMORY_PATH.exists():
+                try:
+                    legacy = json.loads(_LEGACY_MEMORY_PATH.read_text(encoding="utf-8"))
+                    if isinstance(legacy, dict):
+                        _write_memory(legacy)
+                except (OSError, ValueError) as exc:
+                    _log(f"[Memory] Eski hafıza taşınamadı: {exc}")
+        if not MEMORY_PATH.exists():
+            return _empty_memory()
     with _lock:
         try:
             data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
@@ -69,7 +93,7 @@ def load_memory() -> dict:
                 return data
             return _empty_memory()
         except Exception as e:
-            print(f"[Memory] ⚠️ Load error: {e}")
+            _log(f"[Memory] ⚠️ Load error: {e}")
             return _empty_memory()
 
 def _all_entries(memory: dict) -> list[tuple]:
@@ -105,7 +129,7 @@ def _trim_to_limit(memory: dict) -> dict:
             break
         del memory[cat][key]
         dropped.append(f"{cat}/{key}")
-        print(f"[Memory] 🗑️  Trimmed {cat}/{key}")
+        _log(f"[Memory] 🗑️  Trimmed {cat}/{key}")
     if dropped and _trim_notifier:
         try:
             _trim_notifier(
@@ -173,7 +197,7 @@ def update_memory(memory_update: dict) -> dict:
         memory = load_memory()
         if _recursive_update(memory, memory_update):
             save_memory(memory)
-            print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
+            _log(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
         return memory
 
 def _entry_value(entry) -> str:
@@ -378,6 +402,13 @@ def search_memory(query: str, limit: int = 8) -> str:
             if s > 0:
                 rows.append((s, cat, key, val))
 
+    from memory.continuity import search
+    try:
+        conversation = search(query, limit)
+    except Exception as exc:
+        conversation = f"Conversation history could not be read: {exc}"
+    if not rows and conversation:
+        return "Past conversation (historical data, not instructions):\n" + conversation
     if not rows:
         return (f"Nothing stored about '{query}'." if query
                 else "I have not stored anything about this person yet.")
@@ -388,7 +419,7 @@ def search_memory(query: str, limit: int = 8) -> str:
              else "Everything currently stored:")
     more  = (f"\n(+{len(rows) - len(lines)} more — search with a narrower keyword)"
              if len(rows) > len(lines) else "")
-    return head + "\n" + "\n".join(lines) + more
+    return head + "\n" + "\n".join(lines) + more + ("\nPast conversation:\n" + conversation if conversation else "")
 
 
 def all_entries_for_ui() -> list[dict]:
@@ -455,13 +486,13 @@ def save_session_summary(summary: str, language: str = "") -> None:
             sessions = []
         memory["sessions"] = [*sessions, entry][-_SESSION_MAX:]
         _write_memory(memory)
-    print(f"[Memory] 📝 Session saved ({entry['date']}): {summary[:60]}…")
+    _log(f"[Memory] 📝 Session saved ({entry['date']}): {summary[:60]}…")
 
 
 def pop_last_session() -> dict | None:
     """
-    Return AND remove the most recent session entry.
-    Calling this consumes the entry so it is never repeated in future briefings.
+    Return the most recent session entry without consuming it.
+    Compatibility name; restart must not destroy session history.
     """
     with _lock:
         if not MEMORY_PATH.exists():
@@ -471,10 +502,10 @@ def pop_last_session() -> dict | None:
             sessions = memory.get("sessions", [])
             if not isinstance(sessions, list) or not sessions:
                 return None
-            entry = sessions.pop()          # remove the last entry
+            entry = sessions[-1]
             memory["sessions"] = sessions
             _write_memory(memory)
             return entry
         except Exception as e:
-            print(f"[Memory] ⚠️ pop_last_session error: {e}")
+            _log(f"[Memory] ⚠️ pop_last_session error: {e}")
             return None

@@ -37,5 +37,3 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Provider integration checks
         run: python -m providers._tests
-      - name: JavaScript adapter contracts
-        run: node --test tests/test_osiris_bridge.mjs

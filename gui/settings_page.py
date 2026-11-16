@@ -2,8 +2,7 @@
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QAbstractButton, QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
-from core.social_sites import SITES
+    QLabel, QLineEdit, QPushButton, QCheckBox, QPlainTextEdit, QScrollArea, QWidget, QStackedWidget, QFrame)
 from gui.theme import C
 from gui.style import px_font
 
@@ -56,6 +55,8 @@ class SettingsPage(QDialog):
         self.setFont(px_font(13))
         self.setStyleSheet(f'''
             QDialog {{ background: {C.BG}; }}
+            QLineEdit, QPlainTextEdit {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding: 8px; }}
+            QCheckBox {{ color: {C.TEXT}; }}
             QLabel {{ color: {C.TEXT}; background: transparent; }}
             QWidget#page, QWidget#body {{ background: {C.BG}; }}
             QFrame#card {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 12px; }}
@@ -176,16 +177,14 @@ class SettingsPage(QDialog):
             control.clicked.connect(change)
             self.syncs.append(sync)
             sync()
-        def action_button(title, callback, text='Aç  →'):
-            button = QPushButton(text)
+        def action(rows, title, detail, callback):
+            button = QPushButton('Aç  →')
             button.setAccessibleName(title)
             def open_panel():
                 self.hide()
                 callback()
             button.clicked.connect(open_panel)
-            return button
-        def action(rows, title, detail, callback):
-            card(rows, title, detail).addWidget(action_button(title, callback))
+            card(rows, title, detail).addWidget(button)
         general = page('Genel', 'Başlangıç ve günlük kullanım tercihlerin.')
         update_row = card(general, 'JARVIS güncellemesi', 'GitHub’daki yeni sürümü kontrol et ve yükle.')
         update_row.addWidget(owner._build_update_button())
@@ -204,42 +203,142 @@ class SettingsPage(QDialog):
         brain = page('Zekâ ve hafıza', 'Modellerini ve asistanın hatırladıklarını yönet.')
         action(brain, 'Motor ve sağlayıcılar', 'Yapay zekâ modelleri ve bağlantı ayarları.', owner._open_providers)
         action(brain, 'Hafıza', 'Kaydedilmiş bilgileri görüntüle ve düzenle.', owner._open_memory_panel)
+        app_page = page('Uygulamalar', 'Uygulama adını yaz: kaynakları araştır, eksik kontrolleri geliştir ve test et.')
+        app_name = QLineEdit()
+        app_name.setPlaceholderText('Örneğin: CapCut, WhatsApp')
+        app_name.setAccessibleName('Uygulama adı')
+        app_name.setMaxLength(100)
+        app_page.insertWidget(app_page.count()-1, app_name)
+        app_goal = QLineEdit()
+        app_goal.setPlaceholderText('İstenen işlemler (boş bırakırsan mevcut özellikleri araştırır)')
+        app_goal.setAccessibleName('İstenen uygulama işlemleri')
+        app_goal.setMaxLength(4000)
+        app_page.insertWidget(app_page.count()-1, app_goal)
+        auto_publish = QCheckBox('Testler ve GitHub kontrolleri geçerse main’e al ve güncelle')
+        auto_publish.setChecked(True)
+        app_page.insertWidget(app_page.count()-1, auto_publish)
+        app_state = QLabel('Kod testleri, uygulamadaki tüm işlemlerin çalıştığı anlamına gelmez. Sonuçlar ayrı doğrulanır.')
+        app_state.setWordWrap(True)
+        app_page.insertWidget(app_page.count()-1, app_state)
+        app_results = QPlainTextEdit()
+        app_results.setReadOnly(True)
+        app_results.setAccessibleName('Uygulama geliştirme sonuçları')
+        app_results.setMinimumHeight(160)
+        app_page.insertWidget(app_page.count()-1, app_results)
+        def refresh_apps():
+            from core.application_learning import report
+            try:
+                content = report()
+                if app_results.toPlainText() != content:
+                    app_results.setPlainText(content)
+            except Exception as exc:
+                app_state.setText(f'Kayıt okunamadı: {exc}')
+        def learn_app():
+            from plugins.application_learning import run
+            # Route output through the existing thread-safe JarvisUI bridge.
+            player = getattr(owner, '_application_player', None)
+            if player is None:
+                app_state.setText('JARVIS başlatılınca tekrar dene.')
+                return
+            app_state.setText(run({'action': 'learn', 'name': app_name.text(),
+                                  'goal': app_goal.text(), 'publish': auto_publish.isChecked()}, player=player))
+            refresh_apps()
+        learn_btn = QPushButton('Araştır, geliştir ve test et')
+        learn_btn.clicked.connect(learn_app)
+        app_page.insertWidget(app_page.count()-1, learn_btn)
+        self.syncs.append(refresh_apps)
+        refresh_apps()
+        def show_history():
+            from memory.continuity import resume_text
+            player = getattr(owner, '_application_player', None)
+            if player:
+                player.show_content('Nerede kaldık', resume_text())
+        action(brain, 'Nerede kaldık', 'Son konuşmalar ve işlem sonuçları; yeniden başlatınca korunur.', show_history)
         extras = page('Bağlantılar', 'Ek yetenekler ve uzaktan erişim.')
+        # Composio: 1000+ apps (Gmail, Google Takvim/Drive/Docs/Sheets, Notion…)
+        apps_row = card(extras, 'Uygulamalar (Composio)',
+                        'Gmail, Google Takvim, Drive, Docs, Sheets, Notion ve 1000+ uygulama. '
+                        'composio.dev’de ücretsiz hesap aç, Settings → Sessions & API Key’deki '
+                        'ck_ anahtarını (ya da geliştirici panelindeki ak_ anahtarını) buraya yapıştır; '
+                        'sonra Kontrol Merkezi’nde gri bir uygulamaya tıklayarak bağla.')
+        from core import composio as _composio
+        key_edit = QLineEdit()
+        key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        key_edit.setPlaceholderText('Composio API anahtarı')
+        key_edit.setMinimumWidth(220)
+        key_edit.setText(_composio.api_key())
+        key_edit.setAccessibleName('Composio API anahtarı')
+        apps_row.addWidget(key_edit)
+        key_state = QLabel('Kayıtlı' if _composio.is_configured() else '')
+        key_state.setFont(px_font(10))
+        key_state.setStyleSheet(f'color: {C.PRI};')
+        apps_row.addWidget(key_state)
+        key_state.setWordWrap(True)
+        key_state.setMaximumWidth(260)
+        test_result = {}
+        def show_result():
+            if 'msg' not in test_result:
+                QTimer.singleShot(300, show_result)
+                return
+            ok, msg = test_result.pop('ok'), test_result.pop('msg')
+            key_state.setText(('✓ ' if ok else '✕ ') + msg)
+            key_state.setToolTip(msg)
+            key_state.setStyleSheet(f'color: {C.GREEN if ok else C.RED};')
+        def test_key():
+            # The network check runs on a worker thread; a timer on the Qt
+            # thread picks the answer up, so no widget is touched off-thread.
+            key_state.setText('Deneniyor…')
+            key_state.setStyleSheet(f'color: {C.TEXT_DIM};')
+            import threading
+            def work():
+                ok, msg = _composio.check()
+                test_result['ok'] = ok
+                test_result['msg'] = msg
+            threading.Thread(target=work, daemon=True, name='composio-check').start()
+            QTimer.singleShot(300, show_result)
+        def save_key():
+            try:
+                _composio.save_api_key(key_edit.text())
+                key_edit.setText(_composio.api_key())
+                if _composio.is_configured():
+                    test_key()
+                else:
+                    key_state.setText('Silindi')
+            except Exception as exc:
+                key_state.setText(f'Kaydedilemedi: {exc}'[:60])
+        save_btn = QPushButton('Kaydet')
+        save_btn.setAccessibleName('Composio anahtarını kaydet')
+        save_btn.clicked.connect(save_key)
+        apps_row.addWidget(save_btn)
+        test_btn = QPushButton('Test et')
+        test_btn.setAccessibleName('Composio anahtarını dene')
+        test_btn.clicked.connect(test_key)
+        apps_row.addWidget(test_btn)
+        get_btn = QPushButton('Anahtar al')
+        get_btn.setAccessibleName('Composio sitesini aç')
+        def open_composio():
+            import webbrowser
+            webbrowser.open('https://dashboard.composio.dev')
+        get_btn.clicked.connect(open_composio)
+        apps_row.addWidget(get_btn)
+        action(extras, "Dünya Haritası", "Yer ara, haritayı gez veya rota görüntüle.",
+               lambda: owner._show_world_map(True))
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
         action(extras, 'Eklenti ayarları', 'Eklentilere özel seçenekleri düzenle.', owner._open_plugin_settings)
         action(extras, 'Uzaktan kontrol', 'Uzaktan erişim seçeneklerini aç.', owner._open_remote)
-        platforms = page('Platformlar', 'Hesabını aç veya JARVIS için yetkilendirmeyi yönet.')
-        platform_details = {
-            'github': 'GitHub web hesabı tarayıcıda açılır. Kod göndermek için Yetkilendir’i kullan.',
-            'chatgpt': 'Mevcut ChatGPT hesabını tarayıcıda kullan. CORE görünümünü ayrıca açabilirsin.',
-            'claude': 'Claude sohbeti CORE alanında açılır. “Claude’a yaz” ile taslak yazdır.',
-        }
-        for site, (name, _, _) in SITES.items():
-            row = card(platforms, name, platform_details[site])
-            row.addWidget(action_button(
-                f'{name} hesabını aç', lambda key=site: owner._open_social(key), 'Giriş / Aç',
-            ))
-            if site == 'chatgpt':
-                row.addWidget(action_button(
-                    'ChatGPT’yi CORE’da aç', lambda: owner._open_social_in_core('chatgpt'), 'CORE’da aç',
-                ))
-            authorize = QPushButton('API yetkisi' if site == 'chatgpt' else 'Yetkilendir')
-            authorize.setAccessibleName(f'{name} için JARVIS’i yetkilendir')
-            authorize.clicked.connect(lambda checked=False, key=site: self._authorize(key))
-            row.addWidget(authorize)
         navigation.addStretch()
         self.categories[0].setChecked(True)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(700)
 
-    def _authorize(self, site):
-        from gui.platform_authorization import AuthorizationDialog
-
-        dialogs = self.__dict__.setdefault('_authorization_dialogs', {})
-        if site not in dialogs:
-            dialogs[site] = AuthorizationDialog(site, self)
-        dialogs[site].open()
+    def show_category(self, name):
+        """Switch to a category by its title (e.g. 'Bağlantılar')."""
+        for button in self.categories:
+            if button.text() == name:
+                button.click()
+                return True
+        return False
 
     def refresh(self):
         if self.isVisible():

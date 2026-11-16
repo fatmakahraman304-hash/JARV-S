@@ -195,7 +195,7 @@ def get_hud_style() -> str:
     """Which centrepiece the HUD draws: the animated head, or the reactor core.
 
     Taste, not capability — both render in the same software painter and cost
-    about the same. Defaults to the head because that is what MARK LIV shipped
+    about the same. Defaults to the head because that is what earlier versions shipped
     with; anyone who preferred the older look can switch back in ⚙ and the
     choice survives a restart.
     """
@@ -566,27 +566,6 @@ def save_provider_config(provider_id: str, values: dict) -> None:
     creds[provider_id] = cur
     p["creds"] = creds
     _patch_config(providers=p)
-
-
-@_locked
-def save_authorized_model(provider_id: str, key: str, model: str, base_url: str,
-                          *, coding: bool, background: bool) -> None:
-    """Save verified credentials and their chosen uses in one settings write."""
-    providers = get_providers()
-    credentials = providers.get("creds")
-    if not isinstance(credentials, dict):
-        credentials = {}
-    current = credentials.get(provider_id)
-    current = dict(current) if isinstance(current, dict) else {}
-    current.update(api_key=key, model=model, base_url=base_url)
-    credentials[provider_id] = current
-    providers["creds"] = credentials
-    if coding or providers.get("coding") == provider_id:
-        providers["coding"] = provider_id if coding else ""
-    if background or providers.get("sidecar") == provider_id:
-        providers["sidecar"] = provider_id if background else ""
-        providers["sidecar_first"] = background
-    _patch_config(providers=providers)
 
 
 @_locked

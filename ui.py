@@ -1,9 +1,9 @@
 """ui.py — the entry point to the HUD.
 
-Mark LVII moved the implementation into the gui/ package. This file keeps
+The implementation lives in the gui/ package. This file keeps
 JarvisUI — the object main.py builds and every plugin receives as `player` —
 and re-exports every name ui.py has ever defined, so `from ui import X`
-written against an older Mark still finds X here.
+written against an older version still finds X here.
 """
 from __future__ import annotations
 
@@ -103,11 +103,19 @@ class JarvisUI:
         _apply_ui_scale()
         if QApplication.instance() is None:
             QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+            # Exact fractional scaling (125 %, 150 %, 4K at 200 %…) instead of
+            # rounding to whole steps, so painted lines stay crisp on 4K screens.
+            try:
+                QApplication.setHighDpiScaleFactorRoundingPolicy(
+                    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+            except Exception:
+                pass
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
         from gui.style import px_font
         self._app.setFont(px_font(13))
         self._win = MainWindow(face_path)
+        self._win._application_player = self
         self.root = _RootShim(self._app)
         self._win.show()
 
@@ -261,6 +269,12 @@ class JarvisUI:
         self._win._state_sig.emit(state)
 
     def write_log(self, text: str):
+        if str(text).startswith(('GELİŞTİRME:', '[msg]')):
+            try:
+                from memory.continuity import record
+                record('İşlem sonucu', text)
+            except Exception as exc:
+                self._win._log_sig.emit(f'SYS: İşlem hafızaya kaydedilemedi: {exc}')
         self._win._log_sig.emit(text)
 
     def wait_for_api_key(self):
@@ -285,6 +299,11 @@ class JarvisUI:
     def show_camera_scan(self, jpeg: bytes, report: dict):
         self._win._scan_result_sig.emit(jpeg, report)
 
+    def show_control_center(self, opened: bool = True) -> None:
+        """Thread-safe: open (or close) the Control Centre — Jarvis's network
+        of capabilities and the live activity feed."""
+        self._win._control_center_sig.emit(bool(opened))
+
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])
@@ -293,23 +312,9 @@ class JarvisUI:
         """Queue an offline HTML preview on the UI thread."""
         self._win._prototype_sig.emit(html)
 
-    def write_chat_draft(self, site: str, text: str) -> None:
-        self._win._chat_draft_sig.emit(site, text)
-
-    def show_social(self, site: str) -> None:
-        """Queue an official social website in the center panel."""
-        self._win._social_sig.emit(site)
-
-    def show_osiris(self, url: str) -> None:
-        """Thread-safe: queue an OSIRIS map URL to the main Qt GUI thread.
-
-        Returning does not guarantee that the remote page finished loading.
-        """
-        self._win._osiris_sig.emit(str(url))
-
-    def control_osiris(self, command: dict) -> None:
-        """Thread-safe; map results are reported asynchronously in the activity log."""
-        self._win._osiris_command_sig.emit(dict(command))
+    def show_world_map(self, visible: bool) -> None:
+        """Thread-safe: show the native world map or close it."""
+        self._win._world_map_sig.emit(visible)
 
     def show_code_job(self, job: dict) -> None:
         """Thread-safe: draw the coding agent's live progress in the panel."""
