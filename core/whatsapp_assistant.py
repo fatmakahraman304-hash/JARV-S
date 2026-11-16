@@ -182,7 +182,10 @@ def start_listener():
             return {}
         return current
 
-    assistant = Assistant(*connection[:3], settings=active_settings)
+    try:
+        assistant = Assistant(*connection[:3], settings=active_settings)
+    except sqlite3.Error as exc:
+        raise OSError("WhatsApp tekrar denetimi veritabanı açılamadı.") from exc
     httpd = server(assistant, connection[3])
     thread = threading.Thread(target=httpd.serve_forever, name='whatsapp-assistant', daemon=True)
     try:
