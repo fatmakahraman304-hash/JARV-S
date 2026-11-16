@@ -46,6 +46,7 @@ class CityMap(QWidget):
         self.network = network
         self.center = None
         self.route_points = []
+        self.show_center_marker = True
         self.zoom = 11
         self.tiles = {}
         self.pending = set()
@@ -71,18 +72,27 @@ class CityMap(QWidget):
             self._reload.start(120)
 
     def wheelEvent(self, event):
-        if not getattr(self, 'interactive', False) or self.center is None:
+        direction = event.angleDelta().y()
+        if not getattr(self, 'interactive', False) or not direction:
             return
-        zoom = max(2, min(18, self.zoom + (1 if event.angleDelta().y() > 0 else -1)))
+        self.zoom_by(1 if direction > 0 else -1)
+        event.accept()
+
+    def zoom_by(self, steps):
+        if self.center is None:
+            return
+        zoom = max(2, min(18, self.zoom + steps))
+        if zoom == self.zoom:
+            return
         factor = 2 ** (zoom - self.zoom)
         self.center = (self.center[0] * factor, self.center[1] * factor)
         self.zoom = zoom
         self.update()
         self._reload.start(120)
-        event.accept()
 
     def set_route(self, points):
         self.route_points = points
+        self.show_center_marker = False
         # Fit the entire polyline rather than zooming into only its endpoints.
         unit = [tile_position(lat, lon, 0) for lon, lat in points]
         xs, ys = [p[0] for p in unit], [p[1] for p in unit]
@@ -152,6 +162,7 @@ class CityMap(QWidget):
         if self.tiles:
             # Subtle tint keeps street labels readable in the dark HUD.
             p.fillRect(self.rect(), QColor(8, 14, 25, 28))
+        if self.tiles and self.show_center_marker:
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
             p.setPen(QPen(QColor(C.WHITE), 2))
             p.setBrush(QColor(C.PRI_DIM))
@@ -159,7 +170,7 @@ class CityMap(QWidget):
             p.setPen(QPen(QColor(C.PRI_DIM), 1))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawEllipse(QPointF(self.width() / 2, self.height() / 2), 18, 18)
-        else:
+        if not self.tiles:
             p.setPen(QColor(C.TEXT_MED))
             p.setFont(px_font(11))
             message = "Konum bekleniyor" if self.center is None else "Harita yükleniyor…" if self.pending else "Harita yüklenemedi"

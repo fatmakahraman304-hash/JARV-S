@@ -177,6 +177,28 @@ class SleepTests(unittest.TestCase):
 
 
 class MapNavigationTests(unittest.TestCase):
+    def test_world_map_command_routes_without_a_geocoding_request(self):
+        player = Mock()
+        self.assertIs(normal_map.map_command_for_text("JARVIS, Dünya haritasını aç."), True)
+        self.assertIs(normal_map.map_command_for_text("Haritayı kapat"), False)
+        self.assertIsNone(normal_map.map_command_for_text("Gazimağusa’yı haritada aç"))
+        with patch.object(normal_map, "search") as search:
+            normal_map.run({"action": "open"}, player)
+            player.show_world_map.assert_called_once_with(True)
+            search.assert_not_called()
+
+    def test_world_overview_centers_native_map_without_location(self):
+        from gui.location_map import tile_position
+        from gui.window import MainWindow
+        view = Mock(zoom=15, route_points=[[1, 2], [3, 4]])
+        owner = SimpleNamespace(_city_explorer=object(), _large_city_map=view,
+                                _hud_cam_stack=Mock(), _map_place_label=Mock())
+        MainWindow._explore_city_map(owner, world=True)
+        self.assertEqual(view.zoom, 2)
+        self.assertEqual(view.center, tile_position(20, 0, 2))
+        self.assertEqual(view.route_points, [])
+        self.assertFalse(view.show_center_marker)
+
     def test_reopening_explorer_preserves_view_and_route(self):
         from gui.window import MainWindow
         map_view = Mock(center=(12, 20), zoom=15, route_points=[[1, 2], [3, 4]])

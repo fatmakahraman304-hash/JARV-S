@@ -242,8 +242,8 @@ class SettingsPage(QDialog):
             webbrowser.open('https://dashboard.composio.dev')
         get_btn.clicked.connect(open_composio)
         apps_row.addWidget(get_btn)
-        action(extras, "God's Eye View", '3D küreyi CORE alanında aç.',
-               lambda: owner._control_gods_eye({"kind": "open"}))
+        action(extras, "Dünya Haritası", "Yer ara, haritayı gez veya rota görüntüle.",
+               lambda: owner._show_world_map(True))
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
         action(extras, 'Eklenti ayarları', 'Eklentilere özel seçenekleri düzenle.', owner._open_plugin_settings)
         action(extras, 'Uzaktan kontrol', 'Uzaktan erişim seçeneklerini aç.', owner._open_remote)

@@ -1,6 +1,6 @@
 # JARVIS — Nihai Seviye Teknik Yol Haritası
 
-> Arşiv. Güncel 3D harita kurulumu için [God's Eye View kılavuzuna](gods-eye-view-tr.md) bakın.
+> Arşiv. Güncel Dünya Haritası JARVIS’in Bağlantılar menüsünden açılır.
 
 **Proje:** fatmakahraman304-hash/Mark-LVII (FatihMakes MARK LVII çatallaması)  
 **Amaç:** Sesli, görsel, güvenli ve güvenilir kişisel asistan + OSIRIS Dünya

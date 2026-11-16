@@ -312,9 +312,9 @@ class JarvisUI:
         """Queue an official social website in the center panel."""
         self._win._social_sig.emit(site)
 
-    def control_gods_eye(self, payload: dict, reply) -> None:
-        """Thread-safe: open or control the local 3D globe on the Qt thread."""
-        self._win._gods_eye_sig.emit(dict(payload), reply)
+    def show_world_map(self, visible: bool) -> None:
+        """Thread-safe: show the native world map or close it."""
+        self._win._world_map_sig.emit(visible)
 
     def show_code_job(self, job: dict) -> None:
         """Thread-safe: draw the coding agent's live progress in the panel."""

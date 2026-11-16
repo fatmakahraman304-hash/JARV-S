@@ -104,7 +104,8 @@ class MainWindow(QMainWindow):
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
-    _gods_eye_sig = pyqtSignal(object, object)
+    _world_map_sig = pyqtSignal(bool)
+    _map_search_sig = pyqtSignal(object, str)
     _route_choices_sig = pyqtSignal(object)
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
@@ -179,7 +180,6 @@ class MainWindow(QMainWindow):
         self._muted            = False
         self._current_file: str | None = None
         self._remote_overlay: RemoteKeyOverlay | None = None
-        self._gods_eye_panel = None
         self._customize_overlay: CustomizeOverlay | None = None
 
         central = QWidget()
@@ -417,7 +417,8 @@ class MainWindow(QMainWindow):
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
         self._route_result_sig.connect(self._show_route)
-        self._gods_eye_sig.connect(self._control_gods_eye)
+        self._world_map_sig.connect(self._show_world_map)
+        self._map_search_sig.connect(self._finish_map_search)
         self._codejob_sig.connect(self._show_code_job)
         self._reconfig_sig.connect(self._show_setup)
         self._camera_sig.connect(self._show_camera_frame)
@@ -460,7 +461,7 @@ class MainWindow(QMainWindow):
         sc_intr = QShortcut(QKeySequence("Escape"), self)
         sc_intr.activated.connect(self._do_interrupt)
         sc_world = QShortcut(QKeySequence("Ctrl+Shift+O"), self)
-        sc_world.activated.connect(lambda: self._control_gods_eye({"kind": "open"}))
+        sc_world.activated.connect(lambda: self._show_world_map(True))
 
     def _open_prototype(self, text: str) -> None:
         from gui.prototype_panel import PrototypePanel
@@ -524,23 +525,6 @@ class MainWindow(QMainWindow):
         if (panel is None or self._hud_cam_stack.currentWidget() is not panel
                 or not panel.write_chat_draft(text)):
             self._log.append_log("SYS: CORE alanında ChatGPT veya Claude sohbetini aç.")
-
-    def _control_gods_eye(self, payload, reply=None):
-        if payload.get("kind") == "close":
-            if self._hud_cam_stack.currentWidget() is self._gods_eye_panel:
-                self._hud_cam_stack.setCurrentWidget(self.hud)
-            if reply is not None:
-                reply.finish("God's Eye View paneli kapatıldı.")
-            return
-        if self._gods_eye_panel is None:
-            from gui.gods_eye_panel import GodsEyePanel
-
-            panel = self._gods_eye_panel = GodsEyePanel(self._hud_cam_stack)
-            self._hud_cam_stack.addWidget(panel)
-            panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentWidget(self.hud))
-            panel.result.connect(lambda message: self._log.append_log("GOD'S EYE VIEW: " + message))
-        self._hud_cam_stack.setCurrentWidget(self._gods_eye_panel)
-        self._gods_eye_panel.submit(payload, reply)
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -2258,24 +2242,53 @@ class MainWindow(QMainWindow):
             chosen = places[labels.index(label)]
         self._explore_city_map()
         self._large_city_map.route_points = []
+        self._large_city_map.show_center_marker = True
         self._large_city_map.zoom = chosen['zoom']
         self._large_city_map.set_location(chosen['lat'], chosen['lon'])
         self._map_place_label.setText(chosen['name'])
         self._log.append_log('HARİTA: ' + chosen['name'])
 
-    def _explore_city_map(self):
-        from gui.location_map import CityMap
+    def _show_world_map(self, visible):
+        if visible:
+            self._explore_city_map(world=True)
+        elif self._hud_cam_stack.currentWidget() is getattr(self, "_city_explorer", None):
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+
+    def _explore_city_map(self, *, world=False):
+        from gui.location_map import CityMap, tile_position
         if not hasattr(self, '_city_explorer'):
             self._city_explorer = QWidget()
             layout = QVBoxLayout(self._city_explorer)
+            layout.setContentsMargins(10, 8, 10, 6)
             toolbar = QHBoxLayout()
-            back = QPushButton('CORE’a dön')
-            back.clicked.connect(lambda: self._hud_cam_stack.setCurrentIndex(0))
-            toolbar.addWidget(back)
-            toolbar.addStretch()
-            locate = QPushButton('Konumuma dön')
-            locate.clicked.connect(self._center_city_map)
-            toolbar.addWidget(locate)
+            name = QLabel("Dünya Haritası")
+            name.setFont(px_font(16, QFont.Weight.DemiBold))
+            toolbar.addWidget(name)
+
+            self._map_search_input = QLineEdit()
+            self._map_search_input.setPlaceholderText("Şehir, adres veya yer ara")
+            self._map_search_input.setAccessibleName("Haritada yer ara")
+            self._map_search_input.setMaxLength(500)
+            self._map_search_input.setStyleSheet(
+                f"QLineEdit {{ color: {C.WHITE}; background: {C.DARK}; "
+                f"border: 1px solid {C.PRI_DIM}; border-radius: 6px; padding: 6px 9px; }}"
+            )
+            self._map_search_input.returnPressed.connect(self._search_city_map)
+            toolbar.addWidget(self._map_search_input, 1)
+
+            def button(label, callback):
+                widget = QPushButton(label)
+                widget.setStyleSheet(btn_css("dim", align="center"))
+                widget.clicked.connect(callback)
+                toolbar.addWidget(widget)
+                return widget
+
+            self._map_search_button = button("Ara", self._search_city_map)
+            button("−", lambda: self._large_city_map.zoom_by(-1)).setAccessibleName("Uzaklaştır")
+            button("+", lambda: self._large_city_map.zoom_by(1)).setAccessibleName("Yakınlaştır")
+            button("Dünya", lambda: self._explore_city_map(world=True))
+            button("Konumum", self._center_city_map)
+            button("CORE’a dön", lambda: self._show_world_map(False))
             layout.addLayout(toolbar)
             self._map_place_label = QLabel('Haritayı sürükleyerek gezin · Tekerlekle yakınlaştırın')
             self._map_place_label.setWordWrap(True)
@@ -2285,14 +2298,49 @@ class MainWindow(QMainWindow):
             self._large_city_map.interactive = True
             self._large_city_map.setCursor(Qt.CursorShape.OpenHandCursor)
             layout.addWidget(self._large_city_map, 1)
-            layout.addWidget(QLabel('© OpenStreetMap contributors · Konum IP üzerinden yaklaşıktır'))
+            attribution = QLabel('<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap katkıcıları</a>')
+            attribution.setOpenExternalLinks(True)
+            layout.addWidget(attribution)
             self._hud_cam_stack.addWidget(self._city_explorer)
             small = self._location_panel.map
             self._large_city_map.zoom = small.zoom
             self._large_city_map.center = small.center or (2 ** small.zoom / 2, 2 ** small.zoom / 2)
+        if world:
+            self._large_city_map.route_points = []
+            self._large_city_map.show_center_marker = False
+            self._large_city_map.zoom = 2
+            self._large_city_map.center = tile_position(20, 0, 2)
+            self._map_place_label.setText("Haritayı sürükleyerek gezin · Tekerlekle yakınlaştırın")
         self._hud_cam_stack.setCurrentWidget(self._city_explorer)
         self._large_city_map.load_tiles()
         self._large_city_map.update()
+
+    def _search_city_map(self):
+        place = self._map_search_input.text().strip()
+        if not place or not self._map_search_button.isEnabled():
+            return
+        self._map_search_button.setEnabled(False)
+        self._map_place_label.setText("Yer aranıyor…")
+
+        def work():
+            from plugins.normal_map import search
+            try:
+                results = search(place)
+                self._map_search_sig.emit(results, "" if results else "Yer bulunamadı. Şehir veya ülkeyi de yazın.")
+            except Exception:
+                self._map_search_sig.emit([], "Yer arama servisine ulaşılamadı. Tekrar deneyin.")
+
+        threading.Thread(target=work, daemon=True, name="jarvis-map-search").start()
+
+    def _finish_map_search(self, places, message):
+        self._map_search_button.setEnabled(True)
+        if self._hud_cam_stack.currentWidget() is not self._city_explorer:
+            return
+        if places:
+            self._map_place_label.clear()
+            self._show_map_places(places)
+        else:
+            self._map_place_label.setText(message)
 
     def _center_city_map(self):
         small = self._location_panel.map
@@ -2300,6 +2348,7 @@ class MainWindow(QMainWindow):
             self._log.append_log('HARİTA: Güncel konum henüz alınamadı.')
             return
         self._large_city_map.route_points = []
+        self._large_city_map.show_center_marker = True
         self._large_city_map.zoom = small.zoom
         self._large_city_map.center = small.center
         self._map_place_label.setText(self._location_panel.city.text() + ' · Yaklaşık konum')
@@ -3499,7 +3548,7 @@ class MainWindow(QMainWindow):
         if not txt: return
         self._input.clear()
         from core.camera_scan import is_scan_command
-        from core.gods_eye import globe_command_for_text
+        from plugins.normal_map import map_command_for_text
         from core.social_sites import chat_draft_command, site_for_command
 
         if draft := chat_draft_command(txt):
@@ -3513,9 +3562,9 @@ class MainWindow(QMainWindow):
         if is_scan_command(txt):
             self._start_camera_scan()
             return
-        globe_command = globe_command_for_text(txt)
-        if globe_command:
-            self._control_gods_eye({"kind": globe_command})
+        map_command = map_command_for_text(txt)
+        if map_command is not None:
+            self._show_world_map(map_command)
             return
         site = site_for_command(txt)
         if site:

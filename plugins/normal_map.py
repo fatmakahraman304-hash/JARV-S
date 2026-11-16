@@ -2,6 +2,7 @@
 import json
 import math
 import os
+import re
 import threading
 import time
 from urllib.parse import urlencode
@@ -9,13 +10,23 @@ from urllib.request import Request, urlopen
 
 PLUGIN = {
     'name': 'normal_map',
-    'description': 'Open a requested city, country, street, landmark or address in the normal 2D street map INSIDE JARVIS. Use for all ordinary haritada aç/göster, orası nerede, go to place requests. Prefer this for ordinary requests; use gods_eye_view when the user explicitly asks for the 3D globe or its layers. Include known country/city context in place; never invent coordinates.',
-    'parameters': {'type':'OBJECT', 'properties': {'place': {'type':'STRING', 'description':'Place or full address, with city/country when provided.'}}, 'required':['place']}}
+    'description': 'Control the native Turkish 2D Dünya Haritası within JARVIS. Use action=open to open the world overview, action=close to return to CORE, or pass place to show a city, country, street or landmark. Include known location context. For driving directions use map_route.',
+    'parameters': {'type': 'OBJECT', 'properties': {
+        'action': {'type': 'STRING', 'enum': ['open', 'close'], 'description': 'Only for opening the world overview or closing the map.'},
+        'place': {'type': 'STRING', 'description': 'Place or full address, with city or country if known.'},
+    }}}
 _lock = threading.Lock()
 _cache = {}
 _CACHE_LIMIT = 128
 _CACHE_SECONDS = 900
 _last_request = 0.0
+
+
+def map_command_for_text(text):
+    text = " ".join(text.replace("İ", "i").casefold().split()).rstrip(".!?")
+    text = re.sub(r"^(?:jarvis|friday)[, ]+", "", text)
+    match = re.fullmatch(r"(?:dünya haritası(?:nı)?|haritayı|harita) (aç|göster|kapat)", text)
+    return match[1] != "kapat" if match else None
 
 
 def search(place):
@@ -56,6 +67,13 @@ def search(place):
 
 
 def run(parameters, player=None, session_memory=None):
+    action = parameters.get('action')
+    if action in ('open', 'close'):
+        show = getattr(player, 'show_world_map', None)
+        if not callable(show):
+            return 'Dünya Haritası için JARVIS arayüzü açık olmalı.'
+        show(action == 'open')
+        return 'Dünya Haritası açılıyor.' if action == 'open' else 'Harita kapatılıyor.'
     place = str(parameters.get('place', '')).strip()
     if not place or len(place)>500:
         return 'Haritada açılacak yerin adını söyleyin.'

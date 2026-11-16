@@ -69,7 +69,7 @@ _TOOL_NODE = {
     "scan_research": "vision",
     "code_helper": "code", "dev_agent": "code", "github_develop": "code",
     "voice_prototype": "code",
-    "map_route": "maps", "normal_map": "maps", "gods_eye_view": "maps",
+    "map_route": "maps", "normal_map": "maps",
     "background_tasks": "tasks", "night_shift": "tasks", "workspace_mode": "tasks",
     "capacity_simulation": "tasks", "chat_draft": "chat", "control_center": "tasks",
 }
@@ -88,7 +88,7 @@ _TOOL_TEXT = {
     "camera_scan": "Kamera taraması", "scan_research": "Tarama araştırması",
     "code_helper": "Kod yardımı", "dev_agent": "Kodlama görevi", "github_develop": "GitHub geliştirme",
     "voice_prototype": "Prototip", "map_route": "Rota", "normal_map": "Harita",
-    "gods_eye_view": "God's Eye View", "background_tasks": "Arka plan görevi",
+    "background_tasks": "Arka plan görevi",
     "night_shift": "Gece vardiyası", "workspace_mode": "Çalışma modu",
     "capacity_simulation": "Kapasite simülasyonu", "chat_draft": "Sohbet taslağı",
     "send_message": "Mesaj", "control_center": "Kontrol Merkezi", "apps": "Uygulama",
