@@ -17,15 +17,33 @@ başarılı kontrolleri doğrulamadan main'e birleştirme yapmaz. Seçili değil
 CLI oturumu gereklidir. Eksik araç veya başarısız test sonucu ekranda saklanır.
 Bilgisayar kapanırsa iş 'yarıda kaldı' olur; dış uygulama eylemleri tekrarlanmaz.
 
-Bu sürüm genel uygulama öğrenme ve geliştirme altyapısıdır. Bir uygulamanın
-bütün özelliklerini desteklediğini veya üretilen adaptörün Windows'ta gerçek
-uygulamayla doğrulandığını iddia etmez. Özellikle WhatsApp aramasında sesli
-konuşma için ses köprüsü, gelen mesajlara sürekli yanıt için olay dinleyicisi
-ve kapsamlı otomasyon kuralları henüz bu değişiklikte uygulanmamıştır.
-Hesap bağlamak bu yetenekleri kendiliğinden sağlamaz.
+Uygulamaların sunduğu işlemler ve gereken izinler değişir. Kod testleri,
+gerçek Windows uygulamasında yapılan denemenin yerini tutmaz.
 
 Windows kabul denemesi: kısa bir konuşma yap, JARVIS'i kapatıp yeniden aç;
 Nerede kaldık panelini ve hafıza sorgusunu kontrol et. Güncellemeden sonra
 aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama seç,
 önce otomatik yayını kapatarak araştırma ve geliştirme sonuçlarını incele.
 Üretilen kontrolü uygulamanın gerçek arayüzünde denemeden doğrulanmış sayma.
+
+## WhatsApp Business asistanını bağlama
+
+Ayarlar → Uygulamalar → WhatsApp Business → Ayarla. Twilio WhatsApp
+Business göndericisinin numarasını, Auth Token'ı ve dışarıdan erişilebilen
+HTTPS alan adını gir. HTTPS'te yalnızca aşağıdaki iki webhook yolunu,
+JARVIS'in çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
+
+- Twilio göndericisinin gelen mesaj webhook'u **POST `/whatsapp/message`**
+  olmalı. WhatsApp Sandbox üzerinden mesaj akışı da denenebilir.
+- Aramalar için göndericide WhatsApp Business Calling'i aç. Giriş için
+  bağladığın TwiML uygulamasının Voice Request URL'si **POST `/whatsapp/voice`**
+  olmalı. Proxy, sesli konuşma sırasındaki `?turn=` sorgusunu korumalı.
+
+Mesaj ve arama için ayrı açma/kapama seçenekleri var. Mesajlara tanımladığın
+metin döner. Aramalarda JARVIS kendini otomatik asistan olarak tanıtır ve
+sık sorulan sorular alanındaki anahtar kelimelerle eşleşen cevapları Türkçe
+okur. Örnek kural `çalışma saatleri = Hafta içi 9–18.`. Arama sesi Twilio
+tarafında işlenir. JARVIS arama transkriptini diske yazmaz. JARVIS ve HTTPS
+bağlantısı açık olduğu sürece çalışır. Bu bağlantı Twilio'ya kayıtlı Business
+numarası içindir. Yerel dinleyicinin açılması dış bağlantının kurulduğunu
+belirtmez. Gerçek telefondan önce mesaj, ardından sesli arama yaparak doğrula.

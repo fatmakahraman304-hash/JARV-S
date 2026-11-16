@@ -2,7 +2,7 @@
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QAbstractButton, QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QCheckBox, QPlainTextEdit, QScrollArea, QWidget, QStackedWidget, QFrame)
+    QLabel, QLineEdit, QPushButton, QCheckBox, QPlainTextEdit, QFormLayout, QScrollArea, QWidget, QStackedWidget, QFrame)
 from gui.theme import C
 from gui.style import px_font
 
@@ -248,6 +248,70 @@ class SettingsPage(QDialog):
         app_page.insertWidget(app_page.count()-1, learn_btn)
         self.syncs.append(refresh_apps)
         refresh_apps()
+        def configure_whatsapp():
+            from core.whatsapp_assistant import load_settings, start_listener, number
+            from urllib.parse import urlsplit
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle('WhatsApp Business asistanı')
+            form = QFormLayout(dialog)
+            settings = load_settings()
+            origin = QLineEdit(settings.get('origin', ''))
+            secret = QLineEdit(settings.get('secret', ''))
+            secret.setEchoMode(QLineEdit.EchoMode.Password)
+            receiver = QLineEdit(settings.get('receiver', ''))
+            receiver.setPlaceholderText('+90…')
+            from core.whatsapp_assistant import assistant_name
+            message = QLineEdit(settings.get('message', f'Merhaba, ben {assistant_name()}. Mesajınızı aldım.'))
+            message.setMaxLength(1500)
+            faq = QPlainTextEdit(settings.get('faq', ''))
+            faq.setPlaceholderText('Her satıra anahtar kelimeler = cevap yaz. Örn. çalışma saatleri = Hafta içi 9–18.')
+            messages_enabled = QCheckBox('Mesajlara otomatik yanıt ver')
+            calls_enabled = QCheckBox('Gelen aramaları Türkçe yanıtla')
+            messages_enabled.setChecked(bool(settings.get('messages_enabled')))
+            calls_enabled.setChecked(bool(settings.get('voice_enabled')))
+            for label, field in [('Dış HTTPS adresi', origin), ('Twilio Auth Token', secret),
+                                 ('Business numarası', receiver), ('Otomatik mesaj', message),
+                                 ('Arama cevapları', faq)]:
+                form.addRow(label, field)
+            form.addRow(messages_enabled)
+            form.addRow(calls_enabled)
+            help_text = QLabel('HTTPS adresini 127.0.0.1:8769’a yönlendir. Twilio’da mesaj ve ses adresleri için sırasıyla /whatsapp/message ve /whatsapp/voice yolunu kullan.')
+            help_text.setWordWrap(True)
+            form.addRow(help_text)
+            state = QLabel()
+            state.setWordWrap(True)
+            save = QPushButton('Kaydet ve uygula')
+
+            def apply():
+                try:
+                    if messages_enabled.isChecked() or calls_enabled.isChecked():
+                        public = urlsplit(origin.text().strip())
+                        if (public.scheme != 'https' or not public.hostname or public.username is not None
+                                or public.path not in ('', '/') or public.query or public.fragment
+                                or not number(receiver.text()) or not secret.text().strip()):
+                            raise ValueError('HTTPS adresini, Auth Token’ı ve + ile başlayan numarayı doldur.')
+                        if messages_enabled.isChecked() and not message.text().strip():
+                            raise ValueError('Otomatik mesaj metnini gir.')
+                    cfg.update_config(whatsapp_assistant={
+                        'origin': origin.text().strip().rstrip('/'), 'secret': secret.text().strip(),
+                        'receiver': receiver.text().strip(), 'message': message.text().strip(),
+                        'faq': faq.toPlainText()[:16000], 'messages_enabled': messages_enabled.isChecked(),
+                        'voice_enabled': calls_enabled.isChecked(),
+                    })
+                    state.setText(start_listener())
+                except (ValueError, OSError) as exc:
+                    state.setText(str(exc))
+
+            save.clicked.connect(apply)
+            form.addRow(save)
+            form.addRow(state)
+            dialog.resize(590, 450)
+            dialog.exec()
+
+        whatsapp_button = QPushButton('Ayarla')
+        whatsapp_button.clicked.connect(configure_whatsapp)
+        card(app_page, 'WhatsApp Business', 'Gelen mesaj, Türkçe çağrı yanıtı ve sık sorulan sorular.').addWidget(whatsapp_button)
         def show_history():
             from memory.continuity import resume_text
             player = getattr(owner, '_application_player', None)
