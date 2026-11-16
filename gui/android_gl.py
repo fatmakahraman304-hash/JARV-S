@@ -409,7 +409,7 @@ void main() {
             vec3 topDir = normalize(vec3(ps * (px < 0.0 ? 0.9 : 0.45), 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));
             vec3 d0 = mix(vec3(0.0, -0.75, -0.66), topDir, smoothstep(0.30, 0.72, p.y));
             float sideFade = 1.0 - smoothstep(0.05, 0.42, p.y);           // short faded sides
-            float part = exp(-pow(px / 0.0045, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
+            float part = exp(-pow(px / 0.0030, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
             vec3 T = normalize(d0 - nr * dot(d0, nr));
             vec3 B = cross(nr, T);
             float a = dot(p, T), b = dot(p, B);
@@ -419,7 +419,7 @@ void main() {
             strand = mix(0.5, f1, lod(900.0)) * 0.15 + f2 * 0.40 + cl * 0.45;
             float edgeHairs = smoothstep(0.15, 0.85, hm * 1.4 - 0.2 + 0.7 * (f1 - 0.5));
             hairC = mix(edgeHairs, 1.0, smoothstep(0.6, 1.0, hm)) * hm;
-            hairC *= 1.0 - 0.30 * sideFade * (1.0 - f1 * 0.8) - 0.55 * part;
+            hairC *= 1.0 - 0.30 * sideFade * (1.0 - f1 * 0.8) - 0.18 * part;
             vec3 hcol = mix(vec3(0.020, 0.0135, 0.009), vec3(0.085, 0.056, 0.036), strand * strand * 1.2);
             alb = mix(alb, hcol, hairC);
             H += hairC * (f1 * 0.0006 + f2 * 0.0026 + cl * 0.008) - part * 0.003;
@@ -451,8 +451,15 @@ void main() {
     vec3 diff = vec3(amb) + lk * vec3(1.0, 0.95, 0.88) * 1.0 + lf * vec3(0.60, 0.68, 0.85) * 0.30;
     float occ = ao * ao * (1.0 - 0.45 * earShadow);
     if (neck) occ *= mix(0.40, 1.0, smoothstep(-0.70, -0.98, p.y));
-    float underJaw = smoothstep(-0.45, -0.62, p.y) * smoothstep(-0.05, -0.55, n0.y) * float(!neck);
-    occ *= 1.0 - 0.45 * underJaw;
+    // jawline: the mandible edge runs y ≈ -1 + 1.1x² from the chin to under the
+    // ear; everything below and behind it is in shadow, the edge itself catches light
+    float yj = -1.0 + 1.1 * ax * ax;
+    float zj = 0.38 - 1.6 * ax * ax;
+    float jawSide = smoothstep(0.05, 0.25, ax) * float(!neck) * smoothstep(-0.45, -0.25, p.z);
+    float underJaw = smoothstep(0.0, 0.05, yj - p.y + 0.4 * max(zj - p.z, 0.0) * 0.0) * jawSide;
+    underJaw = max(underJaw, smoothstep(-0.45, -0.62, p.y) * smoothstep(-0.05, -0.55, n0.y) * float(!neck));
+    occ *= 1.0 - 0.55 * underJaw;
+    float jawEdge = exp(-pow((p.y - yj - 0.012) / 0.010, 2.0)) * jawSide * smoothstep(0.0, 0.3, dot(n0, KEY));
     vec3 col = alb * diff * occ;
 
     vec3 hk = normalize(KEY + VIEW), hf = normalize(FILL + VIEW);
@@ -472,6 +479,7 @@ void main() {
     float top = smoothstep(0.25, 0.70, r.y) * smoothstep(0.85, 0.35, abs(r.x));
     col += vec3(0.22 * top + 0.03) * fres * (1.0 - 0.8 * hairC) * (1.0 - shirt) * ao;
     col += roll * 0.008;
+    col += jawEdge * alb * 0.18;
     float rim = pow(1.0 - ndv, 3.0);
     col += rim * accent * (0.16 + 0.30 * u_glow) * (1.0 - 0.5 * hairC);
 
