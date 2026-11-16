@@ -55,6 +55,8 @@ class SettingsPage(QDialog):
         self.setFont(px_font(13))
         self.setStyleSheet(f'''
             QDialog {{ background: {C.BG}; }}
+            QLineEdit, QPlainTextEdit {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding: 8px; }}
+            QCheckBox {{ color: {C.TEXT}; }}
             QLabel {{ color: {C.TEXT}; background: transparent; }}
             QWidget#page, QWidget#body {{ background: {C.BG}; }}
             QFrame#card {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 12px; }}
