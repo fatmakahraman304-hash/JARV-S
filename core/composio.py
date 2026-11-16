@@ -97,7 +97,8 @@ def _request(method: str, path: str, *, body: dict | None = None, params: dict |
     except ValueError:
         data = {"raw": r.text[:300]}
     if r.status_code == 401:
-        raise ComposioError("Composio API anahtarı geçersiz")
+        raise ComposioError("Composio API anahtarı geçersiz — dashboard.composio.dev → "
+                            "Settings → API Keys bölümündeki proje anahtarını kopyala")
     if r.status_code == 402:
         raise ComposioError("Composio ücretsiz aylık kullanım hakkı doldu")
     if r.status_code == 429:

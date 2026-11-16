@@ -318,6 +318,7 @@ class ActivityFeed(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(300)
+        self.setMouseTracking(True)
         self._events: list = []
         self._filter = ""
         self._scroll = 0.0
@@ -334,6 +335,17 @@ class ActivityFeed(QWidget):
     def _shown(self):
         ev = [e for e in reversed(self._events) if not self._filter or e.node == self._filter]
         return ev
+
+    def mouseMoveEvent(self, e):
+        """The whole line as a tooltip — long errors are cut off in the row."""
+        y = e.position().y()
+        idx = int((y - 78 + self._scroll) // self.ROW)
+        shown = self._shown()
+        if y >= 72 and 0 <= idx < len(shown):
+            ev = shown[idx]
+            self.setToolTip(f"{activity.NODE_LABEL.get(ev.node, '')}\n{ev.text}")
+        else:
+            self.setToolTip("")
 
     def wheelEvent(self, e):
         rows = len(self._shown())
