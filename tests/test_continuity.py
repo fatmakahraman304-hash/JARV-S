@@ -1,0 +1,84 @@
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch, Mock
+from concurrent.futures import ThreadPoolExecutor
+from memory import continuity as c
+from memory import memory_manager as m
+
+
+class ContinuityTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.p = patch.object(c, 'data_dir', return_value=self.root)
+        self.p.start()
+    def tearDown(self):
+        self.p.stop()
+        self.tmp.cleanup()
+    def test_restart_and_concurrent_writes(self):
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(lambda i: c.record('Kullanıcı', f'görev {i}'), range(24)))
+        self.assertEqual(len(c.recent(100)), 24)
+        self.assertIn('görev', c.prompt_context())
+        self.assertEqual(len(c.recent(100)), 24)  # reading is not consuming
+    def test_interrupted_jobs_are_not_replayed(self):
+        c.set_application('CapCut', 'geliştiriliyor', 'test bekliyor')
+        c.recover_jobs()
+        self.assertEqual(c.applications()[0][1], 'yarıda kaldı')
+    def test_migration_and_summary_survive_repeated_reads(self):
+        old = self.root / 'old.json'
+        old.write_text('{"notes":{"test":{"value":"hatırla"}}}', encoding='utf8')
+        with patch.object(m, 'MEMORY_PATH', self.root/'new.json'), patch.object(m, '_LEGACY_MEMORY_PATH', old):
+            self.assertEqual(m.load_memory()['notes']['test']['value'], 'hatırla')
+            m.save_session_summary('CapCut üzerinde çalışıyorduk')
+            self.assertEqual(m.pop_last_session(), m.pop_last_session())
+        self.assertTrue(old.exists())
+
+    def test_windows_console_encoding_does_not_break_save(self):
+        import io
+        output = io.BytesIO()
+        stream = io.TextIOWrapper(output, encoding='cp1252')
+        with patch.object(m, 'MEMORY_PATH', self.root/'memory.json'), patch.object(m.sys, 'stdout', stream):
+            m.save_session_summary('Türkçe konuşma ve emoji 🌍')
+            self.assertIn('Türkçe', m.pop_last_session()['summary'])
+        stream.flush()
+        self.assertTrue(output.getvalue())
+        with patch.object(m, 'MEMORY_PATH', self.root/'memory.json'), patch.object(m.sys, 'stdout', None):
+            m.save_session_summary('pythonw ile çalışıyor')
+            self.assertEqual(m.pop_last_session()['summary'], 'pythonw ile çalışıyor')
+
+
+class ApplicationTests(unittest.TestCase):
+    def test_plugin_validates_without_starting(self):
+        from plugins.application_learning import run
+        self.assertIn('Geçersiz', run({'action':'invalid'}))
+        self.assertIn('uygulama adı', run({'action':'learn', 'name':''}, player=Mock()))
+    def test_failed_research_never_codes_or_releases(self):
+        from core import application_learning as app
+        from plugins import github_develop as gh
+        class ImmediateThread:
+            def __init__(self, target, **kwargs): self.target=target
+            def start(self): self.target()
+        with patch.object(app, 'set_application') as state, patch.object(app, 'record'), patch('actions.web_search._ddg_search', return_value=[]), patch.object(gh, 'self_release') as release, patch.object(app.threading, 'Thread', ImmediateThread):
+            app.start('CapCut', 'kurgu', Mock(), True)
+            release.assert_not_called()
+            self.assertEqual(state.call_args.args[1], 'durduruldu')
+            self.assertFalse(app._LOCK.locked())
+            self.assertFalse(gh._LOCK.locked())
+    def test_success_is_persisted_before_update(self):
+        from core import application_learning as app
+        from plugins import github_develop as gh
+        events=[]
+        class ImmediateThread:
+            def __init__(self, target, **kwargs): self.target=target
+            def start(self): self.target()
+        player=Mock()
+        player.request_app_update.side_effect=lambda:events.append('update')
+        with patch.object(app, 'set_application', side_effect=lambda *a:events.append(a[1])), patch.object(app, 'record'), patch('actions.web_search._ddg_search', return_value=[{'href':'https://example.org/docs'}]), patch.object(gh, 'self_release', return_value='merged'), patch.object(app.threading, 'Thread', ImmediateThread):
+            app.start('CapCut', 'kurgu', player, True)
+        self.assertEqual(events[-1], 'update')
+        self.assertIn("main'e alındı", events[-2])
+
+if __name__ == '__main__':
+    unittest.main()

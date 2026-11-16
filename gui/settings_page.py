@@ -2,7 +2,7 @@
 from PyQt6.QtCore import Qt, QTimer, QRectF
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QAbstractButton, QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QWidget, QStackedWidget, QFrame)
+    QLabel, QLineEdit, QPushButton, QCheckBox, QPlainTextEdit, QScrollArea, QWidget, QStackedWidget, QFrame)
 from gui.theme import C
 from gui.style import px_font
 
@@ -55,6 +55,8 @@ class SettingsPage(QDialog):
         self.setFont(px_font(13))
         self.setStyleSheet(f'''
             QDialog {{ background: {C.BG}; }}
+            QLineEdit, QPlainTextEdit {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding: 8px; }}
+            QCheckBox {{ color: {C.TEXT}; }}
             QLabel {{ color: {C.TEXT}; background: transparent; }}
             QWidget#page, QWidget#body {{ background: {C.BG}; }}
             QFrame#card {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 12px; }}
@@ -201,6 +203,57 @@ class SettingsPage(QDialog):
         brain = page('Zekâ ve hafıza', 'Modellerini ve asistanın hatırladıklarını yönet.')
         action(brain, 'Motor ve sağlayıcılar', 'Yapay zekâ modelleri ve bağlantı ayarları.', owner._open_providers)
         action(brain, 'Hafıza', 'Kaydedilmiş bilgileri görüntüle ve düzenle.', owner._open_memory_panel)
+        app_page = page('Uygulamalar', 'Uygulama adını yaz: kaynakları araştır, eksik kontrolleri geliştir ve test et.')
+        app_name = QLineEdit()
+        app_name.setPlaceholderText('Örneğin: CapCut, WhatsApp')
+        app_name.setAccessibleName('Uygulama adı')
+        app_name.setMaxLength(100)
+        app_page.insertWidget(app_page.count()-1, app_name)
+        app_goal = QLineEdit()
+        app_goal.setPlaceholderText('İstenen işlemler (boş bırakırsan mevcut özellikleri araştırır)')
+        app_goal.setAccessibleName('İstenen uygulama işlemleri')
+        app_goal.setMaxLength(4000)
+        app_page.insertWidget(app_page.count()-1, app_goal)
+        auto_publish = QCheckBox('Testler ve GitHub kontrolleri geçerse main’e al ve güncelle')
+        auto_publish.setChecked(True)
+        app_page.insertWidget(app_page.count()-1, auto_publish)
+        app_state = QLabel('Kod testleri, uygulamadaki tüm işlemlerin çalıştığı anlamına gelmez. Sonuçlar ayrı doğrulanır.')
+        app_state.setWordWrap(True)
+        app_page.insertWidget(app_page.count()-1, app_state)
+        app_results = QPlainTextEdit()
+        app_results.setReadOnly(True)
+        app_results.setAccessibleName('Uygulama geliştirme sonuçları')
+        app_results.setMinimumHeight(160)
+        app_page.insertWidget(app_page.count()-1, app_results)
+        def refresh_apps():
+            from core.application_learning import report
+            try:
+                content = report()
+                if app_results.toPlainText() != content:
+                    app_results.setPlainText(content)
+            except Exception as exc:
+                app_state.setText(f'Kayıt okunamadı: {exc}')
+        def learn_app():
+            from plugins.application_learning import run
+            # Route output through the existing thread-safe JarvisUI bridge.
+            player = getattr(owner, '_application_player', None)
+            if player is None:
+                app_state.setText('JARVIS başlatılınca tekrar dene.')
+                return
+            app_state.setText(run({'action': 'learn', 'name': app_name.text(),
+                                  'goal': app_goal.text(), 'publish': auto_publish.isChecked()}, player=player))
+            refresh_apps()
+        learn_btn = QPushButton('Araştır, geliştir ve test et')
+        learn_btn.clicked.connect(learn_app)
+        app_page.insertWidget(app_page.count()-1, learn_btn)
+        self.syncs.append(refresh_apps)
+        refresh_apps()
+        def show_history():
+            from memory.continuity import resume_text
+            player = getattr(owner, '_application_player', None)
+            if player:
+                player.show_content('Nerede kaldık', resume_text())
+        action(brain, 'Nerede kaldık', 'Son konuşmalar ve işlem sonuçları; yeniden başlatınca korunur.', show_history)
         extras = page('Bağlantılar', 'Ek yetenekler ve uzaktan erişim.')
         # Composio: 1000+ apps (Gmail, Google Takvim/Drive/Docs/Sheets, Notion…)
         apps_row = card(extras, 'Uygulamalar (Composio)',

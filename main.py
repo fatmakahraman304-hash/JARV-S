@@ -675,6 +675,11 @@ class JarvisLive:
         self._sys_monitor      = SystemMonitor()  # persistent cooldown state
         self._proactive        = ProactiveEngine()
         self._last_user_speech = time.monotonic()  # updated on every user utterance
+        from memory.continuity import recover_jobs
+        try:
+            recover_jobs()
+        except Exception as exc:
+            print(f"[Memory] İş durumu okunamadı: {exc}")
         self._session_log: list[str] = []          # conversation turns for end-of-session summary
 
         self._enhanced_live = True  # proactive audio; auto-disabled if the server rejects it
@@ -1245,7 +1250,23 @@ class JarvisLive:
         return (url, key, f"{url}/auto-login?key={key}", manual,
                 getattr(self._dashboard, "_bind_error", "") or "")
 
+    def _persist_turn(self, role, text):
+        try:
+            from memory.continuity import record
+            record(role, text)
+        except Exception as exc:
+            self.ui.write_log(f"SYS: Hafıza kaydı başarısız: {exc}")
+
     def _on_text_command(self, text: str):
+        from memory.continuity import record, resume_text
+        if not str(text).startswith("["):
+            try:
+                record("Kullanıcı", text)
+            except Exception as exc:
+                self.ui.write_log(f"SYS: Hafıza kaydı başarısız: {exc}")
+        if text.strip().casefold() in ("/hafiza", "nerede kaldık", "nerede kaldik"):
+            self.ui.show_content("Nerede kaldık", resume_text())
+            return
         if not str(text).startswith("["):          # internal notes ([FILE_UPLOADED] …) are not chat
             from core import activity as _activity
             _activity.record("chat", f"Yazdın: {str(text)[:80]}", "info")
@@ -1440,6 +1461,11 @@ class JarvisLive:
 
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
+        from memory.continuity import prompt_context
+        try:
+            mem_str += prompt_context()
+        except Exception as exc:
+            self.ui.write_log(f"SYS: Kalıcı hafıza okunamadı: {exc}")
         sys_prompt = _load_system_prompt()
 
         now      = datetime.now()
@@ -2122,6 +2148,7 @@ class JarvisLive:
                                 from core import activity as _activity
                                 _activity.record("voice", f"Jarvis'le konuştun: {full_in[:80]}", "info")
                                 self._session_log.append(f"User: {full_in}")
+                                self._persist_turn("Kullanıcı", full_in)
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "user",
@@ -2143,6 +2170,7 @@ class JarvisLive:
                                 from core import activity as _activity
                                 _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
+                                self._persist_turn("JARVIS", full_out)
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "jarvis",
@@ -2911,6 +2939,12 @@ class JarvisLive:
                     # reads exactly as "the wake word stopped working after a
                     # restart". It stays awake now and says why.
                     first_connect = not getattr(self, "_connected_once", False)
+                    if first_connect:
+                        from memory.continuity import resume_text
+                        try:
+                            self.ui.show_content("Nerede kaldık", resume_text())
+                        except Exception as exc:
+                            self.ui.write_log(f"SYS: Hafıza gösterilemedi: {exc}")
                     self._connected_once = True
                     wake_ok = False
                     if self._wake_enabled:
