@@ -403,7 +403,7 @@ void main() {
         float hl = hairline(p) + (vnoise(p * 28.0) - 0.5) * 0.016 + (vnoise(p * 210.0) - 0.5) * 0.010;
         float hm = smoothstep(hl - 0.010, hl + 0.045, p.y) * (1.0 - earM);
         if (hm > 0.0) {
-            vec3 nr = normalize(p - vec3(0.0, 0.05, -0.12));
+            vec3 nr = normalize(p - vec3(0.0, 0.10, -0.32));
             vec3 d0 = mix(vec3(0.0, -0.75, -0.66), vec3(sgn * 0.15, 0.25, -1.0), smoothstep(0.30, 0.72, p.y));
             vec3 T = normalize(d0 - nr * dot(d0, nr));
             vec3 B = cross(nr, T);

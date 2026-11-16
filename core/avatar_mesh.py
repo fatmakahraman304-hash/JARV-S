@@ -40,12 +40,12 @@ _OBJ = Path(__file__).resolve().parent / "face_model.obj"
 _SKULL_C = (0.0, 2.0, -1.0)      # centre of the cranial ellipsoid
 _SKULL_R = (8.4, 12.4, 8.2)      # its radii
 _SKULL_POLE = (0.0, 0.42, -1.0)  # direction of the occiput, where the sweep closes
-_SKULL_RINGS = 6
+_SKULL_RINGS = 9
 _SKULL_BLEND = 1.7               # how fast the sweep leaves the face border
 _SKULL_BULGE = 1.04
 
 _NECK_RINGS, _NECK_SEGS = 9, 14
-_NECK_Z = -1.6                   # the neck tube's axis, in model units
+_NECK_Z = -2.8                   # the neck tube's axis, in model units
 _WIRE_STRIDE = 3                 # keep every n-th edge; the surface carries the form
 
 # MediaPipe landmark rings. Verified against the geometry at build time — see
@@ -177,6 +177,39 @@ def _add_cranium(verts: np.ndarray, faces: np.ndarray):
     return np.vstack(out_v), np.array(out_f, dtype=np.int64)
 
 
+# Real head proportions, in normalised units (1 unit ≈ 115 mm): ~190 mm from
+# brow to the back of the skull, ~150 mm across, the occiput bulging out well
+# behind the ears and the crown broad rather than pointed. The swept ellipsoid
+# alone gave an egg — short at the back and narrow on top — so the cranium is
+# reshaped towards these per-height targets.
+#   height y:            crown ......................................... nape
+_SKULL_Y = np.array([1.00, 0.95, 0.80, 0.60, 0.40, 0.20, 0.00, -0.20, -0.40, -0.60])
+_SKULL_FZ = np.array([1.90, 1.90, 1.75, 1.60, 1.62, 1.57, 1.42, 1.30, 1.20, 1.00])  # depth behind _SKULL_ZC
+_SKULL_FX = np.array([1.40, 1.40, 1.36, 1.12, 1.05, 1.00, 1.00, 1.00, 1.00, 1.00])  # width
+_SKULL_ZC = -0.15
+
+
+def _face_faces(faces: np.ndarray, n_face: int) -> np.ndarray:
+    return faces[(faces < n_face).all(axis=1)]
+
+
+def _shape_skull(cr: np.ndarray, ring_len: int) -> np.ndarray:
+    """Reshape the swept cranium (normalised coordinates) towards real head
+    proportions. Rings near the face border move less, so the join stays
+    smooth; the face itself is never touched."""
+    cr = cr.copy()
+    k = np.arange(len(cr)) // max(ring_len, 1) + 1            # sweep ring, 1 = next to the face
+    w = np.clip(k / 3.0, 0.0, 1.0)
+    w = w * w * (3.0 - 2.0 * w)
+    y = cr[:, 1]
+    fz = 1.0 + (np.interp(-y, -_SKULL_Y, _SKULL_FZ) - 1.0) * w
+    fx = 1.0 + (np.interp(-y, -_SKULL_Y, _SKULL_FX) - 1.0) * w
+    back = cr[:, 2] < _SKULL_ZC
+    cr[back, 2] = _SKULL_ZC + (cr[back, 2] - _SKULL_ZC) * fz[back]
+    cr[:, 0] *= fx
+    return cr
+
+
 def _add_neck(verts: np.ndarray, faces: np.ndarray):
     """A tapering tube dropped from inside the jaw; it fades out, so no shoulders."""
     ph = np.linspace(0.0, 2.0 * np.pi, _NECK_SEGS, endpoint=False)
@@ -276,6 +309,8 @@ def build_head() -> dict:
     scale = 2.0 / (crown - chin)
     centre = np.array([0.0, (crown + chin) * 0.5, 0.0])
     verts = (verts - centre) * scale
+
+    verts[n_face:n_head] = _shape_skull(verts[n_face:n_head], len(_boundary_loop(_face_faces(faces, n_face))))
 
     # Outward reference, per part: the head is star-shaped about its own centre,
     # while the neck is a tube whose outward direction is radial in x/z only.
