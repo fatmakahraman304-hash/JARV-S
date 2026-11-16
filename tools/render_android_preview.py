@@ -27,8 +27,9 @@ def main() -> int:
     from core.avatar import HoloAvatar
     from gui.theme import C, qcol
 
+    look = sys.argv[sys.argv.index("--look") + 1] if "--look" in sys.argv else "human"
     av = HoloAvatar()
-    av.style = "android"
+    av.style = look
     poses = [("1_front", 0.0, 0.0, 0.0, 0.0, 0.0), ("2_turned", 0.42, 0.07, 0.0, 0.0, 0.0),
              ("3_talking", -0.18, 0.02, 0.85, 0.0, 0.7), ("4_blink", 0.12, -0.04, 0.0, 0.85, 0.0),
              ("5_side", 1.05, 0.0, 0.0, 0.0, 0.0)]
@@ -46,7 +47,7 @@ def main() -> int:
         times.append(time.perf_counter() - t0)
         p.end()
         img.save(str(out / f"{name}.png"))
-        if av.style != "android":
+        if av.style != look:
             print("GPU path failed:", av.render_note)
             return 1
     # steady-state timing at HUD size (1080p and 4K head heights)
@@ -90,7 +91,10 @@ def _log_images(out: Path, size: int) -> None:
         p.drawImage(QRect(i * tw, 0, tw, th), im, QRect(x0, y0, cw, ch))
     p.end()
     crop = tiles[0].copy(QRect(int(size * 0.30), int(size * 0.18), int(size * 0.40), int(size * 0.44)))
-    for label, im, q in (("SHEET", sheet, 82), ("CROP", crop, 88)):
+    mouth = tiles[2].copy(QRect(int(size * 0.36), int(size * 0.44), int(size * 0.28), int(size * 0.22)))
+    side = tiles[4].copy(QRect(int(size * 0.22), int(size * 0.10), int(size * 0.56), int(size * 0.62)))
+    for label, im, q in (("SHEET", sheet, 82), ("CROP", crop, 88), ("MOUTH", mouth, 88),
+                         ("SIDE", side.scaled(900, 996), 85)):
         ba = QByteArray()
         buf = QBuffer(ba)
         buf.open(QIODevice.OpenModeFlag.WriteOnly)

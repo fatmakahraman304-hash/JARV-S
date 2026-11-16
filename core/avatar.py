@@ -128,7 +128,7 @@ class HoloAvatar:
     # screen's own resolution (gui/android_gl.py). "hologram": the QPainter
     # drawing below. Android falls back to hologram by itself if this machine
     # has no usable OpenGL, and says why in `render_note`.
-    style = "android"
+    style = "human"          # "human" | "android" (GPU) | "hologram" (wireframe)
 
     def __init__(self) -> None:
         mesh = get_head_mesh()
@@ -517,7 +517,7 @@ class HoloAvatar:
         xs = cx + verts[:, 0] * k
         ys = cy - verts[:, 1] * k
 
-        if self.style == "android" and self._paint_android(p, xs, ys, verts, norms,
+        if self.style in ("human", "android") and self._paint_android(p, xs, ys, verts, norms,
                                                            primary, accent, amp):
             return
         if self.shaded:
@@ -527,7 +527,7 @@ class HoloAvatar:
 
     def _paint_android(self, p: QPainter, xs, ys, verts, norms,
                        primary: QColor, accent: QColor, amp: float) -> bool:
-        """The realistic android head, drawn on the GPU at device resolution.
+        """The realistic head (human or android), drawn on the GPU at device resolution.
         Returns False (and switches to the hologram) if OpenGL is unavailable."""
         try:
             if self._gl is None:
@@ -536,11 +536,12 @@ class HoloAvatar:
                 m = self._mesh
                 ao = bake_cavity(m["verts"], m["normals"], m["faces"])
                 self._gl = AndroidGL(m["faces"], m["face_group"], m["verts"], ao, m["jaw"],
-                                     m["fade"], m["landmarks"])
+                                     m["fade"], m["landmarks"], look=self.style)
             dev = p.device()
             dpr = float(dev.devicePixelRatioF()) if dev is not None else 1.0
-            x0, x1 = float(xs.min()) - 3.0, float(xs.max()) + 3.0
-            y0, y1 = float(ys.min()) - 3.0, float(ys.max()) + 3.0
+            pad = 3.0 + 0.07 * float(ys.max() - ys.min())   # hair and ears stand off the mesh
+            x0, x1 = float(xs.min()) - pad, float(xs.max()) + pad
+            y0, y1 = float(ys.min()) - pad, float(ys.max()) + pad
             w = min(4096, int(math.ceil((x1 - x0) * dpr)))
             h = min(4096, int(math.ceil((y1 - y0) * dpr)))
             img = self._gl.render(
@@ -555,7 +556,7 @@ class HoloAvatar:
             p.drawImage(QPointF(x0, y0), img)
             return True
         except Exception as exc:
-            self.render_note = f"Android yüz çizilemedi, hologram kullanılıyor: {exc}"[:300]
+            self.render_note = f"3D yüz çizilemedi, hologram kullanılıyor: {exc}"[:300]
             self.style = "hologram"
             try:
                 import sys
