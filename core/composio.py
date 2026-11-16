@@ -62,17 +62,19 @@ def is_configured() -> bool:
 
 
 def save_api_key(key: str) -> None:
-    global _session_id, _session_key, _header
+    global _session_id, _session_key, _header, _mcp
     from memory.config_manager import save_plugin_config
     # People paste keys with quotes, a "Bearer " prefix or a trailing newline.
     key = str(key or "").strip().strip('"').strip("'").strip()
     if key.lower().startswith("bearer "):
         key = key[7:].strip()
-    save_plugin_config(_NS, {"api_key": key})
-    global _mcp
     with _lock:
+        if key == api_key():
+            return
+        save_plugin_config(_NS, {"api_key": key})
         _session_id, _session_key, _header = None, None, "x-api-key"
         _mcp = None
+    _remember_connected(set())
 
 
 def check() -> tuple[bool, str]:
@@ -97,14 +99,15 @@ def check() -> tuple[bool, str]:
 
 def user_id() -> str:
     """A stable id for this install's user, created once."""
-    uid = str(_cfg().get("user_id") or "").strip()
-    if not uid:
-        uid = f"jarvis-{uuid.uuid4().hex[:12]}"
-        try:
+    with _lock:
+        uid = str(_cfg().get("user_id") or "").strip()
+        if not uid:
             from memory.config_manager import save_plugin_config
-            save_plugin_config(_NS, {"user_id": uid})
-        except Exception:
-            pass
+            uid = f"jarvis-{uuid.uuid4().hex[:12]}"
+            try:
+                save_plugin_config(_NS, {"user_id": uid})
+            except Exception as exc:
+                raise ComposioError("Composio kullanıcı kimliği kaydedilemedi") from exc
     return uid
 
 
@@ -206,6 +209,7 @@ def _schema_summary(schema: dict, limit: int = 12) -> str:
 
 
 def _parse_search(data) -> dict:
+    from core.composio_connect import connection_statuses
     if not isinstance(data, dict):
         raise ComposioError(f"Composio araması beklenmeyen yanıt verdi: {str(data)[:160]}")
     if data.get("success") is False and data.get("error"):
@@ -221,12 +225,12 @@ def _parse_search(data) -> dict:
                       "inputs": _schema_summary(sc.get("input_schema") or {})})
     conns = []
     for st in data.get("toolkit_connection_statuses") or []:
-        conns.append({"toolkit": st.get("toolkit", ""),
-                      "connected": bool(st.get("has_active_connection")),
-                      "note": str(st.get("status_message") or "")[:160]})
-    connected = {c["toolkit"].lower() for c in conns if c["connected"]}
-    if connected:
-        _remember_connected(connected, merge=True)
+        if isinstance(st, dict):
+            conns.extend({"toolkit": slug, "connected": active,
+                          "note": str(st.get("status_message") or "")[:160]}
+                         for slug, active in connection_statuses(st).items())
+    _remember_connected({c["toolkit"] for c in conns if c["connected"]}, merge=True,
+                        inactive={c["toolkit"] for c in conns if not c["connected"]})
     return {"tools": tools, "connections": conns,
             "guidance": str(res.get("execution_guidance") or "")[:600],
             "pitfalls": [str(p)[:160] for p in (res.get("known_pitfalls") or [])[:3]]}
@@ -238,7 +242,10 @@ def _p_search(use_case: str) -> dict:
 
 
 def _p_link(toolkit: str) -> str:
-    data = _in_session("POST", "/link", body={"toolkit": str(toolkit).strip().lower()})
+    slug = str(toolkit).strip().lower()
+    if any(t["slug"] == slug and t["connected"] for t in _p_toolkits(toolkit=slug)):
+        return ""
+    data = _in_session("POST", "/link", body={"toolkit": slug})
     url = str(data.get("redirect_url") or "")
     if not url:
         raise ComposioError("Composio bağlantı sayfası vermedi")
@@ -255,20 +262,26 @@ def _p_execute(tool_slug: str, arguments: dict | None = None) -> dict:
             "result_type": data.get("result_type", "")}
 
 
-def _p_toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50) -> list[dict]:
+def _p_toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50,
+                *, toolkit: str = "") -> list[dict]:
+    from core.composio_connect import account_active
     params = {"limit": max(1, min(50, int(limit)))}
     if connected_only:
         params["is_connected"] = "true"
     if search_text:
         params["search"] = search_text
+    if toolkit:
+        params["toolkits"] = toolkit
     data = _in_session("GET", "/toolkits", params=params)
     out = []
     for it in data.get("items") or []:
-        ca = it.get("connected_account") or {}
         out.append({"slug": str(it.get("slug") or ""), "name": str(it.get("name") or ""),
-                    "connected": bool(ca) and str(ca.get("status") or "ACTIVE").upper() == "ACTIVE"})
-    if connected_only or not search_text:
-        _remember_connected({t["slug"].lower() for t in out if t["connected"]})
+                    "connected": account_active(it) is True})
+    active = {t["slug"].lower() for t in out if t["connected"]}
+    if connected_only and not (search_text or toolkit or data.get("next_cursor")):
+        _remember_connected(active)
+    else:
+        _remember_connected(active, merge=True, inactive={t["slug"].lower() for t in out} - active)
     return out
 
 
@@ -317,13 +330,12 @@ def _c_link(toolkit: str) -> str:
         return cl.call("COMPOSIO_MANAGE_CONNECTIONS", cc.manage_args(cl, tk, "add"))
     data = _c(go)
     from core import composio_connect as cc
+    if cc.connection_statuses(data).get(tk):
+        _remember_connected({tk}, merge=True)
+        return ""
     url = cc.find_url(data)
     if not url:
-        st = cc.connection_statuses(data)
-        if st.get(tk):
-            _remember_connected({tk}, merge=True)
-            return ""                                   # already connected
-        raise ComposioError(f"Composio bağlantı sayfası vermedi: {str(data)[:160]}")
+        raise ComposioError("Composio bağlantıyı doğrulamadı ve giriş sayfası vermedi")
     return url
 
 
@@ -344,15 +356,31 @@ def _c_execute(tool_slug: str, arguments: dict | None = None) -> dict:
     return {"ok": True, "data": resp, "error": "", "result_type": "completed"}
 
 
-def _c_toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50) -> list[dict]:
+def _c_toolkits(connected_only: bool = False, search_text: str = "", limit: int = 50,
+                *, only: set[str] | None = None) -> list[dict]:
+    from core import activity
+
     def go(cc, cl):
-        return cl.call("COMPOSIO_MANAGE_CONNECTIONS", cc.manage_args(cl, None, "list"))
-    data = _c(go)
-    from core import composio_connect as cc
-    st = cc.connection_statuses(data)
-    _remember_connected({k for k, v in st.items() if v})
-    items = [{"slug": k, "name": k, "connected": v} for k, v in sorted(st.items())]
-    return [t for t in items if t["connected"]] if connected_only else items
+        schema = cl.schema("COMPOSIO_MANAGE_CONNECTIONS")
+        action = (schema.get("properties") or {}).get("action") or {}
+        if "list" in (action.get("enum") or []):
+            data = cl.call("COMPOSIO_MANAGE_CONNECTIONS", cc.manage_args(cl, None, "list"))
+        else:
+            apps = sorted(only or (activity.APP_NODES | _cached_connections()))
+            queries = [f"Find a read-only tool to list recent items in {slug} ({activity.NODE_LABEL.get(slug, slug)})"
+                       for slug in apps]
+            data = cl.call("COMPOSIO_SEARCH_TOOLS", cc.search_args(cl, queries))
+        return cc.connection_statuses(data)
+
+    statuses = _c(go)
+    _remember_connected({slug for slug, active in statuses.items() if active}, merge=True,
+                        inactive={slug for slug, active in statuses.items() if not active})
+    connected = _cached_connections()
+    items = [{"slug": slug, "name": activity.NODE_LABEL.get(slug, slug), "connected": slug in connected}
+             for slug in sorted(set(statuses) | connected)]
+    query = search_text.strip().casefold()
+    return [item for item in items if (item["connected"] or not connected_only)
+            and (query in item["slug"] or query in item["name"].casefold())][:max(1, min(50, int(limit)))]
 
 
 # ── public operations: Connect for ck_ keys, the project API otherwise ────────
@@ -378,28 +406,35 @@ def toolkits(connected_only: bool = False, search_text: str = "", limit: int = 5
 
 
 # ── connection cache for the Control Centre ───────────────────────────────────
-def _remember_connected(slugs: set, merge: bool = False) -> None:
+def _remember_connected(slugs: set, merge: bool = False, *, inactive: set | None = None) -> None:
     global _connected_cache
     with _lock:
         cur = set(_connected_cache[1]) if merge else set()
-        _connected_cache = (time.time(), cur | set(slugs))
-    try:
+        _connected_cache = (time.time(), (cur - (inactive or set())) | set(slugs))
         from core import activity
         activity.set_connected(_connected_cache[1])
-    except Exception:
-        pass
 
 
-def refresh_connections() -> set:
-    """Ask Composio which apps are connected. Never raises; returns the set."""
+def _cached_connections() -> set:
+    with _lock:
+        return set(_connected_cache[1])
+
+
+def refresh_connections(*, pending: set[str] | None = None, raise_errors: bool = False) -> set:
+    """Refresh verified accounts and retain the last status on request errors."""
     if not is_configured():
         return set()
     try:
-        toolkits(connected_only=True)
+        if pending and is_consumer():
+            _c_toolkits(connected_only=True, only=pending)
+        elif pending:
+            _p_toolkits(toolkit=",".join(sorted(pending)))
+        else:
+            toolkits(connected_only=True)
     except Exception:
-        pass
-    with _lock:
-        return set(_connected_cache[1])
+        if raise_errors:
+            raise
+    return _cached_connections()
 
 
 def compact(value, limit: int = 3000) -> str:

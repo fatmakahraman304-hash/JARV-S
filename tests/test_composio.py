@@ -54,6 +54,7 @@ class _Setup:
         self.c = composio
         composio._session_id = composio._session_key = None
         self.httpx.routes[("POST", "/tool_router/session")] = _Resp(201, {"session_id": "trs_1"})
+        self.httpx.routes[("GET", "/trs_1/toolkits")] = _Resp(200, {"items": []})
 
     def tearDown(self):
         for p in reversed(self.patches):
@@ -115,8 +116,20 @@ class ComposioTests(_Setup, unittest.TestCase):
         self.c.save_api_key("k")
         self.c._session()
         self.httpx.routes[("POST", "/tool_router/session")] = _Resp(201, {"session_id": "trs_2"})
+        self.httpx.routes[("GET", "/trs_2/toolkits")] = _Resp(200, {"items": []})
         self.httpx.routes[("POST", "/trs_2/link")] = _Resp(201, {"redirect_url": "https://y"})
         self.assertEqual(self.c.link("notion"), "https://y")       # trs_1 → 404 → trs_2
+
+    def test_project_recognizes_active_account_and_skips_new_login(self):
+        self.c.save_api_key("ak_good")
+        self.httpx.routes[("GET", "/trs_1/toolkits")] = _Resp(200, {"items": [
+            {"slug": "gmail", "connection": {"is_active": True, "connected_account": {"id": "ca_1"}}},
+            {"slug": "notion", "connection": {"is_active": False, "connected_account": {"status": "ACTIVE"}}},
+        ]})
+        self.assertEqual(self.c.refresh_connections(), {"gmail"})
+        self.assertEqual(self.c.link("Gmail"), "")
+        self.assertEqual(self.httpx.calls[-1][3]["toolkits"], "gmail")
+        self.assertFalse(any(c[1].endswith("/link") for c in self.httpx.calls))
 
     def test_http_errors_are_readable(self):
         self.c.save_api_key("bad")
@@ -333,6 +346,36 @@ class ConnectTests(_Setup, unittest.TestCase):
         ok, msg = self.c.check()
         self.assertFalse(ok)
         self.assertIn("ck_", msg)
+
+    def test_modern_connect_recognizes_browser_approval_and_restores_it_on_reopen(self):
+        schema = {"type": "object", "properties": {"toolkits": {"type": "array"},
+                  "reinitiate_all": {"type": "boolean"}}, "required": ["toolkits"]}
+        self.server.TOOLS = [dict(t, inputSchema=schema) if t["name"] == "COMPOSIO_MANAGE_CONNECTIONS" else t
+                             for t in self.server.TOOLS]
+        active = False
+
+        def answer(name, args):
+            if name == "COMPOSIO_SEARCH_TOOLS":
+                self.assertTrue(any("gmail" in q["use_case"] for q in args["queries"]))
+                return {"data": {"toolkit_connection_statuses": [
+                    {"toolkit": {"slug": "gmail"}, "has_active_connection": active},
+                ]}, "successful": True}
+            self.assertEqual(args, {"toolkits": ["gmail"]})
+            result = ({"status": "ACTIVE"} if active else
+                      {"status": "INITIATED", "redirect_url": "https://connect.composio.dev/link/gmail"})
+            return {"data": {"results": {"gmail": result}}, "successful": True}
+
+        self.server.answer = answer
+        self.assertEqual(self.c.refresh_connections(raise_errors=True), set())
+        self.assertEqual(self.c.link("gmail"), "https://connect.composio.dev/link/gmail")
+        active = True
+        self.assertEqual(self.c.refresh_connections(raise_errors=True), {"gmail"})
+        self.c._mcp = None
+        self.c._remember_connected(set())
+        self.assertEqual(self.c.refresh_connections(raise_errors=True), {"gmail"})
+        self.assertEqual(self.c.link("gmail"), "")
+        active = False
+        self.assertEqual(self.c.refresh_connections(raise_errors=True), set())
 
     def test_apps_tool_with_consumer_key(self):
         from plugins import apps

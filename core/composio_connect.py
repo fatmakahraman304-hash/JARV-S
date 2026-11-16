@@ -206,20 +206,41 @@ def connection_statuses(v) -> dict[str, bool]:
     """toolkit slug → connected, from any answer that reports statuses."""
     out: dict[str, bool] = {}
     for d in _walk(v):
-        tk = d.get("toolkit") or d.get("toolkit_slug") or d.get("app") or d.get("appName")
+        tk = d.get("toolkit") or d.get("toolkit_slug") or d.get("app") or d.get("appName") or d.get("slug")
         if isinstance(tk, dict):
             tk = tk.get("slug") or tk.get("name")
-        if not isinstance(tk, str) or not tk:
+        if isinstance(tk, str) and tk:
+            slug = tk.lower()
+            active = account_active(d)
+            if active is not None:
+                out[slug] = out.get(slug, False) or active
+        results = d.get("results")
+        if not isinstance(results, dict):
             continue
-        tk = tk.lower()
-        if "has_active_connection" in d:
-            out[tk] = out.get(tk, False) or bool(d["has_active_connection"])
-        elif isinstance(d.get("status"), str):
-            out[tk] = out.get(tk, False) or d["status"].upper() == "ACTIVE"
-        elif isinstance(d.get("accounts"), list):
-            out[tk] = out.get(tk, False) or any(
-                str((a or {}).get("status", "")).upper() == "ACTIVE" for a in d["accounts"])
+        for toolkit, result in results.items():
+            if isinstance(result, dict) and not result.get("toolkit"):
+                active = account_active(result)
+                if active is not None:
+                    slug = toolkit.lower()
+                    out[slug] = out.get(slug, False) or active
     return out
+
+
+def account_active(item: dict) -> bool | None:
+    """Read both the current session connection and older account formats."""
+    for key in ("has_active_connection", "is_active", "isActive", "already_connected"):
+        if isinstance(item.get(key), bool):
+            return item[key]
+    if isinstance(item.get("status"), str):
+        return item["status"].upper() == "ACTIVE"
+    for key in ("connection", "connected_account", "connectedAccount"):
+        if key in item:
+            value = item[key]
+            return account_active(value) if isinstance(value, dict) and value else False
+    for key in ("connected_accounts", "accounts"):
+        if isinstance(item.get(key), list):
+            return any(account_active(a) is True for a in item[key] if isinstance(a, dict))
+    return None
 
 
 # ── argument building from the published schemas ─────────────────────────────
@@ -262,13 +283,14 @@ def _with_session(client: McpClient, schema: dict, args: dict) -> dict:
     return args
 
 
-def search_args(client: McpClient, use_case: str) -> dict:
+def search_args(client: McpClient, use_case: str | list[str]) -> dict:
     sc = client.schema("COMPOSIO_SEARCH_TOOLS")
     props = sc.get("properties") or {}
+    queries = [use_case] if isinstance(use_case, str) else use_case
     if "queries" in props or not props:
-        args = {"queries": [{"use_case": use_case}]}
+        args = {"queries": [{"use_case": query} for query in queries]}
     else:
-        args = {"use_case": use_case}
+        args = {"use_case": "\n".join(queries)}
     if "session" in props:
         args["session"] = ({"id": client.search_session} if client.search_session
                            else {"generate_id": True})

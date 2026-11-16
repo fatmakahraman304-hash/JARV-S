@@ -36,6 +36,7 @@ except Exception:                     # pragma: no cover — never fatal
 
 _ICON_OF = {k: icon for k, _l, icon, _r in activity.NODES}
 _STATUS_COL = {"fail": "RED", "warn": "ACC", "ok": "TEXT", "info": "TEXT"}
+_AUTH_WAIT = 300.0
 
 
 def _ago(ts: float) -> str:
@@ -128,7 +129,7 @@ class NetworkCanvas(QWidget):
 
     def set_pending(self, key: str, on: bool) -> None:
         if on:
-            self._pending[key] = time.time()
+            self._pending[key] = time.monotonic()
         else:
             self._pending.pop(key, None)
         self.update()
@@ -141,7 +142,9 @@ class NetworkCanvas(QWidget):
             self.setCursor(Qt.CursorShape.PointingHandCursor if k else Qt.CursorShape.ArrowCursor)
             if k:
                 n = self._counts.get(k, 0)
-                if self._is_app_off(k):
+                if k in self._pending:
+                    self.setToolTip(f"{activity.NODE_LABEL[k]} · tarayıcı onayı bekleniyor")
+                elif self._is_app_off(k):
                     self.setToolTip(f"{activity.NODE_LABEL[k]} · bağlı değil — bağlamak için tıkla")
                 else:
                     self.setToolTip(f"{activity.NODE_LABEL[k]} · bu oturumda {n} işlem")
@@ -279,12 +282,13 @@ class NetworkCanvas(QWidget):
             p.setFont(px_font(11, QFont.Weight.Medium))
             p.setPen(QPen(with_alpha(C.TEXT if on else C.TEXT_DIM, alpha)))
             p.drawText(QRectF(c.x() - 70, c.y() + r + 4, 140, 16), Qt.AlignmentFlag.AlignHCenter, label)
-            if self._is_app_off(k):
-                pending = time.time() - self._pending.get(k, 0) < 25
+            if k in activity.APP_NODES:
+                pending = k in self._pending
+                status = "bağlanıyor…" if pending else "bağlı" if k in self._connected else "bağla ›"
                 p.setFont(px_font(10, QFont.Weight.DemiBold))
                 p.setPen(QPen(with_alpha(C.ACC if pending else C.PRI, alpha)))
                 p.drawText(QRectF(c.x() - 70, c.y() + r + 19, 140, 14),
-                           Qt.AlignmentFlag.AlignHCenter, "bağlanıyor…" if pending else "bağla ›")
+                           Qt.AlignmentFlag.AlignHCenter, status)
             if n:
                 txt = str(n) if n < 100 else "99+"
                 p.setFont(px_font(10, QFont.Weight.Bold))
@@ -419,6 +423,8 @@ class ControlCenter(QWidget):
     back_requested = pyqtSignal()
     talk_requested = pyqtSignal()
     settings_requested = pyqtSignal(str)   # open Settings, with a line for the log
+    _link_finished = pyqtSignal(str, bool)
+    _check_finished = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -467,6 +473,10 @@ class ControlCenter(QWidget):
         self.network.core_clicked.connect(self.talk_requested.emit)
         self.network.connect_requested.connect(self._connect_app)
         self._next_conn_check = 0.0
+        self._checking_connections = False
+        self._connection_error = ""
+        self._link_finished.connect(self._on_link_finished)
+        self._check_finished.connect(self._on_check_finished)
 
         self._seq = -1
         self._last = time.monotonic()
@@ -499,6 +509,10 @@ class ControlCenter(QWidget):
         self._tmr.stop()
 
     def _refresh(self, force: bool = False) -> None:
+        connected = activity.connected()
+        for key in connected.intersection(self.network._pending):
+            self.network.set_pending(key, False)
+            activity.record(key, f"{activity.NODE_LABEL[key]} hesabı bağlandı", "ok", count=False)
         seq = activity.last_seq()
         if force or seq != self._seq:
             self._seq = seq
@@ -508,17 +522,20 @@ class ControlCenter(QWidget):
                 if e.node == "voice" and "yanıtladı:" in e.text:
                     caption = e.text.split("yanıtladı:", 1)[1].strip()
                     break
-            self.network.set_data(activity.counts(), activity.last_hit(), caption,
-                                  activity.connected())
+            self.network.set_data(activity.counts(), activity.last_hit(), caption, connected)
             self.feed.set_events(events)
         else:
             self.feed.update()      # keeps the "x sn" ages fresh
 
     def _check_connections(self) -> None:
-        """Every 30 s while visible, ask Composio which apps are connected —
-        on a worker thread; the result lands in core.activity."""
+        """Check more often while a browser authorization is pending."""
         now = time.monotonic()
-        if now < self._next_conn_check:
+        for key, started in list(self.network._pending.items()):
+            if now - started >= _AUTH_WAIT and key not in activity.connected():
+                self.network.set_pending(key, False)
+                activity.record(key, f"{activity.NODE_LABEL[key]} onayı doğrulanamadı. Tekrar deneyebilirsin.",
+                                "warn", count=False)
+        if self._checking_connections or now < self._next_conn_check:
             return
         self._next_conn_check = now + 30.0
         try:
@@ -529,10 +546,31 @@ class ControlCenter(QWidget):
             return
         import threading
 
+        self._checking_connections = True
+        pending = set(self.network._pending)
+
         def work():
-            composio.refresh_connections()
-            activity.bump()
+            try:
+                composio.refresh_connections(pending=pending, raise_errors=True)
+            except Exception as exc:
+                self._check_finished.emit(str(exc)[:170])
+            else:
+                self._check_finished.emit("")
         threading.Thread(target=work, daemon=True, name="composio-refresh").start()
+
+    def _on_check_finished(self, error: str) -> None:
+        self._checking_connections = False
+        if error and error != self._connection_error:
+            activity.record("apps", f"Hesap durumu kontrol edilemedi. {error}", "warn", count=False)
+        self._connection_error = error
+        self._refresh()
+        self._next_conn_check = time.monotonic() + (5.0 if self.network._pending else 30.0)
+
+    def _on_link_finished(self, key: str, awaiting_confirmation: bool) -> None:
+        if not awaiting_confirmation:
+            self.network.set_pending(key, False)
+        self._next_conn_check = 0.0
+        self._refresh()
 
     def _connect_app(self, key: str) -> None:
         """Open the login page for one app. The network work runs on a worker
@@ -553,33 +591,33 @@ class ControlCenter(QWidget):
                 f"{label} bağlamak için Ayarlar → Bağlantılar → Uygulamalar (Composio) satırına "
                 f"API anahtarını yapıştırıp Kaydet'e bas.")
             return
-        if time.time() - self.network._pending.get(key, 0) < 25:
-            return                                 # already opening
+        if key in self.network._pending or key in activity.connected():
+            return
         self.network.set_pending(key, True)
         activity.record(key, f"{label} için giriş sayfası açılıyor…", "info", count=False)
         self._refresh(force=True)
 
         def work():
+            awaiting_confirmation = False
             try:
                 url = composio.link(key)
                 if not url:
                     activity.record(key, f"{label} zaten bağlı", "ok", count=False)
-                    self.network._pending.pop(key, None)
-                    activity.bump()
                     return
                 opened = False
                 try:
                     opened = bool(webbrowser.open(url))
                 except Exception:
                     opened = False
+                awaiting_confirmation = True
                 if opened:
-                    activity.record(key, f"{label}: tarayıcıda giriş yap ve izin ver", "ok", count=False)
+                    activity.record(key, f"{label}: tarayıcıda giriş yap ve izin ver", "info", count=False)
                 else:
                     activity.record(key, f"{label}: tarayıcı açılamadı, bu adresi aç: {url}", "warn", count=False)
             except Exception as exc:
                 activity.record(key, f"{label} bağlanamadı: {exc}", "fail", count=False)
-                self.network._pending.pop(key, None)
-            self._next_conn_check = time.monotonic() + 15.0
+            finally:
+                self._link_finished.emit(key, awaiting_confirmation)
         threading.Thread(target=work, daemon=True, name="composio-link").start()
 
     def _tick(self) -> None:
