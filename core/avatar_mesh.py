@@ -210,6 +210,30 @@ def _shape_skull(cr: np.ndarray, ring_len: int) -> np.ndarray:
     return cr
 
 
+def _sharpen_jaw(head: np.ndarray, n_face: int) -> np.ndarray:
+    """A defined male jawline. The measured face is a soft average; this
+    squares the lower jaw towards a clear angle under the ears, gives the chin
+    a little width, and tucks the generated surface under the jaw in towards
+    the neck, so the jaw edge turns sharply instead of rolling into a jowl."""
+    v = head.copy()
+    x, y, z = v[:, 0], v[:, 1], v[:, 2]
+    ax = np.abs(x)
+    ss = lambda e0, e1, t: (lambda u: u * u * (3 - 2 * u))(np.clip((t - e0) / (e1 - e0), 0, 1))
+    front = ss(-0.50, -0.25, z)
+    sq = np.exp(-((y + 0.80) / 0.14) ** 2) * ss(0.12, 0.40, ax) * front
+    angle = np.exp(-(((y + 0.70) / 0.09) ** 2 + ((z + 0.12) / 0.16) ** 2))
+    chin = np.exp(-((y + 0.95) / 0.07) ** 2) * ss(0.04, 0.16, ax) * (1.0 - ss(0.22, 0.36, ax))
+    scale = 1.0 + 0.10 * sq + 0.05 * angle + 0.10 * chin
+    v[:, 0] = x * scale
+    v[:, 1] = y - 0.025 * angle
+    # under the jaw (generated part only): pull in and back towards the neck
+    under = np.zeros(len(v))
+    under[n_face:] = (ss(-0.32, -0.55, y) * front)[n_face:]
+    v[:, 0] *= 1.0 - 0.20 * under
+    v[:, 2] -= 0.12 * under * ss(-0.1, 0.3, z)
+    return v
+
+
 def _add_neck(verts: np.ndarray, faces: np.ndarray):
     """A tapering tube dropped from inside the jaw; it fades out, so no shoulders."""
     ph = np.linspace(0.0, 2.0 * np.pi, _NECK_SEGS, endpoint=False)
@@ -311,6 +335,7 @@ def build_head() -> dict:
     verts = (verts - centre) * scale
 
     verts[n_face:n_head] = _shape_skull(verts[n_face:n_head], len(_boundary_loop(_face_faces(faces, n_face))))
+    verts[:n_head] = _sharpen_jaw(verts[:n_head], n_face)
 
     # Outward reference, per part: the head is star-shaped about its own centre,
     # while the neck is a tube whose outward direction is radial in x/z only.

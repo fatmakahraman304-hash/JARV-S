@@ -404,7 +404,10 @@ void main() {
         float hm = smoothstep(hl - 0.010, hl + 0.045, p.y) * (1.0 - earM);
         if (hm > 0.0) {
             vec3 nr = normalize(p - vec3(0.0, 0.10, -0.32));
-            vec3 d0 = mix(vec3(0.0, -0.75, -0.66), vec3(sgn * 0.15, 0.25, -1.0), smoothstep(0.30, 0.72, p.y));
+            float px = p.x + 0.17;                                // side parting
+            float ps = px < 0.0 ? -1.0 : 1.0;
+            vec3 topDir = normalize(vec3(ps * (px < 0.0 ? 0.9 : 0.45), 0.05, -0.75 + 0.35 * smoothstep(0.0, 0.4, p.z)));
+            vec3 d0 = mix(vec3(0.0, -0.75, -0.66), topDir, smoothstep(0.30, 0.72, p.y));
             vec3 T = normalize(d0 - nr * dot(d0, nr));
             vec3 B = cross(nr, T);
             float a = dot(p, T), b = dot(p, B);
@@ -414,9 +417,12 @@ void main() {
             strand = mix(0.5, f1, lod(900.0)) * 0.15 + f2 * 0.40 + cl * 0.45;
             float edgeHairs = smoothstep(0.15, 0.85, hm * 1.4 - 0.2 + 0.7 * (f1 - 0.5));
             hairC = mix(edgeHairs, 1.0, smoothstep(0.6, 1.0, hm)) * hm;
-            vec3 hcol = mix(vec3(0.022, 0.016, 0.012), vec3(0.060, 0.042, 0.030), strand);
+            hairC *= 1.0 - 0.30 * sideFade * (1.0 - f1 * 0.8) - 0.55 * part;
+            vec3 hcol = mix(vec3(0.020, 0.0135, 0.009), vec3(0.085, 0.056, 0.036), strand * strand * 1.2);
+            float sideFade = 1.0 - smoothstep(0.05, 0.42, p.y);           // short faded sides
+            float part = exp(-pow(px / 0.0045, 2.0)) * smoothstep(0.62, 0.80, p.y) * smoothstep(-0.75, 0.25, p.z);
             alb = mix(alb, hcol, hairC);
-            H += hairC * (f1 * 0.0006 + f2 * 0.0024 + cl * 0.006);
+            H += hairC * (f1 * 0.0006 + f2 * 0.0026 + cl * 0.008) - part * 0.003;
         }
     }
 
@@ -444,7 +450,9 @@ void main() {
     float amb = 0.10 + 0.14 * (0.5 + 0.5 * n.y);
     vec3 diff = vec3(amb) + lk * vec3(1.0, 0.95, 0.88) * 1.0 + lf * vec3(0.60, 0.68, 0.85) * 0.30;
     float occ = ao * ao * (1.0 - 0.45 * earShadow);
-    if (neck) occ *= mix(0.45, 1.0, smoothstep(-0.70, -0.98, p.y));
+    if (neck) occ *= mix(0.40, 1.0, smoothstep(-0.70, -0.98, p.y));
+    float underJaw = smoothstep(-0.45, -0.62, p.y) * smoothstep(-0.05, -0.55, n0.y) * float(!neck);
+    occ *= 1.0 - 0.45 * underJaw;
     vec3 col = alb * diff * occ;
 
     vec3 hk = normalize(KEY + VIEW), hf = normalize(FILL + VIEW);
@@ -598,7 +606,8 @@ def _human_relief(p: np.ndarray) -> np.ndarray:
     ear = side * ear_in * (0.026 + 0.05 * np.clip(0.5 - 0.5 * u, 0.0, 1.0))
     ear_m = side * (1.0 - ss(0.92, 1.02, r))
     hl = _hairline(p)
-    hair = ss(hl - 0.005, hl + 0.09, p[:, 1]) * (0.010 + 0.042 * ss(-0.1, 0.8, p[:, 1]))
+    lift = ss(0.45, 0.78, p[:, 1]) * ss(-0.35, 0.30, p[:, 2])
+    hair = ss(hl - 0.005, hl + 0.09, p[:, 1]) * (0.008 + 0.042 * ss(0.0, 0.7, p[:, 1]) + 0.026 * lift)
     return np.maximum(hair * (1.0 - ear_m), ear)
 
 
