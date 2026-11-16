@@ -20,7 +20,7 @@ API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
 PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
-from core import codex_coding, gemini
+from core import claude_coding, codex_coding, gemini
 
 MODEL_PLANNER    = gemini.SMART
 MODEL_WRITER     = gemini.SMART
@@ -482,7 +482,7 @@ def _build_project(
         _log(player, msg)
 
     provider = _coding_provider()
-    if provider == codex_coding.PROVIDER_ID or provider in EXPLICIT_CODING_PROVIDERS:
+    if provider in {codex_coding.PROVIDER_ID, claude_coding.PROVIDER_ID} or provider in EXPLICIT_CODING_PROVIDERS:
         log(f"Coding with {provider.partition('@')[2] or provider}.")
     else:
         log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
@@ -1239,15 +1239,19 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
             problems[rel] = (problems.get(rel, "") + " " + p).strip()
         if stack.get("test_cmd") and not problems:
             _log(player, f"Running the project's own tests ({stack['test_name']})…")
-            broke = test_regressions(baseline, run_tests(folder, stack))
+            after = run_tests(folder, stack)
+            broke = ("The project test command could not start." if after is None
+                     else test_regressions(baseline, after))
             if broke:
                 for rel in _blame(broke, written):
                     problems[rel] = (problems.get(rel, "") + " " + broke).strip()
+            elif after["ok"]:
+                _log(player, "The project's tests passed.")
             else:
-                _log(player, "The project's tests pass as they did before.")
+                _log(player, "The project has pre-existing test failures. No new failures were detected.")
         problems = {r: p for r, p in problems.items() if r in written}
         if not problems:
-            _log(player, "All changed files passed their tests.")
+            _log(player, "Checks found no new failures in the changed files.")
             return {}
         for rel, p in problems.items():
             _update(file=rel, file_state="broken")
@@ -1510,7 +1514,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         msg += (" These still fail their test and need a look: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + ".")
     elif written:
-        msg += " Every changed file loaded and passed its test."
+        msg += " Checks completed without a new test failure."
     if edited:
         msg += f" Originals are in {_BACKUP_DIR}/{stamp}; say 'undo' to restore them."
     else:

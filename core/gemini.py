@@ -722,6 +722,11 @@ def call(contents, tier: str = FAST, config=None,
     a silent None during a session nobody can debug is how the original problem
     stayed hidden.
     """
+    from core import claude_coding
+
+    if provider == claude_coding.PROVIDER_ID:
+        return claude_coding.generate_content(contents)
+
     # `tier` is normally FAST or SMART. Anything else is taken to be an explicit
     # model name — screen_agent lets the user pick one in its settings — and it
     # is tried first, with the reasoning ladder behind it. So a user's choice is

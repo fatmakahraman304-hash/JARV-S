@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QProgressBar, QSlider,
 )
 
+from core.claude_coding import PROVIDER_ID as CLAUDE_CODE
 from core.codex_coding import PROVIDER_ID as CODEX_CLI
 from gui.theme import (
     C,
@@ -226,7 +227,7 @@ class ProvidersOverlay(_HudOverlay):
                       for slot, sid in dict(get_pipeline()).items()}
         self._sidecar = self._normalise(get_sidecar_provider(), "llm")
         coding = get_coding_provider()
-        self._coding = coding if coding == CODEX_CLI else self._normalise(coding, "llm")
+        self._coding = coding if coding in {CODEX_CLI, CLAUDE_CODE} else self._normalise(coding, "llm")
         self._sidecar_first = get_sidecar_first()
         self._rebuild_body()
 
@@ -909,6 +910,7 @@ class ProvidersOverlay(_HudOverlay):
                 self._coding_combo.insertItem(1, text, data)
                 break
         self._coding_combo.insertItem(1, "Codex CLI (ChatGPT)", CODEX_CLI)
+        self._coding_combo.insertItem(2, "Claude Code", CLAUDE_CODE)
         self._select(self._coding_combo, sid)
         self._coding_combo.currentIndexChanged.connect(self._coding_changed)
         lay.addWidget(self._coding_combo)
@@ -916,6 +918,10 @@ class ProvidersOverlay(_HudOverlay):
         if not sid:
             lay.addWidget(self._label(
                 "Code is written by whatever answers background requests above.",
+                7, C.TEXT_DIM))
+        elif sid == CLAUDE_CODE:
+            lay.addWidget(self._label(
+                "Windows’a Claude Code kur ve PowerShell’de claude auth login çalıştır.",
                 7, C.TEXT_DIM))
         elif sid == CODEX_CLI:
             lay.addWidget(self._label(
@@ -944,7 +950,7 @@ class ProvidersOverlay(_HudOverlay):
         sid = self._coding_combo.currentData() or ""
         self._remember_edits()
         self._coding = sid
-        if sid and sid != CODEX_CLI:
+        if sid and sid not in {CODEX_CLI, CLAUDE_CODE}:
             self._apply_entry("llm", sid)
             self._fetch_models(sid)
         QTimer.singleShot(0, self._rebuild_body)
