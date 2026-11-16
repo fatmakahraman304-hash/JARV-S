@@ -444,7 +444,7 @@ class HudCanvas(QWidget):
         amp = self._amp_disp
         live = (self.speaking or amp > 0.04) and not self.muted
         self._reactor.paint(p, cx, cy, r, main, acc, qcol(C.WHITE), amp, live,
-                            self._assistant_name or "")
+                            self._assistant_name or "", muted=self.muted)
 
     def _paint_core_classic(self, p: QPainter, cx: float, cy: float, r: float,
                             W: float = 0.0, H: float = 0.0):
