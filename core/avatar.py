@@ -124,6 +124,12 @@ class HoloAvatar:
     # see-through glass wireframe. Flip here, or per instance.
     shaded = True
 
+    # "android": a realistic robot head rendered per pixel on the GPU at the
+    # screen's own resolution (gui/android_gl.py). "hologram": the QPainter
+    # drawing below. Android falls back to hologram by itself if this machine
+    # has no usable OpenGL, and says why in `render_note`.
+    style = "human"          # "human" | "android" (GPU) | "hologram" (wireframe)
+
     def __init__(self) -> None:
         mesh = get_head_mesh()
         self._v0 = mesh["verts"]
@@ -151,6 +157,10 @@ class HoloAvatar:
 
         self._lut_cache: list = []
         self._lut_key = None
+        self._mesh = mesh
+        self._gl = None
+        self._muted = False
+        self.render_note = ""
 
         n = self._v0.shape[0]
         self._v = np.empty((n, 3), dtype=np.float32)
@@ -264,6 +274,7 @@ class HoloAvatar:
         self._t += dt
         t = self._t
         amp = max(0.0, min(1.0, float(amp)))
+        self._muted = bool(muted)
         live = speaking and not muted
 
         # Idle sway. The phase is *integrated* rather than taken as
@@ -506,10 +517,53 @@ class HoloAvatar:
         xs = cx + verts[:, 0] * k
         ys = cy - verts[:, 1] * k
 
+        if self.style in ("human", "android") and self._paint_android(p, xs, ys, verts, norms,
+                                                           primary, accent, amp):
+            return
         if self.shaded:
             self._paint_surface(p, xs, ys, norms, verts, primary, bg, amp)
         self._paint_wire(p, xs, ys, norms, verts, primary, bg, amp)
         self._paint_features(p, xs, ys, norms, r, primary, accent, bg, amp)
+
+    def _paint_android(self, p: QPainter, xs, ys, verts, norms,
+                       primary: QColor, accent: QColor, amp: float) -> bool:
+        """The realistic head (human or android), drawn on the GPU at device resolution.
+        Returns False (and switches to the hologram) if OpenGL is unavailable."""
+        try:
+            if self._gl is None:
+                from core.android_render import bake_cavity
+                from gui.android_gl import AndroidGL
+                m = self._mesh
+                ao = bake_cavity(m["verts"], m["normals"], m["faces"])
+                self._gl = AndroidGL(m["faces"], m["face_group"], m["verts"], ao, m["jaw"],
+                                     m["fade"], m["landmarks"], look=self.style)
+            dev = p.device()
+            dpr = float(dev.devicePixelRatioF()) if dev is not None else 1.0
+            pad = 3.0 + 0.07 * float(ys.max() - ys.min())   # hair and ears stand off the mesh
+            x0, x1 = float(xs.min()) - pad, float(xs.max()) + pad
+            y0, y1 = float(ys.min()) - pad, float(ys.max()) + pad
+            w = min(4096, int(math.ceil((x1 - x0) * dpr)))
+            h = min(4096, int(math.ceil((y1 - y0) * dpr)))
+            img = self._gl.render(
+                verts, norms, (xs - x0) * dpr, (ys - y0) * dpr, w, h,
+                accent=(primary.redF(), primary.greenF(), primary.blueF()),
+                eye=(accent.redF(), accent.greenF(), accent.blueF()),
+                glow=amp, t=self._t, mouth=self._mouth, muted=self._muted,
+                open_=(1.0 - self._blink) * self._lids, gaze=tuple(self._gaze))
+            if img is None:
+                raise RuntimeError(self._gl.error or "OpenGL çizimi başarısız")
+            img.setDevicePixelRatio(dpr)
+            p.drawImage(QPointF(x0, y0), img)
+            return True
+        except Exception as exc:
+            self.render_note = f"3D yüz çizilemedi, hologram kullanılıyor: {exc}"[:300]
+            self.style = "hologram"
+            try:
+                import sys
+                print(f"[Avatar] {self.render_note}", file=sys.stderr)
+            except Exception:
+                pass
+            return False
 
     def _paint_surface(self, p: QPainter, xs, ys, norms, verts,
                        primary: QColor, bg: QColor, amp: float) -> None:
