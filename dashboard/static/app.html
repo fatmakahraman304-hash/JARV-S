@@ -184,6 +184,7 @@
     <button type="button" id="m-shot">🖼️ Ekran görüntüsü al</button>
     <button type="button" id="wake">⚡ Jarvis'i uyandır</button>
     <button type="button" id="m-refresh">🔄 Cihazları yenile</button>
+    <button type="button" id="m-update">⬆ Bilgisayarı güncelle</button>
     <div class="enc">Bağlantı: <b id="enc">…</b><br><span>__IP__:__PORT__</span></div>
   </nav>
 
@@ -1169,6 +1170,26 @@
       if (curState === 'idle') setState('idle');
     }
     micBtn.onclick = doMic;
+
+    // ── Updates ───────────────────────────────────────────────────────────────
+    // GÜNCELLE from the phone presses it on the selected computer; when that
+    // computer comes back on a new version, this page reloads itself.
+    let pageVersion = null;
+    document.getElementById('m-update').onclick = async () => {
+      closeMenu();
+      try {
+        const r = await _authFetch('/api/update', { method: 'POST' });
+        const d = await r.json();
+        toast(d.message || (d.ok ? 'Güncelleme başladı' : 'Olmadı'));
+      } catch { toast('Bilgisayara ulaşılamadı'); }
+    };
+    setInterval(async () => {
+      try {
+        const d = await (await fetch('/api/info', { cache: 'no-store' })).json();
+        if (pageVersion === null) pageVersion = d.version || '';
+        else if (d.version && d.version !== pageVersion) location.reload();
+      } catch {}
+    }, 20000);
 
     // ── Start ─────────────────────────────────────────────────────────────────
     (async () => {

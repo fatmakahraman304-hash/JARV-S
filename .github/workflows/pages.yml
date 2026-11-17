@@ -32,6 +32,7 @@ jobs:
           cp -r web/. _site/
           cp dashboard/static/reactor.js _site/reactor.js
           touch _site/.nojekyll
+          echo "{\"version\": \"${GITHUB_SHA::12}\"}" > _site/version.json
       - uses: actions/configure-pages@v5
         with:
           enablement: true

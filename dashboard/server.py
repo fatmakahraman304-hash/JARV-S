@@ -61,6 +61,33 @@ _SCREEN_KINDS = ("video", "url", "image", "text", "clear", "home")
 ACTIVE = None
 
 
+def _app_version() -> str:
+    """Which version of JARVIS is running (the commit), so open phone and TV
+    pages can notice an update and reload themselves."""
+    try:
+        import json as _json
+        st = BASE_DIR / ".jarvis-update.json"
+        if st.exists():
+            sha = _json.loads(st.read_text("utf-8")).get("sha", "")
+            if sha:
+                return sha[:12]
+    except Exception:
+        pass
+    try:
+        head = (BASE_DIR / ".git" / "HEAD").read_text("utf-8").strip()
+        if head.startswith("ref:"):
+            ref = BASE_DIR / ".git" / head.split(" ", 1)[1]
+            if ref.exists():
+                return ref.read_text("utf-8").strip()[:12]
+            packed = BASE_DIR / ".git" / "packed-refs"
+            for line in packed.read_text("utf-8").splitlines() if packed.exists() else []:
+                if line.endswith(head.split(" ", 1)[1]):
+                    return line.split(" ", 1)[0][:12]
+        return head[:12]
+    except Exception:
+        return ""
+
+
 def _make_uploads_dir() -> Path:
     """Return (and create) the cross-platform uploads folder."""
     for candidate in [
@@ -762,6 +789,8 @@ class DashboardServer:
         self._loop                        = None
         self._state                       = "idle"    # idle | thinking | speaking | sleeping
         self._last_level_at               = 0.0
+        self._update_callback             = None
+        self.version                      = _app_version()
         self.app                          = self._build_app()
         global ACTIVE
         ACTIVE = self
@@ -854,6 +883,10 @@ class DashboardServer:
 
     def set_connect_callback(self, fn) -> None:
         self._connect_callback = fn
+
+    def set_update_callback(self, fn) -> None:
+        """fn() presses GÜNCELLE on this computer (thread-safe)."""
+        self._update_callback = fn
 
     # ── broadcast ────────────────────────────────────────────────────────
 
@@ -1192,7 +1225,21 @@ class DashboardServer:
 
         @app.get("/api/info")
         async def info_ep():
-            return JSONResponse({**self._self_info(), "state": self._state})
+            return JSONResponse({**self._self_info(), "state": self._state,
+                                 "version": self.version})
+
+        @app.post("/api/update")
+        async def update_ep(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            if not self._update_callback:
+                return JSONResponse({"ok": False, "message": "Güncelleme bu bilgisayarda başlatılamıyor"})
+            try:
+                self._update_callback()
+            except Exception as exc:
+                return JSONResponse({"ok": False, "message": f"Güncelleme başlatılamadı: {exc}"})
+            asyncio.create_task(self.broadcast({"type": "sys", "text": "Güncelleme başladı."}))
+            return JSONResponse({"ok": True, "message": "Güncelleme başladı; JARVIS kendini yeniden açacak."})
 
         @app.get("/api/devices")
         async def devices_ep(req: Request):

@@ -316,6 +316,10 @@ class JarvisUI:
         of capabilities and the live activity feed."""
         self._win._control_center_sig.emit(bool(opened))
 
+    def start_update(self) -> None:
+        """Thread-safe: press GÜNCELLE — used when the phone or another device asks."""
+        self._win._remote_update_sig.emit()
+
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
         self._win._content_sig.emit(title[:48], text[:4000])
