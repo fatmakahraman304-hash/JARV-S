@@ -73,6 +73,9 @@
   function setState(s) {
     state = s; core.state = (s === 'listening' || s === 'connecting') ? 'idle' : (s === 'setup' ? 'sleeping' : s);
     $('st-title').textContent = STATES[s][0]; $('st-sub').textContent = STATES[s][1];
+    if (s === 'idle' && typeof amOwner === 'function' && !amOwner()) {
+      $('st-title').textContent = 'Sessiz'; $('st-sub').textContent = `Sesli yanıt: ${ownerName}. Konuşmak için mikrofona dokun.`;
+    }
   }
 
   // waveform
@@ -132,18 +135,26 @@
       if (!r.ok) throw new Error('GitHub ' + r.status);
       return r.status === 204 ? null : r.json();
     },
+    etag: '', cache: null,
     async read() {
-      const g = await this.req('GET', '/gists/' + S.gist);
+      const r = await fetch(GH + '/gists/' + S.gist, { cache: 'no-store',
+        headers: { 'Authorization': 'Bearer ' + S.tok, 'Accept': 'application/vnd.github+json', ...(this.etag && this.cache ? { 'If-None-Match': this.etag } : {}) } });
+      if (r.status === 304 && this.cache) return this.cache;            // unchanged: free, not counted
+      if (!r.ok) throw new Error('GitHub ' + r.status);
+      this.etag = r.headers.get('ETag') || '';
+      const g = await r.json();
       const out = {};
       for (const [name, f] of Object.entries(g.files || {})) {
         if (f.truncated && f.raw_url) { try { out[name] = await (await fetch(f.raw_url, { cache: 'no-store' })).text(); } catch {} }
         else out[name] = f.content || '';
       }
+      this.cache = out;
       return out;
     },
     async write(files) {
       const body = { files: {} };
       for (const [k, v] of Object.entries(files)) body.files[k] = { content: typeof v === 'string' ? v : JSON.stringify(v) };
+      this.etag = ''; this.cache = null;
       return this.req('PATCH', '/gists/' + S.gist, body);
     },
     async create() {
@@ -170,19 +181,69 @@
       const cloudMem = J(f['memory.json'], {});
       if (JSON.stringify(cloudMem) !== JSON.stringify(memory)) writes['memory.json'] = JSON.stringify(memory);
       if (recentQueue.length) { recent = recent.concat(recentQueue).slice(-40); recentQueue = []; writes['recent.json'] = JSON.stringify(recent); }
-      if (!lastBeat || Date.now() - lastBeat > 60000) {
-        lastBeat = Date.now();
-        writes['device-' + S.id + '.json'] = JSON.stringify({ id: S.id, name: devName(), kind: KIND, seen: new Date().toISOString(), commands: false });
+      if (beatDirty || !lastBeat || Date.now() - lastBeat > (isActive() ? 20000 : 60000)) {
+        lastBeat = Date.now(); beatDirty = false;
+        writes['device-' + S.id + '.json'] = JSON.stringify(myBeat());
       }
       if (Object.keys(writes).length) await Cloud.write(writes);
       localStorage.setItem('jarvis_mem', JSON.stringify(memory));
       localStorage.setItem('jarvis_recent', JSON.stringify(recent));
       renderDevices();
+      updateOwner();
       return f;
-    } catch (e) { console.warn('sync', e); return null; }
+    } catch (e) { console.warn('sync', e); updateOwner(); return null; }
   }
-  let lastBeat = 0;
-  setInterval(() => syncNow(), 30000);
+  let lastBeat = 0, beatDirty = false, syncing = false;
+  async function syncLoop() {
+    if (!syncing) { syncing = true; try { await syncNow(); } finally { syncing = false; } }
+    setTimeout(syncLoop, document.visibilityState === 'visible' ? 8000 : 45000);
+  }
+  setTimeout(syncLoop, 1500);
+
+  // ── one voice: which device answers out loud ────────────────────────────
+  // Every device hears and understands; only one speaks. The phone first, then
+  // the computer, then tablet, TV/projector, watch — unless the user just turned
+  // to a device on purpose (tapped its mic, typed into it), which wins for five
+  // minutes. Same rule as voice_owner() in core/sync_hub.py.
+  const PRIORITY = { phone: 1, pc: 2, tablet: 3, tv: 4, projector: 4, watch: 5 };
+  const ALIVE_MS = 60000, CLAIM_MS = 300000;
+  let lastInteract = Date.now(), owner = null, ownerName = '', resumeMic = false;
+  const isActive = () => document.visibilityState === 'visible' && (micOn || Date.now() - lastInteract < 10 * 60000);
+  const myBeat = () => ({ id: S.id, name: devName(), kind: KIND, seen: new Date().toISOString(), commands: false,
+                          active: isActive(), claim: S.claim || '' });
+  function voiceOwner(list, now = Date.now()) {
+    const live = list.filter(d => d.active && now - Date.parse(d.seen || 0) < ALIVE_MS);
+    if (!live.length) return null;
+    const claimed = live.filter(d => d.claim && now - Date.parse(d.claim) < CLAIM_MS);
+    if (claimed.length) return claimed.sort((a, b) => Date.parse(b.claim) - Date.parse(a.claim) || String(b.id).localeCompare(String(a.id)))[0].id;
+    return live.sort((a, b) => (PRIORITY[a.kind] || 9) - (PRIORITY[b.kind] || 9) || String(a.id).localeCompare(String(b.id)))[0].id;
+  }
+  const amOwner = () => owner === null || owner === S.id;
+  function updateOwner() {
+    const list = devices.filter(d => d.id !== S.id).concat([myBeat()]);
+    const o = voiceOwner(list);
+    const changed = o !== owner;
+    owner = o; ownerName = (list.find(d => d.id === o) || {}).name || '';
+    if (!changed) return;
+    if (amOwner()) {
+      document.body.classList.remove('quiet');
+      if (resumeMic && !micOn) { resumeMic = false; startMic(); }
+      if (state === 'idle') setState('idle');
+    } else {
+      document.body.classList.add('quiet');
+      stopPlayback();
+      if (micOn) { resumeMic = true; stopMic(); }
+      sys(`Sesli yanıtı ${ownerName} veriyor; burada sessizim. Konuşmak için mikrofona dokun.`);
+      if (state === 'idle' || state === 'listening') setState('idle');
+    }
+  }
+  function claimHere() {
+    lastInteract = Date.now(); S.claim = new Date().toISOString(); save();
+    beatDirty = true; owner = S.id; document.body.classList.remove('quiet');
+    syncNow();
+  }
+  document.addEventListener('visibilitychange', () => { beatDirty = true; if (Cloud.ok()) syncNow(); else updateOwner(); });
+  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { lastInteract = Date.now(); }, { passive: true }));
 
   const CATS = ['identity', 'preferences', 'projects', 'relationships', 'wishes', 'notes'];
   function entry(v) { return v && typeof v === 'object' ? { value: String(v.value ?? ''), updated: String(v.updated ?? '') } : { value: String(v ?? ''), updated: '' }; }
@@ -218,7 +279,7 @@
     const me = { id: S.id, name: devName() + ' (bu cihaz)', kind: KIND, seen: new Date().toISOString() };
     const rows = [me, ...devices.filter(d => d.id !== S.id)];
     const html = rows.map(d => `<div class="dev"><div class="ic">${ICON[d.kind] || '💻'}</div><div class="tx"><div class="nm">${esc(d.name)}</div>
-      <div class="sb">${d.kind === 'pc' ? 'Bilgisayar · komut alır' : (KIND_NAMES[d.kind] || 'Cihaz')}${online(d) ? '' : ' · görülmedi'}</div></div>
+      <div class="sb">${d.kind === 'pc' ? 'Bilgisayar · komut alır' : (KIND_NAMES[d.kind] || 'Cihaz')}${online(d) ? '' : ' · görülmedi'}${d.id === owner || (owner === null && d.id === S.id) ? ' · 🔊 sesli yanıt burada' : ''}</div></div>
       <span class="dot ${online(d) ? 'on' : ''}"></span></div>`).join('');
     $('devs').innerHTML = html + (Cloud.ok() ? '' : '<p>Ortak hafıza kurulmamış: cihazlar birbirini göremiyor. Ayarlar → GitHub anahtarı.</p>');
     $('side-devs').innerHTML = html;
@@ -418,7 +479,7 @@
     if (m.serverContent) {
       const sc = m.serverContent;
       if (sc.interrupted) { stopPlayback(); }
-      if (sc.inputTranscription?.text) { addTurn('user', sc.inputTranscription.text); setState('thinking'); }
+      if (sc.inputTranscription?.text) { lastInteract = Date.now(); addTurn('user', sc.inputTranscription.text); setState('thinking'); }
       if (sc.outputTranscription?.text) { if (!outOpen) { closeTurnsOf('user'); outOpen = true; } addTurn('jarvis', sc.outputTranscription.text); }
       for (const p of sc.modelTurn?.parts || []) {
         if (p.inlineData?.data && /audio/.test(p.inlineData.mimeType || 'audio')) playPcm(p.inlineData.data);
@@ -446,6 +507,7 @@
   function ensureOut() { if (!outCtx) { try { outCtx = new AudioContext({ sampleRate: 24000 }); } catch { outCtx = new AudioContext(); } } if (outCtx.state === 'suspended') outCtx.resume(); }
   const playing = () => sources.size > 0;
   function playPcm(b64) {
+    if (!amOwner()) return;              // one voice: another device is speaking
     ensureOut();
     const bin = atob(b64), n = bin.length >> 1, f = new Float32Array(n);
     let sum = 0;
@@ -498,7 +560,7 @@
       micNode = micCtx.createScriptProcessor(4096, 1, 1); micNode.onaudioprocess = e => handle(e.inputBuffer.getChannelData(0));
       src.connect(micNode); micNode.connect(micCtx.destination);
     }
-    micOn = true; $('mic').classList.add('live'); $('mic').textContent = '⏹';
+    micOn = true; $('mic').classList.add('live'); $('mic').textContent = '⏹'; beatDirty = true;
     if (!playing()) setState('listening');
     if (KIND === 'watch' && navigator.vibrate) navigator.vibrate(30);
   }
@@ -511,13 +573,13 @@
     send({ realtimeInput: { audioStreamEnd: true } });
     if (state === 'listening') setState('idle');
   }
-  $('mic').onclick = () => micOn ? stopMic() : startMic();
+  $('mic').onclick = () => { if (micOn) { resumeMic = false; stopMic(); } else { claimHere(); startMic(); } };
 
   // ── text in ──────────────────────────────────────────────────────────────
   $('ask').addEventListener('submit', async (e) => {
     e.preventDefault();
     const t = $('inp').value.trim(); if (!t) return;
-    $('inp').value = ''; ensureOut();
+    $('inp').value = ''; ensureOut(); claimHere();
     closeTurns(); transcript.push({ role: 'user', text: t, open: false }); queueRecent('user', t); renderLog();
     try { await connect(); } catch { return; }
     setState('thinking');

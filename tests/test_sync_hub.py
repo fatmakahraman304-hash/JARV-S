@@ -33,6 +33,34 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(sync_hub.merge_memory(a2, b)["notes"]["x"]["value"], "geri")
 
 
+class VoiceOwnerTest(unittest.TestCase):
+    """One voice: phone first, then the computer, then the rest; a device the
+    user just turned to wins for a while."""
+
+    def _d(self, id_, kind, active=True, age=5, claim_age=None):
+        now = 1_800_000_000
+        iso = lambda a: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - a))
+        return {"id": id_, "kind": kind, "active": active, "seen": iso(age),
+                "claim": iso(claim_age) if claim_age is not None else ""}
+
+    def test_priority(self):
+        now = 1_800_000_000
+        devs = [self._d("tv", "tv"), self._d("pc", "pc"), self._d("ph", "phone"), self._d("w", "watch")]
+        self.assertEqual(sync_hub.voice_owner(devs, now), "ph")
+        devs[2]["active"] = False                       # phone put away
+        self.assertEqual(sync_hub.voice_owner(devs, now), "pc")
+        devs[1] = self._d("pc", "pc", age=120)          # laptop closed (no heartbeat)
+        self.assertEqual(sync_hub.voice_owner(devs, now), "tv")
+        self.assertIsNone(sync_hub.voice_owner([], now))
+
+    def test_claim_wins_then_expires(self):
+        now = 1_800_000_000
+        devs = [self._d("ph", "phone"), self._d("pc", "pc", claim_age=30)]
+        self.assertEqual(sync_hub.voice_owner(devs, now), "pc")
+        devs[1] = self._d("pc", "pc", claim_age=sync_hub.CLAIM_SECONDS + 5)
+        self.assertEqual(sync_hub.voice_owner(devs, now), "ph")
+
+
 class SetupLinkTest(unittest.TestCase):
     def test_link_carries_settings(self):
         with mock.patch.object(sync_hub, "settings", return_value={"github_token": "ghp_x", "gist_id": "abc"}), \
