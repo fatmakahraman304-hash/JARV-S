@@ -1252,6 +1252,11 @@ class JarvisLive:
 
     def _persist_turn(self, role, text):
         try:
+            from core import sync_hub
+            sync_hub.note_turn(role, text)
+        except Exception:
+            pass
+        try:
             from memory.continuity import record
             record(role, text)
         except Exception as exc:
@@ -2177,6 +2182,11 @@ class JarvisLive:
                                 _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
                                 self._persist_turn("JARVIS", full_out)
+                                try:
+                                    from core import sync_hub
+                                    sync_hub.note_reply(full_out)
+                                except Exception:
+                                    pass
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "jarvis",
@@ -2853,6 +2863,21 @@ class JarvisLive:
         except Exception as e:
             print(f"[Dashboard] Disabled: {e}")
             self._dashboard = None
+
+        # One JARVIS on every device: shared memory and the command mailbox in
+        # the user's private gist (core/sync_hub.py). Off until set up.
+        try:
+            from core import sync_hub
+            _loop = asyncio.get_running_loop()
+
+            def _inject_remote(text, _loop=_loop):
+                if self._dashboard is None:
+                    raise RuntimeError("uzaktan komut kanalı kapalı")
+                _loop.call_soon_threadsafe(self._dashboard._command_queue.put_nowait, text)
+            if sync_hub.start(_inject_remote):
+                print("[Sync] Ortak hafıza ve cihaz posta kutusu açık.")
+        except Exception as e:
+            print(f"[Sync] Disabled: {e}")
 
         while True:
             try:
