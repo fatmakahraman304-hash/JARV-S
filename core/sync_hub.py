@@ -37,13 +37,22 @@ API = "https://api.github.com"
 NAMESPACE = "everywhere"               # plugin config block holding token + gist id
 POLL_SECONDS = 4.0
 MEMORY_EVERY = 45.0
-HEARTBEAT_EVERY = 60.0
+HEARTBEAT_EVERY = 20.0
+ALIVE_SECONDS = 60.0                   # a device not heard from for this long is away
+CLAIM_SECONDS = 300.0                  # "I'm talking to THIS device" lasts this long
+
+# Who answers out loud when several devices are on at once. Every device hears
+# and understands; exactly one speaks. The phone first, then the computer, then
+# the rest — unless the user just turned to a device on purpose (tapped its
+# microphone, typed into it), which wins for a few minutes.
+VOICE_PRIORITY = {"phone": 1, "pc": 2, "tablet": 3, "tv": 4, "projector": 4, "watch": 5}
 RECENT_MAX = 40
 REPLY_WAIT = 90.0                      # how long a command waits for Jarvis's answer
 
 _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": [],
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
-          "status": "kapalı", "done": set()}
+          "status": "kapalı", "done": set(), "claim": "", "active": True,
+          "owner": None, "on_owner": None, "devices": []}
 
 
 # ── settings ──────────────────────────────────────────────────────────────────
@@ -262,6 +271,44 @@ def status() -> str:
     return _state["status"]
 
 
+def _ts(iso: str) -> float:
+    try:
+        return datetime.strptime(str(iso)[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+    except Exception:
+        return 0.0
+
+
+def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
+    """The id of the one device that should speak, or None when none is on.
+    Same rule as voiceOwner() in web/app.js — keep the two in step."""
+    now = time.time() if now is None else now
+    live = [d for d in devices if d.get("active") and now - _ts(d.get("seen", "")) < ALIVE_SECONDS]
+    if not live:
+        return None
+    claimed = [d for d in live if d.get("claim") and now - _ts(d["claim"]) < CLAIM_SECONDS]
+    if claimed:
+        return max(claimed, key=lambda d: (_ts(d["claim"]), str(d.get("id"))))["id"]
+    return min(live, key=lambda d: (VOICE_PRIORITY.get(d.get("kind"), 9), str(d.get("id"))))["id"]
+
+
+def claim() -> None:
+    """The user turned to this computer (typed, pressed wake): it speaks for a while."""
+    _state["claim"] = _now()
+    _state["last_beat"] = 0.0          # tell the others on the next cycle
+
+
+def set_active(active: bool) -> None:
+    """Awake and unmuted — whether this computer is a candidate to speak."""
+    if bool(active) != _state["active"]:
+        _state["active"] = bool(active)
+        _state["last_beat"] = 0.0
+
+
+def on_owner_change(fn) -> None:
+    """fn(this_device_speaks: bool, owner_name: str) — called from the sync thread."""
+    _state["on_owner"] = fn
+
+
 # ── the loop ──────────────────────────────────────────────────────────────────
 
 def start(inject) -> bool:
@@ -315,9 +362,23 @@ def _cycle() -> None:
         return
     if files is None:                  # nothing changed, nothing to send
         _state["status"] = "bağlı"
+        _update_owner(me)              # a device can still time out
         return
     _state["etag"] = tag
     _state["status"] = "bağlı"
+
+    # 0. who speaks
+    others = []
+    for name, text in files.items():
+        if name.startswith("device-") and name != f"device-{me}.json":
+            try:
+                d = json.loads(text)
+                if isinstance(d, dict) and d.get("id"):
+                    others.append(d)
+            except Exception:
+                pass
+    _state["devices"] = others
+    _update_owner(me)
 
     # 1. commands addressed to this computer
     inbox_name = f"inbox-{me}.json"
@@ -394,11 +455,29 @@ def _cycle() -> None:
     if now - _state["last_beat"] > HEARTBEAT_EVERY:
         _state["last_beat"] = now
         info = {"id": me, "name": device_name(), "kind": "pc", "os": platform.system(),
-                "seen": _now(), "commands": True}
+                "seen": _now(), "commands": True, "active": _state["active"],
+                "claim": _state["claim"]}
         writes[f"device-{me}.json"] = json.dumps(info, ensure_ascii=False)
 
     if writes and write_files(token, gid, writes):
         _state["etag"] = ""
+
+
+def _update_owner(me: str) -> None:
+    devs = list(_state["devices"]) + [{"id": me, "name": device_name(), "kind": "pc",
+                                       "active": _state["active"], "seen": _now(),
+                                       "claim": _state["claim"]}]
+    owner = voice_owner(devs)
+    if owner == _state["owner"]:
+        return
+    _state["owner"] = owner
+    cb = _state["on_owner"]
+    if cb:
+        name = next((d.get("name", "") for d in devs if d.get("id") == owner), "")
+        try:
+            cb(owner in (None, me), name)
+        except Exception as exc:
+            print(f"[Sync] owner callback: {exc}")
 
 
 def _run_command(cid: str, text: str, sender: str) -> None:

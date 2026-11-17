@@ -603,6 +603,10 @@ class JarvisLive:
         self._is_speaking         = False
         self._speaking_lock       = threading.Lock()
         self._phone_active        = False   # True while phone mic is streaming; pauses PC mic
+        # True while another device (the phone first) is the one that answers
+        # out loud: this computer still runs commands, but stays silent and does
+        # not listen. core/sync_hub.voice_owner decides.
+        self._yield_voice         = False
         self._pending_vision       = None    # (img_bytes, mime_type, question, angle) to inject after tool response
         self._vision_cam_active    = False   # True if camera was opened for vision → auto-close after response
         self._vision_close_pending = False   # True after vision injected; next turn_complete closes camera
@@ -809,6 +813,14 @@ class JarvisLive:
         self._awake = True
         self._snap_detector = None
         self._last_user_speech = time.monotonic()   # start the auto-sleep clock now
+        try:
+            from core import sync_hub
+            sync_hub.set_active(True)
+            if reason != "remote command":          # spoken to on purpose: answer here
+                sync_hub.claim()
+                self._yield_voice = False
+        except Exception:
+            pass
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
         self.ui.write_log(f"SYS: Awake — {reason}.")
@@ -817,6 +829,11 @@ class JarvisLive:
         if not self._awake:
             return
         self._awake = False
+        try:
+            from core import sync_hub
+            sync_hub.set_active(False)
+        except Exception:
+            pass
         detector = getattr(self, "_wake_detector", None)
         if detector is not None:
             detector.reset()        # nothing heard before sleeping may wake it again
@@ -1263,6 +1280,13 @@ class JarvisLive:
             self.ui.write_log(f"SYS: Hafıza kaydı başarısız: {exc}")
 
     def _on_text_command(self, text: str):
+        if not str(text).startswith("["):
+            try:                                   # typed here: this computer answers
+                from core import sync_hub
+                sync_hub.claim()
+                self._yield_voice = False
+            except Exception:
+                pass
         from memory.continuity import record, resume_text
         if not str(text).startswith("["):
             try:
@@ -1889,7 +1913,7 @@ class JarvisLive:
         def cut_in(blocks):
             nonlocal interruption_pending
             try:
-                if not self._awake or self.ui.muted or self._phone_active:
+                if not self._awake or self.ui.muted or self._phone_active or self._yield_voice:
                     return
                 if self._ptt_enabled and not self._ptt_held:
                     return
@@ -1928,7 +1952,8 @@ class JarvisLive:
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
 
-            if self.ui.muted or self._phone_active or (self._ptt_enabled and not self._ptt_held):
+            if (self.ui.muted or self._phone_active or self._yield_voice
+                    or (self._ptt_enabled and not self._ptt_held)):
                 speech_blocks.clear()
                 return
             if interruption_pending:
@@ -2346,6 +2371,8 @@ class JarvisLive:
                 except Exception:
                     pass
 
+                if self._yield_voice:
+                    continue        # another device is the one speaking
                 try:
                     await asyncio.to_thread(stream.write, bytes(batch))
                 except (RuntimeError, asyncio.CancelledError):
@@ -2874,6 +2901,12 @@ class JarvisLive:
                 if self._dashboard is None:
                     raise RuntimeError("uzaktan komut kanalı kapalı")
                 _loop.call_soon_threadsafe(self._dashboard._command_queue.put_nowait, text)
+            def _on_owner(mine, name):
+                self._yield_voice = not mine
+                self.ui.write_log("SYS: Sesli yanıt bu bilgisayarda." if mine else
+                                  f"SYS: Sesli yanıtı {name or 'başka bir cihaz'} veriyor — "
+                                  f"burada sessizim, yazdıklarını yine yaparım.")
+            sync_hub.on_owner_change(_on_owner)
             if sync_hub.start(_inject_remote):
                 print("[Sync] Ortak hafıza ve cihaz posta kutusu açık.")
         except Exception as e:
