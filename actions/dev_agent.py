@@ -44,27 +44,38 @@ def _get_model(model_name: str = gemini.SMART):
     """Planning and writing whole files — the reasoning tier, and a long
     deadline because the answer is a source file rather than a sentence.
 
-    A coding model chosen in the panel is tried first, with the Gemini ladder
-    behind it. Its deadline is longer still: a reasoning model thinks before
-    it writes, and a whole file from one routinely takes past a minute."""
-    provider = _coding_provider()
+    Which model answers is core/coding_router's choice: the best one that is
+    installed and not resting (Claude Code, Codex, the chosen coding API,
+    then Gemini), and the next one the moment one hits its limit."""
+    from core import coding_router
 
-    if provider == codex_coding.PROVIDER_ID:
-        return codex_coding
-
-    class _W:
+    class _Routed:
         def generate_content(self, contents):
-            resp = gemini.call(contents, tier=model_name,
-                               timeout_ms=180000 if provider else 60000,
-                               provider=provider,
-                               provider_only=provider in EXPLICIT_CODING_PROVIDERS)
-            if resp is None:
-                if provider in EXPLICIT_CODING_PROVIDERS:
-                    raise RuntimeError(f"{provider.split('@', 1)[-1]} kodlama modeli yanıt vermedi. API ayarlarını kontrol et.")
-                raise RuntimeError("every model on the ladder failed")
-            return resp
+            chosen = _coding_provider()
+            for p in coding_router.ladder(chosen):
+                try:
+                    if p == codex_coding.PROVIDER_ID:
+                        resp = codex_coding.generate_content(contents)
+                    elif p == claude_coding.PROVIDER_ID:
+                        resp = claude_coding.generate_content(contents)
+                    elif p == coding_router.GEMINI:
+                        resp = gemini.call(contents, tier=model_name, timeout_ms=60000)
+                    else:
+                        resp = gemini.call(contents, tier=model_name, timeout_ms=180000,
+                                           provider=p, provider_only=True)
+                    if resp is None:
+                        raise RuntimeError(f"{coding_router.name(p)} yanıt vermedi")
+                    return resp
+                except Exception as e:
+                    if p == coding_router.GEMINI or not coding_router.should_switch(e):
+                        if p == coding_router.GEMINI and "yanıt vermedi" in str(e):
+                            raise RuntimeError("every model on the ladder failed") from e
+                        raise
+                    coding_router.rest(p, e)
+                    _log(_player_ref, f"{coding_router.name(p)}: {str(e)[:120]} — switching to the next model.")
+            raise RuntimeError("every model on the ladder failed")
 
-    return _W()
+    return _Routed()
 
 
 def _strip_fences(text: str) -> str:
@@ -482,11 +493,16 @@ def _build_project(
         _log(player, msg)
 
     provider = _coding_provider()
-    if _use_agent(provider):
+    agents = _agent_ladder()
+    if agents:
         try:
-            return _build_with_agent(description, language, project_name, provider, player)
+            done = _with_agents(agents, lambda ag: _build_with_agent(
+                description, language, project_name, ag, player), player)
         except RuntimeError as e:
+            done = None
             log(f"Agent mode failed ({str(e)[:160]}); building the usual way.")
+        if done is not None:
+            return done
     if provider in {codex_coding.PROVIDER_ID, claude_coding.PROVIDER_ID} or provider in EXPLICIT_CODING_PROVIDERS:
         log(f"Coding with {provider.partition('@')[2] or provider}.")
     else:
@@ -1373,8 +1389,15 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     returns the summary; the caller decides whether that is on a thread."""
     started = time.monotonic()
     provider = _coding_provider()
-    who = provider.partition("@")[2] or provider or "the background-request models"
-    _log(player, f"Improving '{folder.name}' with {who}…")
+    from core import coding_router
+    agents = _agent_ladder()
+    order = coding_router.ladder(provider)
+    who = coding_router.name(order[0])
+    _log(player, f"Improving '{folder.name}' with {who} (then: "
+                 f"{', '.join(coding_router.name(p) for p in order[1:]) or 'none'})…")
+    resting = coding_router.status_line(provider)
+    if resting:
+        _log(player, f"Resting after a limit: {resting}.")
 
     _update("reading")
     tree, texts, outlines = _scan(folder)
@@ -1395,7 +1418,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         rf = rules_file(folder)
         if rf is not None:
             _log(player, f"Read the project's rules ({rf.name}).")
-        elif not _use_agent(provider):          # an agent studies the code itself
+        elif not agents:                        # an agent studies the code itself
             brief = _project_brief(folder, context, stack, player)
             if brief:
                 guide = brief + "\n\n" + guide
@@ -1410,9 +1433,21 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     except Exception as e:
         guide = ""
         _log(player, f"Could not study the project: {str(e)[:150]}")
-    if _use_agent(provider):
-        return _improve_with_agent(folder, instruction, guide, stack, baseline, texts,
-                                   provider, player, started, open_editor)
+    if agents:
+        done = _with_agents(agents, lambda ag: _improve_with_agent(
+            folder, instruction, guide, stack, baseline, texts, ag, player, started,
+            open_editor), player)
+        if done is not None:
+            return done
+        _log(player, "No agent is available right now; coding the usual way.")
+        try:
+            from core.code_checks import rules_file
+            if rules_file(folder) is None:
+                brief = _project_brief(folder, context, stack or {}, player)
+                if brief:
+                    guide = brief + ("\n\n" + guide if guide else "")
+        except Exception:
+            pass
     if guide:
         # In front of everything else, because it decides HOW the code must
         # be written — the files only show what is already there.
@@ -1618,8 +1653,8 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
 def _use_agent(provider: str) -> bool:
     """Claude Code and Codex are far stronger as agents — reading what they
     need, editing exactly, running the tests — than as text models fed one
-    prompt. On unless the user turned it off (ENGINE & PROVIDERS keeps the
-    model; plugin setting dev_agent.agent_mode=false switches back)."""
+    prompt. On unless the user turned it off (plugin setting
+    dev_agent.agent_mode=false)."""
     try:
         from core import agent_coding
         from memory.config_manager import get_plugin_setting
@@ -1630,6 +1665,32 @@ def _use_agent(provider: str) -> bool:
         return agent_coding.available(provider)
     except Exception:
         return False
+
+
+def _agent_ladder() -> list[str]:
+    """The agents to try for this job, best first, skipping any at its limit."""
+    try:
+        from core import coding_router
+        return [p for p in coding_router.ladder(_coding_provider()) if _use_agent(p)]
+    except Exception:
+        return []
+
+
+def _with_agents(agents: list[str], job, player):
+    """Run job(agent) with the best agent; on a usage limit or a sign-out,
+    rest that one and try the next. Returns the result, or None when no agent
+    could do it (then the caller codes the usual way)."""
+    from core import coding_router
+    for ag in agents:
+        try:
+            return job(ag)
+        except RuntimeError as e:
+            if not coding_router.should_switch(e):
+                raise
+            secs = coding_router.rest(ag, e)
+            _log(player, f"{coding_router.name(ag)} is at its limit or unavailable "
+                         f"({str(e)[:120]}); resting it {int(secs // 60)} min and switching to the next model.")
+    return None
 
 
 _AGENT_ROUNDS = 2           # agent → JARVIS checks → agent fixes what failed

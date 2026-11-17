@@ -1,6 +1,7 @@
 """Stronger coding: agent mode (Claude Code / Codex working in the folder) and
 exact edit blocks for big files."""
 import json
+import time
 import tempfile
 import unittest
 from pathlib import Path
@@ -139,3 +140,72 @@ class AgentModeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RouterTest(unittest.TestCase):
+    """The best model first; the next one when it hits its limit; back to the
+    best once its rest is over."""
+
+    def setUp(self):
+        from core import coding_router
+        self.r = coding_router
+        self.tmp = tempfile.TemporaryDirectory()
+        self.p = mock.patch.object(coding_router, "_COOL_FILE", Path(self.tmp.name) / "cool.json")
+        self.p.start()
+
+    def tearDown(self):
+        self.p.stop()
+        self.tmp.cleanup()
+
+    def test_order_and_rest(self):
+        both = lambda p: True
+        self.assertEqual(self.r.ladder("openai_compat@openai", both),
+                         ["claude_code", "codex_cli", "openai_compat@openai", ""])
+        self.assertEqual(self.r.ladder("", lambda p: p == "codex_cli"), ["codex_cli", ""])
+        secs = self.r.rest("claude_code", RuntimeError("Claude Code kullanım sınırına ulaşıldı."))
+        self.assertEqual(secs, self.r.LIMIT_REST)
+        self.assertEqual(self.r.ladder("", both), ["codex_cli", ""])
+        with mock.patch.object(self.r.time, "time", return_value=time.time() + self.r.LIMIT_REST + 5):
+            self.assertEqual(self.r.ladder("", both), ["claude_code", "codex_cli", ""])
+        self.assertEqual(self.r.rest("codex_cli", RuntimeError("Codex oturumu doğrulanamadı")), self.r.DOWN_REST)
+
+    def test_what_counts_as_switchable(self):
+        self.assertTrue(self.r.should_switch(RuntimeError("429 Too Many Requests")))
+        self.assertTrue(self.r.should_switch(RuntimeError("Claude Code oturumu kapalı.")))
+        self.assertFalse(self.r.should_switch(RuntimeError("SyntaxError in your request")))
+
+    def test_dev_agent_switches_text_model_on_limit(self):
+        from actions import dev_agent
+        calls = []
+
+        def claude(prompt):
+            calls.append("claude")
+            raise RuntimeError("Claude Code kullanım sınırına ulaşıldı.")
+
+        def codex(prompt):
+            calls.append("codex")
+            return mock.Mock(text="ok")
+        with mock.patch.object(self.r, "ladder", side_effect=lambda chosen="": [
+                p for p in ("claude_code", "codex_cli") if not self.r.resting(p)] + [""]), \
+             mock.patch.object(dev_agent.claude_coding, "generate_content", side_effect=claude), \
+             mock.patch.object(dev_agent.codex_coding, "generate_content", side_effect=codex):
+            out = dev_agent._get_model().generate_content("yaz")
+            self.assertEqual(out.text, "ok")
+            self.assertEqual(calls, ["claude", "codex"])
+            dev_agent._get_model().generate_content("yine")      # claude rests now: straight to codex
+            self.assertEqual(calls, ["claude", "codex", "codex"])
+
+    def test_agents_switch_on_limit(self):
+        from actions import dev_agent
+        tried = []
+
+        def job(ag):
+            tried.append(ag)
+            if ag == "claude_code":
+                raise RuntimeError("Claude Code çalışamadı: Claude Code kullanım sınırına ulaşıldı.")
+            return f"done by {ag}"
+        self.assertEqual(dev_agent._with_agents(["claude_code", "codex_cli"], job, None), "done by codex_cli")
+        self.assertEqual(tried, ["claude_code", "codex_cli"])
+        self.assertTrue(self.r.resting("claude_code") > 0)
+        with self.assertRaises(RuntimeError):      # a real error is not hidden by switching
+            dev_agent._with_agents(["codex_cli"], lambda ag: (_ for _ in ()).throw(RuntimeError("bad diff")), None)
