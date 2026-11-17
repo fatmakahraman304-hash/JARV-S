@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS · Ekran</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --line: rgba(255,150,60,.18); --line2: rgba(255,150,60,.35); --blue: #ff8a1c; --cyan: #ffc04d;
+            --text: #f3ece5; --muted: #9b9087; --green: #3ddc97; --card: rgba(26,19,13,.6); }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: radial-gradient(90% 80% at 50% 45%, #2a1607 0%, #110904 45%, #050403 85%); color: var(--text);
+           font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif; cursor: none; }
+    [hidden] { display: none !important; }
+    .vw { font-size: 1vw; }
+    /* pairing */
+    #pair { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; }
+    #pair h1 { font-size: 3vw; letter-spacing: 1.2vw; padding-left: 1.2vw; text-shadow: 0 0 2vw rgba(255,138,28,.7); }
+    #pair p { color: #d2c7bd; font-size: 1.6vw; margin-top: 1.2vw; line-height: 1.5; }
+    #code { font-size: 9vw; letter-spacing: 2.2vw; padding-left: 2.2vw; font-weight: 700; color: #fff; margin-top: 2vw;
+            text-shadow: 0 0 3vw rgba(255,138,28,.8); font-variant-numeric: tabular-nums; }
+    #pair small { display: block; margin-top: 2vw; color: var(--muted); font-size: 1.2vw; }
+    /* dashboard */
+    #dash { position: fixed; inset: 0; display: grid; grid-template-columns: 22vw 1fr 24vw; grid-template-rows: auto 1fr;
+            gap: 1.5vw; padding: 2vw 2.4vw; }
+    .tl { grid-column: 1; }
+    #clock { font-size: 3.2vw; font-weight: 700; letter-spacing: .2vw; font-variant-numeric: tabular-nums; }
+    #date { color: var(--muted); font-size: 1.1vw; letter-spacing: .25vw; text-transform: uppercase; }
+    .sys { margin-top: 1.6vw; display: flex; align-items: center; gap: .8vw; }
+    .sys .ring { width: 2.6vw; height: 2.6vw; border-radius: 50%; border: .2vw solid var(--cyan); box-shadow: 0 0 1vw var(--blue); }
+    .sys b { display: block; font-size: .8vw; letter-spacing: .3vw; color: var(--muted); }
+    .sys span { font-size: 1.3vw; color: var(--green); font-weight: 700; }
+    .brand { grid-column: 2; text-align: center; }
+    .brand b { font-size: 2.2vw; letter-spacing: 1vw; padding-left: 1vw; text-shadow: 0 0 1.2vw rgba(255,138,28,.8); }
+    .brand small { display: block; font-size: .8vw; letter-spacing: .5vw; color: var(--muted); }
+    .center { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; }
+    #st-title { margin-top: 1.6vw; font-size: 2vw; font-weight: 700; }
+    #st-sub { color: var(--blue); font-size: 1.1vw; margin-top: .3vw; }
+    #wave { width: 26vw; height: 3vw; margin-top: .8vw; }
+    .exchange { margin-top: 1.2vw; max-width: 46vw; text-align: center; }
+    #q { color: var(--muted); font-size: 1.15vw; }
+    #a { font-size: 1.5vw; line-height: 1.4; margin-top: .4vw; max-height: 4.4em; overflow: hidden; }
+    .side { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 1.2vw; min-height: 0; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 1vw; padding: 1.1vw 1.2vw; }
+    .card h3 { font-size: .85vw; letter-spacing: .3vw; color: #d2c7bd; display: flex; justify-content: space-between; }
+    .card h3 i { font-style: normal; color: var(--cyan); }
+    .rule { height: .15vw; margin: .6vw 0 .8vw; background: linear-gradient(90deg, var(--blue), transparent 60%); }
+    .dev { display: flex; gap: .8vw; align-items: center; padding: .6vw 0; }
+    .dev .ic { width: 2.6vw; height: 2.6vw; border-radius: .7vw; display: grid; place-items: center; font-size: 1.3vw; background: rgba(255,138,28,.12); border: 1px solid var(--line2); }
+    .dev .nm { font-size: 1.1vw; font-weight: 700; } .dev .sb { font-size: .8vw; color: var(--muted); }
+    .dev .dt { margin-left: auto; width: .6vw; height: .6vw; border-radius: 50%; background: var(--muted); }
+    .dev .dt.on { background: var(--green); box-shadow: 0 0 .6vw var(--green); }
+    #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: .5vw; }
+    #log div { font-size: .95vw; line-height: 1.35; color: #d2c7bd; } #log div b { color: var(--cyan); font-weight: 700; }
+    /* content shown from the phone */
+    #stage { position: fixed; inset: 0; background: #000; display: grid; place-items: center; z-index: 5; }
+    #stage iframe, #stage img { width: 100%; height: 100%; border: 0; object-fit: contain; }
+    #stage .txt { font-size: 4vw; line-height: 1.3; padding: 6vw; text-align: center; white-space: pre-wrap; }
+    #stage-title { position: fixed; left: 2vw; top: 1.6vw; z-index: 6; background: rgba(0,0,0,.55); padding: .5vw 1vw; border-radius: .6vw; font-size: 1.1vw; }
+    .reactor { position: relative; height: min(58vh, 36vw); aspect-ratio: 1; margin: -2vw 0 -3vw; }
+    .reactor canvas { width: 100%; height: 100%; display: block; }
+  </style>
+</head>
+<body class="st-idle">
+  <section id="pair" hidden>
+    <div>
+      <h1>JARVIS</h1>
+      <p>Telefonda JARVIS'i aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
+      <div id="code">······</div>
+      <small id="pair-note">Kod 5 dakika geçerli, sonra kendiliğinden yenilenir.</small>
+    </div>
+  </section>
+
+  <section id="dash" hidden>
+    <div class="tl">
+      <div id="clock">--:--:--</div>
+      <div id="date"></div>
+      <div class="sys"><div class="ring"></div><div><b>SİSTEM DURUMU</b><span id="sys-st">Hazır</span></div></div>
+    </div>
+    <div class="brand"><b>JARVIS</b><small id="brand-dev">AI OS</small></div>
+    <div class="center">
+      <div class="reactor" id="reactor"><canvas id="core" aria-label="JARVIS çekirdeği"></canvas></div>
+      <div id="st-title">Hazır</div>
+      <div id="st-sub">Komut bekleniyor.</div>
+      <canvas id="wave" width="800" height="90"></canvas>
+      <div class="exchange"><div id="q"></div><div id="a"></div></div>
+    </div>
+    <aside class="side">
+      <div class="card"><h3>BAĞLI CİHAZLAR <i id="dev-n">–</i></h3><div class="rule"></div><div id="devs"></div></div>
+      <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+        <h3>SON KOMUTLAR</h3><div class="rule"></div><div id="log"></div>
+      </div>
+    </aside>
+  </section>
+
+  <div id="stage" hidden></div>
+  <div id="stage-title" hidden></div>
+
+  <script src="/assets/reactor.js"></script>
+  <script>
+    const qs = new URLSearchParams(location.search);
+    let token = localStorage.getItem('jarvis_screen_token') || '';
+    let screenId = localStorage.getItem('jarvis_screen_id') || '';
+    const $ = id => document.getElementById(id);
+    const STATES = {
+      idle: ['Hazır', 'Komut bekleniyor.'], thinking: ['Düşünüyor...', 'Komut bağlamı analiz ediliyor.'],
+      speaking: ['Konuşuyor...', 'Yanıt aktarılıyor.'], sleeping: ['Uykuda', 'Uyandırma bekleniyor.'],
+      offline: ['Bağlantı yok', 'Bilgisayara yeniden bağlanılıyor…'] };
+    let cur = 'offline';
+    function setState(s) {
+      if (!STATES[s]) return; cur = s; core.state = s;
+      document.body.className = 'st-' + s;
+      $('st-title').textContent = STATES[s][0]; $('st-sub').textContent = STATES[s][1];
+      $('sys-st').textContent = s === 'offline' ? 'Bağlantı yok' : (s === 'sleeping' ? 'Uykuda' : 'Hazır');
+      $('sys-st').style.color = s === 'offline' ? '#ff6b7a' : '';
+    }
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    // clock
+    function tick() {
+      const d = new Date();
+      $('clock').textContent = d.toLocaleTimeString('tr-TR', { hour12: false });
+      $('date').textContent = d.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    setInterval(tick, 1000); tick();
+
+    // reactor + wave
+    const core = JarvisReactor($('core'));
+    const wave = $('wave'), wc = wave.getContext('2d');
+    let level = 0, levelT = 0, levelAt = 0;
+    function frame(t) {
+      const sp = cur === 'speaking';
+      if (sp && performance.now() - levelAt > 400) levelT = .35 + .3 * Math.abs(Math.sin(t / 170));
+      if (!sp) levelT = cur === 'thinking' ? .08 : 0;
+      level += (levelT - level) * .18;
+      const W = wave.width, H = wave.height, n = 60, bw = W / n;
+      wc.clearRect(0, 0, W, H);
+      for (let i = 0; i < n; i++) {
+        const x = i / (n - 1), env = Math.sin(Math.PI * x);
+        const nz = .55 + .45 * Math.sin(t / 90 + i * 1.7) * Math.sin(t / 53 + i * .6);
+        const h = Math.max(2, H * .92 * env * (sp ? level * nz + .04 : level * .6 + .02));
+        wc.fillStyle = '#ffb648'; wc.globalAlpha = cur === 'offline' ? .25 : .9;
+        wc.fillRect(i * bw + bw * .25, (H - h) / 2, bw * .5, h);
+      }
+      core.level = level;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // pairing
+    let pollTimer = null;
+    async function startPairing() {
+      $('dash').hidden = true; $('pair').hidden = false;
+      try {
+        const r = await fetch('/api/screen/hello', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ local: qs.get('local') === '1', name: qs.get('name') || '' }) });
+        const d = await r.json();
+        if (r.status === 429) { $('code').textContent = '······'; $('pair-note').textContent = d.error; setTimeout(startPairing, 60000); return; }
+        if (d.state === 'paired') { saveToken(d.screen_id, d.token); return start(); }
+        screenId = d.screen_id; $('code').textContent = d.code;
+        const until = Date.now() + 290000;
+        clearInterval(pollTimer);
+        pollTimer = setInterval(async () => {
+          if (Date.now() > until) { clearInterval(pollTimer); return startPairing(); }
+          try {
+            const p = await (await fetch('/api/screen/poll?id=' + encodeURIComponent(screenId))).json();
+            if (p.state === 'paired') { clearInterval(pollTimer); saveToken(screenId, p.token); start(); }
+            else if (p.state === 'unknown') { clearInterval(pollTimer); startPairing(); }
+          } catch {}
+        }, 2000);
+      } catch { $('pair-note').textContent = 'Bilgisayara ulaşılamadı, yeniden deneniyor…'; setTimeout(startPairing, 5000); }
+    }
+    function saveToken(id, tok) {
+      screenId = id; token = tok;
+      localStorage.setItem('jarvis_screen_id', id); localStorage.setItem('jarvis_screen_token', tok);
+    }
+    function forget() { localStorage.removeItem('jarvis_screen_token'); localStorage.removeItem('jarvis_screen_id'); token = ''; }
+
+    // devices
+    const ICON = { desktop: '🖥️', laptop: '💻', tv: '📺' };
+    async function devices() {
+      try {
+        const r = await fetch('/api/devices', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!r.ok) return;
+        const d = await r.json();
+        const rows = [{ ...d.self, online: cur !== 'offline' }, ...d.peers, ...d.screens];
+        $('brand-dev').textContent = 'AI OS · ' + (d.self.name || '');
+        $('dev-n').textContent = rows.filter(x => x.online).length + '/' + rows.length;
+        $('devs').innerHTML = rows.map(x => `<div class="dev"><div class="ic">${ICON[x.kind] || '🖥️'}</div>
+          <div><div class="nm">${esc(x.name)}${x.id === screenId ? ' (bu ekran)' : ''}</div><div class="sb">${esc(x.os || (x.kind === 'tv' ? 'Ekran' : ''))}</div></div>
+          <span class="dt ${x.online ? 'on' : ''}"></span></div>`).join('');
+      } catch {}
+    }
+
+    // content from the phone
+    function stage(m) {
+      const st = $('stage'), tt = $('stage-title');
+      if (m.kind === 'clear' || m.kind === 'home') { st.innerHTML = ''; st.hidden = true; tt.hidden = true; return; }
+      let html = '';
+      if (m.kind === 'video') html = `<iframe allow="autoplay; fullscreen; encrypted-media" allowfullscreen src="https://www.youtube.com/embed/${encodeURIComponent(m.value)}?autoplay=1&rel=0&playsinline=1"></iframe>`;
+      else if (m.kind === 'url') html = /^https?:\/\//i.test(m.value) ? `<iframe src="${esc(m.value)}"></iframe>` : '';
+      else if (m.kind === 'image') html = /^(https?:|data:image\/)/i.test(m.value) ? `<img alt="" src="${esc(m.value)}">` : '';
+      else if (m.kind === 'text') html = `<div class="txt">${esc(m.value)}</div>`;
+      if (!html) return;
+      st.innerHTML = html; st.hidden = false;
+      tt.textContent = m.title || ''; tt.hidden = !m.title;
+    }
+
+    // live
+    let ws = null;
+    function start() {
+      $('pair').hidden = true; $('dash').hidden = false;
+      devices();
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`);
+      ws.onopen = () => { setState('idle'); devices(); };
+      ws.onclose = (e) => {
+        setState('offline');
+        if (e.code === 4001 || e.code === 4003) { forget(); return startPairing(); }
+        setTimeout(start, 3000);
+      };
+      ws.onmessage = (e) => {
+        let m; try { m = JSON.parse(e.data); } catch { return; }
+        if (m.type === 'hello' && m.state) setState(m.state);
+        else if (m.type === 'state') setState(m.state);
+        else if (m.type === 'status') setState(m.state === 'active' ? 'idle' : 'sleeping');
+        else if (m.type === 'level') { levelT = m.v; levelAt = performance.now(); }
+        else if (m.type === 'screen') { if (m.target === 'all' || m.target === screenId) stage(m); }
+        else if (m.type === 'log') {
+          if (m.speaker === 'user') { $('q').textContent = '“' + m.text + '”'; $('a').textContent = ''; }
+          else $('a').textContent = m.text;
+          const row = document.createElement('div');
+          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'Jarvis'}:</b> ${esc(m.text).slice(0, 160)}`;
+          $('log').appendChild(row);
+          while ($('log').children.length > 12) $('log').firstChild.remove();
+        }
+      };
+    }
+    setInterval(() => { if (token && cur !== 'offline') devices(); }, 10000);
+    if (token) start(); else startPairing();
+  </script>
+</body>
+</html>

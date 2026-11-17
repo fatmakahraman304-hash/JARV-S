@@ -1,182 +1,291 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JARVIS Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050403">
+  <title>JARVIS · AI OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:      #07090f;
-      --surface: rgba(255,255,255,0.04);
-      --border:  rgba(255,255,255,0.07);
-      --accent:  #6366f1;
-      --adim:    rgba(99,102,241,0.14);
-      --text:    #dde3ed;
-      --muted:   #5e6a7e;
-      --green:   #22c55e;
-      --gdim:    rgba(34,197,94,0.14);
+      --bg: #050403; --bg2: #0a1430; --line: rgba(255,150,60,0.16); --line2: rgba(255,150,60,0.32);
+      --blue: #ff8a1c; --cyan: #ffc04d; --glow: rgba(255,138,28,0.55);
+      --text: #f3ece5; --muted: #9b9087; --green: #3ddc97; --red: #ff6b7a; --amber: #ffb648;
+      --card: rgba(26,19,13,0.6);
     }
-    html, body {
-      height: 100%; background: var(--bg); color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex; flex-direction: column; overflow: hidden;
+    html, body { height: 100%; }
+    body {
+      background: radial-gradient(120% 70% at 50% 26%, #2a1607 0%, #120a05 42%, var(--bg) 78%);
+      color: var(--text); font-family: 'Rajdhani', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden; -webkit-tap-highlight-color: transparent;
     }
-
-    /* ── HEADER ── */
-    header {
-      flex-shrink: 0; display: flex; align-items: center; gap: 10px;
-      padding: 12px 16px; border-bottom: 1px solid var(--border);
-      background: rgba(7,9,15,0.95);
-    }
-    .logo { font-size: 15px; font-weight: 700; letter-spacing: 6px; }
-    .logo em { color: var(--accent); font-style: normal; }
-    .pill {
-      display: flex; align-items: center; gap: 6px; padding: 4px 11px;
-      border-radius: 99px; background: var(--surface); border: 1px solid var(--border);
-      font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--muted); transition: all 0.3s;
-    }
-    .pill.on { background: var(--gdim); border-color: rgba(34,197,94,0.3); color: var(--green); }
-    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
-    .pill.on .dot { background: var(--green); animation: blink 2s infinite; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
-    .spacer { flex: 1; }
-    .enc-badge {
-      font-size: 9px; font-weight: 700; letter-spacing: 1.5px; padding: 3px 8px;
-      border-radius: 4px; display: none;
-    }
-    .enc-badge.on  { display: block; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25); color: var(--green); }
-    .enc-badge.off { display: block; background: rgba(255,100,100,0.08); border: 1px solid rgba(255,100,100,0.2); color: #f87171; }
-    .url { font-size: 10px; font-family: monospace; color: var(--muted); padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
-
-    /* ── FEED ── */
-    main { flex: 1; overflow-y: auto; padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 10px; }
-    main::-webkit-scrollbar { width: 3px; }
-    main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; animation: pop 0.18s ease; }
-    @keyframes pop { from { opacity:0; transform:translateY(4px); } }
-    .msg-j   { align-self:flex-start; background:var(--adim);   border:1px solid rgba(99,102,241,0.18); border-bottom-left-radius:4px; }
-    .msg-u   { align-self:flex-end;   background:var(--surface); border:1px solid var(--border);        border-bottom-right-radius:4px; }
-    .msg-sys { align-self:center; font-size:11px; color:var(--muted); padding:2px 0; background:transparent; border:none; letter-spacing:0.3px; }
-    .lbl { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:0.45; margin-bottom:4px; }
-    .msg-j .lbl { color:var(--accent); }
-    .msg-u .lbl { color:var(--muted); text-align:right; }
-
-    /* ── FILE CARD ── */
-    .msg-file {
-      align-self: flex-end;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; border-bottom-right-radius: 4px;
-      padding: 11px 14px; display: flex; align-items: center; gap: 12px;
-      max-width: 82%; animation: pop 0.18s ease;
-    }
-    .fc-icon { font-size: 26px; flex-shrink: 0; }
-    .fc-meta { flex: 1; min-width: 0; }
-    .fc-lbl  { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:0.45; color:var(--muted); margin-bottom:4px; }
-    .fc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fc-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .fc-bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-top: 7px; overflow: hidden; }
-    .fc-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; transition: width 0.12s linear; }
-    .fc-status { font-size: 10px; font-weight: 700; letter-spacing: 1px; flex-shrink: 0; color: var(--muted); }
-    .fc-status.done { color: var(--green); }
-    .fc-status.err  { color: #f87171; }
-    .fc-dl { display:block; margin-top:6px; font-size:11px; color:var(--accent); text-decoration:none; font-weight:600; }
-    .fc-dl:hover { opacity: 0.8; }
-
-    /* ── FOOTER ── */
-    footer { flex-shrink:0; padding:10px 14px; border-top:1px solid var(--border); background:rgba(7,9,15,0.95); display:flex; gap:8px; align-items:center; }
-    #inp { flex:1; padding:11px 14px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; color:var(--text); font-size:14px; outline:none; transition:border-color 0.15s; }
-    #inp:focus { border-color: var(--accent); }
-    #inp::placeholder { color: var(--muted); }
-    .btn { padding:11px 15px; border:none; border-radius:12px; font-size:11px; font-weight:700; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s,transform 0.1s; }
-    .btn:active { transform: scale(0.96); }
-    .btn:hover  { opacity: 0.82; }
-    .btn-send { background: var(--accent); color: #fff; }
-    .btn-wake { background:var(--surface); border:1px solid var(--border); color:var(--muted); display:none; }
-    .btn-wake.show { display:block; color:var(--green); border-color:rgba(34,197,94,0.35); }
-    .btn-attach {
-      background: var(--surface); border: 1px solid var(--border); color: var(--muted);
-      padding: 11px 13px; font-size: 16px; line-height: 1; border-radius: 12px;
-      cursor: pointer; transition: opacity 0.15s, transform 0.1s; display: flex;
-      align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .btn-attach:hover  { opacity: 0.82; border-color: var(--accent); color: var(--accent); }
-    .btn-attach:active { transform: scale(0.96); }
-
-    /* ── MIC BUTTON ── */
-    #mic-btn {
-      background: var(--surface); border: 1px solid var(--border); color: var(--muted);
-      padding: 11px 13px; font-size: 16px; line-height: 1; border-radius: 12px;
-      cursor: pointer; transition: opacity 0.15s, transform 0.1s, background 0.2s, border-color 0.2s;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    #mic-btn:hover  { opacity: 0.82; border-color: var(--accent); color: var(--accent); }
-    #mic-btn:active { transform: scale(0.96); }
-    #mic-btn.recording {
-      background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.45); color: #ef4444;
-      animation: mic-pulse 1s ease-in-out infinite;
-    }
-    #mic-btn.unsupported { opacity: 0.3; cursor: not-allowed; }
-    @keyframes mic-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.65;transform:scale(0.97)} }
-
-    /* ── TOAST ── */
-    #toast {
-      position:fixed; top:66px; left:50%; transform:translateX(-50%) translateY(-8px);
-      background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.4);
-      color:var(--green); font-size:12px; font-weight:700; letter-spacing:1px;
-      padding:7px 18px; border-radius:99px;
-      opacity:0; transition:opacity 0.22s,transform 0.22s;
-      pointer-events:none; white-space:nowrap;
-    }
-    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-
-    .camera-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 16px 0; }
-    #scan-preview { width: 100%; max-height: 270px; object-fit: contain; border-radius: 12px; }
-    #scan-result { color: #bcecff; white-space: pre-wrap; overflow-wrap: anywhere; }
-    #scan-video { width: 100%; max-height: 270px; border-radius: 12px; }
+    .wrap { max-width: 560px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column;
+            padding: max(10px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom)); }
     [hidden] { display: none !important; }
-    .fortune-dialog {
-      color: var(--text); background: #111827; border: 1px solid var(--border);
-      border-radius: 18px; width: min(460px, calc(100% - 32px)); box-sizing: border-box;
-      max-height: 85vh; padding: 20px; overflow: auto;
-    }
-    .fortune-dialog::backdrop { background: rgba(4, 8, 16, .78); }
-    .fortune-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .fortune-heading h2 { font-size: 21px; margin: 0; }
-    .fortune-dialog p { line-height: 1.5; font-size: 14px; }
-    .fortune-dialog form { display: grid; gap: 12px; }
-    .fortune-dialog input { width: 100%; color: inherit; }
-    .fortune-dialog input::file-selector-button { border: none; border-radius: 8px; padding: 10px; margin-right: 10px; }
-    .fortune-dialog button:disabled { opacity: .55; }
-    #fortune-photo-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; }
-    #fortune-result { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+
+    /* top bar */
+    .top { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; }
+    .icon-btn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line);
+                background: rgba(40,26,14,0.45); color: var(--cyan); font-size: 18px; display: grid;
+                place-items: center; cursor: pointer; }
+    .icon-btn:active { transform: scale(.95); }
+    .brand { text-align: center; line-height: 1; }
+    .brand b { display: block; font-size: 22px; letter-spacing: 9px; font-weight: 700; color: #fff8f0;
+               text-shadow: 0 0 14px var(--glow); padding-left: 9px; }
+    .brand small { display: inline-flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 9px;
+                   letter-spacing: 4px; color: var(--muted); }
+    .brand small::before, .brand small::after { content: ""; width: 22px; height: 1px; background: var(--line2); }
+    .top-r { display: flex; gap: 8px; align-items: center; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
+              background: linear-gradient(145deg, #ff9a2e, #c24a06); color: #fff; box-shadow: 0 0 16px var(--glow);
+              font-size: 15px; cursor: pointer; }
+    #spk.off { color: var(--muted); }
+
+    /* reactor */
+    .s3 { animation-duration: 60s; } .s4 { animation-duration: 14s; animation-direction: reverse; }
+
+    /* status */
+    .status { text-align: center; min-height: 92px; }
+    #st-title { font-size: 20px; font-weight: 700; letter-spacing: 1px; color: #fff8f0; }
+    .dots { display: inline-flex; gap: 6px; margin: 6px 0 4px; }
+    .dots b { width: 5px; height: 5px; border-radius: 50%; background: var(--line2); }
+    body.st-thinking .dots b, body.st-speaking .dots b { background: var(--cyan); animation: dot 1.2s infinite; }
+    .dots b:nth-child(2) { animation-delay: .2s !important; } .dots b:nth-child(3) { animation-delay: .4s !important; }
+    @keyframes dot { 50% { opacity: .2; } }
+    #st-sub { font-size: 13px; color: var(--blue); letter-spacing: .3px; }
+    #wave { display: block; width: 100%; max-width: 300px; height: 42px; margin: 6px auto 0; }
+
+    /* reply */
+    .reply { margin: 8px 0 12px; padding: 12px 14px; border-radius: 14px; background: var(--card);
+             border: 1px solid var(--line); font-size: 15px; line-height: 1.45; max-height: 7.6em; overflow: auto; }
+    .reply .lbl { font-size: 10px; letter-spacing: 3px; color: var(--cyan); margin-bottom: 4px; display: flex;
+                  justify-content: space-between; }
+    .reply .lbl a { color: var(--muted); text-decoration: none; letter-spacing: 1px; }
+
+    /* input */
+    .ask { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 999px;
+           border: 1.5px solid var(--line2); background: rgba(20,14,9,.7);
+           box-shadow: 0 0 22px rgba(255,138,28,.18), inset 0 0 18px rgba(255,138,28,.08); }
+    .ask input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text);
+                 font-size: 16px; font-family: inherit; padding: 8px 2px; }
+    .ask input::placeholder { color: var(--muted); }
+    .round { width: 46px; height: 46px; border-radius: 50%; border: 1.5px solid var(--line2); flex-shrink: 0;
+             background: radial-gradient(circle, #3a2412, #1a110a); color: var(--cyan); font-size: 18px;
+             display: grid; place-items: center; cursor: pointer; }
+    .round:active { transform: scale(.94); }
+    #mic-btn.recording { background: radial-gradient(circle, #b3263a, #5a0f1e); color: #fff; border-color: #ff6b7a;
+                         animation: rec 1s infinite; }
+    @keyframes rec { 50% { box-shadow: 0 0 0 8px rgba(255,107,122,.15); } }
+    #send-btn { background: linear-gradient(145deg, #ff8a1c, #d4550a); color: #fff; border: 0; }
+
+    /* quick */
+    .quick { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin: 14px 0 4px; }
+    .quick button { height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+                    color: var(--cyan); font-size: 17px; cursor: pointer; }
+    .quick button:active { background: rgba(255,138,28,.25); }
+
+    /* devices */
+    .sec { margin-top: 18px; }
+    .sec-h { display: flex; justify-content: space-between; align-items: center; font-size: 12px; letter-spacing: 3px;
+             color: #d2c7bd; font-weight: 700; }
+    .sec-h span.n { font-size: 11px; padding: 2px 8px; border: 1px solid var(--line2); border-radius: 8px; color: var(--cyan); letter-spacing: 1px; }
+    .sec-h::after { content: none; }
+    .rule { height: 2px; margin: 7px 0 10px; background: linear-gradient(90deg, var(--blue), transparent 60%); opacity: .7; }
+    .dev { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 14px; margin-bottom: 8px;
+           background: var(--card); border: 1px solid var(--line); cursor: pointer; }
+    .dev.sel { border-color: var(--blue); box-shadow: 0 0 16px rgba(255,138,28,.25); }
+    .dev .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 19px;
+               background: rgba(255,138,28,.12); border: 1px solid var(--line2); }
+    .dev .tx { flex: 1; min-width: 0; }
+    .dev .nm { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dev .sb { font-size: 11.5px; color: var(--muted); }
+    .dev .dt { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+    .dev .dt.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .chip { font-size: 11px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line2); color: var(--cyan); background: transparent; }
+    .row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .ghost { flex: 1; min-width: 140px; padding: 11px; border-radius: 12px; border: 1px dashed var(--line2);
+             background: transparent; color: #d2c7bd; font-family: inherit; font-size: 13px; letter-spacing: .5px; cursor: pointer; }
+
+    /* drawer */
+    .scrim { position: fixed; inset: 0; background: rgba(5,3,2,.65); opacity: 0; pointer-events: none; transition: .2s; z-index: 20; }
+    .drawer { position: fixed; top: 0; bottom: 0; left: 0; width: min(82vw, 320px); background: #0d0907;
+              border-right: 1px solid var(--line2); transform: translateX(-102%); transition: .25s; z-index: 21;
+              padding: max(18px, env(safe-area-inset-top)) 14px 18px; display: flex; flex-direction: column; gap: 6px; }
+    body.menu .scrim { opacity: 1; pointer-events: auto; } body.menu .drawer { transform: none; }
+    .drawer h3 { font-size: 12px; letter-spacing: 4px; color: var(--muted); margin: 6px 4px 8px; }
+    .drawer button, .drawer label { text-align: left; padding: 12px; border-radius: 12px; border: 1px solid transparent;
+              background: transparent; color: var(--text); font-family: inherit; font-size: 15px; cursor: pointer; display: block; }
+    .drawer button:active, .drawer label:active { background: rgba(255,138,28,.12); border-color: var(--line); }
+    .enc { margin-top: auto; font-size: 11px; color: var(--muted); padding: 8px 4px; }
+    .enc b.on { color: var(--green); } .enc b.off { color: var(--amber); }
+
+    /* sheet (conversation) */
+    .sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 78vh; background: #0b0806; border-top: 1px solid var(--line2);
+             border-radius: 20px 20px 0 0; transform: translateY(102%); transition: .25s; z-index: 22; display: flex; flex-direction: column; }
+    body.chat .sheet { transform: none; } body.chat .scrim { opacity: 1; pointer-events: auto; }
+    .sheet-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; font-size: 12px; letter-spacing: 3px; color: #d2c7bd; }
+    main#feed { flex: 1; overflow-y: auto; padding: 6px 14px 18px; display: flex; flex-direction: column; gap: 9px; }
+    .msg { max-width: 86%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.5; }
+    .msg-j { align-self: flex-start; background: rgba(255,138,28,.13); border: 1px solid var(--line2); border-bottom-left-radius: 4px; }
+    .msg-u { align-self: flex-end; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-bottom-right-radius: 4px; }
+    .msg-sys { align-self: center; font-size: 11px; color: var(--muted); }
+    .lbl { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .55; margin-bottom: 3px; }
+    .msg-file { align-self: flex-end; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 14px;
+                padding: 10px 13px; display: flex; align-items: center; gap: 12px; max-width: 86%; }
+    .fc-icon { font-size: 24px; } .fc-meta { flex: 1; min-width: 0; }
+    .fc-lbl { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+    .fc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-size { font-size: 11px; color: var(--muted); }
+    .fc-bar-wrap { height: 3px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+    .fc-bar { height: 100%; width: 0; background: var(--blue); }
+    .fc-status { font-size: 10px; font-weight: 700; color: var(--muted); } .fc-status.done { color: var(--green); } .fc-status.err { color: var(--red); }
+    .fc-dl { display: block; margin-top: 5px; font-size: 11px; color: var(--cyan); text-decoration: none; }
+
+    /* dialogs */
+    dialog.dlg { color: var(--text); background: #120c08; border: 1px solid var(--line2); border-radius: 18px;
+                 width: min(460px, calc(100% - 28px)); max-height: 86vh; padding: 18px; overflow: auto; margin: auto; }
+    dialog.dlg::backdrop { background: rgba(5,3,2,.78); }
+    .dlg-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .dlg-h h2 { font-size: 19px; letter-spacing: .5px; }
+    .dlg p { font-size: 14px; line-height: 1.5; color: #d2c7bd; }
+    .dlg form { display: grid; gap: 10px; margin-top: 8px; }
+    .dlg input[type=text], .dlg input[type=url], .dlg select, .dlg textarea {
+      width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line2); background: rgba(10,7,5,.85);
+      color: var(--text); font-size: 16px; font-family: inherit; }
+    .dlg .big { font-size: 26px; letter-spacing: 8px; text-align: center; }
+    .btn { padding: 11px 15px; border: 1px solid var(--line2); border-radius: 12px; font-size: 13px; font-weight: 700;
+           letter-spacing: 1px; cursor: pointer; background: rgba(255,138,28,.12); color: var(--text); font-family: inherit; }
+    .btn-send { background: linear-gradient(145deg, #ff8a1c, #d4550a); border: 0; color: #fff; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tabs button.on { background: var(--blue); color: #fff; }
+    #shot-img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+    #scan-preview, #scan-video, #fortune-photo-preview { width: 100%; max-height: 260px; object-fit: contain; border-radius: 12px; }
+    #scan-result, #fortune-result { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; font-size: 14px; }
+
+    #toast { position: fixed; top: 16px; left: 50%; transform: translate(-50%, -10px); opacity: 0; transition: .22s;
+             background: rgba(30,20,12,.96); border: 1px solid var(--line2); color: var(--cyan); font-size: 13px;
+             padding: 8px 16px; border-radius: 99px; z-index: 40; pointer-events: none; white-space: nowrap; }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .reactor { position: relative; width: min(92vw, 400px); aspect-ratio: 1; margin: 0 auto -10px; }
+    .reactor canvas { width: 100%; height: 100%; display: block; }
   </style>
 </head>
-<body>
+<body class="st-idle">
   <div id="toast"></div>
-  <header>
-    <div class="logo"><em>J</em>ARVIS</div>
-    <div class="pill" id="pill"><span class="dot"></span><span id="st">Connecting</span></div>
-    <div class="enc-badge" id="enc">AES-GCM</div>
-    <div class="spacer"></div>
-    <div class="url">__IP__:__PORT__</div>
-  </header>
-  <div class="camera-tools">
-    <button class="btn" type="button" id="scan-open">Kamera Tara</button>
-    <button class="btn" type="button" id="fortune-open">☕ Kahve Falı</button>
-  </div>
-  <dialog class="fortune-dialog" id="scan-dialog" aria-labelledby="scan-title">
-    <div class="fortune-heading">
-      <h2 id="scan-title">Kamera Taraması</h2>
-      <button class="btn" type="button" id="scan-close">Kapat</button>
+  <div class="scrim" id="scrim"></div>
+
+  <nav class="drawer" id="drawer" aria-label="Menü">
+    <h3>MENÜ</h3>
+    <button type="button" id="m-chat">💬 Konuşma geçmişi</button>
+    <label for="file-inp">📎 Bilgisayara dosya gönder</label>
+    <button type="button" id="scan-open">📷 Kamera tara</button>
+    <button type="button" id="fortune-open">☕ Kahve falı</button>
+    <button type="button" id="m-tv">📺 Televizyona gönder</button>
+    <button type="button" id="m-shot">🖼️ Ekran görüntüsü al</button>
+    <button type="button" id="wake">⚡ Jarvis'i uyandır</button>
+    <button type="button" id="m-refresh">🔄 Cihazları yenile</button>
+    <div class="enc">Bağlantı: <b id="enc">…</b><br><span>__IP__:__PORT__</span></div>
+  </nav>
+
+  <div class="wrap">
+    <header class="top">
+      <button class="icon-btn" id="menu-btn" type="button" aria-label="Menü">☰</button>
+      <div class="brand"><b>JARVIS</b><small>AI OS</small></div>
+      <div class="top-r">
+        <button class="icon-btn off" id="spk" type="button" aria-label="Yanıtları telefonda seslendir">🔈</button>
+        <div class="avatar" id="avatar" title="Kontrol edilen cihaz">J</div>
+      </div>
+    </header>
+
+    <div class="reactor" id="reactor"><canvas id="core" aria-label="JARVIS çekirdeği"></canvas></div>
+
+    <section class="status" aria-live="polite">
+      <div id="st-title">Bağlanıyor…</div>
+      <div class="dots"><b></b><b></b><b></b></div>
+      <div id="st-sub">Cihaza bağlanılıyor.</div>
+      <canvas id="wave" width="600" height="84"></canvas>
+    </section>
+
+    <div class="reply" id="reply" hidden>
+      <div class="lbl"><span>JARVIS</span><a href="#" id="reply-all">TÜMÜ ›</a></div>
+      <div id="reply-text"></div>
     </div>
-    <p>Bir nesneyi, yazıyı veya QR kodunu kadraja al. Seçtiğin kare görsel analiz için model sağlayıcısına gönderilir. Sonuç JARVIS ekranına yansır.</p>
+
+    <form class="ask" id="ask" autocomplete="off">
+      <button class="round" id="mic-btn" type="button" title="Sesli komut">🎙️</button>
+      <input id="inp" placeholder="Jarvis'e bir şey sor…" enterkeyhint="send">
+      <button class="round" id="send-btn" type="submit" title="Gönder">➤</button>
+    </form>
+    <input type="file" id="file-inp" multiple accept="*/*" hidden>
+
+    <div class="quick" id="quick" aria-label="Hızlı kontrol">
+      <button type="button" data-q="volume_down" title="Sesi kıs">🔉</button>
+      <button type="button" data-q="mute" title="Sessiz">🔇</button>
+      <button type="button" data-q="volume_up" title="Sesi aç">🔊</button>
+      <button type="button" data-q="prev" title="Önceki">⏮</button>
+      <button type="button" data-q="play_pause" title="Oynat/Duraklat">⏯</button>
+      <button type="button" data-q="next" title="Sonraki">⏭</button>
+      <button type="button" data-q="screenshot" title="Ekran görüntüsü">🖼️</button>
+      <button type="button" data-q="lock" title="Kilitle">🔒</button>
+    </div>
+
+    <section class="sec">
+      <div class="sec-h">BAĞLI CİHAZLAR <span class="n" id="dev-n">1/1</span></div>
+      <div class="rule"></div>
+      <div id="devs"></div>
+      <div class="row-btns">
+        <button class="ghost" type="button" id="add-tv">＋ Televizyon ekle</button>
+        <button class="ghost" type="button" id="open-local">🖥️ Bu PC'nin TV'sinde aç</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="sheet" id="sheet" aria-label="Konuşma">
+    <div class="sheet-h">KONUŞMA <button class="icon-btn" id="chat-close" type="button">✕</button></div>
+    <main id="feed"></main>
+  </section>
+
+  <dialog class="dlg" id="pair-dialog">
+    <div class="dlg-h"><h2 id="pair-title">Cihazı eşle</h2><button class="btn" type="button" data-close>Kapat</button></div>
+    <p id="pair-help"></p>
+    <form id="pair-form">
+      <input type="text" id="pair-code" class="big" inputmode="text" autocapitalize="characters" required>
+      <input type="text" id="pair-name" placeholder="Ad (isteğe bağlı) — ör. Salon TV">
+      <button class="btn btn-send" type="submit">Eşle</button>
+      <p id="pair-status" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog class="dlg" id="tv-dialog">
+    <div class="dlg-h"><h2>Televizyona gönder</h2><button class="btn" type="button" data-close>Kapat</button></div>
+    <div class="tabs" id="tv-tabs">
+      <button class="btn on" type="button" data-k="youtube">▶ YouTube</button>
+      <button class="btn" type="button" data-k="url">🌐 Web</button>
+      <button class="btn" type="button" data-k="image">🖼️ Resim</button>
+      <button class="btn" type="button" data-k="text">📝 Yazı</button>
+    </div>
+    <form id="tv-form">
+      <select id="tv-target"></select>
+      <input type="text" id="tv-value" placeholder="Video adı ya da YouTube linki">
+      <button class="btn btn-send" type="submit">Televizyonda aç</button>
+      <div class="tabs"><button class="btn" type="button" id="tv-home">🏠 Jarvis ekranı</button>
+        <button class="btn" type="button" id="tv-clear">✕ Kapat</button></div>
+      <p id="tv-status" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog class="dlg" id="shot-dialog">
+    <div class="dlg-h"><h2>Ekran görüntüsü</h2><button class="btn" type="button" data-close>Kapat</button></div>
+    <img id="shot-img" alt="Bilgisayarın ekranı">
+  </dialog>
+
+  <dialog class="dlg" id="scan-dialog" aria-labelledby="scan-title">
+    <div class="dlg-h"><h2 id="scan-title">Kamera Taraması</h2><button class="btn" type="button" id="scan-close">Kapat</button></div>
+    <p>Fotoğraf çek ya da seç; JARVIS tarayıp sonucu bilgisayarda gösterir.</p>
     <form id="scan-form">
       <button class="btn" type="button" id="scan-camera" hidden>Kamerayı aç</button>
       <video id="scan-video" hidden playsinline muted autoplay></video>
       <button class="btn" type="button" id="scan-capture" hidden>Kareyi çek</button>
-      <label for="scan-photo">Kamerayla çek veya fotoğraf seç</label>
       <input id="scan-photo" type="file" accept="image/*" capture="environment">
       <img id="scan-preview" hidden alt="Taranacak kare">
       <button class="btn btn-send" id="scan-submit" type="submit" disabled>Tara ve yansıt</button>
@@ -184,47 +293,396 @@
     <p id="scan-status" role="status"></p>
     <div id="scan-result" aria-live="polite"></div>
   </dialog>
-  <dialog class="fortune-dialog" id="fortune-dialog" aria-labelledby="fortune-title">
-    <div class="fortune-heading">
-      <h2 id="fortune-title">Kahve Falı</h2>
-      <button class="btn" type="button" id="fortune-close" aria-label="Fal bölümünü kapat">Kapat</button>
-    </div>
-    <p>Fincanın içini aydınlıkta çek. JARVIS telve izlerini inceleyip eğlencelik bir yorum yazsın.</p>
+
+  <dialog class="dlg" id="fortune-dialog" aria-labelledby="fortune-title">
+    <div class="dlg-h"><h2 id="fortune-title">Kahve Falı</h2><button class="btn" type="button" id="fortune-close" aria-label="Fal bölümünü kapat">Kapat</button></div>
+    <p>Fincanın içinin net bir fotoğrafını seç.</p>
     <form id="fortune-form">
-      <label for="fortune-photo">Fincan fotoğrafı</label>
       <input id="fortune-photo" required type="file" accept="image/jpeg,image/png,image/webp">
       <img id="fortune-photo-preview" hidden alt="Seçtiğin fincan fotoğrafı">
-      <p>JPEG, PNG veya WebP, en çok 8 MB. Fotoğraf yorum için Google Gemini’ye gönderilir.</p>
       <button class="btn btn-send" id="fortune-submit" type="submit">Falımı yorumla</button>
     </form>
     <p id="fortune-status" role="status"></p>
     <div id="fortune-result" aria-live="polite"></div>
   </dialog>
-  <main id="feed"></main>
-  <footer>
-    <input id="inp" placeholder="Send a command to JARVIS…" autocomplete="off">
-    <label class="btn-attach" for="file-inp" title="Send file">📎</label>
-    <input type="file" id="file-inp" multiple accept="*/*" style="display:none">
-    <button id="mic-btn" onclick="doMic()" title="Voice command">🎤</button>
-    <button class="btn btn-wake" id="wake" onclick="doWake()">WAKE</button>
-    <button class="btn btn-send" onclick="doSend()">SEND</button>
-  </footer>
-
+  <script src="/assets/reactor.js"></script>
   <script>
-    // ── Auth — bearer token ───────────────────────────────────────────────────
-    const _authToken  = sessionStorage.getItem('jarvis_token');
+    // ── Devices and auth ─────────────────────────────────────────────────────
+    // The phone can command several computers: this one (same origin) and the
+    // other JARVIS computers on the network, each with a token it issued.
+    let selfToken = sessionStorage.getItem('jarvis_token');
     const _sessionKey = sessionStorage.getItem('jarvis_key');
+    if (!selfToken) location.replace('/login');
 
-    if (!_authToken) {
-      location.replace('/login');
+    const _load = (store, k) => { try { return JSON.parse(store.getItem(k) || '{}'); } catch { return {}; } };
+    const peers   = _load(localStorage, 'jarvis_peers');      // id -> {url, dev, name}
+    const peerTok = _load(sessionStorage, 'jarvis_peer_tok'); // id -> token
+    const _savePeers = () => { localStorage.setItem('jarvis_peers', JSON.stringify(peers));
+                               sessionStorage.setItem('jarvis_peer_tok', JSON.stringify(peerTok)); };
+    let target = localStorage.getItem('jarvis_target') || 'self';
+    if (target !== 'self' && !peers[target]) target = 'self';
+    let devState = { self: null, peers: [], screens: [] };
+
+    function T() {
+      if (target === 'self' || !peers[target]) return { id: 'self', base: '', token: selfToken, self: true };
+      return { id: target, base: peers[target].url, token: peerTok[target] || '', self: false };
+    }
+    function _authHeader() { return { 'Authorization': `Bearer ${T().token}` }; }
+    function _authFetch(path, opts = {}) {
+      const t = T();
+      opts.headers = Object.assign({}, opts.headers, { 'Authorization': `Bearer ${t.token}` });
+      return fetch(t.base + path, opts);
+    }
+    function selfFetch(path, opts = {}) {
+      opts.headers = Object.assign({}, opts.headers, { 'Authorization': `Bearer ${selfToken}` });
+      return fetch(path, opts);
+    }
+    async function deviceLogin(base, devTok) {
+      if (!devTok) return null;
+      try {
+        const r = await fetch(base + '/api/device-login', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_token: devTok }) });
+        const d = await r.json();
+        return d.ok ? d : null;
+      } catch { return null; }
+    }
+    async function ensurePeer(id) {
+      const p = peers[id];
+      if (!p) return false;
+      if (peerTok[id]) {
+        try { const r = await fetch(p.url + '/api/devices', { headers: { 'Authorization': `Bearer ${peerTok[id]}` } });
+              if (r.ok) return true; } catch { return false; }
+      }
+      const d = await deviceLogin(p.url, p.dev);
+      if (!d) return false;
+      peerTok[id] = d.token; _savePeers();
+      return true;
     }
 
-    function _authHeader() { return { 'Authorization': `Bearer ${_authToken}` }; }
-    function _authFetch(url, opts = {}) {
-      opts.headers = Object.assign({}, opts.headers, _authHeader());
-      return fetch(url, opts);
+    // ── Screen elements ───────────────────────────────────────────────────────
+    const feed = document.getElementById('feed');
+    const stTitle = document.getElementById('st-title');
+    const stSub = document.getElementById('st-sub');
+    const replyBox = document.getElementById('reply');
+    const replyText = document.getElementById('reply-text');
+    const wake = document.getElementById('wake');
+    const STATES = {
+      idle:     ['Hazır', 'Komut bekleniyor — mikrofona dokun ya da yaz.'],
+      thinking: ['Düşünüyor...', 'Komut bağlamı analiz ediliyor.'],
+      speaking: ['Konuşuyor...', 'Yanıt aktarılıyor.'],
+      sleeping: ['Uykuda', 'Uyandırmak için bir komut gönder.'],
+      offline:  ['Bağlantı yok', 'Cihaza ulaşılamıyor, yeniden deneniyor…'],
+    };
+    let curState = 'offline';
+    function setState(s) {
+      if (!STATES[s]) return;
+      curState = s; core.state = s;
+      document.body.className = document.body.className.replace(/\bst-\w+/g, '').trim() + ' st-' + s;
+      stTitle.textContent = STATES[s][0];
+      stSub.textContent = STATES[s][1];
+    }
+    // the old server messages
+    function setStatus(s) { setState(s === 'active' ? 'idle' : 'sleeping'); }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function append(speaker, text) {
+      const d = document.createElement('div');
+      if (speaker === 'jarvis') {
+        d.className = 'msg msg-j'; d.innerHTML = `<div class="lbl">Jarvis</div>${esc(text)}`;
+        replyText.textContent = text; replyBox.hidden = false; replyBox.scrollTop = 0;
+        speak(text);
+      } else {
+        d.className = 'msg msg-u'; d.innerHTML = `<div class="lbl">Sen</div>${esc(text)}`;
+      }
+      feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+    }
+    function sys(text) {
+      const d = document.createElement('div');
+      d.className = 'msg msg-sys'; d.textContent = text;
+      feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
+    }
+    let _toastTimer;
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
     }
 
+    // ── Speak replies on the phone (optional) ─────────────────────────────────
+    const spk = document.getElementById('spk');
+    let speakOn = localStorage.getItem('jarvis_speak') === '1';
+    function _spkUi() { spk.textContent = speakOn ? '🔊' : '🔈'; spk.classList.toggle('off', !speakOn); }
+    _spkUi();
+    spk.onclick = () => { speakOn = !speakOn; localStorage.setItem('jarvis_speak', speakOn ? '1' : '0'); _spkUi();
+                          if (!speakOn && window.speechSynthesis) speechSynthesis.cancel();
+                          toast(speakOn ? 'Yanıtlar telefonda da seslendirilecek' : 'Telefon sesi kapalı'); };
+    function speak(text) {
+      if (!speakOn || !window.speechSynthesis) return;
+      try { const u = new SpeechSynthesisUtterance(text); u.lang = 'tr-TR'; speechSynthesis.speak(u); } catch {}
+    }
+
+    // ── Reactor and waveform ─────────────────────────────────────────────────
+    const core = JarvisReactor(document.getElementById('core'));
+    const wave = document.getElementById('wave');
+    const wctx = wave.getContext('2d');
+    let level = 0, levelTarget = 0, lastLevelAt = 0;
+    function frame(t) {
+      const speaking = curState === 'speaking';
+      if (speaking && performance.now() - lastLevelAt > 400) levelTarget = 0.35 + 0.3 * Math.abs(Math.sin(t / 170));
+      if (!speaking) levelTarget = curState === 'thinking' ? 0.08 : 0;
+      level += (levelTarget - level) * 0.18;
+      const W = wave.width, H = wave.height, n = 46, bw = W / n;
+      wctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < n; i++) {
+        const x = i / (n - 1), env = Math.sin(Math.PI * x);
+        const noise = 0.55 + 0.45 * Math.sin(t / 90 + i * 1.7) * Math.sin(t / 53 + i * 0.6);
+        const h = Math.max(2, H * 0.92 * env * (speaking ? level * noise + 0.04 : level * 0.6 + 0.02));
+        const g = wctx.createLinearGradient(0, (H - h) / 2, 0, (H + h) / 2);
+        g.addColorStop(0, '#ffdc94'); g.addColorStop(1, '#ff8a1c');
+        wctx.fillStyle = g;
+        wctx.globalAlpha = curState === 'offline' || curState === 'sleeping' ? 0.25 : 0.9;
+        wctx.fillRect(i * bw + bw * 0.25, (H - h) / 2, bw * 0.5, h);
+      }
+      core.level = level;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // ── Live connection to the selected computer ─────────────────────────────
+    let ws = null, wsGen = 0;
+    function wsUrlFor(t) {
+      const u = new URL(t.base || location.origin);
+      return `${u.protocol === 'https:' ? 'wss' : 'ws'}://${u.host}/ws?token=${encodeURIComponent(t.token)}`;
+    }
+    function connectWS() {
+      const t = T(), gen = ++wsGen;
+      if (ws) { ws.onclose = null; try { ws.close(); } catch {} }
+      ws = new WebSocket(wsUrlFor(t));
+      ws.onopen = () => { if (gen === wsGen) { setState('idle'); } };
+      ws.onclose = async (e) => {
+        if (gen !== wsGen) return;
+        setState('offline');
+        if (e.code === 4001) {
+          if (t.self) {
+            const d = await deviceLogin('', localStorage.getItem('jarvis_device_token'));
+            if (!d) { location.replace('/login'); return; }
+            selfToken = d.token; sessionStorage.setItem('jarvis_token', d.token);
+          } else {
+            delete peerTok[t.id]; _savePeers();
+            if (!(await ensurePeer(t.id))) { sys('Bu cihazın eşleşmesi bitti, yeniden eşle.'); selectDevice('self'); return; }
+          }
+        }
+        setTimeout(() => { if (gen === wsGen) connectWS(); }, 2500);
+      };
+      ws.onmessage = (e) => {
+        if (gen !== wsGen) return;
+        let m; try { m = JSON.parse(e.data); } catch { return; }
+        if (m.type === 'log') append(m.speaker, m.text);
+        else if (m.type === 'state') setState(m.state);
+        else if (m.type === 'status') setStatus(m.state);
+        else if (m.type === 'level') { levelTarget = m.v; lastLevelAt = performance.now(); }
+        else if (m.type === 'hello') { if (m.state) setState(m.state); }
+        else if (m.type === 'wake') sys('Uyandırma sözcüğü duyuldu — bağlanıyor…');
+        else if (m.type === 'sys') sys(m.text);
+        else if (m.type === 'file_received') _onFileReceived(m);
+      };
+    }
+
+    // ── Device list ───────────────────────────────────────────────────────────
+    const devsEl = document.getElementById('devs');
+    const ICON = { desktop: '🖥️', laptop: '💻', tv: '📺' };
+    async function refreshDevices() {
+      try {
+        const r = await selfFetch('/api/devices');
+        if (r.status === 401) return;
+        if (r.ok) devState = await r.json();
+      } catch {}
+      renderDevices();
+    }
+    function renderDevices() {
+      const rows = [];
+      const me = devState.self || { id: 'self', name: 'Bu bilgisayar', os: '', kind: 'desktop', online: true };
+      rows.push({ key: 'self', name: me.name, sub: (me.os || 'Bu bilgisayar') + ' · bu sayfanın bilgisayarı',
+                  kind: me.kind, online: curState !== 'offline' || target !== 'self', type: 'pc' });
+      for (const p of devState.peers || []) {
+        const paired = !!peers[p.id];
+        if (paired && peers[p.id].url !== p.url) { peers[p.id].url = p.url; _savePeers(); }
+        rows.push({ key: p.id, name: p.name, sub: (p.os || 'JARVIS') + (paired ? '' : ' · eşlenmedi'),
+                    kind: p.kind, online: p.online, type: 'pc', paired, url: p.url });
+      }
+      for (const id of Object.keys(peers)) {
+        if (!(devState.peers || []).some(p => p.id === id))
+          rows.push({ key: id, name: peers[id].name || 'Bilgisayar', sub: 'Şu an görünmüyor', kind: 'desktop',
+                      online: false, type: 'pc', paired: true });
+      }
+      for (const s of devState.screens || [])
+        rows.push({ key: s.id, name: s.name, sub: s.online ? 'Ekran bağlı' : 'Ekran kapalı', kind: 'tv',
+                    online: s.online, type: 'tv' });
+      const online = rows.filter(r => r.online).length;
+      document.getElementById('dev-n').textContent = `${online}/${rows.length}`;
+      devsEl.innerHTML = rows.map(r => `
+        <div class="dev ${r.type === 'pc' && r.key === target ? 'sel' : ''}" data-key="${esc(r.key)}" data-type="${r.type}">
+          <div class="ic">${ICON[r.kind] || '🖥️'}</div>
+          <div class="tx"><div class="nm">${esc(r.name)}</div><div class="sb">${esc(r.sub)}</div></div>
+          ${r.type === 'pc' && r.paired === false ? '<button class="chip" type="button">Eşle</button>' : ''}
+          ${r.type === 'tv' ? '<button class="chip" data-act="send" type="button">Gönder</button><button class="chip" data-act="rm" type="button">✕</button>' : ''}
+          <span class="dt ${r.online ? 'on' : ''}"></span>
+        </div>`).join('');
+      const t = rows.find(r => r.key === target) || rows[0];
+      document.getElementById('avatar').textContent = (t.name || 'J').trim().charAt(0).toUpperCase();
+      fillTvTargets();
+    }
+    devsEl.addEventListener('click', async (e) => {
+      const row = e.target.closest('.dev'); if (!row) return;
+      const key = row.dataset.key, act = e.target.dataset.act;
+      if (row.dataset.type === 'tv') {
+        if (act === 'rm') {
+          if (!confirm('Bu ekran kaldırılsın mı?')) return;
+          await selfFetch('/api/screen/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                   body: JSON.stringify({ id: key }) });
+          refreshDevices(); return;
+        }
+        openTv(key); return;
+      }
+      if (key === 'self' || peers[key]) {
+        if (key !== 'self' && !(await ensurePeer(key))) { openPair('peer', key); return; }
+        selectDevice(key); return;
+      }
+      openPair('peer', key);
+    });
+    function selectDevice(key) {
+      target = key; localStorage.setItem('jarvis_target', key);
+      feed.innerHTML = ''; replyBox.hidden = true;
+      setState('offline'); connectWS(); renderDevices();
+      const nm = key === 'self' ? (devState.self?.name || 'bu bilgisayar') : (peers[key]?.name || 'cihaz');
+      toast(`Kontrol: ${nm}`);
+    }
+    document.getElementById('m-refresh').onclick = () => { closeMenu(); refreshDevices(); toast('Cihazlar yenilendi'); };
+
+    // ── Pairing: another computer, or a TV ───────────────────────────────────
+    const pairDlg = document.getElementById('pair-dialog');
+    let pairMode = null, pairKey = null;
+    function openPair(mode, key) {
+      pairMode = mode; pairKey = key;
+      const code = document.getElementById('pair-code'), name = document.getElementById('pair-name');
+      code.value = ''; name.value = ''; document.getElementById('pair-status').textContent = '';
+      if (mode === 'tv') {
+        document.getElementById('pair-title').textContent = 'Televizyon ekle';
+        document.getElementById('pair-help').innerHTML =
+          `Televizyonun tarayıcısında <b>${esc(location.host)}/tv</b> adresini aç (ya da bilgisayarı HDMI ile bağla ve “Bu PC'nin TV'sinde aç”a bas). Ekranda çıkan <b>6 haneli kodu</b> yaz.`;
+        code.placeholder = '000000'; code.inputMode = 'numeric'; name.hidden = false;
+      } else {
+        const p = (devState.peers || []).find(x => x.id === key);
+        document.getElementById('pair-title').textContent = `${p ? p.name : 'Bilgisayar'} — eşle`;
+        document.getElementById('pair-help').innerHTML =
+          `O bilgisayarda JARVIS'te <b>Uzaktan Kontrol</b>'e bas ve çıkan <b>8 haneli kodu</b> buraya yaz. Bir kez yeter.`;
+        code.placeholder = 'KOD'; code.inputMode = 'text'; name.hidden = true;
+      }
+      pairDlg.showModal();
+    }
+    document.getElementById('add-tv').onclick = () => openPair('tv');
+    document.getElementById('pair-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const st = document.getElementById('pair-status');
+      const code = document.getElementById('pair-code').value.trim();
+      st.textContent = 'Eşleniyor…';
+      try {
+        if (pairMode === 'tv') {
+          const r = await selfFetch('/api/screen/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, name: document.getElementById('pair-name').value }) });
+          const d = await r.json();
+          if (!d.ok) { st.textContent = d.error || 'Olmadı'; return; }
+          toast(`${d.name} bağlandı`); pairDlg.close(); setTimeout(refreshDevices, 800);
+        } else {
+          const p = (devState.peers || []).find(x => x.id === pairKey);
+          if (!p) { st.textContent = 'Cihaz artık görünmüyor.'; return; }
+          const r = await fetch(p.url + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ pin: code.toUpperCase() }) });
+          const d = await r.json();
+          if (!d.ok) { st.textContent = d.error || 'Kod yanlış'; return; }
+          peers[p.id] = { url: p.url, dev: d.device_token || '', name: p.name };
+          peerTok[p.id] = d.token; _savePeers();
+          pairDlg.close(); selectDevice(p.id);
+        }
+      } catch { st.textContent = 'Cihaza ulaşılamadı. Aynı Wi-Fi ağında mısın?'; }
+    });
+    document.querySelectorAll('dialog [data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
+
+    // ── TV ───────────────────────────────────────────────────────────────────
+    const tvDlg = document.getElementById('tv-dialog');
+    let tvKind = 'youtube';
+    const TV_PH = { youtube: 'Video adı ya da YouTube linki', url: 'https://… web adresi',
+                    image: 'Resim adresi (https://…jpg)', text: 'Ekranda gösterilecek yazı' };
+    function fillTvTargets(sel) {
+      const s = document.getElementById('tv-target'), prev = sel || s.value;
+      const list = devState.screens || [];
+      s.innerHTML = `<option value="all">Tüm ekranlar</option>` +
+        list.map(x => `<option value="${esc(x.id)}">${esc(x.name)}${x.online ? '' : ' (kapalı)'}</option>`).join('');
+      if (prev && [...s.options].some(o => o.value === prev)) s.value = prev;
+    }
+    function openTv(id) {
+      closeMenu(); fillTvTargets(id || 'all'); document.getElementById('tv-status').textContent = '';
+      tvDlg.showModal();
+    }
+    document.getElementById('m-tv').onclick = () => openTv();
+    document.getElementById('tv-tabs').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      tvKind = b.dataset.k;
+      document.querySelectorAll('#tv-tabs button').forEach(x => x.classList.toggle('on', x === b));
+      document.getElementById('tv-value').placeholder = TV_PH[tvKind];
+    });
+    async function tvSend(kind, value) {
+      const st = document.getElementById('tv-status');
+      st.textContent = kind === 'youtube' ? 'Video aranıyor…' : 'Gönderiliyor…';
+      try {
+        const r = await selfFetch('/api/screen/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, value, screen: document.getElementById('tv-target').value }) });
+        const d = await r.json();
+        st.textContent = d.message || (d.ok ? 'Gönderildi' : 'Olmadı');
+      } catch { st.textContent = 'Bilgisayara ulaşılamadı.'; }
+    }
+    document.getElementById('tv-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const v = document.getElementById('tv-value').value.trim();
+      if (v) tvSend(tvKind, v);
+    });
+    document.getElementById('tv-home').onclick = () => tvSend('home', '');
+    document.getElementById('tv-clear').onclick = () => tvSend('clear', '');
+    document.getElementById('open-local').onclick = async () => {
+      toast('Bilgisayarın ekranında açılıyor…');
+      try {
+        const r = await selfFetch('/api/screen/open-local', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const d = await r.json(); toast(d.message || 'Tamam'); setTimeout(refreshDevices, 3000);
+      } catch { toast('Bilgisayara ulaşılamadı'); }
+    };
+
+    // ── Quick controls ────────────────────────────────────────────────────────
+    const shotDlg = document.getElementById('shot-dialog');
+    async function quick(action) {
+      try {
+        const r = await _authFetch('/api/quick', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                   body: JSON.stringify({ action }) });
+        const d = await r.json();
+        if (d.image) { document.getElementById('shot-img').src = d.image; shotDlg.showModal(); }
+        else toast(d.message || (d.ok ? 'Tamam' : 'Olmadı'));
+      } catch { toast('Cihaza ulaşılamadı'); }
+    }
+    document.getElementById('quick').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (b) quick(b.dataset.q);
+    });
+    document.getElementById('m-shot').onclick = () => { closeMenu(); quick('screenshot'); };
+
+    // ── Menu, conversation sheet ──────────────────────────────────────────────
+    const scrim = document.getElementById('scrim');
+    function closeMenu() { document.body.classList.remove('menu'); }
+    document.getElementById('menu-btn').onclick = () => document.body.classList.add('menu');
+    scrim.onclick = () => document.body.classList.remove('menu', 'chat');
+    function openChat() { closeMenu(); document.body.classList.add('chat'); feed.scrollTop = feed.scrollHeight; }
+    document.getElementById('m-chat').onclick = openChat;
+    document.getElementById('reply-all').onclick = (e) => { e.preventDefault(); openChat(); };
+    document.getElementById('chat-close').onclick = () => document.body.classList.remove('chat');
+    document.querySelector('label[for="file-inp"]').addEventListener('click', closeMenu);
 
     const scanDialog = document.getElementById('scan-dialog');
     const scanForm = document.getElementById('scan-form');
@@ -263,7 +721,7 @@
     }
 
     scanCamera.hidden = !navigator.mediaDevices?.getUserMedia;
-    document.getElementById('scan-open').addEventListener('click', () => scanDialog.showModal());
+    document.getElementById('scan-open').addEventListener('click', () => { closeMenu(); scanDialog.showModal(); });
     document.getElementById('scan-close').addEventListener('click', () => scanDialog.close());
     scanDialog.addEventListener('close', () => {
       scanSession++;
@@ -369,7 +827,7 @@
       fortunePreview.removeAttribute('src');
       fortunePreview.hidden = true;
     }
-    document.getElementById('fortune-open').addEventListener('click', () => fortuneDialog.showModal());
+    document.getElementById('fortune-open').addEventListener('click', () => { closeMenu(); fortuneDialog.showModal(); });
     document.getElementById('fortune-close').addEventListener('click', () => fortuneDialog.close());
     fortuneDialog.addEventListener('close', () => {
       clearFortunePreview();
@@ -416,129 +874,6 @@
         fortunePhoto.disabled = false;
       }
     });
-    // ── AES-256-GCM encryption (Web Crypto) ──────────────────────────────────
-    //
-    // WHAT CHANGED, AND WHY THE LIBRARY WENT WITH IT
-    //   This used CryptoJS with AES-CBC and a key of SHA256(pairingKey+salt).
-    //   Two problems, both on the server side of the same conversation:
-    //
-    //   CBC hides a message but does not authenticate it, so an attacker on the
-    //   same network could alter the ciphertext and the assistant would act on
-    //   whatever fell out. GCM refuses a message that has been touched.
-    //
-    //   One round of SHA-256 over an eight-character key is an offline search
-    //   measured in seconds on a GPU. PBKDF2 at 200k rounds makes each guess
-    //   about a hundred thousand times more expensive, and costs this page one
-    //   derivation at pairing time.
-    //
-    //   Both are native in Web Crypto, so the 60 KB CryptoJS bundle is no
-    //   longer needed. crypto.subtle exists only in a secure context, which is
-    //   why the server now insists on HTTPS instead of quietly falling back.
-    const _AES_SALT   = 'JARVIS-DASHBOARD-v1';
-    const _KDF_ROUNDS = 200000;
-    let _aesKey = null;
-
-    async function _initCrypto(key) {
-      if (!window.crypto || !crypto.subtle) return false;
-      try {
-        const enc  = new TextEncoder();
-        const base = await crypto.subtle.importKey(
-          'raw', enc.encode(key), 'PBKDF2', false, ['deriveKey']);
-        _aesKey = await crypto.subtle.deriveKey(
-          { name: 'PBKDF2', salt: enc.encode(_AES_SALT),
-            iterations: _KDF_ROUNDS, hash: 'SHA-256' },
-          base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
-        return true;
-      } catch { return false; }
-    }
-
-    async function _encrypt(plaintext) {
-      if (!_aesKey) return null;
-      try {
-        // A fresh 12-byte nonce per message. Reusing one under the same key is
-        // the single way to break GCM, so it is generated here and never
-        // stored, cached or derived from anything.
-        const nonce = crypto.getRandomValues(new Uint8Array(12));
-        const ct    = new Uint8Array(await crypto.subtle.encrypt(
-          { name: 'AES-GCM', iv: nonce },
-          _aesKey, new TextEncoder().encode(plaintext)));
-        const out = new Uint8Array(nonce.length + ct.length);
-        out.set(nonce, 0);
-        out.set(ct, nonce.length);
-        let bin = '';
-        for (const b of out) bin += String.fromCharCode(b);
-        return btoa(bin);
-      } catch { return null; }
-    }
-
-    let _encReady  = false;
-    const encBadge = document.getElementById('enc');
-    encBadge.textContent = 'AES-GCM';
-    // Deriving the key is PBKDF2 over 200k rounds, so it is awaited rather than
-    // done inline — on a phone that is a few hundred milliseconds, and blocking
-    // the parse for it would stall the whole page.
-    (async () => {
-      _encReady = _sessionKey ? await _initCrypto(_sessionKey) : false;
-      if (_encReady) {
-        encBadge.className = 'enc-badge on';
-      } else {
-        encBadge.className = 'enc-badge off';
-        encBadge.textContent = 'NO ENC';
-      }
-    })();
-
-    // ── WebSocket ─────────────────────────────────────────────────────────────
-    const feed  = document.getElementById('feed');
-    const pill  = document.getElementById('pill');
-    const stTxt = document.getElementById('st');
-    const wake  = document.getElementById('wake');
-
-    const _wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const _wsUrl   = `${_wsProto}://${location.host}/ws?token=${encodeURIComponent(_authToken)}`;
-    const ws       = new WebSocket(_wsUrl);
-
-    ws.onopen    = () => { sys('Remote session active.'); toast('Connected to JARVIS'); };
-    ws.onclose   = () => sys('Connection lost — refresh to reconnect.');
-    ws.onerror   = () => sys('Connection error.');
-    ws.onmessage = (e) => {
-      const m = JSON.parse(e.data);
-      if (m.type === 'log')           append(m.speaker, m.text);
-      if (m.type === 'status')        setStatus(m.state);
-      if (m.type === 'wake')          sys('Wake word detected — connecting…');
-      if (m.type === 'sys')           sys(m.text);
-      if (m.type === 'file_received') _onFileReceived(m);
-    };
-
-    function setStatus(s) {
-      if (s === 'active') {
-        pill.className = 'pill on'; stTxt.textContent = 'Active'; wake.classList.remove('show');
-      } else {
-        pill.className = 'pill'; stTxt.textContent = 'Sleeping'; wake.classList.add('show');
-      }
-    }
-
-    function append(speaker, text) {
-      const d = document.createElement('div');
-      if (speaker === 'jarvis') {
-        d.className = 'msg msg-j';
-        d.innerHTML = `<div class="lbl">Jarvis</div>${esc(text)}`;
-      } else {
-        d.className = 'msg msg-u';
-        d.innerHTML = `<div class="lbl">You</div>${esc(text)}`;
-      }
-      feed.appendChild(d);
-      feed.scrollTop = feed.scrollHeight;
-    }
-
-    function sys(text) {
-      const d = document.createElement('div');
-      d.className = 'msg msg-sys'; d.textContent = text;
-      feed.appendChild(d); feed.scrollTop = feed.scrollHeight;
-    }
-
-    function esc(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
 
     // ── File helpers ──────────────────────────────────────────────────────────
     function _fileIcon(name) {
@@ -573,7 +908,7 @@
       card.innerHTML = `
         <div class="fc-icon">${_fileIcon(file.name)}</div>
         <div class="fc-meta">
-          <div class="fc-lbl">Sending</div>
+          <div class="fc-lbl">Gönderiliyor</div>
           <div class="fc-name">${esc(file.name)}</div>
           <div class="fc-size">${_fmtSize(file.size)}</div>
           <div class="fc-bar-wrap"><div class="fc-bar" id="${id}_bar"></div></div>
@@ -582,10 +917,12 @@
       `;
       feed.appendChild(card);
       feed.scrollTop = feed.scrollHeight;
+      openChat();
 
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/upload');
-      xhr.setRequestHeader('Authorization', `Bearer ${_authToken}`);
+      const _t = T();
+      xhr.open('POST', _t.base + '/api/upload');
+      xhr.setRequestHeader('Authorization', `Bearer ${_t.token}`);
 
       xhr.upload.onprogress = (e) => {
         if (!e.lengthComputable) return;
@@ -604,13 +941,13 @@
         if (xhr.status === 200) {
           let savedName = file.name;
           try { savedName = JSON.parse(xhr.responseText).name || file.name; } catch {}
-          const dlUrl = `/uploads/${encodeURIComponent(savedName)}?token=${encodeURIComponent(_authToken)}`;
+          const dlUrl = `${_t.base}/uploads/${encodeURIComponent(savedName)}?token=${encodeURIComponent(_t.token)}`;
           if (bar)  { bar.style.width = '100%'; bar.style.background = 'var(--green)'; }
           if (st)   { st.textContent = '✓'; st.className = 'fc-status done'; }
-          if (lbl)  lbl.textContent = 'Sent';
+          if (lbl)  lbl.textContent = 'Gönderildi';
           if (meta) meta.insertAdjacentHTML('beforeend',
-            `<a class="fc-dl" href="${dlUrl}" download="${esc(savedName)}">⬇ Download back</a>`);
-          toast('File sent!');
+            `<a class="fc-dl" href="${dlUrl}" download="${esc(savedName)}">⬇ Geri indir</a>`);
+          toast('Dosya gönderildi');
         } else {
           let errMsg = 'Upload failed';
           try { errMsg = JSON.parse(xhr.responseText).error || errMsg; } catch {}
@@ -634,22 +971,22 @@
 
     // File received by another WebSocket client (e.g., second open tab)
     function _onFileReceived(m) {
-      const dlUrl = `/uploads/${encodeURIComponent(m.name)}?token=${encodeURIComponent(_authToken)}`;
+      const dlUrl = `${T().base}/uploads/${encodeURIComponent(m.name)}?token=${encodeURIComponent(T().token)}`;
       const card  = document.createElement('div');
       card.className = 'msg-file';
       card.innerHTML = `
         <div class="fc-icon">${_fileIcon(m.name)}</div>
         <div class="fc-meta">
-          <div class="fc-lbl">Received</div>
+          <div class="fc-lbl">Alındı</div>
           <div class="fc-name">${esc(m.name)}</div>
           <div class="fc-size">${_fmtSize(m.size)}</div>
-          <a class="fc-dl" href="${dlUrl}" download="${esc(m.name)}">⬇ Download</a>
+          <a class="fc-dl" href="${dlUrl}" download="${esc(m.name)}">⬇ İndir</a>
         </div>
         <div class="fc-status done">✓</div>
       `;
       feed.appendChild(card);
       feed.scrollTop = feed.scrollHeight;
-      toast('File received on computer!');
+      toast('Bilgisayarda dosya alındı');
     }
 
     // File input change handler
@@ -658,60 +995,71 @@
       this.value = ''; // reset so the same file can be re-sent
     });
 
+
+    // ── AES-256-GCM (Web Crypto) — commands to THIS computer ─────────────────
+    // Same scheme as before: PBKDF2(200k) from the pairing key, a fresh nonce
+    // per message. Only possible in a secure context (HTTPS).
+    const _AES_SALT = 'JARVIS-DASHBOARD-v1';
+    const _KDF_ROUNDS = 200000;
+    let _aesKey = null, _encReady = false;
+    async function _initCrypto(key) {
+      if (!window.crypto || !crypto.subtle) return false;
+      try {
+        const enc = new TextEncoder();
+        const base = await crypto.subtle.importKey('raw', enc.encode(key), 'PBKDF2', false, ['deriveKey']);
+        _aesKey = await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt: enc.encode(_AES_SALT), iterations: _KDF_ROUNDS, hash: 'SHA-256' },
+          base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+        return true;
+      } catch { return false; }
+    }
+    async function _encrypt(plaintext) {
+      if (!_aesKey) return null;
+      try {
+        const nonce = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, _aesKey,
+                                                              new TextEncoder().encode(plaintext)));
+        const out = new Uint8Array(nonce.length + ct.length);
+        out.set(nonce, 0); out.set(ct, nonce.length);
+        let bin = ''; for (const b of out) bin += String.fromCharCode(b);
+        return btoa(bin);
+      } catch { return null; }
+    }
+    (async () => {
+      _encReady = _sessionKey ? await _initCrypto(_sessionKey) : false;
+      const b = document.getElementById('enc');
+      b.textContent = _encReady ? 'Şifreli (AES-GCM)' : 'Yerel ağ (şifresiz)';
+      b.className = _encReady ? 'on' : 'off';
+    })();
+
     // ── Commands ──────────────────────────────────────────────────────────────
     async function doSend() {
       const inp = document.getElementById('inp');
       const txt = inp.value.trim();
       if (!txt) return;
       inp.value = '';
-      append('user', txt);
       const scanCommand = txt.replaceAll('İ', 'i').toLowerCase()
-        .replace(/^(jarvis|friday)[, ]+/, '').trim().replace(/[.!?]+$/, '')
-        .replace(/\s+/g, ' ');
+        .replace(/^(jarvis|friday)[, ]+/, '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, ' ');
       if (['verileri aktar ve yansıt', 'kamerayı tara', 'kamerayı tara ve yansıt'].includes(scanCommand)) {
         if (!scanDialog.open) scanDialog.showModal();
         return;
       }
-      const enc  = await _encrypt(txt);
-      const body = enc ? { enc } : { text: txt };
-      _authFetch('/api/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const t = T();
+      const enc = t.self ? await _encrypt(txt) : null;
+      setState('thinking');
+      try {
+        const r = await _authFetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                     body: JSON.stringify(enc ? { enc } : { text: txt }) });
+        if (!r.ok) { toast('Komut gönderilemedi'); setState('idle'); }
+      } catch { toast('Cihaza ulaşılamadı'); setState('offline'); }
     }
+    document.getElementById('ask').addEventListener('submit', e => { e.preventDefault(); doSend(); });
+    wake.onclick = () => { closeMenu(); sys('Uyandırma gönderiliyor…'); _authFetch('/api/wake', { method: 'POST' }); };
 
-    function doWake() {
-      sys('Sending wake signal…');
-      _authFetch('/api/wake', { method: 'POST' });
-    }
-
-    document.getElementById('inp').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
-    });
-
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    let _toastTimer;
-    function toast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg; t.classList.add('show');
-      clearTimeout(_toastTimer);
-      _toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
-    }
-
-    // ── Real-time Voice — PCM16 WebSocket → Gemini Live ──────────────────────
-    const micBtn  = document.getElementById('mic-btn');
-    let _voiceWs  = null;
-    let _audioCtx = null;
-    let _micStm   = null;
-    let _audioNd  = null;
-
-    function _micIdle() {
-      micBtn.innerHTML = '🎤';
-      micBtn.title     = 'Voice — tap to speak';
-      micBtn.classList.remove('recording');
-    }
-
+    // ── Real-time voice — PCM16 over WebSocket → the selected computer ───────
+    const micBtn = document.getElementById('mic-btn');
+    let _voiceWs = null, _audioCtx = null, _micStm = null, _audioNd = null;
+    function _micIdle() { micBtn.textContent = '🎙️'; micBtn.title = 'Sesli komut'; micBtn.classList.remove('recording'); }
     // Float32 PCM → resample to 16 kHz + convert to Int16
     function _f32toPcm16(f32, srcRate) {
       let s = f32;
@@ -740,66 +1088,53 @@
         'animation:pop 0.18s ease'
       ].join(';');
       card.innerHTML =
-        '<div style="font-weight:700;color:#818cf8;letter-spacing:.5px;margin-bottom:10px">🎤 One-time voice setup</div>' +
+        '<div style="font-weight:700;color:#818cf8;letter-spacing:.5px;margin-bottom:10px">🎙️ Telefondan sesli komut için bir kerelik ayar</div>' +
         '<ol style="padding-left:18px;color:#8899aa;margin:0;display:flex;flex-direction:column;gap:4px">' +
-        '<li>Open a new tab → go to <span style="background:rgba(255,255,255,0.07);padding:1px 6px;border-radius:4px;font-family:monospace;font-size:12px">chrome://flags</span></li>' +
-        '<li>Search: <strong style="color:#dde3ed">Insecure origins treated as secure</strong></li>' +
-        '<li>Paste this URL into the box:<br><span id="flags-url" style="background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;user-select:all;cursor:pointer">' + esc(origin) + '</span></li>' +
-        '<li>Set to <strong style="color:#22c55e">Enabled</strong> → tap <strong style="color:#dde3ed">Relaunch</strong></li>' +
-        '<li>Return here and tap 🎤</li>' +
+        '<li>Yeni sekmede şunu aç: <span style="background:rgba(255,255,255,0.07);padding:1px 6px;border-radius:4px;font-family:monospace;font-size:12px">chrome://flags</span></li>' +
+        '<li>Ara: <strong style="color:#dde3ed">Insecure origins treated as secure</strong></li>' +
+        '<li>Kutuya bu adresi yapıştır:<br><span id="flags-url" style="background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;user-select:all;cursor:pointer">' + esc(origin) + '</span></li>' +
+        '<li><strong style="color:#22c55e">Enabled</strong> yap → <strong style="color:#dde3ed">Relaunch</strong> düğmesine bas</li>' +
+        '<li>Buraya dön ve 🎙️ düğmesine bas (ya da klavyedeki mikrofonla yaz)</li>' +
         '</ol>';
       feed.appendChild(card);
       feed.scrollTop = feed.scrollHeight;
+      openChat();
       // tap to copy
       card.querySelector('#flags-url').addEventListener('click', () => {
-        navigator.clipboard?.writeText(origin).then(() => toast('URL copied!')).catch(() => {});
+        navigator.clipboard?.writeText(origin).then(() => toast('Adres kopyalandı')).catch(() => {});
       });
     }
 
+
     async function doMic() {
       if (_voiceWs) { _stopVoice(); return; }
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        _showVoiceSetup();
-        return;
-      }
+      if (!navigator.mediaDevices?.getUserMedia) { _showVoiceSetup(); return; }
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-        });
+          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
       } catch (e) {
         sys(e.name === 'NotAllowedError'
-          ? 'Microphone denied — tap the address bar lock and allow microphone.'
-          : 'Mic error: ' + e.message);
+          ? 'Mikrofon izni verilmedi — adres çubuğundaki kilide dokunup mikrofona izin ver.'
+          : 'Mikrofon hatası: ' + e.message);
+        openChat();
         return;
       }
-
-      // 16 kHz context (fall back to native rate — _f32toPcm16 resamples)
       let ctx;
-      try { ctx = new AudioContext({ sampleRate: 16000 }); }
-      catch (_) { ctx = new AudioContext(); }
+      try { ctx = new AudioContext({ sampleRate: 16000 }); } catch (_) { ctx = new AudioContext(); }
       if (ctx.state === 'suspended') await ctx.resume();
-
-      const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(
-        `${wsProto}://${location.host}/ws/phone-audio?token=${encodeURIComponent(_authToken)}`
-      );
-      ws.binaryType = 'arraybuffer';
-
-      ws.onopen = async () => {
+      const t = T(), u = new URL(t.base || location.origin);
+      const ws2 = new WebSocket(`${u.protocol === 'https:' ? 'wss' : 'ws'}://${u.host}/ws/phone-audio?token=${encodeURIComponent(t.token)}`);
+      ws2.binaryType = 'arraybuffer';
+      ws2.onopen = async () => {
         const rate = ctx.sampleRate;
-        const src  = ctx.createMediaStreamSource(stream);
-
-        // AudioWorklet (modern) — runs in dedicated audio thread
+        const src = ctx.createMediaStreamSource(stream);
         const wCode = `class J extends AudioWorkletProcessor{process(i){const c=i[0]?.[0];if(c)this.port.postMessage(c.slice());return true;}}registerProcessor('j',J);`;
         try {
           const burl = URL.createObjectURL(new Blob([wCode], { type: 'application/javascript' }));
           await ctx.audioWorklet.addModule(burl);
           URL.revokeObjectURL(burl);
           const nd = new AudioWorkletNode(ctx, 'j');
-          // Buffer to 1024 samples (64 ms at 16 kHz) before sending —
-          // matches PC mic chunk size, prevents queue flooding on the server.
           let _pbuf = [], _plen = 0;
           nd.port.onmessage = e => {
             const chunk = new Int16Array(_f32toPcm16(e.data, rate));
@@ -807,47 +1142,41 @@
             if (_plen >= 1024) {
               const out = new Int16Array(_plen); let off = 0;
               for (const c of _pbuf) { out.set(c, off); off += c.length; }
-              if (ws.readyState === 1) ws.send(out.buffer);
+              if (ws2.readyState === 1) ws2.send(out.buffer);
               _pbuf = []; _plen = 0;
             }
           };
-          src.connect(nd);
-          _audioNd = nd;
+          src.connect(nd); _audioNd = nd;
         } catch (_) {
-          // ScriptProcessor fallback (deprecated, still works everywhere)
           const sp = ctx.createScriptProcessor(4096, 1, 1);
-          sp.onaudioprocess = e => {
-            if (ws.readyState === 1) ws.send(_f32toPcm16(e.inputBuffer.getChannelData(0), rate));
-          };
-          src.connect(sp); sp.connect(ctx.destination);
-          _audioNd = sp;
+          sp.onaudioprocess = e => { if (ws2.readyState === 1) ws2.send(_f32toPcm16(e.inputBuffer.getChannelData(0), rate)); };
+          src.connect(sp); sp.connect(ctx.destination); _audioNd = sp;
         }
-
-        micBtn.innerHTML = '⏹';
-        micBtn.title     = 'Tap to stop';
-        micBtn.classList.add('recording');
-        sys('Voice live — speak now');
-        toast('🎤 Live');
+        micBtn.textContent = '⏹'; micBtn.title = 'Durdurmak için dokun'; micBtn.classList.add('recording');
+        stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, Jarvis seni duyuyor.';
+        toast('🎙️ Canlı');
       };
-
-      ws.onclose = () => { _stopVoice(); };
-      ws.onerror = () => { sys('Voice connection failed.'); _stopVoice(); };
-
-      _voiceWs  = ws;
-      _audioCtx = ctx;
-      _micStm   = stream;
+      ws2.onclose = () => { _stopVoice(); };
+      ws2.onerror = () => { sys('Ses bağlantısı kurulamadı.'); _stopVoice(); };
+      _voiceWs = ws2; _audioCtx = ctx; _micStm = stream;
     }
-
     function _stopVoice() {
-      if (_audioNd)  { try { _audioNd.disconnect(); }  catch (_) {}; _audioNd  = null; }
-      if (_audioCtx) { try { _audioCtx.close(); }      catch (_) {}; _audioCtx = null; }
+      if (_audioNd)  { try { _audioNd.disconnect(); } catch (_) {} _audioNd = null; }
+      if (_audioCtx) { try { _audioCtx.close(); } catch (_) {} _audioCtx = null; }
       if (_micStm)   { _micStm.getTracks().forEach(t => t.stop()); _micStm = null; }
-      if (_voiceWs)  {
-        const w = _voiceWs; _voiceWs = null;
-        if (w.readyState < 2) w.close();
-      }
+      if (_voiceWs)  { const w = _voiceWs; _voiceWs = null; if (w.readyState < 2) w.close(); }
       _micIdle();
+      if (curState === 'idle') setState('idle');
     }
+    micBtn.onclick = doMic;
+
+    // ── Start ─────────────────────────────────────────────────────────────────
+    (async () => {
+      if (target !== 'self' && !(await ensurePeer(target))) target = 'self';
+      connectWS();
+      refreshDevices();
+      setInterval(refreshDevices, 8000);
+    })();
   </script>
 </body>
 </html>

@@ -1252,6 +1252,11 @@ class JarvisLive:
 
     def _persist_turn(self, role, text):
         try:
+            from core import sync_hub
+            sync_hub.note_turn(role, text)
+        except Exception:
+            pass
+        try:
             from memory.continuity import record
             record(role, text)
         except Exception as exc:
@@ -1335,6 +1340,12 @@ class JarvisLive:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
             self.ui.set_state("LISTENING")
+        dash = getattr(self, "_dashboard", None)
+        if dash is not None:
+            try:
+                dash.set_state("speaking" if value else ("idle" if self._awake else "sleeping"))
+            except Exception:
+                pass
 
     def set_push_to_talk(self, enabled: bool) -> str:
         """Turn hold-to-talk on or off. Returns the scope actually achieved."""
@@ -2171,6 +2182,11 @@ class JarvisLive:
                                 _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
                                 self._persist_turn("JARVIS", full_out)
+                                try:
+                                    from core import sync_hub
+                                    sync_hub.note_reply(full_out)
+                                except Exception:
+                                    pass
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "jarvis",
@@ -2316,12 +2332,16 @@ class JarvisLive:
                         # Barge-in needs to know what we are playing, not just
                         # how loud: the guard subtracts this from the microphone.
                         self._out_level = max(f[0] for f in frames)
+                        if self._dashboard:
+                            self._dashboard.level(self._out_level)
                         self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE,
                                                self._out_level)
                     else:
                         lvl = _pcm_level(pcm)
                         self.ui.set_audio_level(lvl)
                         self._out_level = lvl
+                        if self._dashboard:
+                            self._dashboard.level(lvl)
                         self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE, lvl)
                 except Exception:
                     pass
@@ -2844,6 +2864,21 @@ class JarvisLive:
             print(f"[Dashboard] Disabled: {e}")
             self._dashboard = None
 
+        # One JARVIS on every device: shared memory and the command mailbox in
+        # the user's private gist (core/sync_hub.py). Off until set up.
+        try:
+            from core import sync_hub
+            _loop = asyncio.get_running_loop()
+
+            def _inject_remote(text, _loop=_loop):
+                if self._dashboard is None:
+                    raise RuntimeError("uzaktan komut kanalı kapalı")
+                _loop.call_soon_threadsafe(self._dashboard._command_queue.put_nowait, text)
+            if sync_hub.start(_inject_remote):
+                print("[Sync] Ortak hafıza ve cihaz posta kutusu açık.")
+        except Exception as e:
+            print(f"[Sync] Disabled: {e}")
+
         while True:
             try:
                 self._ensure_executor()
@@ -2986,6 +3021,7 @@ class JarvisLive:
 
                     if self._dashboard:
                         await self._dashboard.broadcast({"type": "status", "state": "active"})
+                        self._dashboard.set_state("idle")
 
                     self._reconnect_event.clear()  # ignore requests from before this session
                     tg.create_task(self._watch_reconnect())
@@ -3147,6 +3183,7 @@ class JarvisLive:
 
             if self._dashboard:
                 await self._dashboard.broadcast({"type": "status", "state": "sleeping"})
+                self._dashboard.set_state("sleeping")
 
             delay = getattr(self, "_conn_backoff", 3)
             print(f"[JARVIS] Reconnecting in {delay}s...")

@@ -54,6 +54,12 @@ PORT        = 8000      # HTTP, redirects to SECURE_PORT
 SECURE_PORT = 8001      # HTTPS, the dashboard itself
 MAX_UPLOAD_MB = 500
 
+# What the phone can put on a paired TV screen.
+_SCREEN_KINDS = ("video", "url", "image", "text", "clear", "home")
+
+# The running server, for plugins that show things on the TV (see send_to_screen).
+ACTIVE = None
+
 
 def _make_uploads_dir() -> Path:
     """Return (and create) the cross-platform uploads folder."""
@@ -736,6 +742,7 @@ class DashboardServer:
         self._scan_callback               = None
         self._pending_keys: dict[str, float] = {}
         self._throttle                    = _Throttle()
+        self._hello_throttle              = _Throttle()   # TV pairing requests
         self._device_sessions: dict[str, dict] = {}  # device_token → {session_key}
         self._phone_audio_queue: asyncio.Queue    = asyncio.Queue(maxsize=200)
         self._uploads_dir                 = UPLOADS_DIR
@@ -744,7 +751,20 @@ class DashboardServer:
         self._bind_error: str = ""
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
+        self._tv_html                     = _read("tv.html")
+        # Devices: the other computers running JARVIS (found by broadcast) and
+        # the big screens paired to this one. See dashboard/devices.py.
+        from dashboard.devices import Discovery, ScreenRegistry, self_info
+        self._self_info                   = lambda: self_info(self.get_url())
+        self._discovery                   = Discovery(self._self_info)
+        self._screens                     = ScreenRegistry()
+        self._screen_ws: dict             = {}   # websocket -> screen id
+        self._loop                        = None
+        self._state                       = "idle"    # idle | thinking | speaking | sleeping
+        self._last_level_at               = 0.0
         self.app                          = self._build_app()
+        global ACTIVE
+        ACTIVE = self
 
     def set_scan_callback(self, callback):
         self._scan_callback = callback
@@ -837,10 +857,11 @@ class DashboardServer:
 
     # ── broadcast ────────────────────────────────────────────────────────
 
-    async def broadcast(self, msg: dict) -> None:
-        self._history.append(msg)
-        if len(self._history) > 300:
-            self._history = self._history[-300:]
+    async def broadcast(self, msg: dict, history: bool = True) -> None:
+        if history:
+            self._history.append(msg)
+            if len(self._history) > 300:
+                self._history = self._history[-300:]
         dead: set[WebSocket] = set()
         for ws in list(self._clients):
             try:
@@ -848,11 +869,68 @@ class DashboardServer:
             except Exception:
                 dead.add(ws)
         self._clients -= dead
+        for ws in dead:
+            self._screen_ws.pop(ws, None)
+
+    # ── thread-safe hooks for the rest of the app ────────────────────────
+
+    def notify(self, msg: dict, history: bool = False) -> None:
+        """Send to every phone and screen from ANY thread."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(lambda: asyncio.ensure_future(self.broadcast(msg, history)))
+        except Exception:
+            pass
+
+    def set_state(self, state: str) -> None:
+        """idle | thinking | speaking | sleeping — drives the phone's reactor,
+        status line and waveform, and the TV screen."""
+        if state == self._state:
+            return
+        self._state = state
+        self.notify({"type": "state", "state": state})
+
+    def level(self, value: float) -> None:
+        """Jarvis's voice level while speaking, at most ~8 times a second."""
+        now = time.monotonic()
+        if now - self._last_level_at < 0.12:
+            return
+        self._last_level_at = now
+        self.notify({"type": "level", "v": round(max(0.0, min(1.0, float(value))), 3)})
+
+    def send_to_screen(self, kind: str, value: str = "", title: str = "",
+                       screen: str = "all") -> str:
+        """Show something on the paired TV screens. Returns a short sentence."""
+        if kind not in _SCREEN_KINDS:
+            return "Ekrana bu tür içerik gönderilemiyor."
+        if not self._screen_ws:
+            return ("Bağlı bir TV ekranı yok. Televizyonun tarayıcısında "
+                    f"{self.get_manual_url()}/tv adresini aç ve kodu telefondan gir.")
+        self.notify({"type": "screen", "target": screen or "all", "kind": kind,
+                     "value": str(value)[:2000], "title": str(title)[:200]})
+        return "Televizyona gönderildi."
+
+    def devices(self) -> dict:
+        online = set(self._screen_ws.values())
+        return {"self": {**self._self_info(), "online": True, "state": self._state},
+                "peers": self._discovery.peers(),
+                "screens": self._screens.listing(online)}
 
     # ── FastAPI app ───────────────────────────────────────────────────────
 
     def _build_app(self) -> "FastAPI":
         app = FastAPI(docs_url=None, redoc_url=None)
+        # The phone page of one computer talks to the other JARVIS computers'
+        # dashboards directly. Auth is a bearer token in a header (no cookies),
+        # so allowing any origin exposes nothing a token does not already gate.
+        try:
+            from fastapi.middleware.cors import CORSMiddleware
+            app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
+                               allow_headers=["*"])
+        except Exception:
+            pass
 
         def _valid(tok: str) -> bool:
             """Is this token live? Expired ones are dropped as they are found,
@@ -919,8 +997,11 @@ class DashboardServer:
                 asyncio.create_task(self.broadcast(
                     {"type": "sys", "text": "Remote connection established."}
                 ))
+                dev_tok = secrets.token_urlsafe(32)
+                self._device_sessions[dev_tok] = {"session_key": entered}
                 # Bearer token in response body — no cookies needed (works on any browser/HTTP)
-                return JSONResponse({"ok": True, "token": tok})
+                return JSONResponse({"ok": True, "token": tok, "device_token": dev_tok,
+                                     "device": self._self_info()})
             self._throttle.record_failure(who)
             return JSONResponse({"ok": False, "error": "Invalid or expired key"},
                                 status_code=401)
@@ -1034,6 +1115,10 @@ class DashboardServer:
                 text = (body.get("text") or "").strip()
             if text:
                 await self._command_queue.put(text)
+                self.set_state("thinking")
+                asyncio.create_task(self.broadcast({
+                    "type": "log", "speaker": "user", "text": text,
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}))
                 if self._wake_callback:
                     self._wake_callback()
             return JSONResponse({"ok": True})
@@ -1102,6 +1187,132 @@ class DashboardServer:
                 return JSONResponse({"error": "Oturum sona erdi. QR koduyla yeniden bağlan."}, status_code=401)
             self._scan_callback(jpeg, result)
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+        # ── devices: computers, screens, quick controls ──────────────────────
+
+        @app.get("/api/info")
+        async def info_ep():
+            return JSONResponse({**self._self_info(), "state": self._state})
+
+        @app.get("/api/devices")
+        async def devices_ep(req: Request):
+            screen_tok = req.headers.get("authorization", "").removeprefix("Bearer ").strip()
+            if not _auth(req) and not self._screens.screen_for_token(screen_tok):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            return JSONResponse(self.devices())
+
+        @app.post("/api/quick")
+        async def quick_ep(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                body = await req.json()
+            except Exception:
+                body = {}
+            from core import remote_control
+            action = str(body.get("action") or "")
+            if action not in remote_control.ACTIONS:
+                return JSONResponse({"ok": False, "message": "Bilinmeyen komut"}, status_code=400)
+            ok, message, extra = await asyncio.get_running_loop().run_in_executor(
+                None, remote_control.perform, action, int(body.get("times") or 1))
+            return JSONResponse({"ok": ok, "message": message, **extra})
+
+        _ASSETS = {"reactor.js": "application/javascript"}
+
+        @app.get("/assets/{name}")
+        async def asset(name: str):
+            if name not in _ASSETS:
+                return JSONResponse({"error": "Not found"}, status_code=404)
+            from fastapi.responses import Response
+            return Response(_read(name), media_type=_ASSETS[name],
+                            headers={"Cache-Control": "no-cache"})
+
+        @app.get("/tv", response_class=HTMLResponse)
+        async def tv_page():
+            return HTMLResponse(self._tv_html)
+
+        @app.post("/api/screen/hello")
+        async def screen_hello(req: Request):
+            who = _who(req)
+            if self._hello_throttle.blocked_for(who) > 0:
+                return JSONResponse({"error": "Çok fazla deneme, birkaç dakika sonra yenile"},
+                                    status_code=429)
+            try:
+                body = await req.json()
+            except Exception:
+                body = {}
+            if body.get("local") and who in ("127.0.0.1", "::1"):
+                got = self._screens.add_local()
+                return JSONResponse({"state": "paired", **got})
+            self._hello_throttle.record_failure(who)   # counts hellos: stops code farming
+            got = self._screens.hello(str(body.get("name") or ""))
+            return JSONResponse({"state": "waiting", **got,
+                                 "device": self._self_info()["name"]})
+
+        @app.get("/api/screen/poll")
+        async def screen_poll(id: str = ""):
+            return JSONResponse(self._screens.poll(id))
+
+        @app.post("/api/screen/pair")
+        async def screen_pair(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            body = await req.json()
+            got = self._screens.approve(str(body.get("code") or ""), str(body.get("name") or ""))
+            if not got:
+                return JSONResponse({"ok": False, "error": "Kod yanlış ya da süresi doldu"},
+                                    status_code=400)
+            asyncio.create_task(self.broadcast({"type": "sys", "text": f"{got['name']} bağlandı."}))
+            return JSONResponse({"ok": True, **got})
+
+        @app.post("/api/screen/remove")
+        async def screen_remove(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            body = await req.json()
+            sid = str(body.get("id") or "")
+            ok = self._screens.remove(sid)
+            for ws, s_id in list(self._screen_ws.items()):
+                if s_id == sid:
+                    try:
+                        await ws.close(code=4003)
+                    except Exception:
+                        pass
+            return JSONResponse({"ok": ok})
+
+        @app.post("/api/screen/send")
+        async def screen_send(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            body = await req.json()
+            kind = str(body.get("kind") or "")
+            value = str(body.get("value") or "").strip()
+            title = str(body.get("title") or "")
+            if kind == "youtube":
+                from core import remote_control
+                vid, vt = await asyncio.get_running_loop().run_in_executor(
+                    None, remote_control.youtube_id, value)
+                if not vid:
+                    return JSONResponse({"ok": False, "message": "Video bulunamadı"})
+                kind, value, title = "video", vid, title or vt
+            msg = self.send_to_screen(kind, value, title, str(body.get("screen") or "all"))
+            return JSONResponse({"ok": msg.startswith("Televizyona"), "message": msg})
+
+        @app.post("/api/screen/open-local")
+        async def screen_open_local(req: Request):
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                body = await req.json()
+            except Exception:
+                body = {}
+            from core import remote_control
+            port = SECURE_PORT if self._ssl_enabled() else PORT
+            scheme = "https" if self._ssl_enabled() else "http"
+            url = f"{scheme}://127.0.0.1:{port}/tv?local=1"
+            ok, message = await asyncio.get_running_loop().run_in_executor(
+                None, remote_control.open_screen_page, url, int(body.get("monitor") or 0))
+            return JSONResponse({"ok": ok, "message": message})
 
         @app.post("/api/wake")
         async def wake_ep(req: Request):
@@ -1230,11 +1441,21 @@ class DashboardServer:
         @app.websocket("/ws")
         async def ws_ep(websocket: WebSocket, token: str = ""):
             tok = token.strip()
+            screen_id = None
             if not _valid(tok):
-                await websocket.close(code=4001)
-                return
+                screen_id = self._screens.screen_for_token(tok)
+                if not screen_id:
+                    await websocket.close(code=4001)
+                    return
             await websocket.accept()
             self._clients.add(websocket)
+            if screen_id:
+                self._screen_ws[websocket] = screen_id
+            try:
+                await websocket.send_json({"type": "hello", "device": self._self_info(),
+                                           "state": self._state, "screen": screen_id or ""})
+            except Exception:
+                pass
             for entry in self._history[-50:]:
                 try:
                     await websocket.send_json(entry)
@@ -1243,17 +1464,21 @@ class DashboardServer:
             try:
                 while True:
                     data = await websocket.receive_json()
+                    if screen_id:
+                        continue                     # a screen only watches
                     if data.get("type") == "command":
                         enc = data.get("enc", "")
                         t   = self._decrypt(tok, enc) if enc else (data.get("text") or "").strip()
                         if t:
                             await self._command_queue.put(t)
+                            self.set_state("thinking")
                             if self._wake_callback:
                                 self._wake_callback()
             except WebSocketDisconnect:
                 pass
             finally:
                 self._clients.discard(websocket)
+                self._screen_ws.pop(websocket, None)
 
         return app
 
@@ -1296,6 +1521,9 @@ class DashboardServer:
         await uvicorn.Server(cfg).serve()
 
     async def serve(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        if _DEPS_OK:
+            self._discovery.start()
         if not _DEPS_OK:
             print("[Dashboard] fastapi/uvicorn not installed — dashboard disabled.")
             print("[Dashboard] Run:  pip install fastapi 'uvicorn[standard]' cryptography")
