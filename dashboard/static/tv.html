@@ -244,6 +244,7 @@
     let ws = null;
     function start() {
       $('pair').hidden = true; $('dash').hidden = false;
+      devices();
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`);
       ws.onopen = () => { setState('idle'); devices(); };
