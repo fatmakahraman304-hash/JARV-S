@@ -14,6 +14,10 @@ def data_dir():
 
 _setup_lock = threading.Lock()
 _ready: set[str] = set()
+# Writers in this process take turns. SQLite's busy wait was not enough on a
+# slow Windows disk with many threads writing at once: "database is locked"
+# lost the event. Within one process a lock costs nothing and never loses one.
+_write_lock = threading.Lock()
 
 
 def _prepare(db, key):
@@ -59,7 +63,7 @@ def record(role, text):
     text = str(text).strip()
     if not text:
         return
-    with connect() as db:
+    with _write_lock, connect() as db:
         db.execute("INSERT INTO events(time,role,text) VALUES(?,?,?)",
                    (datetime.now(timezone.utc).isoformat(), role, text[:12000]))
 
@@ -86,7 +90,7 @@ def prompt_context():
 
 
 def set_application(name, status, detail):
-    with connect() as db:
+    with _write_lock, connect() as db:
         db.execute("INSERT OR REPLACE INTO applications VALUES(?,?,?,?)",
                    (name, status, str(detail)[:16000], datetime.now(timezone.utc).isoformat()))
 
@@ -98,7 +102,7 @@ def applications():
 
 def recover_jobs():
     """A killed worker cannot truthfully remain 'running' after restart."""
-    with connect() as db:
+    with _write_lock, connect() as db:
         db.execute("UPDATE applications SET status=?,detail=detail || ? WHERE status IN (?,?)",
                    ("yarıda kaldı", "\nJARVIS kapandı. Yeniden başlatmak için Uygulamalar ekranını kullan.",
                     "araştırılıyor", "geliştiriliyor"))

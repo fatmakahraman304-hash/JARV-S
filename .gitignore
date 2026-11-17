@@ -62,3 +62,6 @@ screenshots/
 .jarvis-update*
 .jarvis-backups/
 *.jarvis-new
+/config/coding_cooldown.json
+/config/device_id
+/config/jarvis_kurulum_qr.png
