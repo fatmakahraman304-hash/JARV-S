@@ -1335,6 +1335,12 @@ class JarvisLive:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
             self.ui.set_state("LISTENING")
+        dash = getattr(self, "_dashboard", None)
+        if dash is not None:
+            try:
+                dash.set_state("speaking" if value else ("idle" if self._awake else "sleeping"))
+            except Exception:
+                pass
 
     def set_push_to_talk(self, enabled: bool) -> str:
         """Turn hold-to-talk on or off. Returns the scope actually achieved."""
@@ -2316,12 +2322,16 @@ class JarvisLive:
                         # Barge-in needs to know what we are playing, not just
                         # how loud: the guard subtracts this from the microphone.
                         self._out_level = max(f[0] for f in frames)
+                        if self._dashboard:
+                            self._dashboard.level(self._out_level)
                         self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE,
                                                self._out_level)
                     else:
                         lvl = _pcm_level(pcm)
                         self.ui.set_audio_level(lvl)
                         self._out_level = lvl
+                        if self._dashboard:
+                            self._dashboard.level(lvl)
                         self._echo.note_output(pcm, RECEIVE_SAMPLE_RATE, lvl)
                 except Exception:
                     pass
@@ -2986,6 +2996,7 @@ class JarvisLive:
 
                     if self._dashboard:
                         await self._dashboard.broadcast({"type": "status", "state": "active"})
+                        self._dashboard.set_state("idle")
 
                     self._reconnect_event.clear()  # ignore requests from before this session
                     tg.create_task(self._watch_reconnect())
@@ -3147,6 +3158,7 @@ class JarvisLive:
 
             if self._dashboard:
                 await self._dashboard.broadcast({"type": "status", "state": "sleeping"})
+                self._dashboard.set_state("sleeping")
 
             delay = getattr(self, "_conn_backoff", 3)
             print(f"[JARVIS] Reconnecting in {delay}s...")
