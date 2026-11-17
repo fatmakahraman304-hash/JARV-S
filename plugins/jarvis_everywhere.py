@@ -19,13 +19,16 @@ PLUGIN = {
         "smart watch) so they work on their own even when this computer is off, with the "
         "same memory. action='setup' with the user's GitHub token (gist permission) creates "
         "the shared memory and shows the one-tap setup link and QR code; action='link' shows "
-        "the link/QR again; action='status' tells whether syncing works. Trigger phrases: "
-        "'Jarvis'i telefona/tablete/televizyona kur', 'her cihazda çalışsın', 'kurulum linki'."
+        "the link/QR again; action='status' tells whether syncing works; action='update_all' "
+        "updates JARVIS on every device at once (phones, tablets, TVs, watches reload, other "
+        "computers press GÜNCELLE, then this one). Trigger phrases: "
+        "'Jarvis'i telefona/tablete/televizyona kur', 'her cihazda çalışsın', 'kurulum linki', "
+        "'bütün cihazları güncelle'."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "action": {"type": "STRING", "description": "setup | link | status"},
+            "action": {"type": "STRING", "description": "setup | link | status | update_all"},
             "github_token": {"type": "STRING",
                              "description": "GitHub personal access token with the 'gist' scope "
                                             "(only for setup, when the user gives one)"},
@@ -95,6 +98,19 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         from memory.config_manager import get_gemini_key
         action = str((parameters or {}).get("action") or "status").strip().lower()
         token = str((parameters or {}).get("github_token") or "").strip()
+
+        if action in ("update_all", "update"):
+            sent = sync_hub.request_update_all()
+            if player and hasattr(player, "start_update"):
+                try:
+                    player.start_update()
+                except Exception:
+                    pass
+            if sent:
+                return ("Bütün cihazlara güncelleme gönderdim; açık olanlar yenileniyor, "
+                        "bu bilgisayar da güncelleniyor.")
+            return ("Ortak hafıza kurulu olmadığı için sadece bu bilgisayarı güncelliyorum. "
+                    "Telefon ve TV'de ⬆ Güncelle'ye basabilirsin.")
 
         if action == "status":
             s = sync_hub.settings()

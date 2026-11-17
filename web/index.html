@@ -55,6 +55,7 @@
     .send { background: linear-gradient(145deg, #ff9a2e, #d4550a); color: #1a0d03; border: 0; }
     .tools { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .chip { padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--card); color: var(--med); font-size: 13px; cursor: pointer; }
+    .chip.new { border-color: var(--green); color: var(--green); box-shadow: 0 0 10px rgba(94,240,168,.35); }
     .chip.on { border-color: var(--pri); color: var(--acc); box-shadow: 0 0 10px rgba(255,138,28,.3); }
     body.quiet .core { opacity: .5; filter: saturate(.6); }
     #preview { position: fixed; right: 12px; top: 70px; width: 110px; border-radius: 12px; border: 1px solid var(--line2); z-index: 5; background: #000; }
@@ -158,6 +159,7 @@
         <button class="chip" id="t-screen" type="button">🖥️ Ekranı göster</button>
         <button class="chip" id="t-devs" type="button">🔗 Cihazlar</button>
         <button class="chip" id="t-code" type="button" hidden>⌨️ Son kod</button>
+        <button class="chip" id="t-update" type="button">⬆ Güncelle</button>
       </div>
     </section>
   </div>
@@ -199,6 +201,16 @@
     <p id="code-note"></p>
     <pre class="code" id="code-body"></pre>
     <div class="row"><button class="btn pri" id="code-copy" type="button">Kopyala</button><button class="btn" id="code-dl" type="button">İndir</button></div>
+  </section>
+
+  <section class="sheet" id="s-update" hidden>
+    <h2>GÜNCELLEME <button class="ib" data-close type="button">✕</button></h2>
+    <p id="upd-text">Sürüm kontrol ediliyor…</p>
+    <div class="row">
+      <button class="btn pri" id="upd-this" type="button">Bu cihazı güncelle</button>
+      <button class="btn" id="upd-all" type="button">Bütün cihazları güncelle</button>
+    </div>
+    <p style="margin-top:10px;font-size:12px">"Bütün cihazlar": açık olan telefon, tablet, TV, saat yenilenir; bilgisayarlarda GÜNCELLE'ye basılır.</p>
   </section>
 
   <section class="sheet" id="s-ask" hidden>

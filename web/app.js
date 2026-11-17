@@ -190,6 +190,7 @@
       localStorage.setItem('jarvis_recent', JSON.stringify(recent));
       renderDevices();
       updateOwner();
+      watchUpdateFile(f);
       return f;
     } catch (e) { console.warn('sync', e); updateOwner(); return null; }
   }
@@ -655,6 +656,51 @@
     if (e.target.tagName === 'INPUT') return;
     if (e.key === ' ' || e.key === 'MediaPlayPause') { e.preventDefault(); $('mic').click(); }
   });
+
+  // ── updates: this device, or every device at once ───────────────────────
+  let loadedVer = null, latestVer = null;
+  async function fetchVersion() {
+    try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) return (await r.json()).version || ''; } catch {}
+    return null;
+  }
+  async function checkVersion() {
+    const v = await fetchVersion();
+    if (v === null) return;
+    if (loadedVer === null) loadedVer = v;
+    latestVer = v;
+    const fresh = loadedVer !== latestVer;
+    $('t-update').classList.toggle('new', fresh);
+    $('t-update').textContent = fresh ? '⬆ Yeni sürüm' : '⬆ Güncelle';
+    $('upd-text').textContent = fresh ? `Yeni sürüm hazır (${latestVer.slice(0, 7)}). Bu cihaz ${loadedVer.slice(0, 7)} sürümünde.`
+                                      : `Bu cihaz güncel (${(loadedVer || '?').slice(0, 7)}).`;
+  }
+  async function updateThis() {
+    toast('Güncelleniyor…');
+    try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch {}
+    try { if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); } catch {}
+    setTimeout(() => location.reload(), 400);
+  }
+  async function updateAll() {
+    if (!Cloud.ok()) { toast('Ortak hafıza kurulu değil; sadece bu cihaz güncellenir'); return updateThis(); }
+    try {
+      S.updSeen = new Date().toISOString(); save();
+      await Cloud.write({ 'update.json': JSON.stringify({ ts: nowIso(), by: devName() }) });
+      toast('Bütün cihazlara güncelleme gönderildi');
+    } catch { toast('Gönderilemedi'); return; }
+    setTimeout(updateThis, 1200);
+  }
+  function watchUpdateFile(f) {             // called after every sync
+    const u = J(f && f['update.json'], {});
+    if (!u.ts) return;
+    if (!S.updSeen) { S.updSeen = u.ts; save(); return; }  // first look: remember, don't act
+    if (u.ts > S.updSeen) { S.updSeen = u.ts; save(); sys(`${u.by || 'Bir cihaz'} bütün cihazları güncelledi.`); updateThis(); }
+  }
+  $('t-update').onclick = () => { openSheet('s-update'); checkVersion(); };
+  $('upd-this').onclick = updateThis;
+  $('upd-all').onclick = updateAll;
+  setInterval(checkVersion, 5 * 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
+  checkVersion();
 
   // ── start ────────────────────────────────────────────────────────────────
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

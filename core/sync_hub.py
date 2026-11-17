@@ -304,6 +304,22 @@ def set_active(active: bool) -> None:
         _state["last_beat"] = 0.0
 
 
+def on_update(fn) -> None:
+    """fn() presses GÜNCELLE here — when another device asks every device to update."""
+    _state["on_update"] = fn
+
+
+def request_update_all() -> bool:
+    """Ask every device to update: web apps reload, computers press GÜNCELLE."""
+    s = settings()
+    if not (s.get("github_token") and s.get("gist_id")):
+        return False
+    ok = write_files(s["github_token"], s["gist_id"], {"update.json": json.dumps({"ts": _now(), "by": device_name()})})
+    if ok:
+        _state["update_seen"] = _now()
+    return ok
+
+
 def on_owner_change(fn) -> None:
     """fn(this_device_speaks: bool, owner_name: str) — called from the sync thread."""
     _state["on_owner"] = fn
@@ -379,6 +395,26 @@ def _cycle() -> None:
                 pass
     _state["devices"] = others
     _update_owner(me)
+
+    # 0b. "update every device" — pressed on another device
+    try:
+        upd = json.loads(files.get("update.json") or "{}")
+    except Exception:
+        upd = {}
+    ts = str(upd.get("ts") or "")
+    if ts:
+        seen = _state.get("update_seen")
+        if seen is None:
+            _state["update_seen"] = ts                # first look: remember, don't act
+        elif ts > seen:
+            _state["update_seen"] = ts
+            cb = _state.get("on_update")
+            if cb:
+                print(f"[Sync] {upd.get('by', 'Bir cihaz')} bütün cihazları güncelliyor.")
+                try:
+                    cb()
+                except Exception as exc:
+                    print(f"[Sync] update: {exc}")
 
     # 1. commands addressed to this computer
     inbox_name = f"inbox-{me}.json"
@@ -483,6 +519,17 @@ def _update_owner(me: str) -> None:
 def _run_command(cid: str, text: str, sender: str) -> None:
     text = text.strip()
     if not text:
+        return
+    if text.startswith("update:"):
+        cb = _state.get("on_update")
+        reply = "Güncelleme başladı; JARVIS kendini yeniden açacak." if cb else "Güncelleme burada başlatılamıyor."
+        with _state["lock"]:
+            _state["pending"].append({"id": cid, "at": time.time(), "reply": reply})
+        if cb:
+            try:
+                cb()
+            except Exception:
+                pass
         return
     if text.startswith("quick:"):
         from core import remote_control

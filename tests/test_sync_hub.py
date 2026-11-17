@@ -120,6 +120,32 @@ class CycleTest(unittest.TestCase):
         self.assertIn("kod düzenleyici", out[-1]["reply"])
 
 
+class UpdateAllTest(unittest.TestCase):
+    def test_update_file_triggers_once_but_not_on_first_look(self):
+        calls = []
+        sync_hub._state.update(pending=[], done=set(), etag="", last_memory=time.time(),
+                               last_beat=time.time(), turns=[], on_update=lambda: calls.append(1))
+        sync_hub._state.pop("update_seen", None)
+        files = {"update.json": json.dumps({"ts": "2026-11-18T10:00:00Z", "by": "Telefon"}), "memory.json": "{}"}
+        with mock.patch.object(sync_hub, "settings", return_value={"github_token": "t", "gist_id": "g"}), \
+             mock.patch.object(sync_hub, "device_id", return_value="pc1"), \
+             mock.patch.object(sync_hub, "write_files", return_value=True), \
+             mock.patch.object(sync_hub, "read_gist", return_value=(files, "", "")):
+            sync_hub._cycle()                       # an old request: remembered, not obeyed
+            self.assertEqual(calls, [])
+            files["update.json"] = json.dumps({"ts": "2026-11-18T10:05:00Z", "by": "Telefon"})
+            sync_hub._cycle()
+            sync_hub._cycle()
+        self.assertEqual(calls, [1])
+
+    def test_update_command_from_mailbox(self):
+        calls = []
+        sync_hub._state.update(pending=[], on_update=lambda: calls.append(1))
+        sync_hub._run_command("u1", "update:", "Telefon")
+        self.assertEqual(calls, [1])
+        self.assertIn("Güncelleme başladı", sync_hub._state["pending"][0]["reply"])
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")

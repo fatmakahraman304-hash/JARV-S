@@ -2884,6 +2884,7 @@ class JarvisLive:
             self._dashboard = DashboardServer()
             self._dashboard.set_connect_callback(self._on_phone_connected)
             self._dashboard.set_scan_callback(self.ui.show_camera_scan)
+            self._dashboard.set_update_callback(self.ui.start_update)
             self._keep_task(asyncio.create_task(self._dashboard.serve()))
             # Runs for the whole lifetime, not just inside an active session
             self._keep_task(asyncio.create_task(self._process_dashboard_commands()))
@@ -2907,6 +2908,7 @@ class JarvisLive:
                                   f"SYS: Sesli yanıtı {name or 'başka bir cihaz'} veriyor — "
                                   f"burada sessizim, yazdıklarını yine yaparım.")
             sync_hub.on_owner_change(_on_owner)
+            sync_hub.on_update(self.ui.start_update)
             if sync_hub.start(_inject_remote):
                 print("[Sync] Ortak hafıza ve cihaz posta kutusu açık.")
         except Exception as e:

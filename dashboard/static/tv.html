@@ -10,7 +10,7 @@
             --text: #f3ece5; --muted: #9b9087; --green: #3ddc97; --card: rgba(26,19,13,.6); }
     html, body { height: 100%; overflow: hidden; }
     body { background: radial-gradient(90% 80% at 50% 45%, #2a1607 0%, #110904 45%, #050403 85%); color: var(--text);
-           font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif; cursor: none; }
+           font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif; }
     [hidden] { display: none !important; }
     .vw { font-size: 1vw; }
     /* pairing */
@@ -93,6 +93,7 @@
     </aside>
   </section>
 
+  <button id="tv-update" type="button" style="position:fixed;left:2vw;bottom:2vw;z-index:4;background:rgba(26,19,13,.6);color:#d2c7bd;border:1px solid rgba(255,150,60,.25);border-radius:.6vw;padding:.5vw 1vw;font:inherit;font-size:.9vw;cursor:pointer">⬆ Güncelle</button>
   <div id="stage" hidden></div>
   <div id="stage-title" hidden></div>
 
@@ -237,6 +238,16 @@
       };
     }
     setInterval(() => { if (token && cur !== 'offline') devices(); }, 10000);
+    // a new JARVIS version on the computer: the TV reloads by itself
+    let tvVersion = null;
+    setInterval(async () => {
+      try {
+        const d = await (await fetch('/api/info', { cache: 'no-store' })).json();
+        if (tvVersion === null) tvVersion = d.version || '';
+        else if (d.version && d.version !== tvVersion) location.reload();
+      } catch {}
+    }, 20000);
+    $('tv-update').onclick = () => location.reload();
     if (token) start(); else startPairing();
   </script>
 </body>

@@ -100,6 +100,7 @@ class MainWindow(QMainWindow):
     _request_update_sig = pyqtSignal()
     _update_progress_sig = pyqtSignal(str)
     _update_done_sig = pyqtSignal(bool, str)
+    _remote_update_sig = pyqtSignal()   # an update asked for from another device
     _close_assistant_sig = pyqtSignal()
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
@@ -396,6 +397,7 @@ class MainWindow(QMainWindow):
         self._request_update_sig.connect(self._start_update)
         self._update_progress_sig.connect(self._update_progress)
         self._update_done_sig.connect(self._update_done)
+        self._remote_update_sig.connect(self._start_update)
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
         self._scan_generation = 0
