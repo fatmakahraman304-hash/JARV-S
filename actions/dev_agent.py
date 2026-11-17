@@ -482,6 +482,11 @@ def _build_project(
         _log(player, msg)
 
     provider = _coding_provider()
+    if _use_agent(provider):
+        try:
+            return _build_with_agent(description, language, project_name, provider, player)
+        except RuntimeError as e:
+            log(f"Agent mode failed ({str(e)[:160]}); building the usual way.")
     if provider in {codex_coding.PROVIDER_ID, claude_coding.PROVIDER_ID} or provider in EXPLICIT_CODING_PROVIDERS:
         log(f"Coding with {provider.partition('@')[2] or provider}.")
     else:
@@ -1026,10 +1031,92 @@ def _written_block(written: dict[str, str], rel: str) -> str:
             + "\n".join(parts) + "\n")
 
 
+# ── exact edits for big files ─────────────────────────────────────────────────
+# Rewriting a 2,000-line file to change ten lines is where text models fail:
+# they shorten it, drop a function, or stop half way. For big files the model
+# returns only SEARCH/REPLACE blocks, applied exactly; anything that does not
+# apply cleanly falls back to the whole-file rewrite (and its safety checks).
+
+_EDIT_BLOCKS_FROM = 12_000          # characters; smaller files are simply rewritten
+_BLOCK_RE = re.compile(
+    r"<<<<<<< SEARCH\r?\n(.*?)\r?\n?=======\r?\n(.*?)\r?\n?>>>>>>> REPLACE", re.S)
+
+
+def _apply_edit_blocks(current: str, reply: str) -> str | None:
+    """`current` with every block applied, or None when any block does not
+    match exactly one place (then nothing is applied)."""
+    blocks = _BLOCK_RE.findall(_strip_fences(reply) if "```" in reply[:10] else reply)
+    if not blocks:
+        return None
+    text = current
+    for search, replace in blocks:
+        if not search.strip():
+            return None
+        n = text.count(search)
+        if n != 1:
+            # tolerate trailing-space differences, but still only one match
+            pat = re.compile(r"[ \t]*\n".join(re.escape(l.rstrip()) for l in search.split("\n")))
+            hits = list(pat.finditer(text))
+            if len(hits) != 1:
+                return None
+            m = hits[0]
+            text = text[:m.start()] + replace + text[m.end():]
+        else:
+            text = text.replace(search, replace, 1)
+    return text if text != current else None
+
+
+def _edit_with_blocks(change: dict, instruction: str, context: str, current: str,
+                      error: str, written: dict[str, str] | None, other: str) -> str | None:
+    rel = change["path"]
+    fix = (f"\nThe current version has a problem that must be fixed:\n{error}\n") if error else ""
+    numbered = current
+    prompt = f"""You are a senior engineer changing an existing project.
+
+Overall request: {instruction}
+This file: {rel} (edit the existing file)
+What to do in this file: {change.get('what', '')}
+Other files being changed at the same time:
+{other or '  (none)'}
+{fix}{_written_block(written or {}, rel)}
+The rest of the project, for reference:
+{context}
+
+Current content of {rel}:
+{numbered}
+
+Return ONLY edit blocks in exactly this format, as many as needed:
+
+<<<<<<< SEARCH
+lines copied EXACTLY from the current file (enough lines to be unique)
+=======
+the new lines that replace them
+>>>>>>> REPLACE
+
+Rules: copy the SEARCH lines character for character, including indentation;
+keep each block small; to add code, SEARCH for the line before it and repeat
+that line in REPLACE followed by the new code. Imports, calls and data keys must
+match the other files exactly. No explanations, no other text.
+
+Edit blocks:"""
+    try:
+        reply = _get_model(MODEL_WRITER).generate_content(prompt).text
+    except Exception:
+        return None
+    reply = re.sub(r"(?is)<think(?:ing)?>.*?</think(?:ing)?>", "", reply or "")
+    return _apply_edit_blocks(current, reply)
+
+
 def _write_change(change: dict, plan: dict, instruction: str, context: str,
                   current: str, error: str = "",
                   written: dict[str, str] | None = None) -> str:
     rel, action = change["path"], change.get("action", "edit")
+    if action == "edit" and len(current) >= _EDIT_BLOCKS_FROM:
+        other_ = "\n".join(f"  - [{c.get('action')}] {c['path']}: {c.get('what', '')}"
+                           for c in plan["changes"] if c["path"] != rel)
+        edited = _edit_with_blocks(change, instruction, context, current, error, written, other_)
+        if edited is not None:
+            return edited if edited.endswith("\n") else edited + "\n"
     other = "\n".join(f"  - [{c.get('action')}] {c['path']}: {c.get('what', '')}"
                       for c in plan["changes"] if c["path"] != rel)
     fix = (f"\nThe previous version of this file has a problem that must be "
@@ -1308,7 +1395,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         rf = rules_file(folder)
         if rf is not None:
             _log(player, f"Read the project's rules ({rf.name}).")
-        else:
+        elif not _use_agent(provider):          # an agent studies the code itself
             brief = _project_brief(folder, context, stack, player)
             if brief:
                 guide = brief + "\n\n" + guide
@@ -1323,6 +1410,9 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     except Exception as e:
         guide = ""
         _log(player, f"Could not study the project: {str(e)[:150]}")
+    if _use_agent(provider):
+        return _improve_with_agent(folder, instruction, guide, stack, baseline, texts,
+                                   provider, player, started, open_editor)
     if guide:
         # In front of everything else, because it decides HOW the code must
         # be written — the files only show what is already there.
@@ -1519,6 +1609,193 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         msg += f" Originals are in {_BACKUP_DIR}/{stamp}; say 'undo' to restore them."
     else:
         msg += " Say 'undo' to remove the new files."
+    _log(player, msg)
+    return msg
+
+
+# ── agent mode: Claude Code or Codex working inside the folder ────────────────
+
+def _use_agent(provider: str) -> bool:
+    """Claude Code and Codex are far stronger as agents — reading what they
+    need, editing exactly, running the tests — than as text models fed one
+    prompt. On unless the user turned it off (ENGINE & PROVIDERS keeps the
+    model; plugin setting dev_agent.agent_mode=false switches back)."""
+    try:
+        from core import agent_coding
+        from memory.config_manager import get_plugin_setting
+        if provider not in agent_coding.AGENT_PROVIDERS:
+            return False
+        if get_plugin_setting("dev_agent", "agent_mode", True) is False:
+            return False
+        return agent_coding.available(provider)
+    except Exception:
+        return False
+
+
+_AGENT_ROUNDS = 2           # agent → JARVIS checks → agent fixes what failed
+
+
+def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
+    out = {}
+    for rel in rels:
+        t = _read_text(folder / rel)
+        if t is not None:
+            out[rel] = t
+    return out
+
+
+def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
+                  originals: dict[str, str], baseline: dict | None, player) -> dict[str, str]:
+    """JARVIS's own verdict on what the agent wrote: syntax, safe imports,
+    project rules, and the project's tests against how they stood before."""
+    try:
+        from core.code_checks import (detect_stack, run_tests, runtime_problems,
+                                      static_problems, test_regressions)
+    except Exception:
+        return {}
+    stack = stack or detect_stack(folder)
+    problems = static_problems(folder, written, stack)
+    to_run = {r: t for r, t in written.items() if r not in problems}
+    for rel, p in runtime_problems(folder, to_run, originals, stack,
+                                   log=lambda m: _log(player, m)).items():
+        problems[rel] = (problems.get(rel, "") + " " + p).strip()
+    if stack.get("test_cmd") and not problems:
+        _log(player, f"JARVIS runs the project's tests itself ({stack['test_name']})…")
+        after = run_tests(folder, stack)
+        broke = ("The project test command could not start." if after is None
+                 else test_regressions(baseline, after))
+        if broke:
+            problems["(tests)"] = broke
+    return {r: p for r, p in problems.items() if r in written or r == "(tests)"}
+
+
+def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, baseline,
+                        texts: dict[str, str], provider: str, player, started: float,
+                        open_editor: bool) -> str:
+    from core import agent_coding
+    from core.code_checks import Protection
+    who = "Claude Code" if provider == claude_coding.PROVIDER_ID else "Codex"
+    _update("writing")
+    _log(player, f"{who} works inside the project as an agent: reading, editing, testing…")
+    before = agent_coding.snapshot(folder)
+    extra, summary, problems = "", "", {}
+    changed: list[str] = []
+    created: list[str] = []
+    deleted: list[str] = []
+    for round_no in range(_AGENT_ROUNDS):
+        try:
+            summary = agent_coding.run(provider, folder, instruction, guide, extra,
+                                       log=lambda m: _log(player, m)) or summary
+        except RuntimeError as e:
+            if round_no == 0:
+                after = agent_coding.snapshot(folder)
+                agent_coding.restore(folder, before, list(after))
+                raise RuntimeError(f"{who} çalışamadı: {e} Klasör olduğu gibi bırakıldı.") from e
+            _log(player, f"{who} could not finish the fix round: {str(e)[:160]}")
+            break
+        after = agent_coding.snapshot(folder)
+        changed, created, deleted = agent_coding.diff(before, after)
+        # Protected files (secrets, local settings) are put back, whatever the agent did.
+        protection = Protection(folder)
+        for rel in list(changed) + list(created):
+            why = protection.reason(rel)
+            if why:
+                _log(player, f"Put back {rel}: {why}.")
+                agent_coding.restore(folder, {rel: before[rel]} if rel in before else {}, [rel])
+                (changed if rel in changed else created).remove(rel)
+        with _state_lock:
+            if _JOB:
+                _JOB["files"] = {r: {"action": "edit", "state": "done"} for r in changed}
+                _JOB["files"].update({r: {"action": "create", "state": "done"} for r in created})
+                _JOB["summary"] = summary[:400]
+        _publish()
+        written = _text_files(folder, changed + created)
+        if not written:
+            break
+        _update("testing")
+        _log(player, "Checking the agent's work with JARVIS's own tests…")
+        problems = _agent_checks(folder, written, stack, texts, baseline, player)
+        if not problems:
+            _log(player, "JARVIS's checks found no new failures.")
+            break
+        for rel, p in problems.items():
+            _log(player, f"Problem — {rel}: {p[:220]}")
+        if round_no + 1 < _AGENT_ROUNDS:
+            extra = ("JARVIS checked your previous round and these still fail. Fix them, "
+                     "then run the tests again:\n" + "\n".join(f"- {r}: {p[:1500]}" for r, p in problems.items()))
+            _update("writing")
+
+    if not (changed or created or deleted):
+        return summary or f"{who} looked at '{folder.name}' but changed nothing."
+
+    final_after = list(agent_coding.snapshot(folder))
+
+    def restore() -> str:
+        agent_coding.restore(folder, before, final_after)
+        return f"Put '{folder.name}' back as it was before the change."
+    try:
+        from core.undo import push_undo
+        push_undo(f"changes to {folder.name}", restore)
+    except Exception:
+        pass
+    _refresh_brief(folder)
+    if open_editor:
+        _open_vscode(folder)
+    took = time.monotonic() - started
+    parts = []
+    if changed:
+        parts.append(f"changed {len(changed)} file{'s' if len(changed) != 1 else ''} ({', '.join(changed[:8])})")
+    if created:
+        parts.append(f"created {len(created)} ({', '.join(created[:8])})")
+    if deleted:
+        parts.append(f"deleted {len(deleted)} ({', '.join(deleted[:8])})")
+    msg = f"Done with '{folder.name}' in {took:.0f}s by {who}: {' and '.join(parts)}."
+    if summary:
+        msg += f" {summary.strip()[:700]}"
+    if problems:
+        msg += (" These still fail and need a look: "
+                + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
+    else:
+        msg += " JARVIS's own checks passed."
+    msg += " Say 'undo' to put everything back."
+    _log(player, msg)
+    return msg
+
+
+def _build_with_agent(description: str, language: str, project_name: str, provider: str,
+                      player) -> str:
+    """A new project, written, run and tested by the agent in its own folder."""
+    from core import agent_coding
+    who = "Claude Code" if provider == claude_coding.PROVIDER_ID else "Codex"
+    base = project_name or re.sub(r"[^\w]+", "_", description.lower())[:40].strip("_") or "jarvis_project"
+    name = re.sub(r"[^\w\-]", "_", base)
+    project_dir = PROJECTS_DIR / name
+    n = 2
+    while project_dir.exists() and any(project_dir.iterdir()):
+        project_dir = PROJECTS_DIR / f"{name}_{n}"
+        n += 1
+    project_dir.mkdir(parents=True, exist_ok=True)
+    with _state_lock:
+        if _JOB:
+            _JOB["folder"] = project_dir.name
+            _JOB["path"] = str(project_dir)
+    _update("writing")
+    _log(player, f"{who} builds '{project_dir.name}' as an agent: writing, running, testing…")
+    task = (f"Create, from scratch in this empty folder, this project: {description}\n"
+            f"Language: {language}. Include a README.md (in Turkish) that says how to install and run it, "
+            "a requirements/package file if it needs libraries, and tests for the core logic. "
+            "Run it and its tests, and fix everything until they pass.")
+    summary = agent_coding.run(provider, project_dir, task, "", "", log=lambda m: _log(player, m))
+    files = sorted(agent_coding.snapshot(project_dir))
+    with _state_lock:
+        if _JOB:
+            _JOB["files"] = {r: {"action": "create", "state": "done"} for r in files[:60]}
+            _JOB["summary"] = summary[:400]
+    _publish()
+    if not files:
+        return f"{who} could not create any file for the project."
+    _open_vscode(project_dir)
+    msg = f"Built '{project_dir.name}' with {who}: {len(files)} files. {summary.strip()[:700]}"
     _log(player, msg)
     return msg
 
