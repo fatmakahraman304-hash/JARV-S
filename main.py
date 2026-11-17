@@ -2910,7 +2910,7 @@ class JarvisLive:
             sync_hub.on_owner_change(_on_owner)
             sync_hub.on_update(self.ui.start_update)
             if sync_hub.start(_inject_remote):
-                print("[Sync] Ortak hafıza ve cihaz posta kutusu açık.")
+                print("[Sync] Shared memory and device mailbox are on.")
         except Exception as e:
             print(f"[Sync] Disabled: {e}")
 

@@ -14,6 +14,17 @@ import io
 import platform
 import subprocess
 
+
+def _log(msg: str) -> None:
+    """print() that cannot fail (cp1252 consoles, pythonw without a console)."""
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(str(msg).encode("ascii", "replace").decode("ascii"))
+        except Exception:
+            pass
+
 # action -> (pyautogui key, Turkish label)
 _KEYS = {
     "volume_up": ("volumeup", "Ses açıldı"),
@@ -31,10 +42,10 @@ def _run(cmd: list[str]) -> bool:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
         if r.returncode != 0:
-            print(f"[Remote] {' '.join(cmd)} failed: {(r.stderr or r.stdout).strip()[:200]}")
+            _log(f"[Remote] {' '.join(cmd)} failed: {(r.stderr or r.stdout).strip()[:200]}")
         return r.returncode == 0
     except Exception as exc:
-        print(f"[Remote] {' '.join(cmd)}: {exc}")
+        _log(f"[Remote] {' '.join(cmd)}: {exc}")
         return False
 
 
@@ -45,7 +56,7 @@ def _press(key: str, times: int) -> bool:
             pyautogui.press(key)
         return True
     except Exception as exc:
-        print(f"[Remote] key {key}: {exc}")
+        _log(f"[Remote] key {key}: {exc}")
         return False
 
 
@@ -82,7 +93,7 @@ def screenshot_jpeg(max_side: int = 1600, quality: int = 70) -> bytes | None:
         img.save(buf, "JPEG", quality=quality)
         return buf.getvalue()
     except Exception as exc:
-        print(f"[Remote] screenshot: {exc}")
+        _log(f"[Remote] screenshot: {exc}")
         return None
 
 
@@ -150,7 +161,7 @@ def open_screen_page(url: str, monitor: int = 0) -> tuple[bool, str]:
             subprocess.Popen([exe, *flags])
             return True, "Ekran sayfası açıldı"
         except Exception as exc:
-            print(f"[Remote] {exe}: {exc}")
+            _log(f"[Remote] {exe}: {exc}")
     try:
         import webbrowser
         if webbrowser.open(url):
@@ -182,5 +193,5 @@ def youtube_id(query: str) -> tuple[str, str]:
             e = entries[0]
             return str(e.get("id") or ""), str(e.get("title") or "")
     except Exception as exc:
-        print(f"[Remote] YouTube search: {exc}")
+        _log(f"[Remote] YouTube search: {exc}")
     return "", ""

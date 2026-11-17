@@ -55,6 +55,18 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "owner": None, "on_owner": None, "devices": []}
 
 
+def _log(msg: str) -> None:
+    """print() that cannot fail: a Windows console in cp1252 raises on Turkish
+    letters, and under pythonw there may be no console at all."""
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(str(msg).encode("ascii", "replace").decode("ascii"))
+        except Exception:
+            pass
+
+
 # ── settings ──────────────────────────────────────────────────────────────────
 
 def settings() -> dict:
@@ -72,7 +84,7 @@ def save_settings(**values) -> None:
         cur.update(values)
         save_plugin_config(NAMESPACE, cur)
     except Exception as exc:
-        print(f"[Sync] Ayar kaydedilemedi: {exc}")
+        _log(f"[Sync] Ayar kaydedilemedi: {exc}")
 
 
 def device_id() -> str:
@@ -355,7 +367,7 @@ def _loop() -> None:
             _cycle()
         except Exception as exc:
             _state["status"] = f"hata: {exc}"[:120]
-            print(f"[Sync] {exc}")
+            _log(f"[Sync] {exc}")
         _state["stop"].wait(POLL_SECONDS)
 
 
@@ -410,11 +422,11 @@ def _cycle() -> None:
             _state["update_seen"] = ts
             cb = _state.get("on_update")
             if cb:
-                print(f"[Sync] {upd.get('by', 'Bir cihaz')} bütün cihazları güncelliyor.")
+                _log(f"[Sync] {upd.get('by', 'Bir cihaz')} bütün cihazları güncelliyor.")
                 try:
                     cb()
                 except Exception as exc:
-                    print(f"[Sync] update: {exc}")
+                    _log(f"[Sync] update: {exc}")
 
     # 1. commands addressed to this computer
     inbox_name = f"inbox-{me}.json"
@@ -513,7 +525,7 @@ def _update_owner(me: str) -> None:
         try:
             cb(owner in (None, me), name)
         except Exception as exc:
-            print(f"[Sync] owner callback: {exc}")
+            _log(f"[Sync] owner callback: {exc}")
 
 
 def _run_command(cid: str, text: str, sender: str) -> None:

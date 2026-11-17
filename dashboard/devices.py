@@ -23,6 +23,17 @@ import time
 import uuid
 from pathlib import Path
 
+
+def _log(msg: str) -> None:
+    """print() that cannot fail (cp1252 consoles, pythonw without a console)."""
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(str(msg).encode("ascii", "replace").decode("ascii"))
+        except Exception:
+            pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 DISCOVERY_PORT = 8002          # UDP, beside the dashboard's 8000/8001
 ANNOUNCE_EVERY = 4.0           # seconds between announcements
@@ -181,7 +192,7 @@ class Discovery:
             s.bind(("", DISCOVERY_PORT))
             s.settimeout(1.0)
         except Exception as exc:
-            print(f"[Devices] Discovery off ({exc.__class__.__name__}); only this computer is listed.")
+            _log(f"[Devices] Discovery off ({exc.__class__.__name__}); only this computer is listed.")
             return
         while not self._stop.is_set():
             try:
