@@ -336,6 +336,10 @@
       parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['url'] } },
     { name: 'camera', description: 'Bu cihazın kamerasını aç/kapat ki görebilesin. facing: back | front.',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, facing: { type: 'STRING' } }, required: ['on'] } },
+    { name: 'make_image', description: 'Resim çiz (yeni) ya da son çizilen resmi / kullanıcının seçtiği resmi değiştir. Çizim, logo, illüstrasyon, fotoğraf gibi görsel istenince kullan. prompt İngilizce ve ayrıntılı olsun; resimde olması gereken yazıyı kullanıcının kelimeleriyle ekle.',
+      parameters: { type: 'OBJECT', properties: { prompt: { type: 'STRING' }, mode: { type: 'STRING', description: 'new | edit' }, aspect_ratio: { type: 'STRING', description: '1:1 16:9 9:16 4:3 3:4' } }, required: ['prompt'] } },
+    { name: 'open_app', description: 'Bu cihazda bir uygulamayı ya da hizmeti aç: whatsapp (mesaj taslağıyla), youtube, spotify, maps (yol tarifi/yer), phone (arama), sms, email, instagram, camera, web arama. query: ne aranacak / kime / mesaj.',
+      parameters: { type: 'OBJECT', properties: { app: { type: 'STRING' }, query: { type: 'STRING' }, to: { type: 'STRING', description: 'telefon numarası ya da e-posta' } }, required: ['app'] } },
     { name: 'screen_share', description: 'Bu cihazın ekranını görmek için kullanıcıdan ekran paylaşımı iste (kullanıcı onaylamalı).',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' } }, required: ['on'] } },
   ];
@@ -388,6 +392,8 @@
         if (!w) askUser('Bağlantı', `${a.title || url} açılsın mı?`, () => window.open(url, '_blank'));
         return 'Açıldı.';
       }
+      case 'make_image': return await makeImage(String(a.prompt || ''), String(a.mode || 'new') === 'edit', String(a.aspect_ratio || ''));
+      case 'open_app': return openApp(String(a.app || ''), String(a.query || ''), String(a.to || ''));
       case 'camera': return a.on ? await startVideo('camera', a.facing === 'front' ? 'user' : 'environment') : (stopVideo(), 'Kamera kapandı.');
       case 'screen_share':
         if (!a.on) { stopVideo(); return 'Ekran paylaşımı kapandı.'; }
@@ -397,6 +403,93 @@
     }
     return 'Bilinmeyen araç.';
   }
+  // ── pictures: Gemini's image models, straight from this device ──────────
+  const IMAGE_MODELS = ['gemini-3.1-flash-image', 'gemini-3-pro-image', 'gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
+  let lastImage = (() => { try { return JSON.parse(sessionStorage.getItem('jarvis_img') || 'null'); } catch { return null; } })();
+  let imgBusy = false;
+  async function makeImage(prompt, edit, aspect) {
+    if (!prompt) return 'Ne çizeyim?';
+    if (!S.key) return 'Gemini anahtarı yok.';
+    if (imgBusy) return 'Önceki resmi hâlâ çiziyorum.';
+    if (edit && !lastImage) return 'Değiştirilecek resim yok; önce bir resim çizeyim mi?';
+    imgBusy = true; toast(edit ? '🎨 Resim değiştiriliyor…' : '🎨 Çiziliyor…');
+    const parts = edit ? [{ inlineData: { mimeType: lastImage.mime, data: lastImage.data } }, { text: 'Edit this image: ' + prompt + '\nKeep everything else the same unless asked.' }]
+                       : [{ text: prompt }];
+    const gen = { responseModalities: ['TEXT', 'IMAGE'] };
+    if (/^\d+:\d+$/.test(aspect)) gen.imageConfig = { aspectRatio: aspect };
+    let last = '';
+    try {
+      for (const model of IMAGE_MODELS) {
+        let js;
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key },
+            body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: gen }) });
+          js = await r.json();
+          if (!r.ok) { last = `${r.status} ${js.error?.message || ''}`; if ([404, 403, 429, 500, 503].includes(r.status)) continue; break; }
+        } catch (e) { last = String(e.message || e); continue; }
+        let text = '';
+        for (const c of js.candidates || []) for (const p of c.content?.parts || []) {
+          const d = p.inlineData || p.inline_data;
+          if (d?.data && !p.thought) {
+            lastImage = { data: d.data, mime: d.mimeType || 'image/png', prompt };
+            try { sessionStorage.setItem('jarvis_img', JSON.stringify(lastImage)); } catch {}
+            showImage(text);
+            return edit ? 'Resim değiştirildi ve ekranda.' : 'Resim çizildi ve ekranda.';
+          }
+          if (p.text && !p.thought) text += p.text;
+        }
+        last = text || (js.promptFeedback?.blockReason ? 'blocked' : 'resim dönmedi');
+        if (last === 'blocked') break;
+      }
+    } finally { imgBusy = false; }
+    return last === 'blocked' ? 'Bu resmi güvenlik kuralları yüzünden çizemiyorum.' : 'Resim üretilemedi: ' + last.slice(0, 160);
+  }
+  function showImage(note) {
+    if (!lastImage) return;
+    $('img-view').src = `data:${lastImage.mime};base64,${lastImage.data}`;
+    $('img-note').textContent = note || lastImage.prompt || '';
+    openSheet('s-image');
+    if (KIND === 'tv' || KIND === 'projector') { try { $('img-view').requestFullscreen?.(); } catch {} }
+  }
+  $('t-image').onclick = () => { if (lastImage) showImage(); else { $('inp').value = 'Bir resim çiz: '; $('inp').focus(); } };
+  $('img-edit').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const t = $('img-edit-inp').value.trim(); if (!t) return;
+    $('img-edit-inp').value = ''; claimHere();
+    const msg = await makeImage(t, true, '');
+    if (!/değiştirildi/.test(msg)) toast(msg);
+  });
+  function imageBlob() { const b = atob(lastImage.data), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: lastImage.mime }); }
+  $('img-dl').onclick = () => { if (!lastImage) return; const a = document.createElement('a'); a.href = URL.createObjectURL(imageBlob());
+    a.download = 'jarvis-' + Date.now() + (lastImage.mime.includes('jpeg') ? '.jpg' : '.png'); a.click(); };
+  $('img-share').onclick = async () => {
+    if (!lastImage) return;
+    const file = new File([imageBlob()], 'jarvis.png', { type: lastImage.mime });
+    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'JARVIS' }); else $('img-dl').click(); } catch {}
+  };
+  $('img-full').onclick = () => { try { $('img-view').requestFullscreen(); } catch {} };
+
+  // ── apps on this device: links that open the installed app ──────────────
+  function openApp(app, q, to) {
+    const e = encodeURIComponent;
+    const a = app.toLocaleLowerCase('tr');
+    let url = '';
+    if (/whats/.test(a)) url = to ? `https://wa.me/${to.replace(/[^\d]/g, '')}?text=${e(q)}` : `https://wa.me/?text=${e(q)}`;
+    else if (/youtube|video/.test(a)) url = q ? `https://www.youtube.com/results?search_query=${e(q)}` : 'https://www.youtube.com/';
+    else if (/spotify|müzik|music/.test(a)) url = q ? `https://open.spotify.com/search/${e(q)}` : 'https://open.spotify.com/';
+    else if (/map|harita|yol/.test(a)) url = `https://www.google.com/maps/search/?api=1&query=${e(q || to)}`;
+    else if (/phone|ara|tel/.test(a)) url = 'tel:' + (to || q).replace(/[^\d+]/g, '');
+    else if (/sms|mesaj/.test(a)) url = `sms:${(to || '').replace(/[^\d+]/g, '')}?body=${e(q)}`;
+    else if (/mail|e-posta|eposta/.test(a)) url = `mailto:${to}?body=${e(q)}`;
+    else if (/insta/.test(a)) url = q ? `https://www.instagram.com/${e(q.replace(/^@/, ''))}/` : 'https://www.instagram.com/';
+    else if (/camera|kamera/.test(a)) { startVideo('camera'); return 'Kamera açıldı.'; }
+    else url = `https://www.google.com/search?q=${e(q || app)}`;
+    const w = window.open(url, '_blank');
+    if (!w) askUser('Uygulamayı aç', `${app} açılsın mı?`, () => window.open(url, '_blank'));
+    return `${app} açılıyor.`;
+  }
+
   function showCode() {
     if (!lastCode) return;
     $('code-name').textContent = lastCode.filename.toUpperCase();
@@ -420,7 +513,8 @@
       `Kısa, doğal ve sıcak konuş; kullanıcının dilinde yanıt ver (çoğunlukla Türkçe). ` +
       `Güncel bilgi için Google aramasını kullan. Kod istenince kodu show_code ile ekranda göster, sesli okuma. ` +
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
-      `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet.\n\n` +
+      `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. Resim çizmek ya da resmi değiştirmek için make_image, bu cihazda uygulama açmak için open_app kullan. ` +
+      `Önceki konuşmalar ve yarım işler aşağıda; "kaldığımız yerden devam" denirse oradan sür, bilgisayardaki yarım projeler için computer_command ile "yarım kalan işe devam et" gönder.\n\n` +
       `Bugün: ${new Date().toLocaleString('tr-TR', { dateStyle: 'full', timeStyle: 'short' })}.\nBilgisayarlar: ${pcs}.\n\n` +
       `ORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}`;
   }
