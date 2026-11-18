@@ -428,7 +428,8 @@ def device_online(d: dict, now: float | None = None) -> bool:
 
 
 def find_device(name: str, devs: list[dict] | None = None) -> dict | None:
-    devs = [d for d in (devices() if devs is None else devs) if d.get("id") != device_id()]
+    devs = [d for d in (devices() if devs is None else devs)
+            if d.get("id") != device_id() and d.get("kind") != "receiver"]    # the Alıcı takes only remote commands
     n = str(name or "").strip().casefold()
     if not n:
         return None
