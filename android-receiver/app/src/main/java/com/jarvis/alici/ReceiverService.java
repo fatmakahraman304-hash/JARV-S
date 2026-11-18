@@ -227,6 +227,9 @@ public class ReceiverService extends Service {
         known.put("netflix", "com.netflix.ninja");
         known.put("ayarlar", "com.android.tv.settings");
         known.put("chrome", "com.android.chrome");
+        known.put("prime", "com.amazon.amazonvideo.livingroom");
+        known.put("disney", "com.disney.disneyplus");
+        known.put("spotify", "com.spotify.tv.android");
         Map<String, String> labels = appLabels();
         String pkg = null;
         for (Map.Entry<String, String> e : labels.entrySet()) if (e.getKey().equals(n)) pkg = e.getValue();
