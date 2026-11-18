@@ -17,7 +17,7 @@ from pathlib import Path
 import psutil
 
 from PyQt6.QtCore import (
-    QEasingCurve, QLineF, QMimeData, QObject, QParallelAnimationGroup, QPointF,
+    QEasingCurve, QEvent, QLineF, QMimeData, QObject, QParallelAnimationGroup, QPointF,
     QPoint, QPropertyAnimation, QRect, QRectF, QSize, QSizeF, Qt, QTimer,
     QUrl, pyqtSignal,
 )
@@ -27,7 +27,7 @@ from PyQt6.QtGui import (
     QPen, QPixmap, QRadialGradient, QShortcut,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QPushButton, QScrollArea, QSizePolicy, QSplitter,
     QGraphicsScene, QGraphicsView, QGraphicsPixmapItem,
     QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QProgressBar, QSlider,
@@ -501,27 +501,25 @@ class CustomizeOverlay(QWidget):
 
 
 class PluginManagerOverlay(QWidget):
-    """Floating overlay — lists discovered plugins with per-plugin ON/OFF toggles."""
-
-    _OW = 420
+    """Window-filling plugin grid with persistent per-plugin toggles."""
 
     def __init__(self, plugins: list[dict], parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             PluginManagerOverlay {{
-                background: rgba(0, 6, 10, 245);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
         """)
-        self.setFixedWidth(self._OW)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(6)
 
-        hdr = QLabel("🧩  PLUGIN MANAGER")
+        hdr = QLabel("EKLENTİLER")
         hdr.setFont(hud_font(12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         lay.addWidget(hdr)
@@ -530,16 +528,33 @@ class PluginManagerOverlay(QWidget):
         lay.addWidget(sep)
 
         if not plugins:
-            empty = QLabel("No plugins found in /plugins.")
+            empty = QLabel("Eklenti bulunamadı.")
             empty.setFont(hud_font(8))
             empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
             lay.addWidget(empty)
 
-        for p in plugins:
-            lay.addLayout(self._build_row(p))
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setObjectName("pluginGrid")
+        content.setStyleSheet(f"QWidget#pluginGrid {{ background: {C.PANEL}; }}")
+        self._grid = QGridLayout(content)
+        self._grid.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(10)
+        self._cards = [self._build_row(p) for p in plugins]
+        self._columns = 0
+        self._scroll.setWidget(content)
+        lay.addWidget(self._scroll, 1)
+        self._scroll.viewport().installEventFilter(self)
+        if parent is not None:
+            parent.installEventFilter(self)
+        self._reflow()
 
         lay.addSpacing(4)
-        close_btn = QPushButton("CLOSE")
+        close_btn = QPushButton("KAPAT")
         close_btn.setFixedHeight(30)
         close_btn.setFont(hud_font(9))
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -550,18 +565,45 @@ class PluginManagerOverlay(QWidget):
             }}
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
-        close_btn.clicked.connect(self.hide)
+        close_btn.clicked.connect(self.close)
         lay.addWidget(close_btn)
-        self.adjustSize()
+        QShortcut(QKeySequence("Escape"), self, activated=self.close)
 
-    def _build_row(self, p: dict) -> QHBoxLayout:
-        row = QHBoxLayout(); row.setSpacing(6)
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.Resize:
+            if watched is self.parentWidget():
+                self.setGeometry(watched.rect())
+            elif watched is self._scroll.viewport():
+                self._reflow()
+        return super().eventFilter(watched, event)
+
+    def _reflow(self):
+        columns = max(1, min(len(self._cards), (self._scroll.viewport().width() + 10) // 290))
+        if columns == self._columns:
+            return
+        while self._grid.count():
+            self._grid.takeAt(0)
+        for col in range(max(columns, self._columns)):
+            self._grid.setColumnStretch(col, int(col < columns))
+        for index, card in enumerate(self._cards):
+            self._grid.addWidget(card, *divmod(index, columns))
+        self._columns = columns
+
+    def _build_row(self, p: dict) -> QFrame:
+        card = QFrame()
+        card.setObjectName("pluginCard")
+        card.setStyleSheet(f"QFrame#pluginCard {{ background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 4px; }}")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(12, 8, 12, 8)
+        row.setSpacing(6)
 
         label_text = p["name"] if p["valid"] else f"{p['name']}  (⚠ {p['file']})"
         lbl = QLabel(label_text)
         lbl.setFont(hud_font(8))
         lbl.setStyleSheet(f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;")
         lbl.setToolTip(p["description"] if p["valid"] else p["error"])
+        lbl.setMinimumWidth(0)
+        lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         lbl.setWordWrap(False)
         row.addWidget(lbl, stretch=1)
 
@@ -582,7 +624,7 @@ class PluginManagerOverlay(QWidget):
             self._style_toggle(btn, p["enabled"])
             btn.clicked.connect(lambda _, name=p["name"], b=btn: self._toggle(name, b))
         row.addWidget(btn)
-        return row
+        return card
 
     def _style_toggle(self, btn: QPushButton, enabled: bool):
         if enabled:
