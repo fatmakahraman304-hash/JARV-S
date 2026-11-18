@@ -215,14 +215,14 @@ void main() {
         vec3 F = F0 + (1.0 - F0) * pow(1.0 - vh, 5.0);
         vec3 spec = F * ggx(nh, a) * vis(nl, nv, a) * 0.25;
         vec3 kd = (1.0 - F) * (1.0 - metal);
-        col += (kd * alb / PI + spec) * Cs[i] * nl * PI * (i == 0 ? sh : 1.0);
+        col += (kd * alb + spec) * Cs[i] * nl * (i == 0 ? sh : 1.0);
     }
     vec3 R = reflect(-V, N);
     vec3 Fe = F0 + (max(vec3(1.0 - rough), F0) - F0) * pow(1.0 - nv, 5.0);
     float sky = 0.5 + 0.5 * N.y;
     vec3 amb = mix(vec3(0.05, 0.045, 0.04) + u_accent * 0.02, vec3(0.16, 0.17, 0.19), sky);
     col += amb * alb * (1.0 - metal);
-    col += env(R, rough) * Fe * (0.45 + 0.75 * (1.0 - rough * 0.5)) * mix(0.55, 1.0, sh);
+    col += env(R, rough) * Fe * (1.0 - 0.6 * rough) * mix(0.55, 1.0, sh);
     float ao = mix(0.45, 1.0, smoothstep(0.0, u_radius * 0.18, v_wp.y));       // contact darkening near the floor
     col *= ao;
     col += pow(v_col, vec3(2.2)) * v_mat.z * 3.0;                                // screens, LEDs
