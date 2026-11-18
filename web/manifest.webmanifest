@@ -35,5 +35,51 @@
       "text": "share_text",
       "url": "share_url"
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Konuş",
+      "short_name": "Konuş",
+      "url": "./?a=mic",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Ajanda",
+      "short_name": "Ajanda",
+      "url": "./?a=agenda",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Konuşma",
+      "short_name": "Konuşma",
+      "url": "./?a=chat",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Kumanda",
+      "short_name": "Kumanda",
+      "url": "./?a=remote",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }
