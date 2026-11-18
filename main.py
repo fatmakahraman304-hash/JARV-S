@@ -1300,6 +1300,11 @@ class JarvisLive:
         except Exception:
             pass
         try:
+            from memory import learner
+            learner.turn(role, text)        # files lasting facts about the user now and then
+        except Exception:
+            pass
+        try:
             from memory.continuity import record
             record(role, text)
         except Exception as exc:
