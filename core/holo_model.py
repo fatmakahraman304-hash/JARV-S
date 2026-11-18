@@ -19,6 +19,7 @@ import re
 import struct
 
 import numpy as np
+from pathlib import Path
 
 EXPLODE = 0.85                    # how far apart "parçala" pushes the parts (× their distance from the centre)
 SHAPES = ("box", "rounded_box", "cylinder", "cone", "sphere", "hemisphere", "capsule", "torus",
@@ -738,6 +739,38 @@ class Mesh:
         return head + struct.pack("<I", len(tri)) + rec.tobytes()
 
 
+def export_obj(mesh) -> bytes:
+    """Wavefront OBJ (centimetres, y up) with per-vertex colours — opens in
+    Blender, Windows 3D Viewer and most CAD tools."""
+    P, C = mesh.pos0, np.clip(mesh.col, 0, 1)
+    head = "# JARVIS hologram export\n"
+    v = "".join(f"v {x:.4f} {y:.4f} {z:.4f} {r:.3f} {g:.3f} {b:.3f}\n" for (x, y, z), (r, g, b) in zip(P.tolist(), C.tolist()))
+    n_tri = len(P) // 3
+    f = "".join(f"f {3 * t + 1} {3 * t + 2} {3 * t + 3}\n" for t in range(n_tri))
+    return (head + v + f).encode("ascii")
+
+
+def export_glb(mesh, model: dict) -> bytes:
+    """The model as .glb: a real (AI) model is its own file, untouched; a parts
+    model becomes one mesh per piece with its colour, metal and roughness."""
+    from core import glb
+    src = model.get("glb")
+    if src:
+        try:
+            return Path(src).read_bytes()
+        except OSError:
+            pass
+    prims = []
+    for _i, V, N, F, p in getattr(mesh, "parts", []) or []:
+        r, g, b = hex_rgb(p.get("color", "#cccccc"))
+        prims.append({"V": V, "N": N, "F": F, "name": p.get("name", ""), "color": [r, g, b, float(p.get("opacity", 1.0))],
+                      "metal": float(p.get("metal", 0.0)), "rough": float(p.get("rough", 0.5))})
+    if not prims:                                                 # a scanned mesh without parts: one soup
+        F = np.arange(len(mesh.pos0), dtype=np.uint32).reshape(-1, 3)
+        prims.append({"V": mesh.pos0, "N": mesh.nrm, "F": F, "name": model.get("name", "model")})
+    return glb.write(prims)
+
+
 def decode_photo(b64: str):
     """The model's stored photo as an RGB array, or None."""
     if not b64:
@@ -846,6 +879,8 @@ _CMDS = (
     ("parts_engine", r"parça (modeli|motoru)"),
     ("real_engine", r"gerçek (3 ?b|motor|model)"),
     ("video", r"video(su)? (çek|al|kaydet|yap)|dönen video|turntable"),
+    ("lib", r"galeri|kütüphane|kayıtlı modeller|modellerimi göster"),
+    ("stl", r"dışa aktar|export|obj (olarak )?kaydet|glb (olarak )?kaydet"),
     ("cancel", r"iptal|vazgeç|dur$"),
 )
 

@@ -851,6 +851,35 @@ def render_still(gl: "HoloGL", mesh, cam: Camera, w: int, h: int, ss: float = 1.
     return big.scaled(w, h, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
+def bloom(img: QImage, strength: float = 0.6) -> QImage:
+    """A soft glow around the brightest pixels (LEDs, screens, hot highlights)
+    — what a camera lens does, and what makes a render read as a photograph."""
+    try:
+        import cv2
+    except ImportError:
+        return img
+    try:
+        im = img.convertToFormat(QImage.Format.Format_RGBA8888)
+        w, h = im.width(), im.height()
+        ptr = im.constBits(); ptr.setsize(im.sizeInBytes())
+        a = np.frombuffer(ptr, np.uint8).reshape(h, im.bytesPerLine())[:, :w * 4].reshape(h, w, 4).astype(np.float32) / 255.0
+        rgb, alpha = a[:, :, :3], a[:, :, 3:4]
+        lum = rgb @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+        bright = rgb * np.clip((lum - 0.72) / 0.28, 0.0, 1.0)[:, :, None]
+        small = cv2.resize(bright, (max(1, w // 4), max(1, h // 4)), interpolation=cv2.INTER_AREA)
+        glow = np.zeros_like(small)
+        for sigma in (2.0, 6.0, 16.0):                       # three widths: tight halo + wide haze
+            glow += cv2.GaussianBlur(small, (0, 0), sigma)
+        glow = cv2.resize(glow / 3.0, (w, h), interpolation=cv2.INTER_LINEAR)
+        out = 1.0 - (1.0 - rgb) * (1.0 - np.clip(glow * strength, 0, 1))       # screen blend: never clips hard
+        g_a = np.clip(glow.max(axis=2, keepdims=True) * strength, 0, 1)
+        res = np.concatenate([out, np.maximum(alpha, g_a)], axis=2)
+        res = np.ascontiguousarray((np.clip(res, 0, 1) * 255).astype(np.uint8))
+        return QImage(res.data, w, h, w * 4, QImage.Format.Format_RGBA8888).copy()
+    except Exception:
+        return img
+
+
 class SoftRenderer:
     """No OpenGL: flat-shaded triangles with QPainter, far to near. Plainer,
     but every machine can draw it."""

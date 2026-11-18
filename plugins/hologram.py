@@ -15,7 +15,7 @@ PLUGIN = {
         "detail ('daha fazla ayrıntı ekle', 'detaylandır': açık modele bir ayrıntı turu daha) | explode ('parçalarına ayır') | "
         "assemble | reset | real (gerçekçi görünüm) | holo (hologram görünümü) | cut (kesit görünümü, on) | measure "
         "(ölçüleri göster, on) | isolate (request: parça adı — 'sadece kulpu göster') | show_all | hands (el kontrolü; on) | "
-        "save | stl (3D yazıcı dosyası) | shot (4K görüntü kaydet) | throw (modeli at) | upright (yan yatmış modeli doğrult) | "
+        "save | stl (dışa aktar: STL + OBJ + GLB) | lib (kayıtlı modeller galerisi) | shot (4K görüntü kaydet) | throw (modeli at) | upright (yan yatmış modeli doğrult) | "
         "video (6 sn dönen video, MP4) | cancel (süren taramayı iptal et) | real_engine (gerçek 3B: yapay zekâ fotoğraftan dokulu gerçek model — varsayılan) | parts_engine (parça modeli) | "
         "hf_token (request: kullanıcının verdiği anahtar — Hugging Face hf_…, Tripo tsk_…, Meshy msy_…; gerçek 3B için) | open | close. "
         "Hologram açıkken model hakkındaki değişiklik isteklerini edit ile gönder."
@@ -44,7 +44,8 @@ REPLIES = {
     "real": "Gerçekçi görünüm.",
     "holo": "Hologram görünümü.",
     "save": "Model kaydedildi.",
-    "stl": "STL dosyasını Belgeler'deki JARVIS Modeller klasörüne kaydediyorum.",
+    "stl": "Modeli STL, OBJ ve GLB olarak Belgeler'deki JARVIS Modeller klasörüne kaydediyorum.",
+    "lib": "Kayıtlı modellerin galerisini açtım.",
     "throw": "Attım; istersen geri getiririm.",
     "open": "Hologram masası açık.",
     "close": "Hologram masasını kapattım.",
