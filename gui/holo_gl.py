@@ -260,7 +260,7 @@ void main() {
         vec3 c = tint * (0.10 + 1.7 * fres + 0.08 * scan + 0.9 * band) * flick;
         if (sel) c += vec3(1.0, 0.85, 0.55) * (0.35 + fres);
         float a = clamp(0.10 + 0.75 * fres + 0.05 * scan + 0.35 * band + (sel ? 0.2 : 0.0), 0.0, 1.0) * (ghost ? 0.18 : 1.0);
-        gl_FragColor = vec4(c * a, a);                     // premultiplied, drawn additively
+        gl_FragColor = vec4(min(c, vec3(1.0)) * a, a);     // premultiplied (colour ≤ alpha), drawn additively
         return;
     }
     vec3 alb = pow(v_col, vec3(2.2));
