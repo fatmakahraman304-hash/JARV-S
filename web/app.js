@@ -584,6 +584,8 @@
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' } }, required: ['device'] } },
     { name: 'gallery', description: 'Bütün cihazlarda çizilen resimlerin ortak galerisi: "galerimde ne var", "dünkü resmi göster", "laptopta çizdiğin logoyu aç", "ikinci resmi TV\'ye gönder". action: list | show | send. number: 1 = en yeni, ya da query: resimde ne vardı. send için device.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, number: { type: 'NUMBER' }, query: { type: 'STRING' }, device: { type: 'STRING' } }, required: ['action'] } },
+    { name: 'place', description: 'Konum hafızası: "arabamı buraya park ettim", "bu yeri otel diye kaydet" (save: bu cihazın şu anki konumu), "arabam nerede", "otele yol tarifi" (find: haritada açar; device verilirse o cihazda açar), "kayıtlı yerlerim" (list), forget.',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'save | find | list | forget' }, name: { type: 'STRING', description: 'araba, otel, ev …' }, device: { type: 'STRING' } }, required: ['action'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -654,6 +656,7 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'place': return await placeTool(a);
       case 'gallery': {
         await syncNow();
         const newest = [...gallery].reverse();
@@ -934,6 +937,42 @@
     toast(`⚡ ${key.toLocaleUpperCase('tr')} PROTOKOLÜ`);
     return `${key.toLocaleUpperCase('tr')} PROTOKOLÜ BAŞLADI. Şimdi bu adımları sırayla, kendi araçlarınla yap (bilgisayarın yapacağı işler için computer_command, başka cihaz için send_to_device); yapamadığını atla ve sonunda ne yaptığını kısaca söyle:\n` +
       steps.map((x, i) => `${i + 1}. ${x}`).join('\n');
+  }
+
+  // ── places: "arabamı buraya park ettim" → shared memory notes / "konum: …" ──
+  const PLACE = 'konum: ';
+  function here() {
+    return new Promise((res, rej) => {
+      if (!navigator.geolocation) return rej(new Error('Bu cihaz konum vermiyor.'));
+      navigator.geolocation.getCurrentPosition(p => res(p.coords), e => rej(new Error(e.code === 1 ? 'Konum izni verilmedi.' : 'Konum alınamadı.')),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+    });
+  }
+  async function placeTool(a) {
+    const act = String(a.action || 'find').toLowerCase();
+    const name = String(a.name || 'araba').toLocaleLowerCase('tr').replace(/^(benim |bu )/, '').trim();
+    memory.notes = memory.notes || {};
+    const places = Object.entries(memory.notes).filter(([k]) => k.startsWith(PLACE));
+    if (act === 'list') return places.length ? places.map(([k, v]) => `${k.slice(PLACE.length)} — ${entry(v).value.split('|')[1]?.trim() || ''}`).join('\n') : 'Kayıtlı yer yok.';
+    if (act === 'save') {
+      let c; try { c = await here(); } catch (e) { return e.message; }
+      const when = new Date().toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      memory.notes[PLACE + name] = { value: `${c.latitude.toFixed(6)},${c.longitude.toFixed(6)} | ${when} | ±${Math.round(c.accuracy)} m`, updated: nowIso() };
+      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow();
+      return `"${name}" konumu kaydedildi (±${Math.round(c.accuracy)} m). Bütün cihazlar biliyor.`;
+    }
+    const hit = places.find(([k]) => k.slice(PLACE.length) === name) || places.find(([k]) => k.includes(name));
+    if (!hit) return `"${name}" diye kayıtlı bir yer yok.`;
+    if (act === 'forget') {
+      delete memory.notes[hit[0]]; memory._deleted = memory._deleted || {}; memory._deleted['notes/' + hit[0]] = nowIso();
+      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
+      return `"${hit[0].slice(PLACE.length)}" silindi.`;
+    }
+    const [coords, when] = entry(hit[1]).value.split('|').map(x => x.trim());
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coords)}&travelmode=walking`;
+    if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'open', url, title: hit[0].slice(PLACE.length) });
+    const w = window.open(url, '_blank'); if (!w) askUser('Harita', `${hit[0].slice(PLACE.length)} haritada açılsın mı?`, () => window.open(url, '_blank'));
+    return `"${hit[0].slice(PLACE.length)}" (${when} kaydedilmişti) haritada açılıyor, yol tarifiyle.`;
   }
 
   // ── shared to-do list: kept in shared memory (notes/"yapılacak: …"), so the
