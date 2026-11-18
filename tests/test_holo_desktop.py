@@ -360,7 +360,10 @@ class RealEngineTests(unittest.TestCase):
 
 class PanelHelperTests(unittest.TestCase):
     def test_sharpest_frame(self):
-        import cv2
+        try:
+            import cv2
+        except ImportError:
+            self.skipTest("opencv not installed")
         rng = np.random.default_rng(1)
         sharp = (rng.random((120, 160)) * 255).astype(np.uint8)
         blur = cv2.GaussianBlur(sharp, (15, 15), 6)
