@@ -30,7 +30,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import claude_coding, codex_coding
+from core import claude_coding, codex_coding, jarvis_agent
 
 AGENT_TIMEOUT = 45 * 60          # one agent round, seconds (a whole site or app takes a while)
 
@@ -59,7 +59,7 @@ _CLAUDE_TOOLS = ["Read", "Edit", "MultiEdit", "Write", "Glob", "Grep", "LS", "To
                  "WebSearch", "WebFetch", "NotebookEdit"] + \
     [f"Bash({c}:*)" for c in _CLAUDE_BASH]
 
-AGENT_PROVIDERS = {claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID}
+AGENT_PROVIDERS = {claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID, jarvis_agent.PROVIDER_ID}
 
 
 def available(provider: str) -> bool:
@@ -71,6 +71,8 @@ def available(provider: str) -> bool:
         if provider == codex_coding.PROVIDER_ID:
             codex_coding._command()
             return True
+        if provider == jarvis_agent.PROVIDER_ID:       # JARVIS's own agent: needs only a free brain
+            return jarvis_agent.available()
     except Exception:
         return False
     return False
@@ -311,6 +313,8 @@ def run(provider: str, folder: Path, instruction: str, guide: str = "", extra: s
         return _run_claude(folder, prompt, log)
     if provider == codex_coding.PROVIDER_ID:
         return _run_codex(folder, prompt, log)
+    if provider == jarvis_agent.PROVIDER_ID:
+        return jarvis_agent.run(folder, prompt, log)
     raise RuntimeError("Bu model ajan olarak çalışamıyor.")
 
 
