@@ -16,7 +16,7 @@ PLUGIN = {
     "description": (
         "JARVIS'in kodlama ajanını hazırla ve durumunu söyle: 'kodlama kurulumunu kontrol et', "
         "'Claude Code'u kur', 'Claude'a giriş yap', 'kodlamada Opus/Sonnet kullan'. "
-        "action: status | install | login | model | openrouter | ollama. model için name: opus | sonnet | tam model adı; "
+        "action: status | install | login | model | deepseek | openrouter | ollama. deepseek için name: DeepSeek API anahtarı; model için name: opus | sonnet | tam model adı; "
         "openrouter için name: OpenRouter anahtarı (ücretsiz modeller için); ollama için name: yerel model adı."
     ),
     "parameters": {
@@ -121,16 +121,17 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             return "Claude Code'u kuruyorum; bitince haber vereceğim."
         if action == "login":
             return _login()
-        if action in ("openrouter", "ollama"):
+        if action in ("openrouter", "ollama", "deepseek"):
             val = str(p.get("name") or "").strip()
             if not val:
                 return "Değeri söylemen lazım." if action == "ollama" else "OpenRouter anahtarı lazım (openrouter.ai/keys, ücretsiz)."
             from memory.config_manager import get_plugin_config, save_plugin_config
             cfg = dict(get_plugin_config("coding") or {})
-            cfg["openrouter_key" if action == "openrouter" else "ollama_model"] = val
+            cfg[{"openrouter": "openrouter_key", "deepseek": "deepseek_key"}.get(action, "ollama_model")] = val
             save_plugin_config("coding", cfg)
-            return ("OpenRouter eklendi: Gemini sınıra gelince ücretsiz modelleriyle devam ederim."
-                    if action == "openrouter" else f"Ollama modeli {val} ayarlandı.")
+            return {"openrouter": "OpenRouter eklendi: Gemini sınıra gelince ücretsiz modelleriyle devam ederim.",
+                    "deepseek": "DeepSeek eklendi: kodlamada önce onu kullanırım; bakiyesi biterse Gemini'ye geçerim."
+                    }.get(action, f"Ollama modeli {val} ayarlandı.")
         if action == "model":
             name = str(p.get("name") or "").strip().lower()
             if not name:

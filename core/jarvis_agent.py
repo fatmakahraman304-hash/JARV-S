@@ -7,6 +7,9 @@ project, reads the files it needs, makes exact edits, runs the code and the
 tests, reads the errors and fixes them until it works — and only borrows a
 "brain" to think with, choosing the best one that is free right now:
 
+    0. DeepSeek, if a key was added (new accounts get free tokens for a month,
+       then it is pay-as-you-go and very cheap; a strong coder). An empty
+       balance answers 402 and the next brain takes over.
     1. Gemini, with the key JARVIS already has (the best free model the key
        can use is found by asking Google which models exist — model names
        change every few months, so none is hard-coded as the only choice)
@@ -459,6 +462,9 @@ def brains() -> list:
     """Every brain that can work right now, best first."""
     cfg = _settings()
     out = []
+    if cfg.get("deepseek_key"):
+        for m in (cfg.get("deepseek_models") or ["deepseek-chat"]):
+            out.append(OpenAIBrain("https://api.deepseek.com/v1", cfg["deepseek_key"], m, "DeepSeek"))
     key = _gemini_key()
     if key and cfg.get("use_gemini", True) is not False:
         out += [GeminiBrain(key, m) for m in gemini_models(key)]
@@ -473,7 +479,7 @@ def brains() -> list:
 
 def available() -> bool:
     cfg = _settings()
-    return bool(_gemini_key() or cfg.get("openrouter_key") or cfg.get("ollama_model"))
+    return bool(_gemini_key() or cfg.get("openrouter_key") or cfg.get("ollama_model") or cfg.get("deepseek_key"))
 
 
 # ── the loop ─────────────────────────────────────────────────────────────────

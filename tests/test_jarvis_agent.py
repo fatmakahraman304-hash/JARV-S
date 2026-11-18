@@ -129,6 +129,14 @@ class BrainChoiceTest(unittest.TestCase):
         self.assertEqual(calls, [{"id": "t1", "name": "list_files", "args": {"path": "."}}])
         self.assertEqual(h.call_args[0][1]["tools"][0]["type"], "function")
 
+    def test_deepseek_first_when_added(self):
+        with mock.patch.object(ja, "_settings", return_value={"deepseek_key": "sk-x"}), \
+             mock.patch.object(ja, "_gemini_key", return_value="g"), \
+             mock.patch.object(ja, "gemini_models", return_value=["gemini-3.6-flash"]), \
+             mock.patch.object(ja, "_ollama_model", return_value=""):
+            names = [b.name for b in ja.brains()]
+        self.assertEqual(names, ["DeepSeek (deepseek-chat)", "Gemini (gemini-3.6-flash)"])
+
     def test_in_the_coding_ladder(self):
         from core import coding_router
         self.assertIn(ja.PROVIDER_ID, coding_router.AGENTS)
