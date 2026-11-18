@@ -1527,6 +1527,11 @@ class JarvisLive:
             mem_str += prompt_context()
         except Exception as exc:
             self.ui.write_log(f"SYS: Kalıcı hafıza okunamadı: {exc}")
+        try:
+            from core import sync_hub
+            mem_str += sync_hub.recent_context()      # what was said on the phone, TV …
+        except Exception as exc:
+            print(f"[Sync] recent context: {exc}")
         sys_prompt = _load_system_prompt()
 
         now      = datetime.now()

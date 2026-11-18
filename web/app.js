@@ -170,6 +170,15 @@
   let recent = J(localStorage.getItem('jarvis_recent'), []);
   let devices = [];
   let recentQueue = [];
+  let pcProjects = J(localStorage.getItem('jarvis_projects'), []);
+  function projectsText() {
+    const L = [];
+    for (const pc of pcProjects) for (const p of (pc.projects || [])) {
+      const step = p.stages ? ` — aşama ${p.stage}/${p.stages}${p.current ? ' (' + p.current + ')' : ''}` : '';
+      L.push(`[${pc.computer}] #${p.id} ${p.title}: ${p.status}${step}${p.note ? ' — ' + p.note.slice(0, 160) : ''} (${(p.updated || '').replace('T', ' ')})`);
+    }
+    return L.join('\n');
+  }
   function queueRecent(role, text) { if (role === 'sys') return; recentQueue.push({ ts: new Date().toISOString(), device: devName(), role, text: text.slice(0, 600) }); }
 
   async function syncNow(extra = {}) {
@@ -183,6 +192,8 @@
       const cloudMem = J(f['memory.json'], {});
       if (JSON.stringify(cloudMem) !== JSON.stringify(memory)) writes['memory.json'] = JSON.stringify(memory);
       if (recentQueue.length) { recent = recent.concat(recentQueue).slice(-40); recentQueue = []; writes['recent.json'] = JSON.stringify(recent); }
+      pcProjects = Object.entries(f).filter(([k]) => k.startsWith('projects-')).map(([, v]) => J(v, null)).filter(Boolean);
+      try { localStorage.setItem('jarvis_projects', JSON.stringify(pcProjects)); } catch {}
       const myInbox = J(f[`inbox-${S.id}.json`], []);
       if (myInbox.length) { runInbox(myInbox); writes[`inbox-${S.id}.json`] = '[]'; }
       const cloudRem = J(f['reminders.json'], []);
@@ -416,6 +427,8 @@
     { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
+    { name: 'projects', description: 'Bilgisayarda JARVIS\'in yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
+      parameters: { type: 'OBJECT', properties: {} } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -486,6 +499,7 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'projects': { await syncNow(); return projectsText() || 'Bilgisayarlarda kayıtlı bir proje yok (ya da bilgisayar henüz bağlanmadı).'; }
       case 'send_to_device': {
         const what = String(a.what || 'open').toLowerCase(), title = String(a.title || '');
         if (what === 'image') {
@@ -849,7 +863,7 @@
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
       `Önceki konuşmalar ve yarım işler aşağıda; "kaldığımız yerden devam" denirse oradan sür, bilgisayardaki yarım projeler için computer_command ile "yarım kalan işe devam et" gönder.\n\n` +
       `Bugün: ${new Date().toLocaleString('tr-TR', { dateStyle: 'full', timeStyle: 'short' })}.\nBilgisayarlar: ${pcs}.\n\n` +
-      `ORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}`;
+      `BİLGİSAYARDAKİ PROJELER:\n${projectsText() || '(yok)'}\n\nORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}`;
   }
   function setupMsg(v) {
     const model = LIVE_MODELS[v >= 2 ? 1 : 0];

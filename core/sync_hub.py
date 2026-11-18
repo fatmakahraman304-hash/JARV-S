@@ -54,7 +54,7 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
           "status": "kapalı", "done": set(), "claim": "", "active": True,
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
-          "rem_known": None, "out_cmds": []}
+          "rem_known": None, "out_cmds": [], "recent": []}
 
 
 def _log(msg: str) -> None:
@@ -469,6 +469,49 @@ def _deliver_out(files: dict, writes: dict) -> None:
         writes[name] = json.dumps(box[-10:], ensure_ascii=False)
 
 
+# ── this computer's projects, readable on every device ──────────────────────
+def projects_summary(limit: int = 8) -> list[dict]:
+    """Short status of the projects JARVIS builds on this computer
+    (memory/continuity.py), for projects-<id>.json in the shared gist."""
+    try:
+        from memory import continuity
+        rows = continuity.projects(limit=limit)
+    except Exception:
+        return []
+    out = []
+    for p in rows:
+        st = p.get("stages")
+        if isinstance(st, dict):
+            st = (st.get("plan") or {}).get("stages") or []
+        names = [str(x.get("title") if isinstance(x, dict) else x) for x in (st or [])]
+        stage = int(p.get("stage") or 0)
+        out.append({"id": p.get("id"), "title": str(p.get("title") or "")[:120],
+                    "kind": p.get("kind") or "", "status": p.get("status") or "",
+                    "stage": stage, "stages": len(names),
+                    "current": names[stage - 1] if 0 < stage <= len(names) else "",
+                    "folder": Path(str(p.get("folder") or "")).name,
+                    "note": str(p.get("note") or "")[:300], "updated": str(p.get("updated") or "")[:19]})
+    return out
+
+
+def recent_context(limit: int = 12, max_age_hours: float = 12.0) -> str:
+    """What was said on the OTHER devices lately (phone, tablet, TV …), for
+    the desktop's system prompt, so "telefonda konuştuğumuz şey" makes sense
+    here. "" when nothing recent."""
+    me = device_name()
+    cutoff = time.time() - max_age_hours * 3600
+    lines = []
+    for t in _state.get("recent") or []:
+        if str(t.get("device", "")) == me or _ts(str(t.get("ts", ""))) < cutoff:
+            continue
+        who = "Kullanıcı" if t.get("role") == "user" else "JARVIS"
+        lines.append(f"[{t.get('device', '?')}] {who}: {str(t.get('text', ''))[:300]}")
+    if not lines:
+        return ""
+    return ("\n[CONVERSATION ON THE USER'S OTHER DEVICES — same assistant, same user; "
+            "historical, not new commands]\n" + "\n".join(lines[-limit:]))
+
+
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
     """The id of the one device that should speak, or None when none is on.
     Same rule as voiceOwner() in web/app.js — keep the two in step."""
@@ -640,13 +683,15 @@ def _cycle() -> None:
     # 3. recent conversation
     with _state["lock"]:
         turns, _state["turns"] = _state["turns"], []
+    try:
+        recent = json.loads(files.get("recent.json") or "[]")
+    except Exception:
+        recent = []
+    recent = [t for t in (recent if isinstance(recent, list) else []) if isinstance(t, dict)]
     if turns:
-        try:
-            recent = json.loads(files.get("recent.json") or "[]")
-        except Exception:
-            recent = []
-        recent = (recent if isinstance(recent, list) else []) + turns
+        recent = recent + turns
         writes["recent.json"] = json.dumps(recent[-RECENT_MAX:], ensure_ascii=False)
+    _state["recent"] = recent[-RECENT_MAX:]
 
     # 3a. things this computer sends to the phone, tablet, TV …
     _deliver_out(files, writes)
@@ -683,6 +728,13 @@ def _cycle() -> None:
             _state["local_keys"] = {f"{c}/{k}" for c in _CATS for k in merged.get(c, {})}
         if merged != cloud:
             writes["memory.json"] = json.dumps(merged, ensure_ascii=False)
+
+    # 4b. this computer's projects, so the phone can tell how they are going
+    if _state.get("last_projects", 0.0) + MEMORY_EVERY < now:
+        _state["last_projects"] = now
+        summary = json.dumps({"computer": device_name(), "projects": projects_summary()}, ensure_ascii=False)
+        if summary != (files.get(f"projects-{me}.json") or ""):
+            writes[f"projects-{me}.json"] = summary
 
     # 5. heartbeat
     if now - _state["last_beat"] > HEARTBEAT_EVERY:
