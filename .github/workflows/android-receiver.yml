@@ -1,0 +1,45 @@
+name: JARVIS Alıcı (Android APK)
+
+on:
+  push:
+    branches: [main]
+    paths: ["android-receiver/**", ".github/workflows/android-receiver.yml"]
+  pull_request:
+    paths: ["android-receiver/**", ".github/workflows/android-receiver.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build the APK
+        working-directory: android-receiver
+        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Name it
+        run: |
+          mkdir -p out
+          cp android-receiver/app/build/outputs/apk/release/app-release.apk out/jarvis-alici.apk
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-alici
+          path: out/jarvis-alici.apk
+      - name: Publish (download link that stays the same)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view alici >/dev/null 2>&1 || gh release create alici --title "JARVIS Alıcı" \
+            --notes "Projeksiyon/Android TV için JARVIS Alıcı. Projeksiyonun tarayıcısında bu sayfadaki jarvis-alici.apk'yı indirip kur." --latest=false
+          gh release upload alici out/jarvis-alici.apk --clobber

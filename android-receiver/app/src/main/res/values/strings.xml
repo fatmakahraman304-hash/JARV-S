@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">JARVIS Alıcı</string>
+    <string name="a11y_label">JARVIS Alıcı — kumanda tuşları, yazı ve ekran görüntüsü</string>
+    <string name="a11y_desc">Telefondaki JARVIS projeksiyonu kontrol edebilsin diye: kumanda tuşlarını basar, kutulara yazı yazar ve ekranın görüntüsünü alır.</string>
+</resources>
