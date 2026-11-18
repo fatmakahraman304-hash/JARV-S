@@ -87,6 +87,17 @@
     .ag .row2 { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
     .ag .row2 span { flex: 1; } .ag .row2 small { color: var(--dim); }
     .ag .x { background: none; border: 1px solid var(--line2); color: var(--text); border-radius: 9px; padding: 4px 10px; cursor: pointer; }
+    .board { display: grid; grid-template-columns: repeat(8, 1fr); width: min(92vw, 520px); aspect-ratio: 1; margin: 6px auto 0; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; user-select: none; }
+    .board div { display: flex; align-items: center; justify-content: center; font-size: min(9vw, 52px); line-height: 1; cursor: pointer; position: relative; }
+    .board .l { background: #e9cfa6; } .board .d { background: #a8743f; }
+    .board .w { color: #fff; text-shadow: 0 0 2px #000, 0 0 1px #000; } .board .b { color: #111; }
+    .board .sel { box-shadow: inset 0 0 0 4px #ff8a1c; } .board .last { box-shadow: inset 0 0 0 3px rgba(255,200,60,.85); }
+    .board .tgt::after { content: ""; width: 26%; height: 26%; border-radius: 50%; background: rgba(20,20,20,.35); position: absolute; }
+    .board .hint { box-shadow: inset 0 0 0 4px #5ef0a8; }
+    .coach { margin-top: 8px; padding: 10px; border-radius: 10px; background: rgba(94,240,168,.08); border: 1px solid rgba(94,240,168,.3); font-size: 14px; }
+    #s-chess select { background: var(--card); color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 9px; }
+    .thumbs { display: flex; gap: 8px; margin-top: 10px; } .thumbs img { width: 30%; border-radius: 10px; border: 1px solid var(--line2); }
+    .falout { margin-top: 12px; white-space: pre-line; line-height: 1.6; font-size: 15px; }
     .pcgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .btn.pri { background: linear-gradient(145deg, #ff9a2e, #d4550a); color: #1a0d03; border: 0; font-weight: 700; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
@@ -186,6 +197,8 @@
         <button class="chip" id="t-rem" type="button" hidden>⏰</button>
         <button class="chip" id="t-pc" type="button">💻 Bilgisayar</button>
         <button class="chip" id="t-agenda" type="button">📅 Ajanda</button>
+        <button class="chip" id="t-chess" type="button">♟️ Satranç</button>
+        <button class="chip" id="t-fal" type="button">☕ Fal</button>
         <button class="chip" id="t-update" type="button">⬆ Güncelle</button>
       </div>
     </section>
@@ -228,6 +241,29 @@
     <h2>CİHAZLAR <button class="ib" data-close type="button">✕</button></h2>
     <p>Hepsi aynı hafızayı kullanır. Bilgisayarlara buradan ya da sesle komut verebilirsin: <i>"laptopta sunumu aç"</i>.</p>
     <div id="devs"></div>
+  </section>
+
+  <section class="sheet" id="s-chess" hidden>
+    <h2>SATRANÇ <button class="ib" data-close type="button">✕</button></h2>
+    <p id="ch-status">Hamle için taşa, sonra gideceği kareye dokun — ya da sesle söyle ("at f3").</p>
+    <div class="board" id="ch-board"></div>
+    <p id="ch-coach" class="coach" hidden></p>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap">
+      <button class="btn pri" id="ch-new" type="button">Yeni oyun</button>
+      <select id="ch-level"><option value="kolay">Kolay</option><option value="orta" selected>Orta</option><option value="zor">Zor</option></select>
+      <select id="ch-color"><option value="white">Beyaz</option><option value="black">Siyah</option></select>
+      <button class="btn" id="ch-undo" type="button">Geri al</button><button class="btn" id="ch-hint" type="button">💡 İpucu</button>
+      <button class="btn" id="ch-teach" type="button">🎓 Öğret: kapalı</button>
+    </div>
+  </section>
+
+  <section class="sheet" id="s-fal" hidden>
+    <h2>KAHVE FALI <button class="ib" data-close type="button">✕</button></h2>
+    <p>Fincanı tabağa kapat, soğuyunca aç; fincanın içinin ve tabağın fotoğrafını çek (1–3 fotoğraf). <small>(Eğlence içindir.)</small></p>
+    <div class="row"><label class="btn pri" for="fal-in">📷 Fotoğraf çek / seç</label><input id="fal-in" type="file" accept="image/*" capture="environment" multiple hidden>
+      <button class="btn" id="fal-go" type="button" disabled>☕ Falıma bak</button></div>
+    <div id="fal-thumbs" class="thumbs"></div>
+    <div id="fal-out" class="falout"></div>
   </section>
 
   <section class="sheet" id="s-agenda" hidden>
@@ -282,6 +318,7 @@
   </section>
 
   <script src="reactor.js"></script>
+  <script src="chess.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

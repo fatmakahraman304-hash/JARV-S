@@ -615,3 +615,49 @@ def search(board: Board, level: str = "orta", stop=None, rng=None):
         if pool and best_score < MATE - 100:            # never pass up a mate
             best = rng.choice(pool)
     return best, best_score, reached
+
+
+def root_scores(board: Board, depth: int = 2) -> list:
+    """Every legal move with its score for the side to move, all searched to
+    the same fixed depth (plus captures), best first — a fair way to compare
+    the user's move with the best one (the teaching coach)."""
+    b = board.copy()
+
+    def quiesce(alpha, beta, d=0):
+        stand = evaluate(b)
+        if stand >= beta:
+            return beta
+        alpha = max(alpha, stand)
+        if d > 4:
+            return alpha
+        for m in _order(b, b.legal_moves(captures_only=True)):
+            b.push(m)
+            sc = -quiesce(-beta, -alpha, d + 1)
+            b.pop()
+            if sc >= beta:
+                return beta
+            alpha = max(alpha, sc)
+        return alpha
+
+    def negamax(d, alpha, beta, ply):
+        moves = b.legal_moves()
+        if not moves:
+            return -MATE + ply if b.in_check() else 0
+        if d <= 0:
+            return quiesce(alpha, beta)
+        for m in _order(b, moves):
+            b.push(m)
+            sc = -negamax(d - 1, -beta, -alpha, ply + 1)
+            b.pop()
+            if sc >= beta:
+                return beta
+            alpha = max(alpha, sc)
+        return alpha
+
+    out = []
+    for m in b.legal_moves():
+        b.push(m)
+        out.append((-negamax(depth - 1, -MATE - 1, MATE + 1, 1), m))
+        b.pop()
+    out.sort(key=lambda x: -x[0])
+    return out
