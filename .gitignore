@@ -68,3 +68,9 @@ screenshots/
 /config/shared_reminders.json
 /tools/platform-tools/
 /config/android_devices.json
+
+# Computer-side extras (plugins/_pc_kit.py)
+/memory/focus.json
+/memory/screen_time.json
+/memory/pc_extras.json
+/memory/*.json.tmp
