@@ -683,7 +683,11 @@ class JarvisLive:
         try:
             recover_jobs()
         except Exception as exc:
-            print(f"[Memory] İş durumu okunamadı: {exc}")
+            print(f"[Memory] Job state could not be read: {exc}")
+        # A coding job cut off by a shutdown or an update in the last hours is
+        # picked up again by itself, from the stage it reached.
+        threading.Thread(target=self._resume_interrupted_work, daemon=True,
+                         name="resume-work").start()
         self._session_log: list[str] = []          # conversation turns for end-of-session summary
 
         self._enhanced_live = True  # proactive audio; auto-disabled if the server rejects it
@@ -1266,6 +1270,28 @@ class JarvisLive:
         # this object — it only ever sees what this callback returns.
         return (url, key, f"{url}/auto-login?key={key}", manual,
                 getattr(self._dashboard, "_bind_error", "") or "")
+
+    def _resume_interrupted_work(self) -> None:
+        time.sleep(25)                      # let the window and the session come up
+        try:
+            from datetime import datetime, timezone
+            from memory.continuity import projects
+            recent = []
+            for p in projects(unfinished_only=True, limit=5):
+                try:
+                    age = (datetime.now(timezone.utc) - datetime.fromisoformat(p["updated"])).total_seconds()
+                except Exception:
+                    continue
+                if p["status"] == "yarıda kaldı" and age < 6 * 3600:
+                    recent.append(p)
+            if not recent:
+                return
+            from actions import dev_agent
+            p = recent[0]
+            self.ui.write_log(f"SYS: '{p['title']}' projesi yarıda kalmıştı — kaldığı yerden devam ediyorum.")
+            dev_agent._start_resume(str(p["id"]), player=self.ui)
+        except Exception as exc:
+            print(f"[Resume] {exc}")
 
     def _persist_turn(self, role, text):
         try:

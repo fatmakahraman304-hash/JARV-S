@@ -714,7 +714,7 @@ _player_ref = None
 
 
 _PHASES = {"improve": ["reading", "planning", "writing", "checking", "testing"],
-           "build": ["planning", "writing", "installing", "testing"]}
+           "build": ["planning", "reading", "writing", "checking", "testing"]}
 
 
 def _new_job(folder: Path, model: str, instruction: str, player,
@@ -783,6 +783,17 @@ def _status_report() -> str:
     """What the coding agent is doing, or did — for the assistant to say."""
     j = _job_snapshot()
     if not j:
+        try:
+            from memory.continuity import projects
+            pend = projects(unfinished_only=True, limit=5)
+            done = projects(limit=3)
+        except Exception:
+            pend, done = [], []
+        if pend or done:
+            lines = [f"#{p['id']} {p['title']} — {p['status']}" for p in (pend or done)]
+            return ("No coding job is running right now. From the journal: " + "; ".join(lines)
+                    + (". Unfinished ones can be continued with mode='resume'." if pend else ".")
+                    + " Tell the user briefly, in their language.")
         return ("The coding agent has not worked on a folder in this session. "
                 "Tell the user that, in one sentence.")
     took = (j["finished"] or time.time()) - j["started"]
@@ -1884,11 +1895,32 @@ def _start_improve(folder_raw: str, instruction: str, speak=None, player=None) -
     provider = _coding_provider()
     who = provider.partition("@")[2] or provider or "the coding model"
     _new_job(folder, who, instruction, player, kind="improve")
+    pid = _journal_start("improve", folder.name, folder, instruction)
     return _run_job(lambda: _improve_folder(folder, instruction, player),
-                    folder.name, who, speak, player)
+                    folder.name, who, speak, player, pid=pid)
 
 
-def _run_job(job, name: str, who: str, speak=None, player=None) -> str:
+def _journal(pid, **fields) -> None:
+    """Write a coding job's progress where a restart or an update will find it."""
+    if not pid:
+        return
+    try:
+        from memory.continuity import project_update
+        project_update(pid, **fields)
+    except Exception as e:
+        _log(None, f"Journal write failed: {str(e)[:120]}")
+
+
+def _journal_start(kind: str, title: str, folder, instruction: str, stages=None):
+    try:
+        from memory.continuity import project_start
+        return project_start(kind, title, str(folder), instruction, stages)
+    except Exception as e:
+        _log(None, f"Journal start failed: {str(e)[:120]}")
+        return None
+
+
+def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str:
     """Run a coding job on its own thread and answer the tool call at once.
 
     Both kinds of job take minutes. Run inside the tool call, they held the
@@ -1914,6 +1946,9 @@ def _run_job(job, name: str, who: str, speak=None, player=None) -> str:
             result = f"The coding job on '{name}' failed: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
+            _journal(pid, status={"done": "bitti", "nothing changed": "bitti",
+                                  "finished with problems": "sorunlu bitti",
+                                  "failed": "başarısız"}.get(status, status), note=result)
             try:
                 _update(status, result=result, finished=time.time())
             finally:
@@ -1942,9 +1977,169 @@ def _start_build(description: str, language: str, project_name: str,
     provider = _coding_provider()
     who = provider.partition("@")[2] or provider or "the coding model"
     _new_job(PROJECTS_DIR / name, who, description, player, kind="build")
-    return _run_job(lambda: _build_project(description, language, project_name,
-                                           timeout, speak=None, player=player),
-                    name, who, speak, player)
+    pid = _journal_start("build", name, PROJECTS_DIR / name, description)
+
+    def job():
+        try:
+            return _build_staged(description, language, project_name, player, pid)
+        except _StagePlanFailed as e:
+            _log(player, f"Could not plan stages ({str(e)[:120]}); building in one go.")
+            return _build_project(description, language, project_name, timeout,
+                                  speak=None, player=player)
+    return _run_job(job, name, who, speak, player, pid=pid)
+
+
+# ── project manager: plan → stages → code → test → present ─────────────────
+# "Bana bir internet sitesi yap": the work is split into stages, each one coded
+# and tested before the next (by the best coding model, with the usual checks),
+# progress is shown, every stage is written to the journal — so a shutdown or an
+# update loses at most the stage in flight — and the result is opened at the end.
+
+class _StagePlanFailed(Exception):
+    pass
+
+
+def _plan_stages(description: str, language: str) -> dict:
+    prompt = f"""You are the lead engineer planning a new project.
+
+Request (often in Turkish): {description}
+Preferred language/stack: {language} (choose what fits a website if it is one: plain HTML/CSS/JS unless the request needs more)
+
+Return ONLY JSON:
+{{
+  "project_name": "short_snake_case",
+  "summary": "one sentence, in Turkish, of what will be built",
+  "stages": [{{"title": "short Turkish title", "goal": "exactly what this stage delivers, testable"}}],
+  "present": {{"type": "web | run | none", "entry": "index.html or main file", "command": "how to run it, if any"}}
+}}
+
+Rules: 3 to 6 stages; each stage leaves a working project; the first sets up the
+structure and the core, later ones add features, the last one polishes, tests and
+writes the README (Turkish).
+
+JSON:"""
+    try:
+        plan = _json_object(_get_model(MODEL_PLANNER).generate_content(prompt).text)
+    except Exception as e:
+        raise _StagePlanFailed(str(e)) from e
+    stages = [s for s in (plan.get("stages") or []) if isinstance(s, dict) and s.get("title")]
+    if not stages:
+        raise _StagePlanFailed("no stages in the plan")
+    plan["stages"] = [{"title": str(s["title"])[:80], "goal": str(s.get("goal", ""))[:600], "done": False}
+                      for s in stages[:6]]
+    return plan
+
+
+def _present(folder: Path, present: dict, player) -> str:
+    """Open the result: a website in the browser, a program's first output."""
+    present = present or {}
+    entry = str(present.get("entry") or "")
+    html = folder / entry if entry.endswith(".html") and (folder / entry).is_file() else None
+    if html is None:
+        found = sorted(folder.rglob("index.html"), key=lambda p: len(p.parts))
+        html = found[0] if found else None
+    if html is not None and present.get("type", "web") != "run":
+        try:
+            import webbrowser
+            webbrowser.open(html.resolve().as_uri())
+            return f"Opened {html.relative_to(folder).as_posix()} in the browser."
+        except Exception as e:
+            return f"Could not open the page: {str(e)[:100]}"
+    cmd = str(present.get("command") or "")
+    if present.get("type") == "run" and cmd:
+        out = _run_project(cmd, folder, timeout=20)
+        return f"Ran `{cmd}`: {out.strip()[:300]}"
+    return ""
+
+
+def _build_staged(description: str, language: str, project_name: str, player, pid,
+                  plan: dict | None = None, folder: Path | None = None) -> str:
+    started = time.monotonic()
+    if plan is None:
+        _update("planning")
+        _log(player, "Planning the project in stages…")
+        plan = _plan_stages(description, language)
+        base = re.sub(r"[^\w\-]", "_", project_name or plan.get("project_name") or "jarvis_project")
+        folder = PROJECTS_DIR / base
+        n = 2
+        while folder.exists() and any(folder.iterdir()):
+            folder = PROJECTS_DIR / f"{base}_{n}"
+            n += 1
+        folder.mkdir(parents=True, exist_ok=True)
+        stage_list = "\n".join(f"{i + 1}. {s['title']} — {s['goal']}" for i, s in enumerate(plan["stages"]))
+        (folder / "README.md").write_text(
+            f"# {folder.name}\n\n{plan.get('summary') or description}\n\n## İstek\n{description}\n\n"
+            f"## Plan\n{stage_list}\n", encoding="utf-8")
+        _journal(pid, folder=str(folder), title=folder.name,
+                 stages={"plan": plan, "language": language})
+    stages = plan["stages"]
+    with _state_lock:
+        if _JOB:
+            _JOB["folder"], _JOB["path"] = folder.name, str(folder)
+            _JOB["summary"] = plan.get("summary", "")
+    _log(player, f"Plan ({len(stages)} stages): " + " → ".join(s["title"] for s in stages))
+    results = []
+    for i, st in enumerate(stages):
+        if st.get("done"):
+            continue
+        _log(player, f"── Stage {i + 1}/{len(stages)}: {st['title']}")
+        _journal(pid, stage=i)
+        overview = "\n".join(f"{j + 1}. {s['title']}{' (done)' if s.get('done') else ''} — {s['goal']}"
+                             for j, s in enumerate(stages))
+        instruction = (f"PROJECT GOAL: {description}\nStack: {language}\nFULL PLAN:\n{overview}\n\n"
+                       f"NOW DO STAGE {i + 1}/{len(stages)}: {st['title']} — {st['goal']}\n"
+                       "The earlier stages are already in the files. Do only this stage, completely and "
+                       "working; keep README.md (Turkish) up to date with how to run the project.")
+        result = _improve_folder(folder, instruction, player, open_editor=False)
+        st["done"] = True
+        st["result"] = result[:600]
+        results.append(f"{i + 1}. {st['title']}")
+        _journal(pid, stage=i + 1, stages={"plan": plan, "language": language})
+    shown = _present(folder, plan.get("present") or {}, player)
+    _open_vscode(folder)
+    took = time.monotonic() - started
+    msg = (f"Built '{folder.name}' in {len(stages)} stages ({took / 60:.0f} min): "
+           f"{plan.get('summary', '')} {shown}").strip()
+    _log(player, msg)
+    return msg
+
+
+def _start_resume(target: str, speak=None, player=None) -> str:
+    """Pick up the coding job that a shutdown or an update interrupted."""
+    global _job_name
+    try:
+        from memory.continuity import projects
+        pending = projects(unfinished_only=True, limit=10)
+    except Exception as e:
+        return f"I could not read the job journal: {e}"
+    if not pending:
+        return "There is no unfinished coding job to continue, sir."
+    t = (target or "").strip().casefold().lstrip("#")
+    pick = next((p for p in pending if t and (str(p["id"]) == t or t in p["title"].casefold()
+                                               or t in str(p["folder"]).casefold())), pending[0])
+    if not _job_lock.acquire(blocking=False):
+        return f"I am still working on '{_job_name}', sir. One job at a time."
+    folder = Path(pick["folder"])
+    _job_name = pick["title"]
+    who = _coding_provider() or "the coding model"
+    _journal(pick["id"], status="çalışıyor")
+    st = pick.get("stages") or {}
+    if pick["kind"] == "build" and isinstance(st, dict) and st.get("plan") and folder.is_dir():
+        _new_job(folder, who, pick["instruction"], player, kind="build")
+        done = sum(1 for s in st["plan"]["stages"] if s.get("done"))
+        _log(player, f"Resuming '{pick['title']}' at stage {done + 1}/{len(st['plan']['stages'])}.")
+        return _run_job(lambda: _build_staged(pick["instruction"], st.get("language", "python"), "",
+                                              player, pick["id"], plan=st["plan"], folder=folder),
+                        pick["title"], who, speak, player, pid=pick["id"])
+    if not folder.is_dir():
+        _job_lock.release()
+        _journal(pick["id"], status="iptal", note="folder no longer exists")
+        return f"The folder of '{pick['title']}' no longer exists, so it cannot be resumed."
+    _new_job(folder, who, pick["instruction"], player, kind="improve")
+    instruction = (pick["instruction"] + "\n\n(This job was interrupted before it finished. Look at the "
+                   "folder as it is now, keep what is already done, and complete the rest.)")
+    return _run_job(lambda: _improve_folder(folder, instruction, player),
+                    pick["title"], who, speak, player, pid=pick["id"])
 
 
 def dev_agent(
@@ -1960,6 +2155,8 @@ def dev_agent(
     folder       = str(p.get("folder") or "").strip()
     if mode == "status":
         return _status_report()
+    if mode in ("resume", "continue", "devam"):
+        return _start_resume(str(p.get("project_name") or description or ""), speak=speak, player=player)
     if mode == "improve" or (folder and mode != "build"):
         if not description:
             return "Tell me what to change in the folder, sir."
@@ -1984,9 +2181,12 @@ TOOL = {
         "a path they name: fixes bugs, adds features, refactors. When a folder is "
         "uploaded, ANY request to add, create or change something is improve. "
         "Both modes run in the background with progress on screen. "
-        "mode='build' creates a brand-new standalone project, only when no "
+        "mode='build' creates a brand-new project (a website, app, game, tool) — "
+        "planned in stages, each coded and tested, then opened — only when no "
         "folder is meant. mode='status' reports what the coding agent is doing or "
         "did — use it whenever the user asks about the coding work. "
+        "mode='resume' continues a coding job that a shutdown or an update cut "
+        "off ('kaldığımız yerden devam et', 'yarım kalan projeye devam'). "
         "Before calling with improve or build, FIRST say one short sentence that "
         "you are handing it to the coding agent, then call it in the same turn."),
     "parameters": {
@@ -1998,7 +2198,7 @@ TOOL = {
             },
             "mode": {
                 "type": "STRING",
-                "description": "'improve' to change an existing folder, 'build' for a new project, 'status' to ask what the coding agent is doing or did"
+                "description": "'improve' to change an existing folder, 'build' for a new project, 'status' to ask what the coding agent is doing or did, 'resume' to continue an interrupted job"
             },
             "folder": {
                 "type": "STRING",
@@ -2017,9 +2217,7 @@ TOOL = {
                 "description": "Run timeout in seconds (default: 30)"
             }
         },
-        "required": [
-            "description"
-        ]
+        "required": []
     },
     "handler": dev_agent,
 }

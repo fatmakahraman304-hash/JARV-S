@@ -159,6 +159,7 @@
         <button class="chip" id="t-screen" type="button">🖥️ Ekranı göster</button>
         <button class="chip" id="t-devs" type="button">🔗 Cihazlar</button>
         <button class="chip" id="t-code" type="button" hidden>⌨️ Son kod</button>
+        <button class="chip" id="t-image" type="button">🎨 Resim</button>
         <button class="chip" id="t-update" type="button">⬆ Güncelle</button>
       </div>
     </section>
@@ -201,6 +202,18 @@
     <p id="code-note"></p>
     <pre class="code" id="code-body"></pre>
     <div class="row"><button class="btn pri" id="code-copy" type="button">Kopyala</button><button class="btn" id="code-dl" type="button">İndir</button></div>
+  </section>
+
+  <section class="sheet" id="s-image" hidden>
+    <h2>RESİM <button class="ib" data-close type="button">✕</button></h2>
+    <img id="img-view" alt="JARVIS'in çizdiği resim" style="width:100%;max-height:62vh;object-fit:contain;border-radius:12px;border:1px solid var(--line2);background:#000">
+    <p id="img-note" style="margin-top:8px"></p>
+    <form class="ask" id="img-edit" autocomplete="off" style="margin-top:10px">
+      <input id="img-edit-inp" placeholder="Değiştir: ör. gökyüzünü mor yap">
+      <button class="mic send" type="submit" aria-label="Değiştir">✎</button>
+    </form>
+    <div class="row"><button class="btn pri" id="img-dl" type="button">İndir</button><button class="btn" id="img-share" type="button">Paylaş</button>
+      <button class="btn" id="img-full" type="button">Tam ekran</button></div>
   </section>
 
   <section class="sheet" id="s-update" hidden>

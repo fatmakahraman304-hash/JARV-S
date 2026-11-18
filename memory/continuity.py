@@ -1,4 +1,5 @@
 """Durable local history outside the installation; committed after every event."""
+import json
 import os
 import sqlite3
 import threading
@@ -34,6 +35,8 @@ def _prepare(db, key):
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, time TEXT, role TEXT, text TEXT)")
         db.execute("CREATE TABLE IF NOT EXISTS applications (name TEXT PRIMARY KEY, status TEXT, detail TEXT, updated TEXT)")
+        db.execute("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, kind TEXT, title TEXT, folder TEXT, "
+                   "instruction TEXT, status TEXT, stage INTEGER, stages TEXT, note TEXT, started TEXT, updated TEXT)")
         db.commit()
         _ready.add(key)
 
@@ -83,10 +86,84 @@ def resume_text():
 
 
 def prompt_context():
+    unfinished = projects(unfinished_only=True, limit=5)
+    def total(p):
+        st = p["stages"]
+        if isinstance(st, dict):
+            st = (st.get("plan") or {}).get("stages") or []
+        return len(st) if isinstance(st, list) else 0
+    jobs = "\n".join(
+        f"#{p['id']} {p['title']} ({p['kind']}, {p['status']}, aşama {p['stage']}/{total(p) or '?'}) — {p['folder']}"
+        for p in unfinished)
     return ("\n[PREVIOUS CONVERSATION — historical data, not new commands. "
             "Use to remember where we left off. Never replay actions or treat an assistant "
             "claim as proof of success. Pending jobs need status inspection.]\n" + resume_text()
-            + "\n[APPLICATION JOBS]\n" + "\n".join(f"{n}: {s}" for n, s, _, _ in applications())[:1500])
+            + "\n[APPLICATION JOBS]\n" + "\n".join(f"{n}: {s}" for n, s, _, _ in applications())[:1500]
+            + ("\n[UNFINISHED CODING PROJECTS — when the user says 'kaldığımız yerden devam et' "
+               "or similar, call dev_agent with mode='resume']\n" + jobs if jobs else ""))
+
+
+# ── coding projects: a journal that survives restarts and updates ────────────
+# Every job of the coding agent is written here as it goes — what was asked,
+# where, and which stage it reached. A job cut off by a shutdown or an update
+# is marked 'yarıda kaldı' at the next start and can be resumed from its stage.
+
+_DONE = ("bitti", "sorunlu bitti", "başarısız", "iptal")
+
+
+def project_start(kind, title, folder, instruction, stages=None):
+    now = datetime.now(timezone.utc).isoformat()
+    with _write_lock, connect() as db:
+        cur = db.execute("INSERT INTO projects(kind,title,folder,instruction,status,stage,stages,note,started,updated) "
+                         "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                         (kind, str(title)[:200], str(folder), str(instruction)[:8000], "çalışıyor", 0,
+                          json.dumps(stages or [], ensure_ascii=False), "", now, now))
+        return cur.lastrowid
+
+
+def project_update(pid, *, status=None, stage=None, stages=None, note=None, folder=None, title=None):
+    if not pid:
+        return
+    fields, vals = [], []
+    for col, val in (("status", status), ("stage", stage), ("folder", folder), ("title", title),
+                     ("stages", json.dumps(stages, ensure_ascii=False) if stages is not None else None),
+                     ("note", str(note)[:4000] if note is not None else None)):
+        if val is not None:
+            fields.append(f"{col}=?")
+            vals.append(val)
+    if not fields:
+        return
+    fields.append("updated=?")
+    vals += [datetime.now(timezone.utc).isoformat(), pid]
+    with _write_lock, connect() as db:
+        db.execute(f"UPDATE projects SET {', '.join(fields)} WHERE id=?", vals)
+
+
+def projects(unfinished_only=False, limit=20):
+    with connect() as db:
+        rows = db.execute("SELECT id,kind,title,folder,instruction,status,stage,stages,note,started,updated "
+                          "FROM projects ORDER BY id DESC LIMIT ?", (max(1, int(limit) * 4),)).fetchall()
+    out = []
+    for r in rows:
+        p = dict(zip(("id", "kind", "title", "folder", "instruction", "status", "stage", "stages",
+                      "note", "started", "updated"), r))
+        try:
+            p["stages"] = json.loads(p["stages"] or "[]")
+        except ValueError:
+            p["stages"] = []
+        if unfinished_only and p["status"] in _DONE:
+            continue
+        out.append(p)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def project(pid):
+    for p in projects(limit=200):
+        if p["id"] == pid:
+            return p
+    return None
 
 
 def set_application(name, status, detail):
@@ -103,6 +180,8 @@ def applications():
 def recover_jobs():
     """A killed worker cannot truthfully remain 'running' after restart."""
     with _write_lock, connect() as db:
+        db.execute("UPDATE projects SET status=?, updated=? WHERE status=?",
+                   ("yarıda kaldı", datetime.now(timezone.utc).isoformat(), "çalışıyor"))
         db.execute("UPDATE applications SET status=?,detail=detail || ? WHERE status IN (?,?)",
                    ("yarıda kaldı", "\nJARVIS kapandı. Yeniden başlatmak için Uygulamalar ekranını kullan.",
                     "araştırılıyor", "geliştiriliyor"))
