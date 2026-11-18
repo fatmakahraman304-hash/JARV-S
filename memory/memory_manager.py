@@ -1,6 +1,5 @@
 import json
 import os
-import re
 from datetime import datetime
 from threading import RLock
 from pathlib import Path
@@ -27,7 +26,7 @@ def get_base_dir() -> Path:
 
 
 BASE_DIR         = get_base_dir()
-from memory.continuity import data_dir
+from memory.continuity import data_dir, memory_words, recall_terms
 MEMORY_PATH      = data_dir() / "long_term.json"
 _LEGACY_MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
 _lock            = RLock()
@@ -361,25 +360,26 @@ def format_memory_for_prompt(memory: dict | None) -> str:
 
 # ── Recall ────────────────────────────────────────────────────────────────────
 
-def _score(query_words: list[str], cat: str, key: str, value: str) -> int:
-    """Cheap lexical relevance. No embeddings, no network, no model call - this
-    runs in well under a millisecond, which is the entire point: recall must
-    cost one model round trip, never two."""
-    hay_key = _pretty(key).lower()
-    hay_val = value.lower()
-    score   = 0
-    for w in query_words:
-        if not w:
+def _score(query_words: set[str], cat: str, key: str, value: str) -> tuple[int, int]:
+    """Rank by distinct clues first, then favor exact matches in fact names."""
+    keys = memory_words(key)
+    values = memory_words(value)
+    category = memory_words(cat)
+    words = keys | values
+    coverage = weight = 0
+    for term in query_words:
+        if term in keys:
+            weight += 10
+        elif term in values:
+            weight += 6
+        elif term in category:
+            weight += 2
+        elif len(term) >= 4 and any(word.startswith(term) for word in words):
+            weight += 1
+        else:
             continue
-        if w == hay_key:
-            score += 10
-        elif w in hay_key:
-            score += 6
-        if w in hay_val:
-            score += 3
-        if w in cat:
-            score += 1
-    return score
+        coverage += 1
+    return coverage, weight
 
 
 def search_memory(query: str, limit: int = 8) -> str:
@@ -388,9 +388,9 @@ def search_memory(query: str, limit: int = 8) -> str:
     An empty query is treated as "show me everything you know", capped - the
     model asks that when the user says "what do you remember about me?"."""
     memory = load_memory()
-    words  = [w for w in re.split(r"[^\w]+", (query or "").lower()) if len(w) > 1]
+    words = recall_terms(query or "")
 
-    rows: list[tuple[int, str, str, str]] = []
+    rows: list[tuple[int, int, str, str, str]] = []
     for cat, items in memory.items():
         if not isinstance(items, dict):
             continue                     # skip 'sessions', which is a list
@@ -398,9 +398,9 @@ def search_memory(query: str, limit: int = 8) -> str:
             val = _entry_value(entry)
             if not val:
                 continue
-            s = _score(words, cat, key, val) if words else 1
-            if s > 0:
-                rows.append((s, cat, key, val))
+            coverage, weight = _score(words, cat, key, val)
+            if coverage or not (query or "").strip():
+                rows.append((coverage, weight, cat, key, val))
 
     from memory.continuity import search
     try:
@@ -413,8 +413,8 @@ def search_memory(query: str, limit: int = 8) -> str:
         return (f"Nothing stored about '{query}'." if query
                 else "I have not stored anything about this person yet.")
 
-    rows.sort(key=lambda r: (-r[0], r[2]))
-    lines = [f"{cat}/{_pretty(key)}: {val}" for _s, cat, key, val in rows[:max(1, limit)]]
+    rows.sort(key=lambda r: (-r[0], -r[1], r[3]))
+    lines = [f"{cat}/{_pretty(key)}: {val}" for _, _, cat, key, val in rows[:max(1, limit)]]
     head  = (f"Stored facts matching '{query}':" if query
              else "Everything currently stored:")
     more  = (f"\n(+{len(rows) - len(lines)} more — search with a narrower keyword)"

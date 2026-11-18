@@ -190,6 +190,20 @@ def recover_jobs():
                     "araştırılıyor", "geliştiriliyor"))
 
 
+_RECALL_STOP = {"bir", "ile", "icin", "olan", "bana", "benim", "hani", "ne", "diye",
+                "the", "and", "for", "was", "about", "what"}
+
+
+def memory_words(value):
+    folded = unicodedata.normalize("NFKD", value.casefold().replace("ı", "i"))
+    plain = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return set(re.findall(r"[^\W_]+", plain))
+
+
+def recall_terms(query):
+    return {word for word in memory_words(str(query)) if len(word) >= 2} - _RECALL_STOP
+
+
 def search(query, limit=8):
     # Bound SQL and escape LIKE metacharacters; user text is never SQL.
     term = str(query).replace("!", "!!").replace("%", "!%").replace("_", "!_")
@@ -199,20 +213,13 @@ def search(query, limit=8):
     if not rows and str(query).strip():
         # Exact matches still search the complete journal. For conversational
         # wording, rank recent turns by coverage, then by recency.
-        def terms(value):
-            folded = unicodedata.normalize("NFKD", value.casefold().replace("ı", "i"))
-            plain = "".join(ch for ch in folded if not unicodedata.combining(ch))
-            return set(re.findall(r"[^\W_]+", plain))
-
-        stop = {"bir", "ile", "icin", "olan", "bana", "benim", "hani", "ne", "diye",
-                "the", "and", "for", "was", "about", "what"}
-        wanted = {w for w in terms(str(query)) if len(w) >= 2 and w not in stop}
+        wanted = recall_terms(query)
         if wanted:
             def candidates(db):
                 for event_id, date, role, text in db.execute(
                     "SELECT id,time,role,text FROM events ORDER BY id DESC LIMIT 1500"
                 ):
-                    words = terms(text)
+                    words = memory_words(text)
                     exact = wanted & words
                     # Handles common Turkish endings such as 'kanat' / 'kanatları'.
                     partial = sum(any(len(w) >= 4 and other.startswith(w) for other in words)
