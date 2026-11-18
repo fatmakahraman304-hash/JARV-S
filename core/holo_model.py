@@ -104,7 +104,7 @@ def clean_part(p, i: int = 0) -> dict:
 
 def clean(m) -> dict:
     m = m if isinstance(m, dict) else {}
-    parts = [clean_part(p, i) for i, p in enumerate((m.get("parts") if isinstance(m.get("parts"), list) else [])[:160])]
+    parts = [clean_part(p, i) for i, p in enumerate((m.get("parts") if isinstance(m.get("parts"), list) else [])[:320])]
     box = m.get("photo_box")
     box = [_clamp(_num(v, 0), 0, 1) for v in box[:4]] if isinstance(box, list) and len(box) >= 4 else None
     if box and (box[2] - box[0] < 0.02 or box[3] - box[1] < 0.02):
@@ -153,7 +153,7 @@ def _fan(n: int, offset: int, reverse: bool) -> list:
     return [(a, c, b) for a, b, c in tri] if reverse else tri
 
 
-def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 48, corner_deg: float = 42.0, smooth: bool = True):
+def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 96, corner_deg: float = 42.0, smooth: bool = True):
     """profile: [[r 0..1, y 0..1]] bottom → top. Smooth runs between sharp
     corners, flat caps where the profile ends away from the axis."""
     pr = [(float(r), float(y)) for r, y in profile]
@@ -177,7 +177,7 @@ def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 48, co
         if len(run) < 2:
             continue
         if len(run) >= 3 and smooth:
-            run = [(max(0.0, r), y) for r, y in catmull(run, 4)]
+            run = [(max(0.0, r), y) for r, y in catmull(run, 8)]
         rows = len(run)
         V = np.zeros((rows * seg, 3), np.float32)
         for k, (r, y) in enumerate(run):
@@ -221,7 +221,7 @@ def _box(sx, sy, sz):
     return out
 
 
-def _rounded_box(sx, sy, sz, r, n: int = 8):
+def _rounded_box(sx, sy, sz, r, n: int = 12):
     h = np.array([sx, sy, sz], np.float64) / 2
     r = min(r, *(h * 0.999))
     if r < 1e-3:
@@ -261,7 +261,7 @@ def _rounded_box(sx, sy, sz, r, n: int = 8):
     return fixed
 
 
-def _torus(sx, sy, sz, n1=48, n2=20):
+def _torus(sx, sy, sz, n1=96, n2=32):
     R, r = 0.35, 0.15
     a = np.linspace(0, 2 * np.pi, n1, endpoint=False)[:, None]
     b = np.linspace(0, 2 * np.pi, n2, endpoint=False)[None, :]
@@ -377,8 +377,8 @@ def _extrude(outline, sx, sy, sz, smooth_deg: float = 32.0):
     return out
 
 
-def _tube(path, radius, seg: int = 20):
-    P = catmull(path, 8) if len(path) >= 3 else np.asarray(path, np.float64)
+def _tube(path, radius, seg: int = 32):
+    P = catmull(path, 14) if len(path) >= 3 else np.asarray(path, np.float64)
     if len(P) < 2:
         return []
     T = np.gradient(P, axis=0)
@@ -405,12 +405,12 @@ def _tube(path, radius, seg: int = 20):
     return out
 
 
-def _loft(sections, rnd, sx, sy, sz, seg: int = 40):
+def _loft(sections, rnd, sx, sy, sz, seg: int = 96):
     """A body through cross-sections stacked along y: [[y, width, depth, dx, dz]]
     (fractions of the part's size), each a superellipse — 2 round, 4+ boxy."""
     S = np.asarray(sections, np.float64)
     if len(S) >= 3:
-        S = catmull(S, 5)
+        S = catmull(S, 10)
         S[:, 1:3] = np.clip(S[:, 1:3], 0, None)
     t = np.linspace(0, 2 * np.pi, seg, endpoint=False)
     ct, st = np.cos(t), np.sin(t)
@@ -445,13 +445,13 @@ def surfaces(p: dict) -> list:
     if s == "cone":
         return _lathe([[1, 0], [0, 1]], sx / 2, sz / 2, -sy / 2, sy)
     if s == "sphere":
-        return _lathe(_sphere_profile(-math.pi / 2, math.pi / 2, 24), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
+        return _lathe(_sphere_profile(-math.pi / 2, math.pi / 2, 48), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
     if s == "hemisphere":
-        return _lathe(_sphere_profile(0, math.pi / 2, 14), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
+        return _lathe(_sphere_profile(0, math.pi / 2, 24), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
     if s == "capsule":
         cap = min(0.5, (sx / 2) / max(sy, 1e-6))
-        prof = [[r, y * cap] for r, y in _sphere_profile(-math.pi / 2, 0, 10)] + \
-               [[r, 1 - cap + y * cap] for r, y in _sphere_profile(0, math.pi / 2, 10)]
+        prof = [[r, y * cap] for r, y in _sphere_profile(-math.pi / 2, 0, 16)] + \
+               [[r, 1 - cap + y * cap] for r, y in _sphere_profile(0, math.pi / 2, 16)]
         return _lathe(prof, sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
     if s == "torus":
         return _torus(sx, sy, sz)

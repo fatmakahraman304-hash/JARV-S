@@ -219,6 +219,7 @@ class HoloPanel(QWidget):
         self.build_t = 0.0
         self.results: queue.Queue = queue.Queue()
         self._img = None
+        self._last_key, self._key_since, self._still_img = None, 0.0, None
         self._drag = None
         self._t0 = time.monotonic()
         self._build_ui()
@@ -234,7 +235,7 @@ class HoloPanel(QWidget):
         self.btns = {}
         for key, text, kind in (("scan", "📷  TARA", "primary"), ("hands", "🖐  EL", "off"), ("look", "◐  HOLOGRAM", "choice"),
                                 ("explode", "💥  PARÇALA", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
-                                ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"), ("close", "✕", "dim")):
+                                ("shot", "📸 4K", "dim"), ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"), ("close", "✕", "dim")):
             b = QPushButton(text)
             b.setFixedHeight(34)
             b.setMinimumWidth(40)
@@ -336,10 +337,10 @@ class HoloPanel(QWidget):
         if a == "scan":
             self._scan()
         elif a == "make":
-            self._job("TASARLANIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).create(req or "bir model"))
+            self._job("TASARLANIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).create(req or "bir model", progress=self._progress))
         elif a == "edit":
             if not self.model:
-                self._job("TASARLANIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).create(req))
+                self._job("TASARLANIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).create(req, progress=self._progress))
             else:
                 m = self.model
                 self._job("GÜNCELLENİYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).edit(m, req), keep_view=True)
@@ -359,6 +360,8 @@ class HoloPanel(QWidget):
                 self.flash("💾 Kaydedildi: " + self.model["name"])
         elif a == "stl":
             self._stl()
+        elif a in ("shot", "4k", "render"):
+            self._shot()
         elif a == "lib":
             self._cycle_library()
         elif a == "throw":
@@ -383,6 +386,9 @@ class HoloPanel(QWidget):
                 m, msg = None, f"Hata: {exc}"
             self.results.put((m, msg, keep_view))
         threading.Thread(target=run, daemon=True, name="holo-gemini").start()
+
+    def _progress(self, text: str):
+        self.status, self.status_until = text, time.monotonic() + 600       # read by paintEvent on the Qt thread
 
     def _scan(self):
         self._ensure_camera()
@@ -410,7 +416,7 @@ class HoloPanel(QWidget):
                     return
                 self.status = "DİJİTALLEŞTİRİLİYOR…"
                 from core import holo_scan
-                m, msg = holo_scan.scan(frames)
+                m, msg = holo_scan.scan(frames, progress=self._progress)
                 self.results.put((m, msg, False))
             except Exception as exc:
                 self.results.put((None, f"Tarama hatası: {exc}", False))
@@ -436,6 +442,38 @@ class HoloPanel(QWidget):
         path.write_bytes(self.mesh.stl())
         self.flash(f"⬇ {path}")
         self.note.emit(f"SYS: 🧊 STL kaydedildi: {path}")
+
+    def _shot(self):
+        """A 3840×2160 render of what is on the table, saved as PNG."""
+        if not self.mesh:
+            self.flash("Görüntülenecek model yok")
+            return
+        from gui.holo_gl import render_still
+        W, H = 3840, 2160
+        acc = qcol(C.PRI)
+        kw = dict(holo=self.holo, accent=(acc.redF(), acc.greenF(), acc.blueF()), t=time.monotonic() - self._t0,
+                  explode=self.explode, sel=-1)
+        img = render_still(self.gl, self.mesh, self.cam, W, H, ss=1.5, **kw) or self.soft.render(self.mesh, self.cam, W, H, **kw)
+        out = QImage(W, H, QImage.Format.Format_ARGB32_Premultiplied)
+        p = QPainter(out)
+        self._background(p, W, H)
+        p.drawImage(0, 0, img)
+        p.end()
+        EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        safe = "".join(ch if ch.isalnum() else "_" for ch in self.model["name"]).strip("_") or "model"
+        path = EXPORT_DIR / f"{safe}_{time.strftime('%Y%m%d_%H%M%S')}_4K.png"
+        if out.save(str(path)):
+            self.flash(f"📸 4K kaydedildi: {path.name}")
+            self.note.emit(f"SYS: 🧊 4K görüntü: {path}")
+        else:
+            self.flash("4K görüntü kaydedilemedi")
+
+    def _background(self, p, W, H):
+        bg = QRadialGradient(QPointF(W / 2, H * 0.58), max(W, H) * 0.75)
+        bg.setColorAt(0, qcol(C.PRI_GHO) if self.holo else QColor(26, 22, 19))
+        bg.setColorAt(0.55, qcol(C.BG))
+        bg.setColorAt(1, QColor(0, 0, 0))
+        p.fillRect(QRectF(0, 0, W, H), bg)
 
     def _cycle_library(self):
         lib = load_library()
@@ -471,7 +509,7 @@ class HoloPanel(QWidget):
         self.explode += (self.explode_to - self.explode) * 0.14
         if abs(self.explode - self.explode_to) < 0.002:
             self.explode = self.explode_to
-        if self.mesh is not None and now - self.last_input > 6 and self._drag is None:
+        if self.mesh is not None and now - self.last_input > 15 and self._drag is None:
             self.cam.yaw += 0.18
         if self.worker and self.hands_on:
             self._apply_hands(now)
@@ -523,11 +561,7 @@ class HoloPanel(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
-        bg = QRadialGradient(QPointF(W / 2, H * 0.58), max(W, H) * 0.75)
-        bg.setColorAt(0, qcol(C.PRI_GHO) if self.holo else QColor(26, 22, 19))
-        bg.setColorAt(0.55, qcol(C.BG))
-        bg.setColorAt(1, QColor(0, 0, 0))
-        p.fillRect(self.rect(), bg)
+        self._background(p, W, H)
         t = time.monotonic() - self._t0
         dpr = self.devicePixelRatioF()
         acc = qcol(C.PRI)
@@ -542,7 +576,20 @@ class HoloPanel(QWidget):
                 if k >= 1:
                     self.build_t = 0.0
             kw = dict(holo=self.holo, accent=(acc.redF(), acc.greenF(), acc.blueF()), t=t, explode=explode, sel=sel)
-            img = self.gl.render(self.mesh, self.cam, w, h, **kw)
+            # standing still in the real look: one supersampled frame, kept until something moves
+            key = (id(self.mesh), round(self.cam.yaw, 2), round(self.cam.pitch, 2), round(self.cam.zoom, 4),
+                   round(self.cam.pan[0], 4), round(self.cam.pan[1], 4), round(explode, 3), sel, w, h)
+            still = not self.holo and not self.build_t and not self.throw_t
+            if key != self._last_key:
+                self._last_key, self._key_since, self._still_img = key, time.monotonic(), None
+            img = None
+            if still and self._still_img is not None:
+                img = self._still_img
+            elif still and time.monotonic() - self._key_since > 0.25 and self.gl.ok is not False:
+                from gui.holo_gl import render_still
+                img = self._still_img = render_still(self.gl, self.mesh, self.cam, w, h, ss=2.0, **kw)
+            if img is None:
+                img = self.gl.render(self.mesh, self.cam, w, h, **kw)
             if img is None:
                 img = self.soft.render(self.mesh, self.cam, w, h, **kw)
             img.setDevicePixelRatio(dpr)

@@ -141,6 +141,15 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(e["id"], m["id"])
             self.assertEqual(e["photo"], m["photo"])
             self.assertIn("ekranı kırmızı yap", ask.call_args[0][0][0])
+        more = {**reply, "parts": PHONE["parts"] + [{"name": "Vida", "shape": "cylinder", "size": [0.2, 0.1, 0.2], "pos": [0, 0.05, 0]}]}
+        with mock.patch.object(gemini, "as_json", side_effect=[reply, more]) as ask, mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
+            steps = []
+            m, _ = holo_scan.scan([b"a", b"b"], progress=steps.append)
+            self.assertEqual(len(m["parts"]), 12)                       # the detail pass added a part
+            self.assertEqual(steps, ["AYRINTILANDIRILIYOR…"])
+            self.assertIn("ADD 30 to 90 new parts", ask.call_args[0][0][0])
+        with mock.patch.object(gemini, "as_json", side_effect=[reply, {"parts": []}]), mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
+            self.assertEqual(len(holo_scan.scan([b"a"])[0]["parts"]), 11)  # a failed detail pass keeps the first model
         with mock.patch.object(gemini, "as_json", return_value=None):
             self.assertIsNone(holo_scan.create("x")[0])
         with mock.patch.object(gemini, "as_json", return_value={"name": "", "parts": []}), mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
