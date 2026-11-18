@@ -62,6 +62,23 @@ def save_to_library(model: dict) -> None:
     tmp.replace(LIBRARY)
 
 
+def sharpest(frames: list[bytes]) -> bytes:
+    """The least blurred of the scan frames (variance of the Laplacian)."""
+    try:
+        import cv2
+        best, score = frames[0], -1.0
+        for f in frames:
+            img = cv2.imdecode(np.frombuffer(f, np.uint8), cv2.IMREAD_GRAYSCALE)
+            if img is None:
+                continue
+            v = float(cv2.Laplacian(img, cv2.CV_64F).var())
+            if v > score:
+                best, score = f, v
+        return best
+    except Exception:
+        return frames[len(frames) // 2]
+
+
 # ── camera + hands on a worker thread ─────────────────────────────────────────
 
 class CameraWorker(threading.Thread):
@@ -240,7 +257,8 @@ class HoloPanel(QWidget):
         for key, text, kind in (("scan", "📷  TARA", "primary"), ("engine", "🧠  GERÇEK 3B", "choice"), ("detail", "🔎  DETAY", "choice"), ("hands", "🖐  EL", "off"),
                                 ("look", "◐  HOLOGRAM", "choice"), ("explode", "💥  PARÇALA", "off"), ("cut", "✂  KESİT", "off"),
                                 ("measure", "📏  ÖLÇ", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
-                                ("shot", "📸 4K", "dim"), ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"), ("close", "✕", "dim")):
+                                ("shot", "📸 4K", "dim"), ("video", "🎬", "dim"), ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"),
+                                ("key", "🔑", "dim"), ("close", "✕", "dim")):
             b = QPushButton(text)
             b.setFixedHeight(34)
             b.setMinimumWidth(40)
@@ -413,6 +431,12 @@ class HoloPanel(QWidget):
             self._stl()
         elif a in ("shot", "4k", "render"):
             self._shot()
+        elif a in ("video", "turntable"):
+            self._turntable()
+        elif a == "key":
+            self._ask_key()
+        elif a == "cancel":
+            self.cancel()
         elif a == "lib":
             self._cycle_library()
         elif a == "throw":
@@ -429,13 +453,14 @@ class HoloPanel(QWidget):
             return
         self.busy = True
         self.status, self.status_until = label + "…", time.monotonic() + 600
+        self.job_t0, ticket = time.monotonic(), self._new_ticket()
 
         def run():
             try:
                 m, msg = fn()
             except Exception as exc:
                 m, msg = None, f"Hata: {exc}"
-            self.results.put((m, msg, keep_view))
+            self.results.put((m, msg, keep_view, ticket))
         threading.Thread(target=run, daemon=True, name="holo-gemini").start()
 
     def _find_part(self, name: str):
@@ -502,6 +527,10 @@ class HoloPanel(QWidget):
         if self.busy:
             return
         self.busy = True
+        self.job_t0, ticket = time.monotonic(), self._new_ticket()
+
+        def put(m, msg, keep=False):
+            self.results.put((m, msg, keep, ticket))
 
         def run():
             try:
@@ -511,30 +540,97 @@ class HoloPanel(QWidget):
                 self.count = ""
                 self.status, self.status_until = "TARANIYOR — nesneyi yavaşça biraz çevir", time.monotonic() + 600
                 frames = []
-                for _ in range(3):
+                for _ in range(5):
                     if self.worker and self.worker.failed:
                         break
                     j = self.worker.jpeg() if self.worker else b""
                     if j:
                         frames.append(j)
-                    time.sleep(0.7)
+                    time.sleep(0.5)
                 if not frames:
-                    self.results.put((None, (self.worker.failed if self.worker else "") or "Kameradan görüntü alınamadı.", False))
+                    put(None, (self.worker.failed if self.worker else "") or "Kameradan görüntü alınamadı.")
                     return
                 self.status = "DİJİTALLEŞTİRİLİYOR…"
                 m, msg = (None, "")
                 if self.engine == "real":
-                    m, msg = self._real_from_photo(frames[len(frames) // 2])
+                    m, msg = self._real_from_photo(sharpest(frames))
                 if m is None:
                     from core import holo_scan
                     note = msg
                     m, msg = holo_scan.scan(frames, progress=self._progress)
                     if note and m:
                         msg = f"{msg} (Gerçek 3B olmadı: {note[:120]} — parça modeli yaptım.)"
-                self.results.put((m, msg, False))
+                put(m, msg)
             except Exception as exc:
-                self.results.put((None, f"Tarama hatası: {exc}", False))
+                put(None, f"Tarama hatası: {exc}")
         threading.Thread(target=run, daemon=True, name="holo-scan").start()
+
+    _ticket = 0
+
+    def _new_ticket(self) -> int:
+        self._ticket += 1
+        return self._ticket
+
+    def cancel(self):
+        """Stop waiting for the running scan / model (it may finish in the background, unseen)."""
+        if self.busy:
+            self._new_ticket()
+            self.busy, self.count, self.status_until = False, "", 0
+            self.flash("İptal edildi")
+
+    def _ask_key(self):
+        """A text box for the Hugging Face / Tripo / Meshy key (the real-3D engine's quota)."""
+        from PyQt6.QtWidgets import QInputDialog, QLineEdit
+        try:
+            from memory.config_manager import get_hf_token, load_api_keys
+            have = [n for n, ok in (("Hugging Face", get_hf_token()), ("Tripo", load_api_keys().get("tripo_key")),
+                                     ("Meshy", load_api_keys().get("meshy_key"))) if ok]
+        except Exception:
+            have = []
+        text, ok = QInputDialog.getText(
+            self, "Gerçek 3B anahtarı",
+            ("Kayıtlı: " + ", ".join(have) + "\n\n" if have else "") +
+            "Ücretsiz Hugging Face anahtarı (hf_…): huggingface.co → Settings → Access Tokens → New token (Read).\n"
+            "Ya da Tripo (tsk_…) / Meshy (msy_…) anahtarı:", QLineEdit.EchoMode.Password)
+        if ok and text.strip():
+            from plugins import hologram
+            self.flash(hologram.run({"action": "hf_token", "request": text.strip()}, None), 6)
+
+    def _turntable(self):
+        """A 6-second 360° turntable video (1920×1080, MP4) of the model."""
+        if not self.mesh:
+            self.flash("Videoya alınacak model yok")
+            return
+        import cv2
+        W, H, N = 1920, 1080, 180
+        EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        safe = "".join(ch if ch.isalnum() else "_" for ch in self.model["name"]).strip("_") or "model"
+        path = EXPORT_DIR / f"{safe}_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30, (W, H))
+        if not vw.isOpened():
+            self.flash("Video dosyası açılamadı")
+            return
+        acc = qcol(C.PRI)
+        yaw0 = self.cam.yaw
+        bg = QImage(W, H, QImage.Format.Format_ARGB32_Premultiplied)
+        p = QPainter(bg); self._background(p, W, H); p.end()
+        try:
+            for i in range(N):
+                self.cam.yaw = yaw0 + 360.0 * i / N
+                img = self.gl.render(self.mesh, self.cam, W, H, holo=self.holo, accent=(acc.redF(), acc.greenF(), acc.blueF()),
+                                     t=i / 30.0, explode=self.explode) or self.soft.render(self.mesh, self.cam, W, H, holo=self.holo,
+                                                                                       accent=(acc.redF(), acc.greenF(), acc.blueF()), t=i / 30.0)
+                frame = bg.copy()
+                p = QPainter(frame); p.drawImage(0, 0, img); p.end()
+                frame = frame.convertToFormat(QImage.Format.Format_RGB888)
+                ptr = frame.constBits(); ptr.setsize(frame.sizeInBytes())
+                arr = np.frombuffer(ptr, np.uint8).reshape(H, frame.bytesPerLine())[:, :W * 3].reshape(H, W, 3)
+                vw.write(arr[:, :, ::-1].copy())
+        finally:
+            vw.release()
+            self.cam.yaw = yaw0
+        self.flash(f"🎬 Video kaydedildi: {path.name}", 6)
+        self.note.emit(f"SYS: 🧊 Dönen video: {path}")
 
     def _toggle_hands(self, on=None):
         self.hands_on = (not self.hands_on) if on is None else bool(on)
@@ -605,7 +701,9 @@ class HoloPanel(QWidget):
     def _tick(self):
         now = time.monotonic()
         while not self.results.empty():
-            m, msg, keep = self.results.get()
+            m, msg, keep, ticket = self.results.get()
+            if ticket != self._ticket:
+                continue                                    # cancelled: the answer came too late
             self.busy = False
             self.status_until = 0
             if m:
@@ -841,7 +939,10 @@ class HoloPanel(QWidget):
         if self.status and (time.monotonic() < self.status_until or self.busy):
             p.setPen(qcol(C.ACC))
             p.setFont(px_font(15))
-            p.drawText(QRectF(0, 58, W, 30), Qt.AlignmentFlag.AlignHCenter, self.status)
+            st = self.status
+            if self.busy and getattr(self, "job_t0", 0):
+                st += f"  ·  {int(time.monotonic() - self.job_t0)} sn  ·  Esc: iptal"
+            p.drawText(QRectF(0, 58, W, 30), Qt.AlignmentFlag.AlignHCenter, st)
         if self.hands_on:
             p.setPen(with_alpha(qcol(C.TEXT_DIM), 0.9))
             p.setFont(px_font(11))
@@ -901,7 +1002,10 @@ class HoloPanel(QWidget):
     def keyPressEvent(self, e):
         k = e.key()
         if k == Qt.Key.Key_Escape:
-            self.back_requested.emit()
+            if self.busy:
+                self.cancel()
+            else:
+                self.back_requested.emit()
         elif k == Qt.Key.Key_Space:
             self.command({"action": "explode"})
         elif k == Qt.Key.Key_R:

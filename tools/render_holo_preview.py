@@ -59,6 +59,26 @@ def main() -> int:
         img.save(str(out / "zz_4k_helmet.png"))
         crop = img.copy(1500, 500, 1280, 794)
         crop.save(str(out / "zz_4k_crop.png"))
+    # a real PBR asset (normal, metal/roughness, emissive, occlusion maps)
+    try:
+        import urllib.request
+        f = out / "DamagedHelmet.glb"
+        urllib.request.urlretrieve("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/"
+                                   "DamagedHelmet/glTF-Binary/DamagedHelmet.glb", str(f))
+        M = holo_model.build_mesh(holo_model.clean({"name": "DamagedHelmet", "glb": str(f), "height_cm": 30}))
+        print("PBR maps:", [sorted(k for k in d if d.get(k) is not None) for d in M.textures])
+        for k, yaw in enumerate((-35, 20, 140)):
+            cam.yaw, cam.pitch = yaw, 8
+            im = render_still(gl, M, cam, w, h, ss=2.0, holo=False, accent=(1.0, 0.54, 0.11), t=1.3)
+            canvas = QImage(w, h, QImage.Format.Format_ARGB32_Premultiplied)
+            p = QPainter(canvas)
+            g = QRadialGradient(QPointF(w / 2, h * 0.58), w * 0.75)
+            g.setColorAt(0, QColor(26, 22, 19)); g.setColorAt(0.55, QColor(5, 4, 3)); g.setColorAt(1, QColor(0, 0, 0))
+            p.fillRect(0, 0, w, h, g); p.drawImage(0, 0, im); p.end()
+            canvas.save(str(out / f"pbr_helmet_{k}.png"))
+        cam.reset()
+    except Exception as exc:
+        print("PBR sample skipped:", exc)
     # the whole table as it appears in JARVIS's window
     from unittest import mock
     from gui import holo_panel

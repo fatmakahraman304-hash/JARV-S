@@ -16,12 +16,12 @@ PLUGIN = {
         "assemble | reset | real (gerçekçi görünüm) | holo (hologram görünümü) | cut (kesit görünümü, on) | measure "
         "(ölçüleri göster, on) | isolate (request: parça adı — 'sadece kulpu göster') | show_all | hands (el kontrolü; on) | "
         "save | stl (3D yazıcı dosyası) | shot (4K görüntü kaydet) | throw (modeli at) | upright (yan yatmış modeli doğrult) | "
-        "real_engine (gerçek 3B: yapay zekâ fotoğraftan dokulu gerçek model — varsayılan) | parts_engine (parça modeli) | "
+        "video (6 sn dönen video, MP4) | cancel (süren taramayı iptal et) | real_engine (gerçek 3B: yapay zekâ fotoğraftan dokulu gerçek model — varsayılan) | parts_engine (parça modeli) | "
         "hf_token (request: kullanıcının verdiği anahtar — Hugging Face hf_…, Tripo tsk_…, Meshy msy_…; gerçek 3B için) | open | close. "
         "Hologram açıkken model hakkındaki değişiklik isteklerini edit ile gönder."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "scan | make | edit | detail | explode | assemble | reset | real | holo | cut | measure | isolate | show_all | hands | save | stl | shot | throw | upright | real_engine | parts_engine | hf_token | open | close"},
+        "action": {"type": "STRING", "description": "scan | make | edit | detail | video | cancel | explode | assemble | reset | real | holo | cut | measure | isolate | show_all | hands | save | stl | shot | throw | upright | real_engine | parts_engine | hf_token | open | close"},
         "request": {"type": "STRING", "description": "make / edit için ne istendiği"},
         "on": {"type": "BOOLEAN", "description": "hands / cut / measure için: aç (true) / kapat (false)"},
         "hands": {"type": "BOOLEAN", "description": "açarken el kontrolü de başlasın mı"},
@@ -49,6 +49,8 @@ REPLIES = {
     "open": "Hologram masası açık.",
     "close": "Hologram masasını kapattım.",
     "upright": "Modeli doğrulttum.",
+    "video": "Dönen videoyu çekiyorum; Belgeler'deki JARVIS Modeller klasörüne kaydedeceğim.",
+    "cancel": "İptal ettim.",
     "real_engine": "Gerçek 3B motoru: fotoğraftan dokulu gerçek model.",
     "parts_engine": "Parça motoru: Gemini parçalardan kuracak.",
 }
