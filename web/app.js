@@ -210,6 +210,7 @@
       localStorage.setItem('jarvis_recent', JSON.stringify(recent));
       renderDevices();
       updateOwner();
+      batteryWatch();
       watchUpdateFile(f);
       return f;
     } catch (e) { console.warn('sync', e); updateOwner(); return null; }
@@ -237,6 +238,27 @@
   (async () => { try { const b = await navigator.getBattery?.(); if (!b) return;
     const upd = () => { battery = { battery: Math.round(b.level * 100), charging: !!b.charging }; };
     upd(); b.addEventListener('levelchange', upd); b.addEventListener('chargingchange', upd); } catch {} })();
+  // Low battery anywhere: said once by the device that has the voice
+  // (core/sync_hub.low_battery is the same rule).
+  const batAlerted = new Set(J(sessionStorage.getItem('jarvis_bat'), []));
+  function lowBattery(list) {
+    const out = [];
+    for (const d of list) {
+      if (d.battery == null) continue;
+      if (d.charging || d.battery > 30) { batAlerted.delete(d.id); continue; }
+      if (d.battery <= 15 && online(d) && !batAlerted.has(d.id)) { batAlerted.add(d.id); out.push(d); }
+    }
+    try { sessionStorage.setItem('jarvis_bat', JSON.stringify([...batAlerted])); } catch {}
+    return out;
+  }
+  function batteryWatch() {
+    const me = { id: S.id, name: devName(), kind: KIND, seen: new Date().toISOString(), ...battery };
+    const low = lowBattery([me, ...devices.filter(d => d.id !== S.id)]);
+    if (!low.length || !amOwner()) return;
+    const names = low.map(d => `${d.name} %${d.battery}`).join(', ');
+    toast('🔋 Pil azaldı: ' + names); sys('🔋 Pil azaldı: ' + names);
+    if (ws && ready) tellBrain(`Pili azalan cihaz: ${names}. Şarja takmasını öner.`);
+  }
   function healthText(d) {
     const L = [];
     if (d.battery != null) L.push(`pil %${d.battery}${d.charging ? ' (şarjda)' : ''}`);
@@ -317,6 +339,24 @@
       <span class="dot ${online(d) ? 'on' : ''}"></span></div>`).join('');
     $('devs').innerHTML = html + (Cloud.ok() ? '' : '<p>Ortak hafıza kurulmamış: cihazlar birbirini göremiyor. Ayarlar → GitHub anahtarı.</p>');
     $('side-devs').innerHTML = html;
+    renderHud();
+  }
+  // Big screens (TV, projector): an Iron Man style board beside the core —
+  // what is coming up, the to-do list, projects, and any device that needs care.
+  function renderHud() {
+    if (!document.body.classList.contains('big')) return;
+    try { renderHudNow(); } catch { /* called before the reminder code has loaded: next sync draws it */ }
+  }
+  function renderHudNow() {
+    const block = (title, items, cls = '') => items.length ? `<div><h4>${title}</h4>${items.map(x => `<div class="it ${cls}">${esc(x)}</div>`).join('')}</div>` : '';
+    const warn = [{ id: S.id, name: devName(), seen: new Date().toISOString(), ...battery }, ...devices.filter(d => d.id !== S.id)]
+      .filter(d => online(d) && ((d.battery != null && d.battery <= 20 && !d.charging) || (d.disk != null && d.disk >= 90)))
+      .map(d => d.battery != null && d.battery <= 20 ? `🔋 ${d.name} %${d.battery}` : `💾 ${d.name} disk %${d.disk}`);
+    const rem = pendingRem().slice(0, 4).map(r => `⏰ ${remTime(r.due)} — ${r.text}`);
+    const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).slice(0, 5).map(k => '☐ ' + k.slice(11));
+    const proj = [];
+    for (const pc of pcProjects) for (const p of (pc.projects || [])) if (!/bitti|iptal|başarısız/.test(p.status)) proj.push(`⚙ ${p.title} — ${p.stages ? p.stage + '/' + p.stages : p.status}`);
+    $('hud').innerHTML = block('UYARI', warn, 'warn') + block('SIRADAKİLER', rem) + block('YAPILACAKLAR', todos) + block('PROJELER', proj.slice(0, 3));
   }
   $('t-devs').onclick = () => { renderDevices(); openSheet('s-devs'); syncNow(); };
 
@@ -360,6 +400,8 @@
         } else if (c.kind === 'code' || c.kind === 'text') {
           lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
           showCode(); $('t-code').hidden = false;
+        } else if (c.kind === 'guard') {
+          if (c.on) startGuard().then(m => sys(`${from}: ${m}`)); else sys(`${from}: ${stopGuard()}`);
         } else if (c.kind === 'say' && c.text) {
           sys(`${from}: ${c.text}`);
           if (amOwner()) { if (ws && ready) tellBrain(`${from} şu mesajı iletti: "${c.text}".`); else toast(`${from}: ${c.text}`); }
@@ -368,6 +410,66 @@
     }
     if (did) localStorage.setItem('jarvis_inbox_done', JSON.stringify(inboxDone.slice(-200)));
     return did;
+  }
+  // ── guard mode: this device's camera watches; on movement a photo goes to
+  // every other device and the one with the voice says it ──────────────────
+  let guard = null;
+  async function startGuard() {
+    if (guard) return 'Güvenlik modu zaten açık.';
+    if (!navigator.mediaDevices?.getUserMedia) return 'Bu cihazda kamera yok.';
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false }); }
+    catch { return 'Kameraya izin verilmedi.'; }
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream; await v.play().catch(() => {});
+    const small = document.createElement('canvas'); small.width = 64; small.height = 48;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    let prev = null, hits = 0, lastAlert = 0, warm = 4;
+    guard = { stream, timer: setInterval(() => {
+      if (!v.videoWidth) return;
+      sctx.drawImage(v, 0, 0, 64, 48);
+      const px = sctx.getImageData(0, 0, 64, 48).data, g = new Uint8Array(64 * 48);
+      for (let i = 0; i < g.length; i++) g[i] = (px[i * 4] * 3 + px[i * 4 + 1] * 6 + px[i * 4 + 2]) / 10;
+      if (prev) {
+        let changed = 0; for (let i = 0; i < g.length; i++) if (Math.abs(g[i] - prev[i]) > 28) changed++;
+        const moving = changed / g.length > 0.04;            // over 4 % of the picture changed
+        hits = moving ? hits + 1 : 0;
+        if (warm > 0) warm--;
+        else if (hits >= 2 && Date.now() - lastAlert > 60000) { lastAlert = Date.now(); hits = 0; guardAlert(v); }
+      }
+      prev = g;
+    }, 700) };
+    document.body.classList.add('guard'); toast('🛡️ Güvenlik modu açık'); keepAwake();
+    return 'Güvenlik modu açık: bu cihazın kamerası izliyor; hareket olursa fotoğrafı diğer cihazlara gönderip haber vereceğim. Cihazı sabit bir yere koy ve sayfayı açık bırak.';
+  }
+  function stopGuard() {
+    if (!guard) return 'Güvenlik modu zaten kapalı.';
+    clearInterval(guard.timer); guard.stream.getTracks().forEach(t => t.stop()); guard = null;
+    document.body.classList.remove('guard'); toast('Güvenlik modu kapandı');
+    return 'Güvenlik modu kapandı.';
+  }
+  async function guardAlert(v) {
+    const c = document.createElement('canvas'), sc = Math.min(1, 800 / Math.max(v.videoWidth, v.videoHeight));
+    c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    const data = c.toDataURL('image/jpeg', 0.75).split(',')[1];
+    const when = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const title = `🚨 ${devName()}: hareket algılandı (${when})`;
+    sys(title);
+    if (!Cloud.ok()) { beep(); toast(title); return; }
+    try {
+      await syncNow();
+      const targets = devices.filter(d => d.id !== S.id && online(d));
+      const f = await Cloud.read(), writes = {};
+      for (const d of targets) {
+        const name = `inbox-${d.id}.json`, box = J(f[name], []);
+        const base = { from: devName(), ts: nowIso() };
+        if (d.kind === 'pc') box.push({ ...base, id: S.id + '-g' + Date.now().toString(36), kind: 'image', data, mime: 'image/jpeg', title, text: title });
+        else box.push({ ...base, id: S.id + '-g' + Date.now().toString(36), kind: 'image', data, mime: 'image/jpeg', title },
+                      { ...base, id: S.id + '-s' + Date.now().toString(36), kind: 'say', text: `${devName()} kamerasında hareket algılandı, saat ${when}. Fotoğraf ekranda.` });
+        writes[name] = JSON.stringify(box.slice(-10));
+      }
+      if (Object.keys(writes).length) await Cloud.write(writes);
+    } catch (e) { console.warn('guard', e); }
   }
   async function sendToDevice(name, cmd) {
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; başka cihaza ulaşamıyorum.';
@@ -439,7 +541,9 @@
     { name: 'reminder', description: 'Bu cihazda hatırlatıcı / zamanlayıcı: "10 dakika sonra hatırlat", "saat 18:30\'da ilacı söyle", "zamanlayıcı kur". action: set | list | cancel. Zamanı gelince cihaz çalar, bildirim gösterir ve sen söylersin.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'set | list | cancel' }, text: { type: 'STRING', description: 'ne hatırlatılacak' },
         minutes: { type: 'NUMBER', description: 'kaç dakika sonra (saniye için 0.5 gibi)' }, at: { type: 'STRING', description: 'saat "HH:MM" ya da "YYYY-MM-DD HH:MM"' },
-        id: { type: 'STRING', description: 'iptal için hatırlatıcı numarası ya da metni' } }, required: ['action'] } },
+        id: { type: 'STRING', description: 'iptal için hatırlatıcı numarası ya da metni' },
+        repeat: { type: 'STRING', description: '"daily" = her gün aynı saatte; boşsa bir kez' },
+        protocol: { type: 'STRING', description: 'zamanı gelince söylemek yerine çalıştırılacak protokolün adı ("her sabah 8\'de günaydın protokolü")' } }, required: ['action'] } },
     { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
@@ -449,6 +553,8 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
     { name: 'status_report', description: 'Iron Man tarzı durum raporu: bütün cihazlar (açık/kapalı, pil, işlemci, bellek, disk), sıradaki hatırlatıcılar, yapılacaklar, bilgisayardaki projeler. "durum raporu", "sistemler nasıl", "cihazlarım ne durumda", "laptopun şarjı kaç".',
       parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'guard', description: 'Güvenlik modu: bu cihazın (ya da device verilirse o cihazın) kamerası odayı izler; hareket olursa fotoğraf çekip bütün cihazlara gönderir ve sesli haber verir. "odayı izle", "güvenlik modunu aç/kapat", "tableti kamera yap".',
+      parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, device: { type: 'STRING', description: 'boşsa bu cihaz' } }, required: ['on'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -519,6 +625,10 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'guard': {
+        if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'guard', on: !!a.on });
+        return a.on ? await startGuard() : stopGuard();
+      }
       case 'status_report': return await statusReport();
       case 'protocol': return protocolTool(a);
       case 'projects': { await syncNow(); return projectsText() || 'Bilgisayarlarda kayıtlı bir proje yok (ya da bilgisayar henüz bağlanmadı).'; }
@@ -833,6 +943,15 @@
       const old = by.get(r.id);
       by.set(r.id, old ? { ...old, ...r, cancelled: old.cancelled || r.cancelled || '' } : { ...r, cancelled: r.cancelled || '' });
     }
+    // daily: the next day is added with an id that names the day, so every
+    // device adds the same entry (core/sync_hub.merge_reminders does the same)
+    const DAY = 86400000;
+    for (const r of [...by.values()]) {
+      if (r.repeat !== 'daily' || r.cancelled || +r.due > now) continue;
+      const nxt = +r.due + DAY * Math.max(1, Math.floor((now - r.due) / DAY) + 1);
+      const nid = `${String(r.id).split('@')[0]}@${nxt}`;
+      if (!by.has(nid)) by.set(nid, { ...r, id: nid, due: nxt, cancelled: '' });
+    }
     return [...by.values()].filter(r => +r.due > now - REM_KEEP).sort((x, y) => x.due - y.due);
   }
   const pendingRem = () => reminders.filter(r => !r.cancelled && !remFired.includes(r.id) && r.due > Date.now() - 60000);
@@ -850,22 +969,25 @@
   function reminderTool(a) {
     const act = String(a.action || 'set').toLowerCase();
     const open = pendingRem();
-    if (act === 'list') return open.length ? open.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}${r.from ? ` (${r.from})` : ''}`).join('\n') : 'Kurulu hatırlatıcı yok.';
+    if (act === 'list') return open.length ? open.map((r, i) => `${i + 1}. ${remTime(r.due)}${r.repeat ? ' (her gün)' : ''} — ${r.text}${r.from ? ` (${r.from})` : ''}`).join('\n') : 'Kurulu hatırlatıcı yok.';
     if (act === 'cancel') {
       const k = String(a.id || a.text || '').toLocaleLowerCase('tr').trim();
       const all = !k || k === 'hepsi' || k === 'all';
       const hit = open.filter((r, i) => all || String(i + 1) === k || r.text.toLocaleLowerCase('tr').includes(k));
-      hit.forEach(r => { r.cancelled = nowIso(); });
+      const bases = new Set(hit.map(r => String(r.id).split('@')[0]));     // a daily one: the whole series
+      reminders.forEach(r => { if (bases.has(String(r.id).split('@')[0]) && !r.cancelled) r.cancelled = nowIso(); });
       saveRem(); renderRem(); if (hit.length) syncNow();
       return hit.length ? `${hit.length} hatırlatıcı iptal edildi (bütün cihazlarda).` : 'Böyle bir hatırlatıcı bulamadım.';
     }
     const due = parseWhen(a);
     if (!due) return 'Ne zaman? Dakika ya da saat söylemen lazım.';
-    const text = String(a.text || 'Zamanlayıcı').slice(0, 200);
-    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '' });
+    const protocol = String(a.protocol || '').trim(), repeat = /daily|her ?gün|günlük/i.test(String(a.repeat || '')) ? 'daily' : '';
+    const text = String(a.text || (protocol ? `${protocol} protokolü` : 'Zamanlayıcı')).slice(0, 200);
+    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '', ...(repeat ? { repeat } : {}), ...(protocol ? { protocol } : {}) });
     reminders.sort((x, y) => x.due - y.due); saveRem(); renderRem(); syncNow();
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {}
-    return `Tamam: ${remTime(due)} — ${text}.` + (Cloud.ok() ? ' Bütün cihazlar biliyor; o an hangisi açıksa o söyler.' : ' (Bu sayfa açık kaldıkça bu cihaz çalar.)');
+    if (repeat) { syncNow(); }
+    return `Tamam: ${remTime(due)}${repeat ? ' ve her gün bu saatte' : ''} — ${protocol ? '"' + protocol + '" protokolü çalışacak' : text}.` + (Cloud.ok() ? ' Bütün cihazlar biliyor; o an hangisi açıksa o söyler.' : ' (Bu sayfa açık kaldıkça bu cihaz çalar.)');
   }
   function beep() {
     try { ensureOut(); const t0 = outCtx.currentTime;
@@ -878,6 +1000,7 @@
     const open = pendingRem();
     b.hidden = !open.length; b.textContent = open.length ? `⏰ ${open.length}` : '⏰';
     b.title = open.map(r => `${remTime(r.due)} — ${r.text}`).join('\n');
+    renderHud();
   }
   setInterval(() => {
     const now = Date.now(), due = reminders.filter(r => r.due <= now && !r.cancelled && !remFired.includes(r.id));
@@ -891,8 +1014,9 @@
       try { if ('Notification' in window && Notification.permission === 'granted') new Notification('JARVIS hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
       sys('⏰ Hatırlatma: ' + r.text + late);
       if (amOwner()) {
-        if (ws && ready) tellBrain(`Hatırlatma zamanı: ${r.text}.`);
-        else connect().then(() => tellBrain(`Hatırlatma zamanı: ${r.text}.`)).catch(() => {});
+        const note = r.protocol ? `Zamanlanmış protokol zamanı: "${r.protocol}". Şimdi protocol aracıyla çalıştır.` : `Hatırlatma zamanı: ${r.text}.`;
+        if (ws && ready) tellBrain(note);
+        else connect().then(() => tellBrain(note)).catch(() => {});
       }
     }
   }, 5000);
@@ -900,7 +1024,7 @@
   // ── keep the screen awake while JARVIS is listening or on a big screen ──
   let wakeLock = null;
   async function keepAwake() {
-    const want = micOn || KIND === 'tv' || KIND === 'projector';
+    const want = micOn || !!guard || KIND === 'tv' || KIND === 'projector';
     try {
       if (want && !wakeLock && document.visibilityState === 'visible' && navigator.wakeLock) {
         wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; });
@@ -1231,6 +1355,21 @@
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
+  // Shared from another app (Android "Paylaş → JARVIS", manifest share_target):
+  // JARVIS asks what to do with it — open on the TV, send to the computer …
+  (function sharedIn() {
+    const q = new URLSearchParams(location.search);
+    const parts = ['share_title', 'share_text', 'share_url'].map(k => (q.get(k) || '').trim()).filter(Boolean);
+    if (!parts.length) return;
+    history.replaceState(null, '', location.pathname);
+    const shared = [...new Set(parts)].join(' — ').slice(0, 1500);
+    closeTurns(); transcript.push({ role: 'user', text: '📎 ' + shared, open: false }); renderLog();
+    claimHere();
+    connect().then(() => { setState('thinking');
+      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu JARVIS'e paylaştı: ${shared}\n` +
+        'Ne olduğunu tek cümleyle söyle ve ne yapmak istediğini sor: bir cihazda açmak (TV, bilgisayar…), özetlemek, kaydetmek, yapılacaklara eklemek gibi.' } }); })
+      .catch(() => toast('Paylaşılan alındı; bağlanınca soracağım.'));
+  })();
   $('t-rem').onclick = () => {
     const open = pendingRem(); if (!open.length) return;
     askUser('Hatırlatıcılar', open.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') + '\n\nHepsi iptal edilsin mi?',

@@ -315,6 +315,16 @@ def merge_reminders(a, b, now_ms: float | None = None) -> list[dict]:
         merged = {**(old or {}), **r, "due": due}
         merged["cancelled"] = (old or {}).get("cancelled") or r.get("cancelled") or ""
         by[r["id"]] = merged
+    # a daily one that came due brings its next day; the id says which day,
+    # so every device adds the very same entry and the merge keeps one
+    day = 86_400_000
+    for r in list(by.values()):
+        if r.get("repeat") != "daily" or r.get("cancelled") or r["due"] > now_ms:
+            continue
+        nxt = r["due"] + day * max(1, int((now_ms - r["due"]) // day) + 1)
+        nid = f"{str(r['id']).split('@')[0]}@{int(nxt)}"
+        if nid not in by:
+            by[nid] = {**r, "id": nid, "due": float(nxt), "cancelled": ""}
     out = [r for r in by.values() if r["due"] > now_ms - REM_KEEP_MS]
     return sorted(out, key=lambda r: r["due"])
 
@@ -564,6 +574,46 @@ def status_report() -> str:
             + "\n\nSIRADAKİ ORTAK HATIRLATICILAR:\n" + ("\n".join(rem_lines) or "- yok"))
 
 
+# ── low battery: said once, by the device that has the voice ────────────────
+LOW_BATTERY = 15
+RECHARGED = 30
+
+
+def low_battery(devs: list[dict], alerted: set, now: float | None = None) -> list[dict]:
+    """Devices that just went low (≤15 %, not charging, online) and were not
+    announced yet. A device that charges or climbs back over 30 % is forgotten,
+    so it is announced again next time. Same rule as lowBattery in web/app.js."""
+    out = []
+    for d in devs:
+        b = d.get("battery")
+        if b is None:
+            continue
+        if d.get("charging") or b > RECHARGED:
+            alerted.discard(d.get("id"))
+            continue
+        if b <= LOW_BATTERY and device_online(d, now) and d.get("id") not in alerted:
+            alerted.add(d.get("id"))
+            out.append(d)
+    return out
+
+
+def _battery_watch(me: str) -> None:
+    alerted = _state.setdefault("bat_alerted", set())
+    mine = {"id": me, "name": device_name(), "kind": "pc", "seen": _now(), **health()}
+    low = low_battery(devices() + [mine], alerted)
+    if not low or _state.get("owner") not in (None, me):
+        return
+    inject = _state.get("inject")
+    names = ", ".join(f"{d.get('name')} %{d.get('battery')}" for d in low)
+    _log(f"[Sync] pil azaldı: {names}")
+    if inject:
+        try:
+            inject(f"[Sistem notu, kullanıcı söylemedi] Pili azalan cihaz: {names}. "
+                   f"Kullanıcıya tek kısa cümleyle söyle ve şarja takmasını öner.")
+        except Exception:
+            pass
+
+
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
     """The id of the one device that should speak, or None when none is on.
     Same rule as voiceOwner() in web/app.js — keep the two in step."""
@@ -790,6 +840,9 @@ def _cycle() -> None:
         summary = json.dumps({"computer": device_name(), "projects": projects_summary()}, ensure_ascii=False)
         if summary != (files.get(f"projects-{me}.json") or ""):
             writes[f"projects-{me}.json"] = summary
+
+    # 4c. a device's battery is running out: the voice says so, once
+    _battery_watch(me)
 
     # 5. heartbeat
     if now - _state["last_beat"] > HEARTBEAT_EVERY:

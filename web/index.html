@@ -104,6 +104,11 @@
     body.big .chip { font-size: 1vw; padding: .6vw 1vw; }
     .side, .left { display: none; }
     .clock { font-size: 3.4vw; font-weight: 700; font-variant-numeric: tabular-nums; }
+    body.guard .brand small::after { content: '  ·  🛡️ GÜVENLİK MODU'; color: #ff8a5c; }
+    .hud { margin-top: 2vw; display: flex; flex-direction: column; gap: 1.1vw; }
+    .hud h4 { margin: 0 0 .4vw; font-size: .8vw; letter-spacing: .3vw; color: var(--dim); font-weight: 600; }
+    .hud div.it { font-size: 1vw; line-height: 1.5; opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hud div.warn { color: #ff8a5c; }
     .date { color: var(--dim); font-size: 1.1vw; letter-spacing: .25vw; text-transform: uppercase; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 1vw; padding: 1.1vw 1.2vw; min-height: 0; }
     .card h3 { font-size: .85vw; letter-spacing: .3vw; color: var(--med); }
@@ -133,7 +138,8 @@
       </div>
     </header>
 
-    <aside class="left"><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></aside>
+    <aside class="left"><div class="clock" id="clock">--:--</div><div class="date" id="date"></div>
+      <div class="hud" id="hud"></div></aside>
 
     <section class="main">
       <div class="core"><canvas id="core" aria-label="JARVIS çekirdeği"></canvas></div>

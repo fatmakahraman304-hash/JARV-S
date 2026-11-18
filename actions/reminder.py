@@ -386,8 +386,12 @@ def on_shared_reminder(event: str, r: dict) -> None:
             return
         if any(routine.get("source") == source for routine in eng.list()):
             return
-        eng.add(name=text[:60], kind="say", text=f"Hatırlatma: {text}",
-                trigger={"type": "time", "rule": {"type": "once", "at_ts": due}}, source=source)
+        trigger = {"type": "time", "rule": {"type": "once", "at_ts": due}}
+        if r.get("protocol"):           # a scheduled protocol: carried out, not just said
+            eng.add(name=text[:60], kind="prompt", text=f"'{r['protocol']}' protokolünü şimdi çalıştır (protocol aracı).",
+                    trigger=trigger, source=source)
+        else:
+            eng.add(name=text[:60], kind="say", text=f"Hatırlatma: {text}", trigger=trigger, source=source)
         print(f"[Reminder] from {r.get('from') or 'another device'}: {text[:60]}")
     except Exception as e:
         print(f"[Reminder] shared reminder not set here: {e}")

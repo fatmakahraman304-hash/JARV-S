@@ -169,6 +169,31 @@ class SharedRemindersTest(unittest.TestCase):
         m = sync_hub.merge_reminders(a, b, now)
         self.assertEqual([(r["id"], bool(r["cancelled"])) for r in m], [("x", True), ("y", False)])
 
+    def test_daily_brings_the_same_next_day_everywhere(self):
+        now = 1_800_000_000_000
+        daily = [{"id": "w-a", "text": "ilaç", "due": now - 1000, "repeat": "daily", "cancelled": ""}]
+        m1 = sync_hub.merge_reminders(daily, [], now)
+        self.assertEqual([r["id"] for r in m1], ["w-a", f"w-a@{now - 1000 + 86_400_000}"])
+        self.assertEqual(len(sync_hub.merge_reminders(m1, m1, now)), 2)      # two devices: still one next day
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("split('@')[0]}@${nxt}", js)                           # same id rule on the web
+
+    def test_scheduled_protocol_is_carried_out_on_desktop(self):
+        from actions import reminder
+        added = []
+
+        class Eng:
+            def list(self):
+                return []
+
+            def add(self, **kw):
+                added.append(kw)
+        r = {"id": "w-b", "text": "sabah protokolü", "protocol": "sabah", "due": (time.time() + 600) * 1000}
+        with mock.patch("core.routines.desktop.engine", return_value=Eng()):
+            reminder.on_shared_reminder("new", r)
+        self.assertEqual(added[0]["kind"], "prompt")
+        self.assertIn("sabah", added[0]["text"])
+
     def test_phone_reminder_reaches_desktop_once_and_cancel_follows(self):
         events = []
         sync_hub.on_reminder(lambda ev, r: events.append((ev, r["id"])))
@@ -271,10 +296,14 @@ class SendToDeviceTest(unittest.TestCase):
         self.assertEqual(sent[0][1]["url"], "https://image.pollinations.ai/p/x")
         self.assertNotIn("data", sent[0][1])
         self.assertIn("adres", send_to_device.run({"device": "tv", "what": "open", "url": "dosya"}))
+        with mock.patch.object(sync_hub, "send_to_device", side_effect=lambda d, c: sent.append((d, c)) or (True, "ok")):
+            send_to_device.run({"device": "tablet", "what": "guard_on"})
+        self.assertEqual(sent[-1], ("tablet", {"kind": "guard", "on": True}))
 
     def test_web_reads_its_inbox(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("function runInbox", js)
+        self.assertIn("c.kind === 'guard'", js)
         self.assertIn("inbox-${S.id}.json", js)
 
 
@@ -380,6 +409,31 @@ class StatusReportTest(unittest.TestCase):
             out = status_report.run({})
         self.assertIn("CİHAZLAR", out)
         self.assertIn("PROJELER", out)
+
+
+class LowBatteryTest(unittest.TestCase):
+    def test_announced_once_until_charged(self):
+        now = sync_hub._now()
+        alerted = set()
+        phone = {"id": "p", "name": "Telefon", "battery": 12, "charging": False, "seen": now}
+        self.assertEqual([d["id"] for d in sync_hub.low_battery([phone], alerted)], ["p"])
+        self.assertEqual(sync_hub.low_battery([phone], alerted), [])            # once
+        sync_hub.low_battery([dict(phone, charging=True)], alerted)              # plugged in: forgotten
+        self.assertEqual(len(sync_hub.low_battery([phone], alerted)), 1)          # low again: said again
+        self.assertEqual(sync_hub.low_battery([{"id": "x", "seen": now}], alerted), [])   # no battery info
+
+    def test_only_the_voice_owner_speaks(self):
+        said = []
+        now = sync_hub._now()
+        low = [{"id": "p", "name": "Telefon", "battery": 9, "charging": False, "seen": now}]
+        with mock.patch.dict(sync_hub._state, {"devices": low, "owner": "p", "inject": said.append, "bat_alerted": set()}), \
+             mock.patch.object(sync_hub, "health", return_value={}):
+            sync_hub._battery_watch("me")
+        self.assertEqual(said, [])
+        with mock.patch.dict(sync_hub._state, {"devices": low, "owner": "me", "inject": said.append, "bat_alerted": set()}), \
+             mock.patch.object(sync_hub, "health", return_value={}):
+            sync_hub._battery_watch("me")
+        self.assertIn("Telefon %9", said[0])
 
 
 class WebPageWiringTest(unittest.TestCase):
