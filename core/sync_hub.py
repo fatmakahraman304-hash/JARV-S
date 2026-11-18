@@ -54,7 +54,8 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
           "status": "kapalı", "done": set(), "claim": "", "active": True,
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
-          "rem_known": None, "out_cmds": [], "recent": [], "img_new": [], "gallery": []}
+          "rem_known": None, "out_cmds": [], "recent": [], "img_new": [], "gallery": [],
+          "arch_queue": [], "arch_last": 0.0, "arch_id": ""}
 
 
 def _log(msg: str) -> None:
@@ -264,10 +265,12 @@ def note_turn(role: str, text: str) -> None:
     """A line of conversation on this computer, for the other devices' context."""
     if not text or not _state["thread"]:
         return
+    turn = {"ts": _now(), "device": device_name(),
+            "role": "user" if role.lower().startswith(("kullan", "user")) else "jarvis",
+            "text": str(text)[:600]}
     with _state["lock"]:
-        _state["turns"].append({"ts": _now(), "device": device_name(),
-                                "role": "user" if role.lower().startswith(("kullan", "user")) else "jarvis",
-                                "text": str(text)[:600]})
+        _state["turns"].append(turn)
+        _state["arch_queue"].append(turn)
 
 
 def note_reply(text: str) -> None:
@@ -650,6 +653,104 @@ def gallery() -> list[dict]:
     return list(_state.get("gallery") or [])
 
 
+# ── the archive: every conversation from every device, for good ─────────────
+# A second secret gist (its id in archive.json of the main one), one file a
+# month: history-YYYY-MM.json. Read only when searching. Same format as
+# Archive in web/app.js.
+ARCHIVE_EVERY = 180.0
+
+
+def _archive_id(token: str, files: dict | None = None, create: bool = True) -> str:
+    if _state.get("arch_id"):
+        return _state["arch_id"]
+    try:
+        aid = json.loads((files or {}).get("archive.json") or "{}").get("gist", "")
+    except Exception:
+        aid = ""
+    if not aid and files is None:
+        got, _, err = read_gist(token, settings().get("gist_id", ""))
+        if not err and got:
+            return _archive_id(token, got, create)
+    if not aid and create:
+        st, js, _ = _req("POST", "/gists", token, {"description": "JARVIS — konuşma arşivi (gizli, silme)",
+                                                    "public": False,
+                                                    "files": {"README.md": {"content": "JARVIS konuşma arşivi. Silme."}}})
+        if st == 201 and js and js.get("id"):
+            aid = js["id"]
+            write_files(token, settings().get("gist_id", ""), {"archive.json": json.dumps({"gist": aid})})
+    _state["arch_id"] = aid
+    return aid
+
+
+def _archive_files(token: str, aid: str) -> dict[str, list]:
+    got, _, err = read_gist(token, aid)
+    out = {}
+    for name, text in (got or {}).items():
+        if name.startswith("history-") and name.endswith(".json"):
+            try:
+                v = json.loads(text or "[]")
+                out[name] = v if isinstance(v, list) else []
+            except Exception:
+                out[name] = []
+    return out
+
+
+def _archive_flush(token: str, files: dict, now: float) -> None:
+    with _state["lock"]:
+        batch = list(_state["arch_queue"])
+    if not batch or now - _state["arch_last"] < ARCHIVE_EVERY:
+        return
+    _state["arch_last"] = now
+    aid = _archive_id(token, files)
+    if not aid:
+        return
+    months = _archive_files(token, aid)
+    writes: dict[str, list] = {}
+    for t in batch:
+        name = f"history-{t['ts'][:7]}.json"
+        lst = writes.get(name) or list(months.get(name, []))
+        if not any(x.get("ts") == t["ts"] and x.get("device") == t["device"] and x.get("text") == t["text"] for x in lst):
+            lst.append(t)
+        writes[name] = lst
+    if write_files(token, aid, {k: json.dumps(v, ensure_ascii=False) for k, v in writes.items()}):
+        with _state["lock"]:
+            _state["arch_queue"] = _state["arch_queue"][len(batch):]
+
+
+def search_archive(query: str, days: float = 0) -> str:
+    """Search every device's past conversations (desktop search_history)."""
+    import re
+    s = settings()
+    token = s.get("github_token", "")
+    if not (token and s.get("gist_id")):
+        return "Cihazlar bağlı değil; konuşma arşivi yok."
+    aid = _archive_id(token, None, create=False)
+    if not aid:
+        return "Konuşma arşivi henüz oluşmadı."
+    months = _archive_files(token, aid)
+    since = time.time() - days * 86400 if days and days > 0 else 0
+    rows = [t for name in sorted(months) for t in months[name] if isinstance(t, dict) and _ts(str(t.get("ts", ""))) >= since]
+    with _state["lock"]:
+        rows += [t for t in _state["arch_queue"] if t not in rows]
+
+    def stem(w: str) -> str:
+        return w[:max(4, len(w) - 3)] if len(w) > 5 else w
+    words = [stem(w) for w in re.findall(r"\w+", str(query).casefold()) if len(w) > 2]
+    scored = []
+    for i, t in enumerate(rows):
+        txt = str(t.get("text", "")).casefold()
+        sc = sum(1 for w in words if w in txt) if words else 1
+        if sc:
+            scored.append((sc, i))
+    scored.sort(key=lambda x: (-x[0], -x[1]))
+    pick = sorted({j for _, i in scored[:8] for j in (i - 1, i, i + 1) if 0 <= j < len(rows)})
+    if not pick:
+        return "Arşivde bununla ilgili bir konuşma bulamadım."
+    lines = [f"{str(rows[j].get('ts', ''))[:16].replace('T', ' ')} [{rows[j].get('device', '?')}] "
+             f"{'Kullanıcı' if rows[j].get('role') == 'user' else 'JARVIS'}: {rows[j].get('text', '')}" for j in pick]
+    return f"Arşivden ({len(rows)} satır arandı):\n" + "\n".join(lines)[:6000]
+
+
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
     """The id of the one device that should speak, or None when none is on.
     Same rule as voiceOwner() in web/app.js — keep the two in step."""
@@ -890,6 +991,12 @@ def _cycle() -> None:
         if summary != (files.get(f"projects-{me}.json") or ""):
             writes[f"projects-{me}.json"] = summary
 
+    # 4b2. the conversation archive (every few minutes)
+    try:
+        _archive_flush(token, files, now)
+    except Exception as exc:
+        _log(f"[Sync] archive: {exc}")
+
     # 4c. a device's battery is running out: the voice says so, once
     _battery_watch(me)
 
@@ -923,7 +1030,7 @@ def _update_owner(me: str) -> None:
 
 
 # ── things sent to this computer (a picture, code, a link) ───────────────────
-_ITEM_KINDS = ("image", "code", "text", "open")
+_ITEM_KINDS = ("image", "code", "text", "open", "screenshot")
 
 
 def on_item(fn) -> None:
@@ -985,12 +1092,42 @@ def _receive_item(cid: str, cmd: dict, sender: str) -> None:
             path.write_text(body, encoding="utf-8")
             _show(kind, str(path), f"{sender}: {name}", body)
             return _reply(cid, f"Bilgisayara kaydedildi ve ekranda: {path}")
+        if kind == "screenshot":
+            threading.Thread(target=_send_screenshot, args=(cid, cmd), daemon=True, name="sync-shot").start()
+            return
         if kind == "image":
             threading.Thread(target=_receive_image, args=(cid, cmd, sender), daemon=True,
                              name="sync-image").start()
             return
     except Exception as exc:
         _reply(cid, f"Bilgisayar alamadı: {exc}")
+
+
+def _queue_to(dev_id: str, cmd: dict) -> None:
+    item = dict(cmd)
+    item.update({"id": f"{device_id()}-{int(time.time() * 1000):x}", "from": device_name(), "ts": _now()})
+    with _state["lock"]:
+        _state["out_cmds"].append((dev_id, item))
+
+
+def _send_screenshot(cid: str, cmd: dict) -> None:
+    """The phone asked to see this computer's screen: a picture of it goes
+    back to that device, which shows it and lets its brain look at it."""
+    import base64
+    try:
+        from core import remote_control
+        data = remote_control.screenshot_jpeg(1400, 65)
+        target = str(cmd.get("reply_to") or "")
+        if not data:
+            return _reply(cid, "Ekran görüntüsü alınamadı.")
+        if not target:
+            return _reply(cid, "Görüntüyü kime göndereceğimi bilmiyorum.")
+        _queue_to(target, {"kind": "image", "data": base64.b64encode(data).decode(), "mime": "image/jpeg",
+                           "title": f"{device_name()} ekranı, {time.strftime('%H:%M')}", "see": True,
+                           "question": str(cmd.get("question") or "")})
+        _reply(cid, "Ekran görüntüsü gönderildi; birkaç saniyede gelir.")
+    except Exception as exc:
+        _reply(cid, f"Ekran görüntüsü gönderilemedi: {exc}")
 
 
 def _receive_image(cid: str, cmd: dict, sender: str) -> None:

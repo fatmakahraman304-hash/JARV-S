@@ -186,7 +186,117 @@
     }
     return L.join('\n');
   }
-  function queueRecent(role, text) { if (role === 'sys') return; recentQueue.push({ ts: new Date().toISOString(), device: devName(), role, text: text.slice(0, 600) }); }
+  function queueRecent(role, text) {
+    if (role === 'sys') return;
+    const t = { ts: new Date().toISOString(), device: devName(), role, text: text.slice(0, 600) };
+    recentQueue.push(t); Archive.queue(t); Learn.turn(t);
+  }
+
+  // ── the archive: every conversation from every device, kept for good in a
+  // second secret gist (one file a month), so "geçen hafta ne demiştim?"
+  // can be answered. Not read on every sync — only when searching.
+  // Desktop side: core/sync_hub.py (archive_*).
+  const Archive = {
+    pending: J(localStorage.getItem('jarvis_arch_q'), []), last: 0, busy: false,
+    queue(t) { this.pending.push(t); this.save(); if (this.pending.length >= 16) this.flush(); },
+    save() { try { localStorage.setItem('jarvis_arch_q', JSON.stringify(this.pending.slice(-400))); } catch {} },
+    async id() {
+      if (!Cloud.ok()) return '';
+      const f = Cloud.cache || await Cloud.read();
+      let id = J(f['archive.json'], {}).gist || '';
+      if (!id) {
+        const g = await Cloud.req('POST', '/gists', { description: 'JARVIS — konuşma arşivi (gizli, silme)', public: false,
+          files: { 'README.md': { content: 'JARVIS konuşma arşivi: her ay bir dosya. Silme.' } } });
+        id = g.id; await Cloud.write({ 'archive.json': JSON.stringify({ gist: id }) });
+      }
+      return id;
+    },
+    async files(id) {
+      const g = await Cloud.req('GET', '/gists/' + id);
+      const out = {};
+      for (const [n, f] of Object.entries(g.files || {})) {
+        if (!/^history-\d{4}-\d{2}\.json$/.test(n)) continue;
+        out[n] = f.truncated && f.raw_url ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : (f.content || '');
+      }
+      return out;
+    },
+    async flush() {
+      if (this.busy || !this.pending.length || !Cloud.ok() || !navigator.onLine) return;
+      this.busy = true;
+      try {
+        const id = await this.id(), files = await this.files(id), batch = this.pending.slice(), writes = {};
+        for (const t of batch) {
+          const name = `history-${t.ts.slice(0, 7)}.json`;
+          const list = writes[name] || J(files[name], []);
+          if (!list.some(x => x.ts === t.ts && x.device === t.device && x.text === t.text)) list.push(t);
+          writes[name] = list;
+        }
+        const body = { files: {} }; for (const [k, v] of Object.entries(writes)) body.files[k] = { content: JSON.stringify(v) };
+        await Cloud.req('PATCH', '/gists/' + id, body);
+        this.pending = this.pending.slice(batch.length); this.save(); this.last = Date.now();
+      } catch (e) { console.warn('archive', e); } finally { this.busy = false; }
+    },
+    async search(query, days) {
+      await this.flush();
+      const id = await this.id(); if (!id) return 'Ortak hafıza kurulu değil; arşiv yok.';
+      const files = await this.files(id);
+      const since = days > 0 ? Date.now() - days * 864e5 : 0;
+      const stem = w => w.length > 5 ? w.slice(0, Math.max(4, w.length - 3)) : w;
+      const q = String(query || '').toLocaleLowerCase('tr').split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 2).map(stem);
+      const all = Object.keys(files).sort().flatMap(n => J(files[n], [])).filter(t => Date.parse(t.ts) >= since);
+      const hits = [];
+      all.forEach((t, i) => {
+        const txt = String(t.text || '').toLocaleLowerCase('tr');
+        const score = q.length ? q.filter(w => txt.includes(w)).length : 1;
+        if (score) hits.push([score, i]);
+      });
+      hits.sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+      const pick = new Set();
+      for (const [, i] of hits.slice(0, 8)) { pick.add(i - 1); pick.add(i); pick.add(i + 1); }   // with the line around it
+      const lines = [...pick].filter(i => all[i]).sort((a, b) => a - b).map(i => { const t = all[i];
+        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'JARVIS'}: ${t.text}`; });
+      return lines.length ? `Arşivden (${all.length} satır arandı):\n` + lines.join('\n').slice(0, 6000) : 'Arşivde bununla ilgili bir konuşma bulamadım.';
+    },
+  };
+  setInterval(() => { if (Archive.pending.length && Date.now() - Archive.last > 180000) Archive.flush(); }, 30000);
+  window.addEventListener('pagehide', () => Archive.save());
+
+  // ── learning: every so often Gemini's free text model reads the latest
+  // conversation and files lasting facts about the user into shared memory
+  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like JARVIS knowing Tony.
+  const Learn = {
+    buf: [], timer: null,
+    turn(t) { this.buf.push(t); clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 90000); if (this.buf.filter(x => x.role === 'user').length >= 10) this.run(); },
+    async run() {
+      clearTimeout(this.timer);
+      const turns = this.buf.splice(0); if (!S.key || turns.filter(t => t.role === 'user').length < 2) return;
+      const known = CATS.flatMap(c => Object.keys(memory[c] || {}).map(k => `${c}/${k}`)).join(', ').slice(0, 3000);
+      const ask = 'Aşağıdaki konuşmadan kullanıcı hakkında KALICI ve işe yarar yeni bilgileri çıkar (kim olduğu, ailesi ve yakınları, tercihleri, alışkanlıkları, projeleri, istekleri, önemli tarihler). ' +
+        'Geçici şeyleri (bugünkü ruh hali, tek seferlik istekler), sağlık, din, siyaset, para bilgilerini ve zaten bilinenleri ALMA. Emin değilsen alma. ' +
+        `Kategoriler: ${CATS.join(', ')}. Bilinen anahtarlar: ${known || '(yok)'}\n` +
+        'Sadece JSON dizi döndür: [{"category":"...","key":"kısa_anahtar","value":"kısa değer"}] ya da [].\n\nKONUŞMA:\n' +
+        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'JARVIS'}: ${t.text}`).join('\n').slice(-6000);
+      for (const model of TEXT_MODELS) {
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: ask }] }], generationConfig: { responseMimeType: 'application/json' } }) });
+          if (!r.ok) continue;
+          const js = await r.json();
+          const txt = (js.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('');
+          const facts = J(txt.replace(/^```(json)?|```$/g, '').trim(), []);
+          let n = 0;
+          for (const f of Array.isArray(facts) ? facts.slice(0, 6) : []) {
+            const c = CATS.includes(f.category) ? f.category : 'notes', k = String(f.key || '').trim().slice(0, 60), v = String(f.value || '').trim().slice(0, 300);
+            if (!k || !v || entry((memory[c] || {})[k] || '').value === v) continue;
+            memory[c] = memory[c] || {}; memory[c][k] = { value: v, updated: nowIso() }; n++;
+          }
+          if (n) { localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow(); console.info('[öğrenme]', n, 'yeni bilgi'); }
+          return;
+        } catch {}
+      }
+    },
+  };
 
   async function syncNow(extra = {}) {
     if (!Cloud.ok()) return null;
@@ -407,6 +517,11 @@
         } else if (c.kind === 'image' && (c.data || c.url)) {
           keepImage({ data: c.data || '', mime: c.mime || 'image/png', url: c.url || '', prompt: c.prompt || title, en: c.en || '', seed: c.seed || 0 });
           showImage(`${from} gönderdi${title ? ': ' + title : ''}`);
+          if (c.see && c.data && ws && ready) {
+            // the computer's screen, asked for by the user: let the brain look at it
+            send({ realtimeInput: { video: { data: c.data, mimeType: c.mime || 'image/jpeg' } } });
+            tellBrain(`${title} geldi ve ekranda; bu görüntüye bakarak ${c.question ? 'şu soruyu yanıtla: ' + c.question : 'bilgisayarda ne olduğunu kısaca anlat'}.`);
+          }
         } else if (c.kind === 'code' || c.kind === 'text') {
           lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
           showCode(); $('t-code').hidden = false;
@@ -586,6 +701,10 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, number: { type: 'NUMBER' }, query: { type: 'STRING' }, device: { type: 'STRING' } }, required: ['action'] } },
     { name: 'place', description: 'Konum hafızası: "arabamı buraya park ettim", "bu yeri otel diye kaydet" (save: bu cihazın şu anki konumu), "arabam nerede", "otele yol tarifi" (find: haritada açar; device verilirse o cihazda açar), "kayıtlı yerlerim" (list), forget.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'save | find | list | forget' }, name: { type: 'STRING', description: 'araba, otel, ev …' }, device: { type: 'STRING' } }, required: ['action'] } },
+    { name: 'computer_screen', description: 'Bilgisayarın ekranını bu cihazda gör: "bilgisayarın ekranında ne var", "laptopta indirme bitti mi bak", "ekranını göster". Ekran görüntüsü gelir, ekranda açılır ve sen de bakıp anlatırsın. question: ekranda neye bakılacağı.',
+      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, question: { type: 'STRING' } } } },
+    { name: 'search_history', description: 'Bütün cihazlardaki geçmiş konuşmaların kalıcı arşivinde ara: "geçen hafta ne konuşmuştuk", "annemin doğum günü hakkında ne demiştim", "dün telefonda bahsettiğim film neydi". days: kaç gün geriye (boşsa hepsi).',
+      parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, days: { type: 'NUMBER' } }, required: ['query'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -656,6 +775,14 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'search_history': return await Archive.search(String(a.query || ''), Number(a.days) || 0);
+      case 'computer_screen': {
+        const pc = findPc(a.device);
+        if (!pc) return 'Bağlı bir bilgisayar yok.';
+        const r = await sendToPc(pc.name, 'Ekranının görüntüsünü bana gönder.', { kind: 'screenshot', reply_to: S.id, question: String(a.question || '') });
+        setTimeout(() => syncNow(), 2500); setTimeout(() => syncNow(), 6000);
+        return r + ' Görüntü gelince ekranda açılacak ve sana göstereceğim; o zaman anlat.';
+      }
       case 'place': return await placeTool(a);
       case 'gallery': {
         await syncNow();
@@ -1155,7 +1282,7 @@
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
       `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol kullan. `+
-      `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak. ` +
+      `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak; geçmiş bir konuşma sorulursa search_history ile arşive bak. ` +
       `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
       `Önceki konuşmalar ve yarım işler aşağıda; "kaldığımız yerden devam" denirse oradan sür, bilgisayardaki yarım projeler için computer_command ile "yarım kalan işe devam et" gönder.\n\n` +
