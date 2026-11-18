@@ -231,7 +231,20 @@
   let lastInteract = Date.now(), owner = null, ownerName = '', resumeMic = false;
   const isActive = () => document.visibilityState === 'visible' && (micOn || Date.now() - lastInteract < 10 * 60000);
   const myBeat = () => ({ id: S.id, name: devName(), kind: KIND, seen: new Date().toISOString(), commands: false,
-                          active: isActive(), claim: S.claim || '' });
+                          active: isActive(), claim: S.claim || '', ...battery });
+  // This device's battery where the browser tells (Android Chrome; not iPhone).
+  let battery = {};
+  (async () => { try { const b = await navigator.getBattery?.(); if (!b) return;
+    const upd = () => { battery = { battery: Math.round(b.level * 100), charging: !!b.charging }; };
+    upd(); b.addEventListener('levelchange', upd); b.addEventListener('chargingchange', upd); } catch {} })();
+  function healthText(d) {
+    const L = [];
+    if (d.battery != null) L.push(`pil %${d.battery}${d.charging ? ' (şarjda)' : ''}`);
+    if (d.cpu != null) L.push(`işlemci %${d.cpu}`);
+    if (d.ram != null) L.push(`bellek %${d.ram}`);
+    if (d.disk != null) L.push(`disk %${d.disk} dolu`);
+    return L.join(', ');
+  }
   function voiceOwner(list, now = Date.now()) {
     const live = list.filter(d => d.active && now - Date.parse(d.seen || 0) < ALIVE_MS);
     if (!live.length) return null;
@@ -297,10 +310,10 @@
   // ── devices ──────────────────────────────────────────────────────────────
   const online = d => Date.now() - Date.parse(d.seen || 0) < 3 * 60 * 1000;
   function renderDevices() {
-    const me = { id: S.id, name: devName() + ' (bu cihaz)', kind: KIND, seen: new Date().toISOString() };
+    const me = { id: S.id, name: devName() + ' (bu cihaz)', kind: KIND, seen: new Date().toISOString(), ...battery };
     const rows = [me, ...devices.filter(d => d.id !== S.id)];
     const html = rows.map(d => `<div class="dev"><div class="ic">${ICON[d.kind] || '💻'}</div><div class="tx"><div class="nm">${esc(d.name)}</div>
-      <div class="sb">${d.kind === 'pc' ? 'Bilgisayar · komut alır' : (KIND_NAMES[d.kind] || 'Cihaz')}${online(d) ? '' : ' · görülmedi'}${d.id === owner || (owner === null && d.id === S.id) ? ' · 🔊 sesli yanıt burada' : ''}</div></div>
+      <div class="sb">${d.kind === 'pc' ? 'Bilgisayar · komut alır' : (KIND_NAMES[d.kind] || 'Cihaz')}${online(d) ? '' : ' · görülmedi'}${healthText(d) ? ' · ' + esc(healthText(d)) : ''}${d.id === owner || (owner === null && d.id === S.id) ? ' · 🔊 sesli yanıt burada' : ''}</div></div>
       <span class="dot ${online(d) ? 'on' : ''}"></span></div>`).join('');
     $('devs').innerHTML = html + (Cloud.ok() ? '' : '<p>Ortak hafıza kurulmamış: cihazlar birbirini göremiyor. Ayarlar → GitHub anahtarı.</p>');
     $('side-devs').innerHTML = html;
@@ -434,6 +447,8 @@
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'protocol', description: 'Protokoller (Iron Man tarzı): tek komutla sırayla birçok iş. "çalışma protokolü", "film moduna geç", "uyku protokolü", "günaydın", "protokollerim neler", "yeni protokol kaydet". action: run | list | save | delete. run bir adım listesi döner: o adımları sırayla araçlarınla yap.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
+    { name: 'status_report', description: 'Iron Man tarzı durum raporu: bütün cihazlar (açık/kapalı, pil, işlemci, bellek, disk), sıradaki hatırlatıcılar, yapılacaklar, bilgisayardaki projeler. "durum raporu", "sistemler nasıl", "cihazlarım ne durumda", "laptopun şarjı kaç".',
+      parameters: { type: 'OBJECT', properties: {} } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -504,6 +519,7 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'status_report': return await statusReport();
       case 'protocol': return protocolTool(a);
       case 'projects': { await syncNow(); return projectsText() || 'Bilgisayarlarda kayıtlı bir proje yok (ya da bilgisayar henüz bağlanmadı).'; }
       case 'send_to_device': {
@@ -787,6 +803,18 @@
       return `${n} madde silindi.`;
     }
     return items.length ? items.map(([k], i) => `${i + 1}. ${k.slice(TODO.length)}`).join('\n') : 'Yapılacaklar listesi boş.';
+  }
+
+  async function statusReport() {
+    await syncNow();
+    const me = { id: S.id, name: devName() + ' (bu cihaz)', kind: KIND, seen: new Date().toISOString(), ...battery };
+    const devs = [me, ...devices.filter(d => d.id !== S.id)].map(d =>
+      `- ${d.name} (${d.kind === 'pc' ? 'bilgisayar' : KIND_NAMES[d.kind] || d.kind}): ${online(d) ? 'açık' : 'kapalı'}${healthText(d) ? ', ' + healthText(d) : ''}`);
+    const rem = pendingRem().slice(0, 4).map(r => `- ${remTime(r.due)}: ${r.text}`);
+    const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).map(k => '- ' + k.slice(11));
+    const proj = projectsText();
+    return `CİHAZLAR:\n${devs.join('\n')}\n\nSIRADAKİ HATIRLATICILAR:\n${rem.join('\n') || '- yok'}\n\nYAPILACAKLAR (${todos.length}):\n${todos.slice(0, 6).join('\n') || '- yok'}` +
+      `\n\nPROJELER:\n${proj || '- yok'}\n\n(Kullanıcıya Iron Man'deki JARVIS gibi kısa, akıcı bir rapor olarak özetle; düşük pil ya da dolu disk varsa uyar.)`;
   }
 
   // ── reminders and timers, shared by every device ────────────────────────
