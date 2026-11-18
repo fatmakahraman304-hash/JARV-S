@@ -713,6 +713,8 @@
       parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, days: { type: 'NUMBER' } }, required: ['query'] } },
     { name: 'background_task', description: 'Bilgisayarda uzun bir işi arka planda başlat: araştırma yapıp rapor yazmak, bir web sitesi/uygulama kodlamak, dosyaları düzenlemek. Kullanıcı başka işlerle uğraşırken sürer; bitince sonuç bu cihaza gelir ve sen söylersin. "araştır ve rapor hazırla", "bana bir site yap", "şu projeyi bitir".',
       parameters: { type: 'OBJECT', properties: { task: { type: 'STRING', description: 'yapılacak işin tam tarifi, Türkçe' }, kind: { type: 'STRING', description: 'research | code | other' } }, required: ['task'] } },
+    { name: 'notifications', description: 'Sayfa kapalıyken de bildirim almak: kullanıcıya Ayarlar\'daki "🔔 Bildirimleri aç" tuşuna basmasını söyler (tarayıcı izni bir dokunuş ister).',
+      parameters: { type: 'OBJECT', properties: {} } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -783,6 +785,10 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'notifications': {
+        if ('Notification' in window && Notification.permission === 'granted' && J(localStorage.getItem('jarvis_push_key'), '')) return 'Bildirimler bu cihazda zaten açık.';
+        openSetup(); return 'Ayarlar açıldı: kullanıcı "🔔 Bildirimleri aç" tuşuna bassın (izin bir dokunuş ister). Bunu ona söyle.';
+      }
       case 'background_task': {
         const kind = String(a.kind || 'other'), task = String(a.task || '').trim();
         if (!task) return 'Ne yapılacak?';
@@ -1598,6 +1604,27 @@
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
+  // ── notifications while this page is closed: the computer sends them
+  // (core/webpush.py) with the keys in push.json; this device subscribes ──
+  const b64uBytes = t => { const b = atob(String(t).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(t).length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+  async function enablePush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return /iPhone|iPad/.test(navigator.userAgent)
+      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile JARVIS\'i ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
+    if (!Cloud.ok()) return 'Önce ortak hafıza (GitHub anahtarı) kurulmalı.';
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return 'Bildirim izni verilmedi.';
+    const f = await Cloud.read();
+    const pub = J(f['push.json'], {}).publicKey;
+    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda JARVIS bir kez açılınca oluşur. Sonra tekrar dene.';
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && J(localStorage.getItem('jarvis_push_key'), '') !== pub) { await sub.unsubscribe(); sub = null; }
+    sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(pub) });
+    localStorage.setItem('jarvis_push_key', JSON.stringify(pub));
+    await Cloud.write({ [`push-sub-${S.id}.json`]: JSON.stringify(sub.toJSON()) });
+    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki JARVIS açıkken).';
+  }
+  $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
   // ── the computer panel: buttons straight to the computer's JARVIS ───────
   $('t-pc').onclick = () => {
     const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "Jarvis\'i her cihaza kur" de.';
