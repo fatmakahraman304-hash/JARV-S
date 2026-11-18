@@ -1,8 +1,9 @@
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from plugins import blender_studio as studio
 
@@ -38,7 +39,21 @@ class BlenderWorkflow(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp, patch.object(studio, "ROOT", Path(tmp)):
             with patch.object(gemini, "as_json", return_value={"steps": steps}):
-                studio.process("new", "Kırmızı bir küpü döndür", None)
+                player = Mock()
+                real_popen = subprocess.Popen
+
+                def spawn(args, **kwargs):
+                    if "--background" in args:
+                        return real_popen(args, **kwargs)
+                    return Mock()
+
+                with patch.object(studio.subprocess, "Popen", side_effect=spawn) as popen:
+                    studio.process("new", "Kırmızı bir küpü döndür", None, result="both", player=player)
+                    gui = [c.args[0] for c in popen.call_args_list if "--background" not in c.args[0]]
+                    self.assertEqual(gui, [[studio.executable(), "--disable-autoexec",
+                                            str(studio.project_path(None))]])
+                shown = Path(player.show_image.call_args.args[0])
+                self.assertTrue(shown.read_bytes().startswith(b"\x89PNG"))
             with tempfile.TemporaryDirectory() as temp:
                 info = studio.invoke(studio.executable(), None, Path(temp), "reference", query="uv unwrap")
                 self.assertIn("uv.unwrap", [row[0] for row in info["operators"]])

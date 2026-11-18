@@ -1,6 +1,7 @@
 """Build versioned Blender projects from spoken directions."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -11,11 +12,14 @@ PLUGIN = {
     "name": "blender_studio",
     "description": ("Masaüstü Blender'da Türkçe tarifle proje oluştur (new), son projeyi veya verilen "
                     ".blend dosyasının kopyasını düzenle (edit), sahneyi incele (inspect), görüntü al "
-                    "(render), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
-                    "Modelleme, malzeme, kamera, ışık veya animasyon isteklerinde kullan."),
+                    "(render), zaman çizelgesini PNG kare dizisi olarak işle (animation), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
+                    "Sahne veya render istendiğinde open_app kullanma. new/edit için gösterim isteğini result ile belirt. "
+                    "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
+                    "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | inspect | render | glb | open | guide | status"},
+        "action": {"type": "STRING", "description": "new | edit | inspect | render | animation | glb | open | guide | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
+        "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
         "project": {"type": "STRING", "description": "İsteğe bağlı mevcut .blend dosyasının tam yolu"}
     }, "required": ["action"]},
@@ -50,23 +54,75 @@ pose: rig name,bone, optional location/rotation/scale and frame for animation.
 mesh_edit: name,tool, optional Blender operator settings. All mesh elements selected. Tools:
 subdivide,bevel,inset,poke,triangulate,recalculate_normals,remove_doubles,unwrap,smart_project.
 render_settings: resolution_x,resolution_y,transparent, optional engine CYCLES or BLENDER_EEVEE_NEXT.
+Procedural tools (choose when suitable, then refine their objects with normal steps):
+district: name, rows and columns (1..12 each, one lot per cell), max_floors (1..24),
+parks (list of 1-based [row,col]), seed, location (grid center xyz). Each lot uses 20m pitch.
+Buildings have names "<name> Bina <row>-<col>", parks "<name> Park <row>-<col>" and roads "<name> Yollar".
+For exact building counts account for parks. District makes exterior blocks; model interiors with walls.
+wall: name,start,end (world XY meters),height,thickness,base_z,openings list of
+{offset,width,height,sill}. Offset from start to left edge, sill from base_z. Leave doorways
+and windows as actual openings; add glazing/doors as distinct objects if requested.
+landscape: name,size,height,resolution (2..200),seed,location. Smooth height field centered at location.
+lathe: name, profile list of [radius,z] ordered along the surface, segments (3..256),location.
+Use zero radii at the ends to close the surface, e.g. pottery, lamps, shaped product bodies.
+cable: name,points (ordered xyz coordinates),radius,closed. Smooth editable 3D curve.
+physics: name,type ACTIVE/PASSIVE for rigid body, CLOTH for cloth, COLLISION for cloth collider,
+optional mass. Use subdivided meshes for cloth; caches run during timeline playback.
 Plan complete geometry, composition and requested animation. For new scenes add a camera
 aimed at the subject and lighting unless explicitly unwanted. No scripts or placeholders."""
 
 
+def running_blenders():
+    import psutil
+    for process in psutil.process_iter(["name", "exe"]):
+        try:
+            name = (process.info["name"] or "").lower()
+            path = process.info["exe"]
+            if path and name in ("blender.exe", "blender-launcher.exe"):
+                yield Path(path).with_name("blender.exe")
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+
+
+def windows_candidates():
+    yield from running_blenders()
+    import winreg
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        try:
+            with winreg.OpenKey(hive, r"Software\Microsoft\Windows\CurrentVersion\App Paths\blender.exe") as key:
+                yield Path(os.path.expandvars(winreg.QueryValueEx(key, None)[0].strip('"')))
+        except OSError:
+            pass
+    for variable in ("ProgramW6432", "ProgramFiles", "LOCALAPPDATA", "ProgramFiles(x86)"):
+        root = os.environ.get(variable)
+        if not root:
+            continue
+        base = Path(root)
+        for parent in (base, base / "Programs"):
+            paths = (parent / "Blender Foundation").glob("Blender */blender.exe")
+            yield from sorted(paths, key=lambda p: tuple(map(int, re.findall(r"\d+", p.parent.name))),
+                              reverse=True)
+        yield base / "Steam/steamapps/common/Blender/blender.exe"
+
+
 def executable():
+    override = os.environ.get("JARVIS_BLENDER_EXE")
+    if override:
+        path = Path(override.strip('"')).expanduser()
+        if path.is_file():
+            return str(path)
+        raise ValueError("JARVIS_BLENDER_EXE geçersiz. blender.exe dosyasının tam yolunu kontrol et.")
+    if os.name == "nt":
+        for path in windows_candidates():
+            if path.is_file():
+                return str(path)
     found = shutil.which("blender")
     if found:
         return found
-    if os.name == "nt":
-        base = Path(os.environ.get("ProgramFiles", "C:/Program Files"))
-        candidates = sorted((base / "Blender Foundation").glob("Blender */blender.exe"))
-    else:
-        candidates = [Path("/Applications/Blender.app/Contents/MacOS/Blender")]
-    for path in reversed(candidates):
-        if path.is_file():
-            return str(path)
-    raise ValueError("Blender bulunamadı. Blender'ı kur veya PATH'e ekle.")
+    mac = Path("/Applications/Blender.app/Contents/MacOS/Blender")
+    if mac.is_file():
+        return str(mac)
+    raise ValueError("Blender bulunamadı. Blender'ı açıp tekrar dene veya JARVIS_BLENDER_EXE değişkenine tam yolunu yaz.")
 
 
 def invoke(binary, source, folder, mode, steps=(), query=""):
@@ -97,8 +153,53 @@ def project_path(value):
     return path
 
 
-def process(action, request, project, topic=""):
-    binary = executable()
+def build_project(binary, source, folder, request):
+    """Resolve complex briefs in passes, committing only the final reopened scene."""
+    from core import gemini
+
+    scene = invoke(binary, source, folder, "inspect")
+    if not source:
+        scene.update(objects=[], details=[], count=0, camera=None)
+    brief = f"{SPEC}\nUser: {request}"
+    phase_choice = ('For a complex brief you may instead return {"phases":["specific subtask", ...]} '
+                    'with 2 to 8 ordered phases covering every requirement. Each phase will see the '
+                    'saved result of the preceding one. For simple requests return steps directly.')
+    prompt = f"{brief}\n{phase_choice}\nScene: {json.dumps(scene, ensure_ascii=False)}"
+    first = gemini.as_json(prompt, tier=gemini.SMART)
+    phases = first.get("phases") if isinstance(first, dict) else None
+    if phases is not None and (not isinstance(phases, list) or not 2 <= len(phases) <= 8
+                               or not all(isinstance(p, str) and p.strip() for p in phases)):
+        raise ValueError("Geçersiz Blender aşama listesi.")
+    tasks = phases or [request]
+    with tempfile.TemporaryDirectory(dir=folder) as work:
+        for index, phase in enumerate(tasks):
+            last = index == len(tasks) - 1
+            stage = folder if last else Path(work) / str(index)
+            stage.mkdir(exist_ok=True)
+            if phases:
+                prompt = (f"{brief}\nOverall plan: {json.dumps(phases, ensure_ascii=False)}"
+                          f"\nExecute ONLY phase {index + 1}: {phase}. Return steps or unsupported."
+                          f"\nCurrent scene: {json.dumps(scene, ensure_ascii=False)}")
+            for attempt in range(2):
+                plan = first if not phases and not attempt else gemini.as_json(prompt, tier=gemini.SMART)
+                if isinstance(plan, dict) and plan.get("unsupported"):
+                    raise ValueError(str(plan["unsupported"])[:400])
+                steps = plan.get("steps") if isinstance(plan, dict) else None
+                try:
+                    if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
+                        raise ValueError("Plan 1–500 işlem içermeli.")
+                    invoke(binary, source, stage, "build", steps)
+                    break
+                except ValueError as exc:
+                    if attempt:
+                        raise ValueError(f"Aşama {index + 1}: {exc}") from exc
+                    prompt += f"\nRejected response: {json.dumps(plan)}\nError: {exc}\nReturn corrected steps."
+            source = stage / "scene.blend"
+            scene = invoke(binary, source, stage, "inspect")
+
+
+def process(action, request, project, topic="", *, binary=None, result="save", player=None):
+    binary = binary or executable()
     if action == "guide":
         from core import gemini
         with tempfile.TemporaryDirectory() as temp:
@@ -119,39 +220,32 @@ def process(action, request, project, topic=""):
         return f'{report["count"]} nesne. Kamera: {report["camera"] or "yok"}. Nesneler: {names}'
     folder = Path(tempfile.mkdtemp(prefix="proje-", dir=ROOT))
     try:
+        if action == "animation":
+            invoke(binary, source, folder, "animation")
+            return f"Animasyon kareleri hazır. {folder / 'frames'}"
         if action in ("glb", "render"):
             invoke(binary, source, folder, action)
             output = folder / ("render.png" if action == "render" else "scene.glb")
         else:
-            from core import gemini
-            scene = invoke(binary, source, folder, "inspect")
-            if not source:
-                scene.update(objects=[], details=[], count=0, camera=None)
-            prompt = f"{SPEC}\nScene: {json.dumps(scene, ensure_ascii=False)}\nUser: {request}"
-            for attempt in range(2):
-                plan = gemini.as_json(prompt, tier=gemini.SMART)
-                if not isinstance(plan, dict):
-                    raise ValueError("Modelden geçerli bir Blender planı alınamadı.")
-                if plan.get("unsupported"):
-                    raise ValueError(str(plan["unsupported"])[:400])
-                steps = plan.get("steps")
-                if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
-                    raise ValueError("Plan 1–500 işlem içermeli.")
-                try:
-                    invoke(binary, source, folder, "build", steps)
-                    break
-                except ValueError as exc:
-                    if attempt:
-                        raise
-                    prompt += f"\nRejected plan: {json.dumps(steps)}\nError: {exc}\nReturn corrected plan."
+            build_project(binary, source, folder, request)
             output = folder / "scene.blend"
         if not output.is_file() or not output.stat().st_size:
             raise ValueError("Blender çıktı dosyasını oluşturamadı.")
         if action in ("new", "edit"):
-            invoke(binary, output, folder, "inspect")
             pointer = folder / "latest.tmp"
             pointer.write_text(folder.name, encoding="utf8")
             pointer.replace(ROOT / "latest.txt")
+            # Keep the verified project even if a requested preview fails.
+            try:
+                if result in ("open", "both"):
+                    subprocess.Popen([binary, "--disable-autoexec", str(output)])
+                if result in ("render", "both"):
+                    preview = process("render", "", output, binary=binary, player=player)
+                    return f"Blender projesi hazır. {output}  {preview}"
+            except Exception as exc:
+                return f"Blender projesi kaydedildi: {output}. Gösterim tamamlanamadı: {exc}"
+        if action == "render" and player is not None and hasattr(player, "show_image"):
+            player.show_image(str(output), "Blender render")
         return f'{"Görüntü" if action == "render" else "GLB" if action == "glb" else "Blender projesi"} hazır. {output}'
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)
@@ -164,7 +258,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     action = p.get("action")
     if action == "status":
         return _status
-    if action not in ("new", "edit", "inspect", "open", "render", "glb", "guide"):
+    if action not in ("new", "edit", "inspect", "open", "render", "animation", "glb", "guide"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
     if action in ("new", "edit", "guide") and not request:
@@ -172,10 +266,18 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if not _lock.acquire(blocking=False):
         return "Bir Blender işlemi sürüyor. Durumunu sorabilirsin."
 
+    try:
+        binary = executable()
+    except Exception as exc:
+        _status = f"Blender işlemi başlamadı. {exc}"
+        _lock.release()
+        return _status
+
     def work():
         global _status
         try:
-            _status = process(action, request, p.get("project"), p.get("topic") or "")
+            _status = process(action, request, p.get("project"), p.get("topic") or "",
+                              binary=binary, result=p.get("result") or "save", player=player)
         except Exception as exc:
             _status = f"Blender işlemi tamamlanamadı. {exc}"
         finally:
@@ -183,6 +285,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             _lock.release()
         if player is not None:
             player.write_log(message)
+            if hasattr(player, "request_say"):
+                player.request_say("Blender aracının doğrulanmış sonucunu kullanıcıya kısaca bildir. "
+                                   "Yeni bir işlem başlatma. Sonuç: " + message)
 
     _status = "Blender işlemi sürüyor."
     try:
