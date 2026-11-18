@@ -1,7 +1,6 @@
 name: Hologram real-3D live check
 on:
-  push:
-    branches: [feature/holo-real3d]
+  pull_request:
     paths: ["core/holo_ai3d.py", "core/glb.py", "tools/holo_ai3d_live.py", ".github/workflows/holo-ai3d-live.yml", "gui/holo_gl.py", "core/holo_model.py"]
   workflow_dispatch:
 permissions:
