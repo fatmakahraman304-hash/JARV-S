@@ -55,6 +55,37 @@ class ShapeTests(unittest.TestCase):
         self.assertEqual(len(tris), 8)
 
 
+class ExpandTests(unittest.TestCase):
+    def test_array_radial_mirror(self):
+        m = hm.clean({"parts": [
+            {"name": "kanat", "shape": "box", "size": [1, 4, 0.3], "pos": [2, 2, 5], "array": {"count": 10, "step": [0, 0, -0.6]}, "mirror": "x"},
+            {"name": "civata", "shape": "cylinder", "size": [0.5, 0.5, 0.5], "pos": [6, 1, 0], "radial": {"count": 8, "axis": "y", "center": [0, 1, 0]}},
+            {"name": "rampa", "shape": "wedge", "size": [3, 2, 1], "pos": [3, 1, 0], "rot": [0, 30, 0], "mirror": "x"}]})
+        M = hm.Mesh(m)
+        self.assertEqual(M.pieces, 20 + 8 + 2)
+        self.assertEqual(sorted(M.part_center), [0, 1, 2])
+        c = np.array(M.inst_center)
+        self.assertTrue(np.allclose(sorted(np.round(c[20:28, 0], 2)), sorted(np.round(6 * np.cos(np.arange(8) * np.pi / 4), 2)), atol=0.05))
+        w = c[28:30]
+        self.assertAlmostEqual(w[0, 0], -w[1, 0], places=4)            # the mirrored wedge is a true mirror image
+        self.assertTrue(np.allclose(w[0, 1:], w[1, 1:], atol=1e-4))
+        V, N, F = hm.part_mesh(hm.expand(m)[-1][1])
+        self.assertEqual(consistent(V, N, F), 1.0)
+
+    def test_finish_and_limits(self):
+        p = hm.clean_part({"finish": "Carbon", "array": {"count": 500}, "radial": {"count": 1}})
+        self.assertEqual(p["finish"], "carbon")
+        self.assertEqual(p["array"]["count"], 64)
+        self.assertNotIn("radial", p)
+        self.assertEqual(hm.clean_part({"finish": "lava"})["finish"], "none")
+        many = hm.clean({"parts": [{"shape": "box", "array": {"count": 64}, "radial": {"count": 72}}]})
+        self.assertEqual(len(hm.expand(many)), hm.MAX_INSTANCES)
+
+    def test_rounded_box_stays_light(self):
+        V, N, F = hm.part_mesh(hm.clean_part({"shape": "rounded_box", "size": [2, 1, 2], "radius": 0.25}))
+        self.assertLess(len(F), 4000)
+
+
 class MeshTests(unittest.TestCase):
     def test_samples(self):
         for m in ALL:
@@ -121,8 +152,9 @@ class GestureTests(unittest.TestCase):
 
     def test_local_commands(self):
         self.assertEqual([hm.local_command(t) for t in ("bunu dijital olarak modelle", "parçalarına ayır", "birleştir", "gerçekçi görünüm",
-                                                        "hologram görünümüne geç", "STL çıkar", "kanatları kırmızı yap", "hologramı kapat")],
-                         ["scan", "explode", "assemble", "real", "holo", "stl", "", "close"])
+                                                        "hologram görünümüne geç", "STL çıkar", "kanatları kırmızı yap", "hologramı kapat",
+                                                        "daha fazla ayrıntı ekle", "kesit göster", "ölçüleri göster", "hepsini göster")],
+                         ["scan", "explode", "assemble", "real", "holo", "stl", "", "close", "detail", "cut", "measure", "show_all"])
 
 
 class ScanTests(unittest.TestCase):
@@ -136,19 +168,19 @@ class ScanTests(unittest.TestCase):
             self.assertIn("11 parça", msg)
             prompt = ask.call_args[0][0][0]
             self.assertIn("lathe", prompt); self.assertIn("photo_box", prompt)
-            self.assertEqual(len(ask.call_args[0][0]), 3)
+            self.assertEqual(len(ask.call_args[0][0]), 2)          # last pass: prompt + one photo
             e, _ = holo_scan.edit(m, "ekranı kırmızı yap")
             self.assertEqual(e["id"], m["id"])
             self.assertEqual(e["photo"], m["photo"])
             self.assertIn("ekranı kırmızı yap", ask.call_args[0][0][0])
         more = {**reply, "parts": PHONE["parts"] + [{"name": "Vida", "shape": "cylinder", "size": [0.2, 0.1, 0.2], "pos": [0, 0.05, 0]}]}
-        with mock.patch.object(gemini, "as_json", side_effect=[reply, more]) as ask, mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
+        with mock.patch.object(gemini, "as_json", side_effect=[reply, more, more]) as ask, mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
             steps = []
             m, _ = holo_scan.scan([b"a", b"b"], progress=steps.append)
             self.assertEqual(len(m["parts"]), 12)                       # the detail pass added a part
-            self.assertEqual(steps, ["AYRINTILANDIRILIYOR…"])
-            self.assertIn("ADD 30 to 90 new parts", ask.call_args[0][0][0])
-        with mock.patch.object(gemini, "as_json", side_effect=[reply, {"parts": []}]), mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
+            self.assertEqual(steps, ["AYRINTILANDIRILIYOR…"] * 2)        # thin model: two detail passes
+            self.assertIn("ADD 30 to 90 new part entries", ask.call_args[0][0][0])
+        with mock.patch.object(gemini, "as_json", side_effect=[reply, {"parts": []}, {"parts": []}]), mock.patch.object(holo_scan, "_part", side_effect=lambda b: b):
             self.assertEqual(len(holo_scan.scan([b"a"])[0]["parts"]), 11)  # a failed detail pass keeps the first model
         with mock.patch.object(gemini, "as_json", return_value=None):
             self.assertIsNone(holo_scan.create("x")[0])
@@ -211,6 +243,12 @@ class PanelTests(unittest.TestCase):
             panel.command({"action": "holo"}); self.assertTrue(panel.holo)
             panel.command({"action": "real"}); self.assertFalse(panel.holo)
             panel.command({"action": "save"}); self.assertEqual(len(holo_panel.load_library()), 1)
+            panel.command({"action": "cut"}); self.assertEqual(panel.cut, 0.5)
+            panel.command({"action": "measure"}); self.assertTrue(panel.measure)
+            panel.command({"action": "say", "request": "sadece kulpu göster"}); self.assertEqual(panel.iso, 1)
+            panel.command({"action": "say", "request": "hepsini göster"}); self.assertEqual(panel.iso, -1)
+            img = panel.grab(); self.assertFalse(img.isNull())
+            panel.command({"action": "cut", "on": False}); self.assertIsNone(panel.cut)
             img = panel.grab()
             self.assertFalse(img.isNull())
             with mock.patch("core.holo_scan.edit", return_value=(hm.clean(PHONE), "Güncellendi.")):

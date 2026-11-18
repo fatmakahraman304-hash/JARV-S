@@ -28,7 +28,8 @@ Shapes (pick the one that matches the real form, not the simplest):
 - "rounded_box": devices, cases, remotes, phones, books, furniture panels; add "radius" (cm) for the corner/edge round-over.
 - "lathe": anything turned/round in plan — bottles, cups, mugs, cans, lamps, vases, knobs, lenses, wheels, bowls, bulbs.
   Add "profile": [[r, y], ...] from bottom to top, r = radius as a fraction 0..1 of size x/2, y = height fraction 0..1.
-  Use 6–16 points to follow the real silhouette (lip, neck, shoulder, foot). Start/end at r = 0 to close it.
+  Use 6–16 points to follow the real silhouette (lip, neck, shoulder, foot). Start/end at r = 0 to close it; a profile
+  that does not reach r = 0 stays open there (rims, tyres, rings, tubes, lamp shades).
 - "extrude": flat-sided outlines — phone silhouettes, brackets, logos, letters, blades, plates, shaped panels.
   Add "outline": [[x, y], ...] in -1..1 of size x/2 and size y/2, counter-clockwise, 4–40 points; depth = size z;
   optional "bevel" (cm).
@@ -43,9 +44,21 @@ Shapes (pick the one that matches the real form, not the simplest):
 
 Materials: real colours from the photo; metal 1 for bare metal, 0 for plastic/wood/fabric/ceramic; rough 0.05–0.25 for
 polished/glossy, 0.4–0.6 satin, 0.8–1 matte; emissive > 0 only for things that glow (screens on, LEDs); opacity < 1
-only for glass/clear plastic.
+only for glass/clear plastic. "finish" gives the surface its real texture (drawn procedurally at true scale):
+"brushed" (brushed aluminium/steel), "carbon" (carbon fibre weave), "leather", "fabric" (cloth, mesh, knit),
+"wood", "knurl" (knurled grips, textured knobs), "rubber", "paint" (glossy car/lacquer paint with clear coat),
+"matte" (bead-blasted/soft-touch), "concrete" (stone, cast, ceramic glaze speckle), "glass", or "none".
 
-Detail: 40 to 150 parts — this is a high-end product visualisation, not a toy. Proportions first, then every visible
+Repetition (use it — it gives you far more detail for the same length):
+- "mirror": "x" adds a copy reflected across x = 0 (left/right ear cups, wheels, eyes, handles) — "z" or "xz" too.
+- "array": {"count": n, "step": [dx, dy, dz], "rot": [rx, ry, rz] optional} makes n copies, each moved by step
+  (vent slats, keyboard keys, ribs, fins, rows of screws, stairs).
+- "radial": {"count": n, "axis": "y", "center": [x, y, z]} makes n copies around an axis (bolts round a rim,
+  spokes, turbine blades, petals, knurl ridges).
+They combine (an array that is also mirrored).
+
+Detail: 40 to 150 part entries — with arrays, radial copies and mirrors the drawn model should reach 150–600 pieces.
+This is a high-end product visualisation, not a toy. Proportions first, then every visible
 detail: buttons, ports, screens and their bezels, lenses with their rings, seams and panel gaps (thin dark strips), screws,
 feet, hinges, handles, vents and grilles as several slats, labels and logos as thin panels, edge bevels and trim strips,
 inner surfaces you can see. Prefer the curved shapes (loft, lathe, rounded_box, tube) over plain boxes wherever the real
@@ -101,9 +114,10 @@ REFINE = """Here is the first version of the model as JSON:
 {model}
 
 Make it more detailed and more real. Keep every existing part (you may correct a part's size, position, shape or
-material when it is clearly wrong), and ADD 30 to 90 new parts for the details a close-up would show: seams and panel
-gaps, screws, small buttons and LEDs, port openings, vent slats, label panels, bevel and trim strips, rims and rings,
-inner surfaces, feet, cable ends. Use the same JSON format and return the WHOLE model (all old and new parts).
+material or finish when it is clearly wrong), and ADD 30 to 90 new part entries for the details a close-up would show:
+seams and panel gaps, screws, small buttons and LEDs, port openings, vent slats, label panels, bevel and trim strips,
+rims and rings, inner surfaces, feet, cable ends. Use array / radial / mirror for anything repeated, and give every part
+a fitting finish. Use the same JSON format and return the WHOLE model (all old and new parts).
 {fmt}"""
 
 
@@ -122,6 +136,19 @@ def _refine(m: dict, images=(), progress=None) -> dict:
             better["photo_box"] = m.get("photo_box")
         return better
     return m
+
+
+def detail(model: dict, frames=(), progress=None):
+    """One more detail pass on the model on the table ("daha fazla ayrıntı")."""
+    m = _refine(model, frames, progress)
+    added = len(holo_model.expand(m)) - len(holo_model.expand(model))
+    if added <= 0:
+        return None, "Daha fazla ayrıntı ekleyemedim."
+    return m, f"{added} parça eklendi — toplam {len(holo_model.expand(m))}."
+
+
+def _pieces(m) -> int:
+    return len(holo_model.expand(m))
 
 
 def scan(frames: list[bytes], progress=None, refine: bool = True):
@@ -143,7 +170,9 @@ def scan(frames: list[bytes], progress=None, refine: bool = True):
         return None, "Net bir nesne göremedim; yakına tut, iyi ışıkta tekrar dene."
     if refine:
         m = _refine(m, frames[:2], progress)
-    return m, f"{m['name']}: {len(m['parts'])} parça."
+        if _pieces(m) < 120:                       # still thin: one more pass
+            m = _refine(m, frames[:1], progress)
+    return m, f"{m['name']}: {_pieces(m)} parça."
 
 
 def create(text: str, progress=None, refine: bool = True):
@@ -158,7 +187,9 @@ def create(text: str, progress=None, refine: bool = True):
         return None, "Boş bir model geldi."
     if refine:
         m = _refine(m, (), progress)
-    return m, f"{m['name']}: {len(m['parts'])} parça."
+        if _pieces(m) < 120:
+            m = _refine(m, (), progress)
+    return m, f"{m['name']}: {_pieces(m)} parça."
 
 
 def edit(model: dict, text: str):

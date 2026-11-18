@@ -33,7 +33,7 @@ GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE = 0x0302, 0x0303, 1
 GL_FLOAT = 0x1406
 GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT = 0x4000, 0x0100, 0x0400
 GL_POLYGON_OFFSET_FILL = 0x8037
-STRIDE = 14                       # pos3 nrm3 col3 mat4 pid1
+STRIDE = 16                       # pos3 nrm3 col3 mat4 pid1 ext2 (finish, ambient occlusion)
 SHADOW = 4096
 _KEY = np.array([-0.45, 0.72, 0.52]); _KEY /= np.linalg.norm(_KEY)
 _LU = np.cross([0.0, 1.0, 0.0], _KEY); _LU /= np.linalg.norm(_LU)
@@ -46,6 +46,7 @@ attribute vec3 a_nrm;
 attribute vec3 a_col;
 attribute vec4 a_mat;
 attribute float a_pid;
+attribute vec2 a_ext;
 uniform mat4 u_mvp;
 uniform vec3 u_off;           // model → world: subtract the centre (x, z) and the floor (y)
 uniform float u_pass;         // 0 model, 1 floor, 2 shadow
@@ -61,8 +62,10 @@ varying vec3 v_n;
 varying vec3 v_col;
 varying vec4 v_mat;
 varying float v_pid;
+varying vec2 v_ext;
 void main() {
     vec3 wp = a_pos - u_off;
+    v_ext = a_ext;
     if (u_pass > 2.5) wp.y = -wp.y;        // floor reflection: the model upside down under the floor
     else if (u_pass > 1.5) {               // flatten onto the floor along the light
         float t = wp.y / max(-u_ldir.y, 0.05);
@@ -122,7 +125,44 @@ uniform float u_alpha_pass;    // 0 opaque parts only, 1 see-through parts only
 uniform float u_shadow_a;
 uniform sampler2D u_shadow;
 uniform float u_has_shadow;
+uniform float u_cut;           // geometry with x beyond this is cut away (section view); 1e9 = none
+uniform float u_iso;           // the one part shown solid, the rest ghosted; -1 = all solid
 varying vec3 v_lp;
+varying vec2 v_ext;
+
+float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x) {
+    vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
+
+// surface height (0..1) of a finish at p (cm), on the tangent plane (u, v)
+float fin_h(float id, vec3 p, vec2 uv) {
+    if (id < 1.5) return vnoise(vec3(uv.y * 60.0, uv.x * 0.8, 0.0));                                   // brushed
+    if (id < 2.5) { vec2 c = floor(uv / 0.32); vec2 f = fract(uv / 0.32);                               // carbon twill
+        float along = mod(c.x + c.y, 2.0) < 1.0 ? f.x : f.y; return 0.55 + 0.45 * sin(along * 3.14159 * 5.0) * (0.6 + 0.4 * sin((mod(c.x + c.y, 2.0) < 1.0 ? f.y : f.x) * 3.14159)); }
+    if (id < 3.5) { float n = vnoise(p * 3.2); return 1.0 - abs(n * 2.0 - 1.0) * 0.8 + 0.2 * vnoise(p * 9.0); }   // leather
+    if (id < 4.5) return 0.5 + 0.5 * sin(uv.x * 62.8) * sin(uv.y * 62.8);                              // fabric weave (1 mm)
+    if (id < 5.5) return fract(length(p.xz) * 2.2 + fbm(p * vec3(0.6, 0.15, 0.6)) * 1.6);               // wood rings
+    if (id < 6.5) return abs(sin((uv.x + uv.y) * 25.0)) * abs(sin((uv.x - uv.y) * 25.0));                // knurl
+    if (id < 7.5) return vnoise(p * 22.0);                                                               // rubber
+    if (id < 8.5) return hash3(floor(p * 90.0));                                                          // paint flake
+    if (id < 9.5) return vnoise(p * 40.0);                                                               // matte bead blast
+    if (id < 10.5) return fbm(p * 1.8) * 0.7 + 0.3 * step(0.93, vnoise(p * 7.0));                        // concrete / stone
+    return 0.5;
+}
+float fin_period(float id) {
+    if (id < 1.5) return 0.03; if (id < 2.5) return 0.32; if (id < 3.5) return 0.3; if (id < 4.5) return 0.1;
+    if (id < 5.5) return 0.45; if (id < 6.5) return 0.25; if (id < 7.5) return 0.05; if (id < 8.5) return 0.012;
+    if (id < 9.5) return 0.025; return 0.5;
+}
+float fin_bump(float id) {
+    if (id < 1.5) return 0.10; if (id < 2.5) return 0.35; if (id < 3.5) return 0.55; if (id < 4.5) return 0.45;
+    if (id < 5.5) return 0.12; if (id < 6.5) return 0.9; if (id < 7.5) return 0.18; if (id < 8.5) return 0.0;
+    if (id < 9.5) return 0.08; if (id < 10.5) return 0.45; return 0.0;
+}
 
 const vec3 KEY = vec3(-0.45, 0.72, 0.52);
 const vec3 FILL = vec3(0.70, 0.25, 0.66);
@@ -192,10 +232,19 @@ void main() {
         }
         return;
     }
+    if (v_wp.x > u_cut) discard;
     float opacity = v_mat.w;
+    bool ghost = u_iso > -0.5 && abs(v_pid - u_iso) > 0.5;
     if (u_holo < 0.5) {
-        if (u_alpha_pass < 0.5 && opacity < 0.99) discard;
-        if (u_alpha_pass > 0.5 && opacity >= 0.99) discard;
+        bool see = opacity < 0.99 || ghost;
+        if (u_alpha_pass < 0.5 && see) discard;
+        if (u_alpha_pass > 0.5 && !see) discard;
+    }
+    if (u_cut < 1e8 && dot(normalize(v_n), V) < 0.0 && u_pass < 2.5) {        // looking inside through the cut
+        float hatch = step(0.5, fract((v_wp.y + v_wp.z) * 1.2));
+        vec3 c = u_holo > 0.5 ? u_accent * (0.35 + 0.25 * hatch) : mix(vec3(0.16, 0.13, 0.11), u_accent * 0.55, 0.35 + 0.25 * hatch);
+        gl_FragColor = vec4(c, 1.0);
+        return;
     }
     vec3 N = normalize(v_n);
     if (u_pass > 2.5) N.y = -N.y;
@@ -210,39 +259,72 @@ void main() {
         vec3 tint = mix(u_accent, vec3(1.0, 0.86, 0.62), 0.25 + 0.35 * dot(v_col, vec3(0.33)));
         vec3 c = tint * (0.10 + 1.7 * fres + 0.08 * scan + 0.9 * band) * flick;
         if (sel) c += vec3(1.0, 0.85, 0.55) * (0.35 + fres);
-        float a = clamp(0.10 + 0.75 * fres + 0.05 * scan + 0.35 * band + (sel ? 0.2 : 0.0), 0.0, 1.0);
-        gl_FragColor = vec4(c * a, a);                     // premultiplied, drawn additively
+        float a = clamp(0.10 + 0.75 * fres + 0.05 * scan + 0.35 * band + (sel ? 0.2 : 0.0), 0.0, 1.0) * (ghost ? 0.18 : 1.0);
+        gl_FragColor = vec4(min(c, vec3(1.0)) * a, a);     // premultiplied (colour ≤ alpha), drawn additively
         return;
     }
     vec3 alb = pow(v_col, vec3(2.2));
-    float metal = v_mat.x, rough = max(v_mat.y, 0.045), a = rough * rough;
+    float metal = v_mat.x, rough = max(v_mat.y, 0.045);
+    float fid = floor(v_ext.x + 0.5), coat = 0.0, ao = v_ext.y;
+    if (fid > 0.5 && fid < 10.5) {
+        // a real surface texture, at true scale, faded out where it would only shimmer
+        vec3 T = normalize(abs(N.y) < 0.95 ? cross(N, vec3(0.0, 1.0, 0.0)) : cross(N, vec3(1.0, 0.0, 0.0)));
+        vec3 B = cross(N, T);
+        vec2 uv = vec2(dot(v_wp, T), dot(v_wp, B));
+        float per = fin_period(fid);
+        float px = length(fwidth(v_wp));
+        float lod = 1.0 - smoothstep(per * 0.35, per * 1.1, px);
+        float e = per * 0.18;
+        float h0 = fin_h(fid, v_wp, uv);
+        float hu = fin_h(fid, v_wp + T * e, uv + vec2(e, 0.0));
+        float hv = fin_h(fid, v_wp + B * e, uv + vec2(0.0, e));
+        float k = fin_bump(fid) * lod;
+        N = normalize(N - (T * (hu - h0) + B * (hv - h0)) * k * 2.0);
+        if (fid < 1.5) { rough = clamp(rough * (0.75 + 0.55 * h0 * lod) , 0.05, 1.0); }
+        else if (fid < 2.5) { alb *= mix(1.0, 0.55 + 0.6 * h0, lod); rough = mix(rough, 0.22 + 0.25 * (1.0 - h0), lod); }
+        else if (fid < 3.5) { rough = clamp(rough + 0.25 * h0 * lod, 0.3, 1.0); alb *= mix(1.0, 0.85 + 0.25 * h0, lod); }
+        else if (fid < 4.5) { rough = max(rough, 0.82); alb *= mix(1.0, 0.8 + 0.3 * h0, lod); }
+        else if (fid < 5.5) { alb *= mix(0.62, 1.12, smoothstep(0.1, 0.9, h0)) * (0.9 + 0.2 * vnoise(v_wp * vec3(9.0, 0.6, 9.0))); rough = max(rough, 0.45); }
+        else if (fid < 6.5) { rough = clamp(rough + 0.15 * h0 * lod, 0.2, 1.0); }
+        else if (fid < 7.5) { rough = max(rough, 0.86); alb *= 0.92 + 0.12 * h0 * lod; }
+        else if (fid < 8.5) { coat = 1.0; alb *= 0.96 + 0.1 * h0 * lod; }
+        else if (fid < 9.5) { rough = max(rough, 0.72) + 0.12 * h0 * lod; }
+        else { alb *= 0.82 + 0.35 * h0; rough = max(rough, 0.88); }
+    }
+    float a = rough * rough;
     vec3 F0 = mix(vec3(0.04), alb, metal);
     vec3 col = vec3(0.0);
     vec3 Ls[3]; Ls[0] = normalize(KEY); Ls[1] = normalize(FILL); Ls[2] = normalize(RIM);
     vec3 Cs[3]; Cs[0] = vec3(2.7, 2.57, 2.4); Cs[1] = vec3(0.65, 0.78, 1.05); Cs[2] = u_accent * 1.6 + vec3(0.6);
     float sh = lit(0.0012);
+    if (dot(N, V) < 0.0) N = normalize(N + V * (0.01 - dot(N, V)));          // a bump must not face away
+    nv = clamp(dot(N, V), 1e-3, 1.0);
     for (int i = 0; i < 3; i++) {
         vec3 L = Ls[i]; vec3 H = normalize(L + V);
         float nl = max(dot(N, L), 0.0), nh = max(dot(N, H), 0.0), vh = max(dot(V, H), 0.0);
         vec3 F = F0 + (1.0 - F0) * pow(1.0 - vh, 5.0);
         vec3 spec = F * ggx(nh, a) * vis(nl, nv, a) * 0.25;
         vec3 kd = (1.0 - F) * (1.0 - metal);
-        col += (kd * alb + spec) * Cs[i] * nl * (i == 0 ? sh : 1.0);
+        vec3 cc = vec3(0.0);
+        if (coat > 0.5) { float Fc = 0.04 + 0.96 * pow(1.0 - vh, 5.0); cc = vec3(Fc * ggx(nh, 0.0025) * vis(nl, nv, 0.0025) * 0.25); }
+        col += ((kd * alb + spec) * mix(1.0, ao, 0.35) + cc) * Cs[i] * nl * (i == 0 ? sh : 1.0);
     }
     vec3 R = reflect(-V, N);
     vec3 Fe = F0 + (max(vec3(1.0 - rough), F0) - F0) * pow(1.0 - nv, 5.0);
     float sky = 0.5 + 0.5 * N.y;
     vec3 amb = mix(vec3(0.05, 0.045, 0.04) + u_accent * 0.02, vec3(0.16, 0.17, 0.19), sky);
-    col += amb * alb * (1.0 - metal);
-    col += env(R, rough) * Fe * (1.0 - 0.6 * rough) * mix(0.55, 1.0, sh);
-    float ao = mix(0.45, 1.0, smoothstep(0.0, u_radius * 0.18, v_wp.y));       // contact darkening near the floor
-    col *= ao;
+    col += amb * alb * (1.0 - metal) * ao;
+    col += env(R, rough) * Fe * (1.0 - 0.6 * rough) * mix(0.55, 1.0, sh) * mix(ao, 1.0, 0.25);
+    if (coat > 0.5) col += env(R, 0.03) * (0.04 + 0.96 * pow(1.0 - nv, 5.0)) * mix(0.6, 1.0, sh) * ao;
+    float contact = mix(0.72, 1.0, smoothstep(0.0, u_radius * 0.12, v_wp.y));  // a little extra darkening right at the floor
+    col *= contact;
     col += pow(v_col, vec3(2.2)) * v_mat.z * 3.0;                                // screens, LEDs
     if (sel) col += u_accent * (0.25 + 0.9 * pow(1.0 - nv, 2.0));
     col = aces(col * 1.05);
     col = pow(col, vec3(1.0 / 2.2));
     float alpha = u_alpha_pass > 0.5 ? clamp(opacity + 0.5 * pow(1.0 - nv, 3.0), 0.0, 1.0) : 1.0;
     alpha *= refl;
+    if (ghost && u_alpha_pass > 0.5) { col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))), 0.7); alpha = 0.10 * refl; }
     gl_FragColor = vec4(col * alpha, alpha);
 }
 """
@@ -353,7 +435,7 @@ class HoloGL:
                 raise RuntimeError("köşe gölgelendiricisi: " + prog.log())
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAG):
                 raise RuntimeError("piksel gölgelendiricisi: " + prog.log())
-            for i, name in enumerate(("a_pos", "a_nrm", "a_col", "a_mat", "a_pid")):
+            for i, name in enumerate(("a_pos", "a_nrm", "a_col", "a_mat", "a_pid", "a_ext")):
                 prog.bindAttributeLocation(name, i)
             if not prog.link():
                 raise RuntimeError("gölgelendirici bağlanamadı: " + prog.log())
@@ -447,6 +529,7 @@ class HoloGL:
         buf = np.zeros((mesh.n_vert, STRIDE), np.float32)
         buf[:, 0:3] = mesh.positions(explode)
         buf[:, 3:6], buf[:, 6:9], buf[:, 9:13], buf[:, 13] = mesh.nrm, mesh.col, mesh.mat, mesh.pid
+        buf[:, 14], buf[:, 15] = mesh.fin, mesh.ao
         data = buf.tobytes()
         self._vbo.bind()
         if mesh is not self._mesh:
@@ -466,11 +549,11 @@ class HoloGL:
         prog = self._prog
         if on:
             vbo.bind()
-            for loc, (off, size) in enumerate(((0, 3), (3, 3), (6, 3), (9, 4), (13, 1))):
+            for loc, (off, size) in enumerate(((0, 3), (3, 3), (6, 3), (9, 4), (13, 1), (14, 2))):
                 prog.enableAttributeArray(loc)
                 prog.setAttributeBuffer(loc, GL_FLOAT, off * 4, size, STRIDE * 4)
         else:
-            for loc in range(5):
+            for loc in range(6):
                 prog.disableAttributeArray(loc)
             vbo.release()
 
@@ -483,8 +566,84 @@ class HoloGL:
         else:
             prog.setUniformValue(name, float(v))
 
+    # ── ambient occlusion, baked a few directions per frame ──────────────────
+    AO_DIRS, AO_RES, AO_PER_FRAME = 32, 1024, 4
+
+    def ao_ready(self, mesh) -> bool:
+        job = self.__dict__.get("_ao")
+        return bool(job and job["mesh"] is mesh and job["i"] >= len(job["dirs"]))
+
+    def _ao_step(self, mesh):
+        """Light from the whole sky, blocked by the model itself: render the
+        model's depth from AO_DIRS directions over the upper hemisphere and
+        count, per vertex, from how many it is visible. Crevices, the inside of
+        a cup, the gap under a lid come out darker — the depth real photos have."""
+        from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+        job = self.__dict__.get("_ao")
+        if job is None or job["mesh"] is not mesh:
+            n = self.AO_DIRS
+            k = np.arange(n) + 0.5
+            y = 0.08 + 0.92 * (k / n)                       # upper hemisphere, denser near the top
+            r = np.sqrt(1 - y * y)
+            th = k * 2.399963
+            dirs = np.c_[np.cos(th) * r, y, np.sin(th) * r]
+            job = self._ao = {"mesh": mesh, "dirs": dirs, "i": 0, "acc": np.zeros(mesh.n_vert), "w": np.zeros(mesh.n_vert)}
+        if job["i"] >= len(job["dirs"]):
+            return False
+        gl, sp = self._gl, self._sprog
+        if self.__dict__.get("_aofbo") is None:
+            fmt = QOpenGLFramebufferObjectFormat()
+            fmt.setAttachment(QOpenGLFramebufferObject.Attachment.Depth)
+            self._aofbo = QOpenGLFramebufferObject(QSize(self.AO_RES, self.AO_RES), fmt)
+        off = Camera.offset(mesh)
+        P = mesh.pos0 - off
+        c = np.array([0.0, mesh.size[1] * 0.5, 0.0])
+        ext = mesh.radius * 1.05
+        for _ in range(self.AO_PER_FRAME):
+            if job["i"] >= len(job["dirs"]):
+                break
+            d = job["dirs"][job["i"]]; job["i"] += 1
+            up = np.array([0.0, 1.0, 0.0]) if abs(d[1]) < 0.95 else np.array([1.0, 0.0, 0.0])
+            u = np.cross(up, d); u /= np.linalg.norm(u)
+            v = np.cross(d, u)
+            self._aofbo.bind()
+            gl.glViewport(0, 0, self.AO_RES, self.AO_RES)
+            gl.glClearColor(1.0, 1.0, 1.0, 1.0)
+            gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True); gl.glDisable(GL_BLEND)
+            sp.bind()
+            sp.setUniformValue("u_off", QVector3D(*[float(x) for x in off]))
+            for name, vv in (("u_lu", u), ("u_lv", v), ("u_ll", d), ("u_lc", c)):
+                sp.setUniformValue(name, QVector3D(*[float(x) for x in vv]))
+            if hasattr(sp, "setUniformValue1f"):
+                sp.setUniformValue1f("u_ext", float(ext))
+            else:
+                sp.setUniformValue("u_ext", float(ext))
+            self._vbo.bind(); sp.enableAttributeArray(0); sp.setAttributeBuffer(0, GL_FLOAT, 0, 3, STRIDE * 4)
+            gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
+            sp.disableAttributeArray(0); self._vbo.release(); sp.release()
+            img = self._aofbo.toImage().convertToFormat(QImage.Format.Format_RGBA8888)
+            self._aofbo.release()
+            ptr = img.constBits(); ptr.setsize(img.sizeInBytes())
+            arr = np.frombuffer(ptr, np.uint8).reshape(img.height(), img.bytesPerLine() // 4, 4)[:, :img.width()]
+            depth = arr[:, :, 0].astype(np.float32) / 255.0 + arr[:, :, 1].astype(np.float32) / 65025.0
+            q = P - c
+            lx, ly, lz = q @ u / ext, q @ v / ext, -(q @ d) / ext
+            res = self.AO_RES
+            px = np.clip(((lx * 0.5 + 0.5) * (res - 1)).astype(int), 0, res - 1)
+            py = np.clip(((1 - (ly * 0.5 + 0.5)) * (res - 1)).astype(int), 0, res - 1)    # toImage is top-down
+            seen = (lz * 0.5 + 0.5) - 0.004 <= depth[py, px]
+            wgt = np.clip(mesh.nrm @ d, 0, None)
+            job["acc"] += seen * wgt
+            job["w"] += wgt
+        if job["i"] >= len(job["dirs"]):
+            ao = np.where(job["w"] > 1e-6, job["acc"] / np.maximum(job["w"], 1e-6), 0.55)
+            mesh.ao = (0.18 + 0.82 * np.clip(ao, 0, 1) ** 1.2).astype(np.float32)
+            self._explode = -1.0                              # upload again with the AO
+        return True
+
     def render(self, mesh, cam: Camera, w: int, h: int, *, holo: bool, accent, t: float,
-               explode: float = 0.0, sel: int = -1) -> QImage | None:
+               explode: float = 0.0, sel: int = -1, cut: float = 1e9, iso: int = -1) -> QImage | None:
         if self.ok is False or w < 8 or h < 8 or mesh is None or mesh.n_vert == 0:
             return None
         if self.ok is None:
@@ -496,6 +655,13 @@ class HoloGL:
             if not self._ctx.makeCurrent(self._surf):
                 raise RuntimeError("OpenGL bağlamı etkinleştirilemedi")
             self._ensure_fbo(w, h)
+            if not holo and explode < 1e-3:
+                self._upload(mesh, 0.0)
+                try:
+                    self._ao_step(mesh)
+                except Exception as exc:                          # AO is a bonus: never cost the frame
+                    print(f"[Hologram] AO: {exc}")
+                    self._ao = {"mesh": mesh, "dirs": [], "i": 0}
             self._upload(mesh, explode)
             mvp, eye = cam.matrices(mesh, w, h)
             if not holo:
@@ -509,6 +675,7 @@ class HoloGL:
             prog.setUniformValue("u_mvp", _qmat(mvp))
             self._u("u_eye", eye); self._u("u_accent", accent); self._u("u_time", t)
             self._u("u_holo", 1.0 if holo else 0.0); self._u("u_sel", float(sel))
+            self._u("u_cut", float(cut)); self._u("u_iso", float(iso))
             self._u("u_radius", mesh.radius); self._u("u_height", float(mesh.size[1]))
             self._u("u_ldir", (0, -1, 0)); self._u("u_shadow_a", 0.0); self._u("u_alpha_pass", 0.0)
             self._light(prog, mesh)
@@ -600,7 +767,7 @@ class SoftRenderer:
 
     MAX_TRI = 9000
 
-    def render(self, mesh, cam: Camera, w, h, *, holo, accent, t, explode=0.0, sel=-1) -> QImage:
+    def render(self, mesh, cam: Camera, w, h, *, holo, accent, t, explode=0.0, sel=-1, cut=1e9, iso=-1) -> QImage:
         img = QImage(w, h, QImage.Format.Format_ARGB32_Premultiplied)
         img.fill(0)
         if mesh is None or mesh.n_vert == 0:

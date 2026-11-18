@@ -73,6 +73,12 @@ def main() -> int:
             panel.sel = 1
             app.processEvents()
             panel.grab().save(str(out / f"zz_panel_{look}.png"))
+        panel.set_model(holo_model.clean(ALL[6]), animate=False)
+        panel.command({"action": "real"}); panel.command({"action": "measure"}); panel.command({"action": "cut"})
+        panel.cut = 0.62
+        for _ in range(12):                      # let the ambient occlusion finish
+            panel.repaint(); app.processEvents()
+        panel.grab().save(str(out / "zz_panel_lab.png"))
         panel.hide()
     print("renderer:", gl.renderer_name)
     if "--log-preview" in sys.argv:
