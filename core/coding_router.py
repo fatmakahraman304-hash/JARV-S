@@ -5,10 +5,12 @@ The best one first, always; when it hits its usage limit (or is signed out),
 the next one takes over, and the best one is tried again once its limit has
 had time to reset. The order, best first:
 
-    1. Claude Code        (agent in the project folder)
-    2. Codex CLI          (agent in the project folder)
-    3. the coding API chosen under ENGINE & PROVIDERS → CODING, if it is an API
-    4. Gemini's own ladder (always there, the last resort)
+    1. Claude Code        (agent in the project folder, subscription)
+    2. Codex CLI          (agent in the project folder, subscription)
+    3. JARVIS's own agent (core/jarvis_agent.py: same way of working, free
+                           brains — Gemini key, OpenRouter free, Ollama)
+    4. the coding API chosen under ENGINE & PROVIDERS → CODING, if it is an API
+    5. Gemini's own ladder (always there, the last resort)
 
 Only what is installed and signed in takes part. A model that hit its limit
 rests for an hour, one that would not start (signed out, not found) for fifteen
@@ -25,7 +27,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import claude_coding, codex_coding
+from core import claude_coding, codex_coding, jarvis_agent
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _COOL_FILE = BASE_DIR / "config" / "coding_cooldown.json"
@@ -33,8 +35,9 @@ LIMIT_REST = 60 * 60           # usage limit: try the best again after an hour
 DOWN_REST = 15 * 60            # signed out / not installed / would not start
 GEMINI = ""                    # the Gemini ladder (never rests)
 
-AGENTS = (claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID)
-NAMES = {claude_coding.PROVIDER_ID: "Claude Code", codex_coding.PROVIDER_ID: "Codex", GEMINI: "Gemini"}
+AGENTS = (claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID, jarvis_agent.PROVIDER_ID)
+NAMES = {claude_coding.PROVIDER_ID: "Claude Code", codex_coding.PROVIDER_ID: "Codex",
+         jarvis_agent.PROVIDER_ID: "JARVIS ajanı", GEMINI: "Gemini"}
 
 _lock = threading.Lock()
 

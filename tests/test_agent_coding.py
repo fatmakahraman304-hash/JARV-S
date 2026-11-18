@@ -160,13 +160,13 @@ class RouterTest(unittest.TestCase):
     def test_order_and_rest(self):
         both = lambda p: True
         self.assertEqual(self.r.ladder("openai_compat@openai", both),
-                         ["claude_code", "codex_cli", "openai_compat@openai", ""])
+                         ["claude_code", "codex_cli", "jarvis_agent", "openai_compat@openai", ""])
         self.assertEqual(self.r.ladder("", lambda p: p == "codex_cli"), ["codex_cli", ""])
         secs = self.r.rest("claude_code", RuntimeError("Claude Code kullanım sınırına ulaşıldı."))
         self.assertEqual(secs, self.r.LIMIT_REST)
-        self.assertEqual(self.r.ladder("", both), ["codex_cli", ""])
+        self.assertEqual(self.r.ladder("", both), ["codex_cli", "jarvis_agent", ""])
         with mock.patch.object(self.r.time, "time", return_value=time.time() + self.r.LIMIT_REST + 5):
-            self.assertEqual(self.r.ladder("", both), ["claude_code", "codex_cli", ""])
+            self.assertEqual(self.r.ladder("", both), ["claude_code", "codex_cli", "jarvis_agent", ""])
         self.assertEqual(self.r.rest("codex_cli", RuntimeError("Codex oturumu doğrulanamadı")), self.r.DOWN_REST)
 
     def test_what_counts_as_switchable(self):
