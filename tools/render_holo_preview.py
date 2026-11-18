@@ -91,7 +91,7 @@ def _log_sheet(out: Path) -> None:
     import base64
     from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, Qt
     from PyQt6.QtGui import QImage, QPainter
-    files = sorted(f for f in out.glob("*.png") if "zz_4k_helmet" not in f.name)
+    files = sorted(f for f in list(out.glob("*.png")) + list(out.glob("00_*.jpg")) if "zz_4k_helmet" not in f.name)
     for start in range(0, len(files), 6):
         group = files[start:start + 6]
         tw, th = 640, 397

@@ -266,3 +266,93 @@ class PanelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RealEngineTests(unittest.TestCase):
+    def _glb(self, tmp):
+        from core import glb
+        V1, N1, F1 = hm.part_mesh(hm.clean_part({"shape": "sphere", "size": [2, 2, 2], "pos": [0, 1, 0]}))
+        V2, N2, F2 = hm.part_mesh(hm.clean_part({"shape": "box", "size": [1, 1, 1], "pos": [3, 0.5, 0]}))
+        data = glb.write([{"V": np.vstack([V1, V2]), "N": np.vstack([N1, N2]), "F": np.vstack([F1, F2 + len(V1)]),
+                           "color": [0.8, 0.2, 0.1, 1], "name": "gövde"}])
+        p = Path(tmp) / "m.glb"
+        p.write_bytes(data)
+        return str(p), data
+
+    def test_glb_roundtrip_and_scan_mesh(self):
+        import tempfile
+        from core import glb
+        with tempfile.TemporaryDirectory() as t:
+            path, data = self._glb(t)
+            prims = glb.load(data)
+            self.assertEqual(len(prims), 1)
+            m = hm.clean({"glb": path, "height_cm": 50, "name": "test", "parts": []})
+            M = hm.build_mesh(m)
+            self.assertEqual(M.pieces, 2)                           # the sphere and the box come apart
+            self.assertAlmostEqual(float(M.size[1]), 50.0, places=3)  # scaled to the real height
+            self.assertAlmostEqual(float(M.floor), 0.0, places=4)
+            self.assertEqual([p["name"] for p in m["parts"]], ["gövde 1", "gövde 2"])
+            self.assertGreater(np.linalg.norm(M.positions(1.0) - M.pos0), 0)
+            self.assertEqual(len(M.stl()), 84 + 50 * (M.n_vert // 3))
+            m["upright"] = 1; m["parts"] = []
+            self.assertAlmostEqual(float(hm.build_mesh(m).size[1]), 50.0, places=3)
+        with self.assertRaises(glb.GlbError):
+            glb.load(b"not a glb at all, sorry")
+
+    def test_strays_are_dropped(self):
+        parts = [{"shape": "box", "size": [10, 10, 10], "pos": [i * 5, 5, 0]} for i in range(8)] + \
+                [{"shape": "box", "size": [0.5, 0.5, 0.5], "pos": [3, 600, 4]}]
+        self.assertEqual(len(hm.clean({"parts": parts})["parts"]), 8)
+
+    def test_providers_fall_back(self):
+        import sys as _s
+        import tempfile
+        import types
+        from core import holo_ai3d
+        calls = []
+
+        class FakeJob:
+            def __init__(self, v): self.v = v
+            def result(self, timeout=None):
+                if isinstance(self.v, Exception):
+                    raise self.v
+                return self.v
+
+        with tempfile.TemporaryDirectory() as t:
+            good = Path(t) / "textured_mesh.glb"; good.write_bytes(b"glTF" + b"\0" * 2000)
+
+            class FakeClient:
+                def __init__(self, space, token=None, verbose=False):
+                    self.space = space; calls.append(space)
+                def submit(self, api_name=None, **kw):
+                    if self.space.startswith("microsoft"):
+                        return FakeJob(RuntimeError("You have exceeded your GPU quota (ZeroGPU)"))
+                    return FakeJob((str(Path(t) / "white.glb"), {"value": str(good)}, "<html>", {}, 1))
+
+            fake = types.ModuleType("gradio_client")
+            fake.Client, fake.handle_file = FakeClient, (lambda p: p)
+            with mock.patch.dict(_s.modules, {"gradio_client": fake}):
+                data, prov, msg = holo_ai3d.image_to_3d(str(good))
+            self.assertEqual(prov, "Hunyuan3D-2.1")
+            self.assertTrue(data.startswith(b"glTF"))
+            self.assertEqual(calls[:2], ["microsoft/TRELLIS.2", "tencent/Hunyuan3D-2.1"])
+
+            class DeadClient(FakeClient):
+                def submit(self, api_name=None, **kw):
+                    return FakeJob(RuntimeError("ZeroGPU quota exceeded"))
+            fake.Client = DeadClient
+            with mock.patch.dict(_s.modules, {"gradio_client": fake}), mock.patch.object(holo_ai3d, "_token", return_value=""):
+                data, prov, msg = holo_ai3d.image_to_3d(str(good))
+            self.assertIsNone(data)
+            self.assertIn("Hugging Face", msg)
+
+    def test_engine_commands(self):
+        self.assertEqual([hm.local_command(t) for t in ("modeli doğrult", "parça modeli kullan", "gerçek 3B yap")],
+                         ["upright", "parts_engine", "real_engine"])
+
+    def test_hf_token_action(self):
+        from plugins import hologram
+        with mock.patch("memory.config_manager.save_hf_token") as save:
+            self.assertIn("kaydettim", hologram.run({"action": "hf_token", "request": "hf_" + "a" * 30}, None))
+            save.assert_called_once()
+            self.assertIn("benzemiyor", hologram.run({"action": "hf_token", "request": "abc"}, None))
