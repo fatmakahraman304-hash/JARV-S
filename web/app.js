@@ -339,6 +339,24 @@
       <span class="dot ${online(d) ? 'on' : ''}"></span></div>`).join('');
     $('devs').innerHTML = html + (Cloud.ok() ? '' : '<p>Ortak hafıza kurulmamış: cihazlar birbirini göremiyor. Ayarlar → GitHub anahtarı.</p>');
     $('side-devs').innerHTML = html;
+    renderHud();
+  }
+  // Big screens (TV, projector): an Iron Man style board beside the core —
+  // what is coming up, the to-do list, projects, and any device that needs care.
+  function renderHud() {
+    if (!document.body.classList.contains('big')) return;
+    try { renderHudNow(); } catch { /* called before the reminder code has loaded: next sync draws it */ }
+  }
+  function renderHudNow() {
+    const block = (title, items, cls = '') => items.length ? `<div><h4>${title}</h4>${items.map(x => `<div class="it ${cls}">${esc(x)}</div>`).join('')}</div>` : '';
+    const warn = [{ id: S.id, name: devName(), seen: new Date().toISOString(), ...battery }, ...devices.filter(d => d.id !== S.id)]
+      .filter(d => online(d) && ((d.battery != null && d.battery <= 20 && !d.charging) || (d.disk != null && d.disk >= 90)))
+      .map(d => d.battery != null && d.battery <= 20 ? `🔋 ${d.name} %${d.battery}` : `💾 ${d.name} disk %${d.disk}`);
+    const rem = pendingRem().slice(0, 4).map(r => `⏰ ${remTime(r.due)} — ${r.text}`);
+    const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).slice(0, 5).map(k => '☐ ' + k.slice(11));
+    const proj = [];
+    for (const pc of pcProjects) for (const p of (pc.projects || [])) if (!/bitti|iptal|başarısız/.test(p.status)) proj.push(`⚙ ${p.title} — ${p.stages ? p.stage + '/' + p.stages : p.status}`);
+    $('hud').innerHTML = block('UYARI', warn, 'warn') + block('SIRADAKİLER', rem) + block('YAPILACAKLAR', todos) + block('PROJELER', proj.slice(0, 3));
   }
   $('t-devs').onclick = () => { renderDevices(); openSheet('s-devs'); syncNow(); };
 
@@ -900,6 +918,7 @@
     const open = pendingRem();
     b.hidden = !open.length; b.textContent = open.length ? `⏰ ${open.length}` : '⏰';
     b.title = open.map(r => `${remTime(r.due)} — ${r.text}`).join('\n');
+    renderHud();
   }
   setInterval(() => {
     const now = Date.now(), due = reminders.filter(r => r.due <= now && !r.cancelled && !remFired.includes(r.id));
