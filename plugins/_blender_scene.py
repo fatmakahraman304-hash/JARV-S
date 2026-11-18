@@ -381,7 +381,9 @@ def studio(job, request):
     yaw = math.radians(float(request.get("yaw", -32)))
     pitch = math.radians(float(request.get("pitch", 14)))
     aim = Vector((0, 0, size.z * 0.48))
-    dist = radius / math.tan(cam_data.angle / 2) * 1.18
+    aspect = float(request.get("width", 1920)) / float(request.get("height", 1080))
+    half = min(math.atan(math.tan(cam_data.angle / 2) / max(aspect, 1.0)), cam_data.angle / 2)   # the narrower (vertical) half-angle
+    dist = radius / math.sin(half) * 1.12
     cam.location = aim + Vector((math.sin(yaw) * math.cos(pitch), -math.cos(yaw) * math.cos(pitch), math.sin(pitch))) * dist
     cam.rotation_euler = (aim - cam.location).to_track_quat("-Z", "Y").to_euler()
     cam_data.clip_start, cam_data.clip_end = dist * 0.01, dist * 50

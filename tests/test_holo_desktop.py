@@ -389,6 +389,7 @@ class ExportTests(unittest.TestCase):
         prims = glb.load(hm.export_glb(mesh, model))
         self.assertEqual(sum(len(p["F"]) for p in prims), mesh.n_vert // 3)
         self.assertAlmostEqual(prims[0]["color"][0], 1.0, places=2)
+        self.assertAlmostEqual(prims[0]["color"][1], 0.0, places=2)
 
     def test_gallery_commands(self):
         self.assertEqual(hm.local_command("galeriyi aç"), "lib")

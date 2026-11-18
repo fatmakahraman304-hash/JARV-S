@@ -359,7 +359,7 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
                   f"yanıtla. Bir işlem yaptığını söyleme. Yerel API eşleşmeleri: "
                   f"{json.dumps(report['operators'])}. Soru: {request}")
         return gemini.text(prompt, tier=gemini.SMART) or "Blender açıklaması alınamadı."
-    source = None if action == "new" else project_path(project)
+    source = None if action == "new" or (action == "script" and not project) else project_path(project)
     if action == "open":
         subprocess.Popen([binary, "--disable-autoexec", str(source)])
         return f"Blender'a açma isteği gönderildi. {source}"
