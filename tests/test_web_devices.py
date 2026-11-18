@@ -16,7 +16,7 @@ NODE = shutil.which("node")
 
 
 def node(script: str) -> str:
-    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30, cwd=str(ROOT))
+    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, encoding="utf-8", timeout=30, cwd=str(ROOT))
     if out.returncode:
         raise AssertionError(out.stderr)
     return out.stdout.strip()
