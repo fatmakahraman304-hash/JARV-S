@@ -183,6 +183,8 @@
       const cloudMem = J(f['memory.json'], {});
       if (JSON.stringify(cloudMem) !== JSON.stringify(memory)) writes['memory.json'] = JSON.stringify(memory);
       if (recentQueue.length) { recent = recent.concat(recentQueue).slice(-40); recentQueue = []; writes['recent.json'] = JSON.stringify(recent); }
+      const myInbox = J(f[`inbox-${S.id}.json`], []);
+      if (myInbox.length) { runInbox(myInbox); writes[`inbox-${S.id}.json`] = '[]'; }
       const cloudRem = J(f['reminders.json'], []);
       reminders = mergeReminders(reminders, cloudRem);
       const remSig = L => L.map(r => [r.id, +r.due, r.text, r.cancelled || ''].join('|')).join('\n');
@@ -303,6 +305,64 @@
     if (/laptop|dizüstü/.test(n)) { const l = pcs.find(d => /laptop|book|dizüstü/i.test(d.name)); if (l) return l; }
     return pcs.filter(online).sort((a, b) => Date.parse(b.seen) - Date.parse(a.seen))[0] || pcs[0];
   }
+  // Any device by name or kind ("telefon", "TV", "tablet", "saat", a name).
+  const KIND_WORDS = { phone: /telefon|phone|cep/, tablet: /tablet|ipad/, tv: /tv|televizyon|tele/, projector: /projeksiyon|projekt/, watch: /saat|watch/, pc: /bilgisayar|laptop|pc|dizüstü|masaüstü/ };
+  function findDevice(name, list = devices) {
+    const n = String(name || '').toLocaleLowerCase('tr').trim();
+    const others = list.filter(d => d.id !== S.id);
+    if (!n) return null;
+    const byName = others.find(d => (d.name || '').toLocaleLowerCase('tr') === n) || others.find(d => (d.name || '').toLocaleLowerCase('tr').includes(n));
+    if (byName) return byName;
+    const kind = Object.keys(KIND_WORDS).find(k => KIND_WORDS[k].test(n));
+    const ofKind = others.filter(d => d.kind === kind || (kind === 'tv' && d.kind === 'projector'));
+    return ofKind.sort((a, b) => (online(b) - online(a)) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
+  }
+  // Something sent to this device by another one (desktop: sync_hub.send_to_device).
+  let inboxDone = J(localStorage.getItem('jarvis_inbox_done'), []);
+  function runInbox(cmds) {
+    let did = false;
+    for (const c of Array.isArray(cmds) ? cmds : []) {
+      if (!c || !c.id || inboxDone.includes(c.id)) continue;
+      inboxDone.push(c.id); did = true;
+      const from = c.from || 'Başka bir cihaz', title = String(c.title || '');
+      try {
+        if (c.kind === 'open' && /^https?:\/\//i.test(c.url || '')) {
+          sys(`${from} bir bağlantı gönderdi: ${title || c.url}`);
+          const w = window.open(c.url, '_blank');
+          if (!w) askUser('Açılsın mı?', `${from}: ${title || c.url}`, () => window.open(c.url, '_blank'));
+        } else if (c.kind === 'image' && (c.data || c.url)) {
+          keepImage({ data: c.data || '', mime: c.mime || 'image/png', url: c.url || '', prompt: c.prompt || title, en: c.en || '', seed: c.seed || 0 });
+          showImage(`${from} gönderdi${title ? ': ' + title : ''}`);
+        } else if (c.kind === 'code' || c.kind === 'text') {
+          lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
+          showCode(); $('t-code').hidden = false;
+        } else if (c.kind === 'say' && c.text) {
+          sys(`${from}: ${c.text}`);
+          if (amOwner()) { if (ws && ready) tellBrain(`${from} şu mesajı iletti: "${c.text}".`); else toast(`${from}: ${c.text}`); }
+        }
+      } catch (e) { console.warn('inbox', e); }
+    }
+    if (did) localStorage.setItem('jarvis_inbox_done', JSON.stringify(inboxDone.slice(-200)));
+    return did;
+  }
+  async function sendToDevice(name, cmd) {
+    if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; başka cihaza ulaşamıyorum.';
+    await syncNow();
+    const d = findDevice(name);
+    if (!d) return `"${name}" adında ya da türünde bir cihaz bulamadım. Açık cihazlar: ${devices.filter(x => x.id !== S.id).map(x => x.name).join(', ') || 'yok'}.`;
+    if (d.kind === 'pc') {
+      // computers take commands in words through their own inbox format
+      const words = cmd.kind === 'open' ? `Bu bağlantıyı aç: ${cmd.url}` : cmd.kind === 'say' ? `Şunu söyle: ${cmd.text}` : `Bunu ekranda göster: ${cmd.text || cmd.url || ''}`;
+      return await sendToPc(d.name, words);
+    }
+    const f = await Cloud.read();
+    const box = J(f[`inbox-${d.id}.json`], []);
+    box.push({ ...cmd, id: S.id + '-' + Date.now().toString(36), from: devName(), ts: nowIso() });
+    let body = JSON.stringify(box.slice(-10));
+    if (body.length > 4e6) return 'Gönderilecek şey çok büyük.';
+    await Cloud.write({ [`inbox-${d.id}.json`]: body });
+    return `${d.name} cihazına gönderildi${online(d) ? '' : ' (şu an kapalı görünüyor; açılınca görecek)'}.`;
+  }
   async function sendToPc(name, text) {
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; bilgisayara ulaşamıyorum.';
     await syncNow();
@@ -353,6 +413,9 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'set | list | cancel' }, text: { type: 'STRING', description: 'ne hatırlatılacak' },
         minutes: { type: 'NUMBER', description: 'kaç dakika sonra (saniye için 0.5 gibi)' }, at: { type: 'STRING', description: 'saat "HH:MM" ya da "YYYY-MM-DD HH:MM"' },
         id: { type: 'STRING', description: 'iptal için hatırlatıcı numarası ya da metni' } }, required: ['action'] } },
+    { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
+      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
+        url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -423,6 +486,21 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'send_to_device': {
+        const what = String(a.what || 'open').toLowerCase(), title = String(a.title || '');
+        if (what === 'image') {
+          if (!lastImage) return 'Gönderilecek resim yok.';
+          return await sendToDevice(a.device, { kind: 'image', data: lastImage.url ? '' : lastImage.data, url: lastImage.url || '', mime: lastImage.mime,
+                                                prompt: lastImage.prompt, en: lastImage.en || '', seed: lastImage.seed || 0, title });
+        }
+        if (what === 'code') {
+          if (!lastCode && !a.text) return 'Gönderilecek kod yok.';
+          return await sendToDevice(a.device, { kind: 'code', text: a.text || lastCode.code, filename: lastCode?.filename || title || 'kod.txt', title });
+        }
+        if (what === 'open') { const url = String(a.url || ''); if (!/^https?:\/\//i.test(url)) return 'Geçerli bir adres lazım.'; return await sendToDevice(a.device, { kind: 'open', url, title }); }
+        if (!a.text) return 'Ne göndereyim?';
+        return await sendToDevice(a.device, { kind: what === 'say' ? 'say' : 'text', text: String(a.text), title });
+      }
       case 'open_app': return openApp(String(a.app || ''), String(a.query || ''), String(a.to || ''));
       case 'camera': return a.on ? await startVideo('camera', a.facing === 'front' ? 'user' : 'environment') : (stopVideo(), 'Kamera kapandı.');
       case 'screen_share':
@@ -765,7 +843,7 @@
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
-      `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo kullan. `+
+      `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device kullan. `+
       `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak. ` +
       `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +

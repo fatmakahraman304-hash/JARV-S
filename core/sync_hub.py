@@ -54,7 +54,7 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
           "status": "kapalı", "done": set(), "claim": "", "active": True,
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
-          "rem_known": None}
+          "rem_known": None, "out_cmds": []}
 
 
 def _log(msg: str) -> None:
@@ -395,6 +395,80 @@ def _sync_reminders(files: dict, writes: dict, now: float) -> None:
         writes["reminders.json"] = json.dumps(merged, ensure_ascii=False)
 
 
+# ── this computer → another device (phone, tablet, TV …) ────────────────────
+_KIND_WORDS = (("phone", ("telefon", "phone", "cep")), ("tablet", ("tablet", "ipad")),
+               ("projector", ("projeksiyon", "projekt")), ("tv", ("televizyon", "tv", "tele")),
+               ("watch", ("saat", "watch")), ("pc", ("bilgisayar", "laptop", "pc", "dizüstü", "masaüstü")))
+
+
+def devices() -> list[dict]:
+    """The other devices seen in the shared gist (latest heartbeat each)."""
+    return [dict(d) for d in _state["devices"]]
+
+
+def device_online(d: dict, now: float | None = None) -> bool:
+    now = time.time() if now is None else now
+    return now - _ts(d.get("seen", "")) < 180
+
+
+def find_device(name: str, devs: list[dict] | None = None) -> dict | None:
+    devs = [d for d in (devices() if devs is None else devs) if d.get("id") != device_id()]
+    n = str(name or "").strip().casefold()
+    if not n:
+        return None
+    for d in devs:
+        if str(d.get("name", "")).casefold() == n:
+            return d
+    for d in devs:
+        if n in str(d.get("name", "")).casefold():
+            return d
+    kind = next((k for k, words in _KIND_WORDS if any(w in n for w in words)), None)
+    if not kind:
+        return None
+    pool = [d for d in devs if d.get("kind") == kind or (kind == "tv" and d.get("kind") == "projector")]
+    pool.sort(key=lambda d: (device_online(d), _ts(d.get("seen", ""))), reverse=True)
+    return pool[0] if pool else None
+
+
+def send_to_device(name: str, cmd: dict) -> tuple[bool, str]:
+    """Queue `cmd` ({"kind": open|image|code|text|say, ...}) for another
+    device; web/app.js runInbox carries it out there. Delivered on the next
+    sync cycle (a few seconds)."""
+    s = settings()
+    if not (s.get("github_token") and s.get("gist_id")):
+        return False, "Cihazlar bağlı değil; önce 'Jarvis'i her cihaza kur' de."
+    d = find_device(name)
+    if not d:
+        names = ", ".join(x.get("name", "?") for x in devices()) or "yok"
+        return False, f"'{name}' adında ya da türünde bir cihaz bulamadım. Bilinen cihazlar: {names}."
+    if d.get("kind") == "pc":
+        return False, f"{d.get('name')} bir bilgisayar; bilgisayarlar arası gönderme henüz yok."
+    item = dict(cmd)
+    item.update({"id": f"{device_id()}-{int(time.time() * 1000):x}", "from": device_name(), "ts": _now()})
+    if len(json.dumps(item)) > 4_000_000:
+        return False, "Gönderilecek şey çok büyük."
+    with _state["lock"]:
+        _state["out_cmds"].append((d["id"], item))
+    tail = "" if device_online(d) else " (şu an kapalı görünüyor; açılınca görecek)"
+    return True, f"{d.get('name')} cihazına gönderiyorum{tail}."
+
+
+def _deliver_out(files: dict, writes: dict) -> None:
+    with _state["lock"]:
+        out, _state["out_cmds"] = _state["out_cmds"], []
+    by: dict[str, list] = {}
+    for dev_id, item in out:
+        by.setdefault(dev_id, []).append(item)
+    for dev_id, items in by.items():
+        name = f"inbox-{dev_id}.json"
+        try:
+            box = json.loads(writes.get(name) or files.get(name) or "[]")
+        except Exception:
+            box = []
+        box = [b for b in box if isinstance(b, dict)] + items
+        writes[name] = json.dumps(box[-10:], ensure_ascii=False)
+
+
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
     """The id of the one device that should speak, or None when none is on.
     Same rule as voiceOwner() in web/app.js — keep the two in step."""
@@ -487,7 +561,7 @@ def _cycle() -> None:
     writes: dict[str, str] = {}
     force = now - _state["last_memory"] > MEMORY_EVERY or now - _state["last_beat"] > HEARTBEAT_EVERY
     with _state["lock"]:
-        has_turns = bool(_state["turns"]) or bool(_state["rem_new"])
+        has_turns = bool(_state["turns"]) or bool(_state["rem_new"]) or bool(_state["out_cmds"])
         answered = [p for p in _state["pending"] if p.get("reply") is not None or now - p["at"] > REPLY_WAIT]
     files, tag, err = read_gist(token, gid, "" if (force or has_turns or answered) else _state["etag"])
     if err:
@@ -573,6 +647,9 @@ def _cycle() -> None:
             recent = []
         recent = (recent if isinstance(recent, list) else []) + turns
         writes["recent.json"] = json.dumps(recent[-RECENT_MAX:], ensure_ascii=False)
+
+    # 3a. things this computer sends to the phone, tablet, TV …
+    _deliver_out(files, writes)
 
     # 3b. reminders, shared by every device
     _sync_reminders(files, writes, now)
