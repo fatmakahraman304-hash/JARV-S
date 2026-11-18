@@ -207,7 +207,7 @@ void main() {
     vec3 F0 = mix(vec3(0.04), alb, metal);
     vec3 col = vec3(0.0);
     vec3 Ls[3]; Ls[0] = normalize(KEY); Ls[1] = normalize(FILL); Ls[2] = normalize(RIM);
-    vec3 Cs[3]; Cs[0] = vec3(3.1, 2.95, 2.75); Cs[1] = vec3(0.65, 0.78, 1.05); Cs[2] = u_accent * 1.6 + vec3(0.6);
+    vec3 Cs[3]; Cs[0] = vec3(2.7, 2.57, 2.4); Cs[1] = vec3(0.65, 0.78, 1.05); Cs[2] = u_accent * 1.6 + vec3(0.6);
     float sh = lit(0.0012);
     for (int i = 0; i < 3; i++) {
         vec3 L = Ls[i]; vec3 H = normalize(L + V);

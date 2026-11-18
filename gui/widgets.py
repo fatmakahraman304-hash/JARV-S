@@ -1002,6 +1002,15 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
         path.lineTo(cx - s * 0.55, cy + s * 0.55)
         path.closeSubpath()
         p.drawPath(path)
+    elif kind == "cube":                       # the hologram table
+        top = QPolygonF([QPointF(cx, cy - s * 0.85), QPointF(cx + s * 0.75, cy - s * 0.45),
+                         QPointF(cx, cy - s * 0.05), QPointF(cx - s * 0.75, cy - s * 0.45)])
+        p.drawPolygon(top)
+        p.drawLine(QLineF(cx - s * 0.75, cy - s * 0.45, cx - s * 0.75, cy + s * 0.4))
+        p.drawLine(QLineF(cx + s * 0.75, cy - s * 0.45, cx + s * 0.75, cy + s * 0.4))
+        p.drawLine(QLineF(cx, cy - s * 0.05, cx, cy + s * 0.85))
+        p.drawLine(QLineF(cx - s * 0.75, cy + s * 0.4, cx, cy + s * 0.85))
+        p.drawLine(QLineF(cx + s * 0.75, cy + s * 0.4, cx, cy + s * 0.85))
     elif kind == "mail":
         p.drawRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.6, s * 1.7, s * 1.2), s * 0.12, s * 0.12)
         p.drawPolyline(QPolygonF([QPointF(cx - s * 0.8, cy - s * 0.5), QPointF(cx, cy + s * 0.1),

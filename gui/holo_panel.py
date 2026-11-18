@@ -95,7 +95,7 @@ class CameraWorker(threading.Thread):
         try:
             import mediapipe as mp
         except Exception:
-            self.hand_note = "El kontrolü için mediapipe gerekli (⚙ butonundan kurulabilir)."
+            self._install_mediapipe()
             return None
         try:
             hands = mp.solutions.hands.Hands(max_num_hands=2, model_complexity=0,
@@ -128,6 +128,27 @@ class CameraWorker(threading.Thread):
             self.hand_note = f"El takibi başlatılamadı: {type(exc).__name__}"
             self.log(f"[Hologram] hand tracker: {exc}")
             return None
+
+    _installing = False
+
+    def _install_mediapipe(self):
+        """El takibi kurulu değil: bir kez arka planda kur, bitince yeniden dene."""
+        if CameraWorker._installing:
+            return
+        CameraWorker._installing = True
+        self.hand_note = "El takibi (mediapipe) ilk kez kuruluyor, bir iki dakika… bu sırada fareyle kontrol edebilirsin."
+
+        def go():
+            try:
+                from core.installer import _pip
+                ok = _pip("mediapipe", log=self.log)
+            except Exception as exc:
+                self.log(f"[Hologram] mediapipe install: {exc}")
+                ok = False
+            self.hand_note = ("El takibi kuruldu — 🖐 EL'e tekrar bas." if ok else
+                              "mediapipe kurulamadı (bu Python sürümü desteklenmiyor olabilir); fareyle kontrol et.")
+            CameraWorker._installing = False
+        threading.Thread(target=go, daemon=True, name="holo-mediapipe").start()
 
     def run(self):
         try:
