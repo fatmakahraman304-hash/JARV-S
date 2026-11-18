@@ -166,6 +166,20 @@ def save_voice(voice_name: str) -> None:
     _write_config(data)
 
 
+def get_hf_token() -> str:
+    """Hugging Face token (free) for the hologram table's image-to-3D services;
+    "" when unset. HF_TOKEN in the environment works too."""
+    return (load_api_keys().get("hf_token") or os.environ.get("HF_TOKEN") or "").strip()
+
+
+@_locked
+def save_hf_token(token: str) -> None:
+    ensure_config_dir()
+    data = _read_for_write()
+    data["hf_token"] = (token or "").strip()
+    _write_config(data)
+
+
 def get_wake_word_enabled() -> bool:
     """Whether local wake-word gating is on (assistant sleeps until 'Hey Jarvis')."""
     return load_api_keys().get("wake_word_enabled", False)

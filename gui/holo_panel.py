@@ -207,6 +207,7 @@ class HoloPanel(QWidget):
         self.holo = False
         self.explode, self.explode_to = 0.0, 0.0
         self.sel, self.hover = -1, -1
+        self.engine = "real"                  # "real": AI image-to-3D first; "parts": Gemini's parts model
         self.cut = None                       # section view: fraction across the model (0 left … 1 right), None off
         self.measure = False
         self.iso = -1                         # the part shown alone
@@ -236,7 +237,7 @@ class HoloPanel(QWidget):
         top.setSpacing(8)
         top.addStretch()
         self.btns = {}
-        for key, text, kind in (("scan", "📷  TARA", "primary"), ("detail", "🔎  DETAY", "choice"), ("hands", "🖐  EL", "off"),
+        for key, text, kind in (("scan", "📷  TARA", "primary"), ("engine", "🧠  GERÇEK 3B", "choice"), ("detail", "🔎  DETAY", "choice"), ("hands", "🖐  EL", "off"),
                                 ("look", "◐  HOLOGRAM", "choice"), ("explode", "💥  PARÇALA", "off"), ("cut", "✂  KESİT", "off"),
                                 ("measure", "📏  ÖLÇ", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
                                 ("shot", "📸 4K", "dim"), ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"), ("close", "✕", "dim")):
@@ -318,13 +319,18 @@ class HoloPanel(QWidget):
         self.explode = self.explode_to = 0.0
         self._mark("explode", False)
         self.throw_t = 0.0
-        if not m or not m.get("parts"):
+        if not m or not (m.get("parts") or m.get("glb")):
             self.mesh = None
             self.model = None
             self.update()
             return
-        photo = holo_model.decode_photo(m.get("photo", ""))
-        self.mesh = holo_model.Mesh(m, photo)
+        try:
+            photo = holo_model.decode_photo(m.get("photo", ""))
+            self.mesh = holo_model.build_mesh(m, photo)
+        except Exception as exc:
+            self.mesh, self.model = None, None
+            self.flash(f"Model açılamadı: {exc}", 6)
+            return
         self.build_t = time.monotonic() if animate else 0.0
         self.update()
 
@@ -346,14 +352,26 @@ class HoloPanel(QWidget):
                 a = "edit" if self.model else "make"
         if a == "scan":
             self._scan()
-        elif a == "make":
-            self._job("TASARLANIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).create(req or "bir model", progress=self._progress))
+        elif a == "make" or (a == "edit" and not self.model):
+            self._job("TASARLANIYOR", lambda: self._make(req or "bir model"))
         elif a == "edit":
-            if not self.model:
-                self._job("TASARLANIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).create(req, progress=self._progress))
+            m = self.model
+            if m.get("glb"):
+                self._job("GÜNCELLENİYOR", lambda: self._edit_real(m, req))
             else:
-                m = self.model
                 self._job("GÜNCELLENİYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).edit(m, req), keep_view=True)
+        elif a in ("engine", "real_engine", "parts_engine"):
+            self.engine = {"real_engine": "real", "parts_engine": "parts"}.get(a, "parts" if self.engine == "real" else "real")
+            self.btns["engine"].setText("🧠  GERÇEK 3B" if self.engine == "real" else "🧩  PARÇA")
+            self.flash("Motor: " + ("gerçek 3B (yapay zekâ ile fotoğraftan doku ve şekil)" if self.engine == "real" else "parça modeli (Gemini)"))
+        elif a == "upright":
+            if self.model and self.model.get("glb"):
+                self.model["upright"] = (int(self.model.get("upright") or 0) + 1) % 4
+                self.model["parts"] = []
+                self.set_model(self.model, animate=False)
+                save_to_library(self.model)
+        elif a == "detail" and self.model and self.model.get("glb"):
+            self.flash("Bu gerçek 3B tarama; ayrıntı turu parça modelleri için. Daha iyi sonuç için ışığı artırıp yeniden tara.")
         elif a == "detail":
             if not self.model:
                 self.flash("Önce bir model tara ya da iste")
@@ -433,6 +451,49 @@ class HoloPanel(QWidget):
                 return i
         return None
 
+    # ── the real-3D engine (core/holo_ai3d), with the parts model behind it ───
+    def _real_from_photo(self, jpeg: bytes, prompt: str = "", source: str = ""):
+        from core import holo_ai3d
+        if not source:
+            holo_ai3d.GLB_DIR.mkdir(parents=True, exist_ok=True)
+            source = str(holo_ai3d.GLB_DIR / f"src_{int(time.time() * 1000):x}.jpg")
+            Path(source).write_bytes(jpeg)
+        self._progress("ÖLÇÜLÜYOR…")
+        info = holo_ai3d.measure(prompt, jpeg)
+        glb, provider, msg = holo_ai3d.image_to_3d(source, progress=self._progress, log=print)
+        if not glb:
+            return None, msg
+        m = holo_ai3d.build(glb, provider, info, source=source, prompt=prompt)
+        return m, f"{m['name']}: gerçek 3B model ({provider})."
+
+    def _make(self, text: str):
+        if self.engine == "real":
+            from core import holo_ai3d
+            self._progress("REFERANS GÖRÜNTÜ ÇİZİLİYOR…")
+            ref, note = holo_ai3d.reference_image(text)
+            if ref:
+                m, msg = self._real_from_photo(Path(ref).read_bytes(), text, ref)
+                if m:
+                    return m, msg
+                note = msg
+            from core import holo_scan
+            m, msg = holo_scan.create(text, progress=self._progress)
+            return m, (f"{msg} (Gerçek 3B olmadı: {note[:120]} — parça modeli yaptım.)" if m and note else msg)
+        from core import holo_scan
+        return holo_scan.create(text, progress=self._progress)
+
+    def _edit_real(self, m: dict, change: str):
+        from core import holo_ai3d
+        src = m.get("source_image") or ""
+        self._progress("GÖRÜNTÜ DEĞİŞTİRİLİYOR…")
+        if src and Path(src).exists():
+            ref, note = holo_ai3d.reference_image(change, edit_from=src)
+        else:
+            ref, note = holo_ai3d.reference_image(f"{m.get('prompt') or m.get('name')}, {change}")
+        if not ref:
+            return None, note or "Değişikliği çizemedim."
+        return self._real_from_photo(Path(ref).read_bytes(), f"{m.get('name')}: {change}", ref)
+
     def _progress(self, text: str):
         self.status, self.status_until = text, time.monotonic() + 600       # read by paintEvent on the Qt thread
 
@@ -461,8 +522,15 @@ class HoloPanel(QWidget):
                     self.results.put((None, (self.worker.failed if self.worker else "") or "Kameradan görüntü alınamadı.", False))
                     return
                 self.status = "DİJİTALLEŞTİRİLİYOR…"
-                from core import holo_scan
-                m, msg = holo_scan.scan(frames, progress=self._progress)
+                m, msg = (None, "")
+                if self.engine == "real":
+                    m, msg = self._real_from_photo(frames[len(frames) // 2])
+                if m is None:
+                    from core import holo_scan
+                    note = msg
+                    m, msg = holo_scan.scan(frames, progress=self._progress)
+                    if note and m:
+                        msg = f"{msg} (Gerçek 3B olmadı: {note[:120]} — parça modeli yaptım.)"
                 self.results.put((m, msg, False))
             except Exception as exc:
                 self.results.put((None, f"Tarama hatası: {exc}", False))

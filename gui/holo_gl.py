@@ -33,7 +33,7 @@ GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE = 0x0302, 0x0303, 1
 GL_FLOAT = 0x1406
 GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT = 0x4000, 0x0100, 0x0400
 GL_POLYGON_OFFSET_FILL = 0x8037
-STRIDE = 16                       # pos3 nrm3 col3 mat4 pid1 ext2 (finish, ambient occlusion)
+STRIDE = 18                       # pos3 nrm3 col3 mat4 pid1 ext2 (finish, ambient occlusion) uv2
 SHADOW = 4096
 _KEY = np.array([-0.45, 0.72, 0.52]); _KEY /= np.linalg.norm(_KEY)
 _LU = np.cross([0.0, 1.0, 0.0], _KEY); _LU /= np.linalg.norm(_LU)
@@ -47,6 +47,7 @@ attribute vec3 a_col;
 attribute vec4 a_mat;
 attribute float a_pid;
 attribute vec2 a_ext;
+attribute vec2 a_uv;
 uniform mat4 u_mvp;
 uniform vec3 u_off;           // model → world: subtract the centre (x, z) and the floor (y)
 uniform float u_pass;         // 0 model, 1 floor, 2 shadow
@@ -63,9 +64,10 @@ varying vec3 v_col;
 varying vec4 v_mat;
 varying float v_pid;
 varying vec2 v_ext;
+varying vec2 v_uv;
 void main() {
     vec3 wp = a_pos - u_off;
-    v_ext = a_ext;
+    v_ext = a_ext; v_uv = a_uv;
     if (u_pass > 2.5) wp.y = -wp.y;        // floor reflection: the model upside down under the floor
     else if (u_pass > 1.5) {               // flatten onto the floor along the light
         float t = wp.y / max(-u_ldir.y, 0.05);
@@ -127,8 +129,12 @@ uniform sampler2D u_shadow;
 uniform float u_has_shadow;
 uniform float u_cut;           // geometry with x beyond this is cut away (section view); 1e9 = none
 uniform float u_iso;           // the one part shown solid, the rest ghosted; -1 = all solid
+uniform sampler2D u_tex;       // a scanned model's colour texture
+uniform float u_has_tex;
 varying vec3 v_lp;
 varying vec2 v_ext;
+varying vec2 v_uv;
+vec3 base_rgb() { return u_has_tex > 0.5 ? v_col * texture2D(u_tex, vec2(v_uv.x, 1.0 - v_uv.y)).rgb : v_col; }
 
 float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float vnoise(vec3 x) {
@@ -256,14 +262,15 @@ void main() {
         float scan = 0.55 + 0.45 * sin(v_wp.y / max(u_height, 1.0) * 140.0 - u_time * 6.0);
         float band = 0.5 * exp(-pow((v_wp.y / max(u_height, 1.0) - fract(u_time * 0.35)) * 12.0, 2.0));
         float flick = 0.94 + 0.06 * sin(u_time * 53.0 + v_wp.y);
-        vec3 tint = mix(u_accent, vec3(1.0, 0.86, 0.62), 0.25 + 0.35 * dot(v_col, vec3(0.33)));
+        float lum = dot(base_rgb(), vec3(0.3, 0.59, 0.11));
+        vec3 tint = mix(u_accent, vec3(1.0, 0.86, 0.62), 0.25 + 0.35 * lum) * (u_has_tex > 0.5 ? 0.55 + 0.9 * lum : 1.0);
         vec3 c = tint * (0.10 + 1.7 * fres + 0.08 * scan + 0.9 * band) * flick;
         if (sel) c += vec3(1.0, 0.85, 0.55) * (0.35 + fres);
         float a = clamp(0.10 + 0.75 * fres + 0.05 * scan + 0.35 * band + (sel ? 0.2 : 0.0), 0.0, 1.0) * (ghost ? 0.18 : 1.0);
         gl_FragColor = vec4(min(c, vec3(1.0)) * a, a);     // premultiplied (colour ≤ alpha), drawn additively
         return;
     }
-    vec3 alb = pow(v_col, vec3(2.2));
+    vec3 alb = pow(base_rgb(), vec3(2.2));
     float metal = v_mat.x, rough = max(v_mat.y, 0.045);
     float fid = floor(v_ext.x + 0.5), coat = 0.0, ao = v_ext.y;
     if (fid > 0.5 && fid < 10.5) {
@@ -435,7 +442,7 @@ class HoloGL:
                 raise RuntimeError("köşe gölgelendiricisi: " + prog.log())
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAG):
                 raise RuntimeError("piksel gölgelendiricisi: " + prog.log())
-            for i, name in enumerate(("a_pos", "a_nrm", "a_col", "a_mat", "a_pid", "a_ext")):
+            for i, name in enumerate(("a_pos", "a_nrm", "a_col", "a_mat", "a_pid", "a_ext", "a_uv")):
                 prog.bindAttributeLocation(name, i)
             if not prog.link():
                 raise RuntimeError("gölgelendirici bağlanamadı: " + prog.log())
@@ -530,6 +537,7 @@ class HoloGL:
         buf[:, 0:3] = mesh.positions(explode)
         buf[:, 3:6], buf[:, 6:9], buf[:, 9:13], buf[:, 13] = mesh.nrm, mesh.col, mesh.mat, mesh.pid
         buf[:, 14], buf[:, 15] = mesh.fin, mesh.ao
+        buf[:, 16:18] = getattr(mesh, "uv", 0.0)
         data = buf.tobytes()
         self._vbo.bind()
         if mesh is not self._mesh:
@@ -545,15 +553,54 @@ class HoloGL:
         self._vbo.release()
         self._mesh, self._explode = mesh, explode
 
+    def _textures(self, mesh):
+        """GPU textures of a scanned mesh (made once per mesh), with mipmaps."""
+        from PyQt6.QtOpenGL import QOpenGLTexture
+        cache = self.__dict__.setdefault("_tex", {})
+        if cache.get("mesh") is not mesh:
+            for t in cache.get("list", []):
+                try:
+                    t.destroy()
+                except Exception:
+                    pass
+            lst = []
+            for arr in getattr(mesh, "textures", []) or []:
+                a = np.ascontiguousarray(arr)
+                img = QImage(a.data, a.shape[1], a.shape[0], a.shape[1] * 4, QImage.Format.Format_RGBA8888).copy()
+                t = QOpenGLTexture(img, QOpenGLTexture.MipMapGeneration.GenerateMipMaps)
+                t.setMinificationFilter(QOpenGLTexture.Filter.LinearMipMapLinear)
+                t.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
+                t.setWrapMode(QOpenGLTexture.WrapMode.Repeat)
+                try:
+                    t.setMaximumAnisotropy(8.0)
+                except Exception:
+                    pass
+                lst.append(t)
+            cache.update(mesh=mesh, list=lst)
+        return cache["list"]
+
+    def _draw_model(self, mesh):
+        """The model, range by range, each with its texture (unit 1)."""
+        gl = self._gl
+        texs = self._textures(mesh) if getattr(mesh, "textures", None) else []
+        for first, count, ti in getattr(mesh, "draws", [(0, mesh.n_vert, None)]):
+            if ti is not None and ti < len(texs):
+                texs[ti].bind(1)
+                self._u("u_has_tex", 1.0)
+            else:
+                self._u("u_has_tex", 0.0)
+            gl.glDrawArrays(GL_TRIANGLES, first, count)
+        self._u("u_has_tex", 0.0)
+
     def _attrs(self, vbo, on: bool):
         prog = self._prog
         if on:
             vbo.bind()
-            for loc, (off, size) in enumerate(((0, 3), (3, 3), (6, 3), (9, 4), (13, 1), (14, 2))):
+            for loc, (off, size) in enumerate(((0, 3), (3, 3), (6, 3), (9, 4), (13, 1), (14, 2), (16, 2))):
                 prog.enableAttributeArray(loc)
                 prog.setAttributeBuffer(loc, GL_FLOAT, off * 4, size, STRIDE * 4)
         else:
-            for loc in range(6):
+            for loc in range(7):
                 prog.disableAttributeArray(loc)
             vbo.release()
 
@@ -688,6 +735,7 @@ class HoloGL:
                 for pname in (0x2802, 0x2803):                             # clamp to edge
                     gl.glTexParameteri(0x0DE1, pname, 0x812F)
                 prog.setUniformValue("u_shadow", 0)
+            prog.setUniformValue("u_tex", 1)
             gl.glDisable(GL_CULL_FACE)
             # floor
             self._u("u_off", (0, 0, 0)); self._u("u_pass", 1.0)
@@ -702,24 +750,24 @@ class HoloGL:
                 self._u("u_pass", 3.0); self._u("u_has_shadow", 0.0)
                 gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True)
                 gl.glEnable(GL_BLEND); gl.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
-                gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
+                self._draw_model(mesh)
                 gl.glClear(GL_DEPTH_BUFFER_BIT)
                 self._u("u_has_shadow", 1.0)
                 # the model: opaque parts, then glass
                 self._u("u_pass", 0.0)
                 gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True)
                 gl.glDisable(GL_BLEND)
-                gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
+                self._draw_model(mesh)
                 self._u("u_alpha_pass", 1.0)
                 gl.glEnable(GL_BLEND); gl.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA); gl.glDepthMask(False)
-                gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
+                self._draw_model(mesh)
                 gl.glDepthMask(True)
                 self._attrs(self._vbo, False)
             else:
                 self._u("u_pass", 0.0)
                 gl.glDisable(GL_DEPTH_TEST)
                 gl.glEnable(GL_BLEND); gl.glBlendFunc(GL_ONE, GL_ONE)
-                self._attrs(self._vbo, True); gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert); self._attrs(self._vbo, False)
+                self._attrs(self._vbo, True); self._draw_model(mesh); self._attrs(self._vbo, False)
             prog.release()
             img = self._fbo.toImage()
             self._fbo.release()

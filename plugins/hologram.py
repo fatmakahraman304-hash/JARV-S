@@ -15,11 +15,13 @@ PLUGIN = {
         "detail ('daha fazla ayrıntı ekle', 'detaylandır': açık modele bir ayrıntı turu daha) | explode ('parçalarına ayır') | "
         "assemble | reset | real (gerçekçi görünüm) | holo (hologram görünümü) | cut (kesit görünümü, on) | measure "
         "(ölçüleri göster, on) | isolate (request: parça adı — 'sadece kulpu göster') | show_all | hands (el kontrolü; on) | "
-        "save | stl (3D yazıcı dosyası) | shot (4K görüntü kaydet) | throw (modeli at) | open | close. "
+        "save | stl (3D yazıcı dosyası) | shot (4K görüntü kaydet) | throw (modeli at) | upright (yan yatmış modeli doğrult) | "
+        "real_engine (gerçek 3B: yapay zekâ fotoğraftan dokulu gerçek model — varsayılan) | parts_engine (parça modeli) | "
+        "hf_token (request: kullanıcının verdiği ücretsiz Hugging Face anahtarı; gerçek 3B kotasını büyütür) | open | close. "
         "Hologram açıkken model hakkındaki değişiklik isteklerini edit ile gönder."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "scan | make | edit | detail | explode | assemble | reset | real | holo | cut | measure | isolate | show_all | hands | save | stl | shot | throw | open | close"},
+        "action": {"type": "STRING", "description": "scan | make | edit | detail | explode | assemble | reset | real | holo | cut | measure | isolate | show_all | hands | save | stl | shot | throw | upright | real_engine | parts_engine | hf_token | open | close"},
         "request": {"type": "STRING", "description": "make / edit için ne istendiği"},
         "on": {"type": "BOOLEAN", "description": "hands / cut / measure için: aç (true) / kapat (false)"},
         "hands": {"type": "BOOLEAN", "description": "açarken el kontrolü de başlasın mı"},
@@ -46,6 +48,9 @@ REPLIES = {
     "throw": "Attım; istersen geri getiririm.",
     "open": "Hologram masası açık.",
     "close": "Hologram masasını kapattım.",
+    "upright": "Modeli doğrulttum.",
+    "real_engine": "Gerçek 3B motoru: fotoğraftan dokulu gerçek model.",
+    "parts_engine": "Parça motoru: Gemini parçalardan kuracak.",
 }
 
 
@@ -54,8 +59,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         p = parameters or {}
         action = str(p.get("action") or "scan").lower().strip()
         request = str(p.get("request") or "").strip()
-        if action in ("make", "edit", "isolate") and not request and action != "isolate":
+        if action in ("make", "edit") and not request:
             return "Ne modellememi ya da neyi değiştirmemi istediğini söyler misin?"
+        if action == "hf_token":
+            tok = request.strip()
+            if not tok.startswith("hf_") or len(tok) < 20:
+                return "Bu bir Hugging Face anahtarına benzemiyor; huggingface.co → Settings → Access Tokens'tan 'hf_' ile başlayan bir anahtar al."
+            from memory.config_manager import save_hf_token
+            save_hf_token(tok)
+            return "Hugging Face anahtarını kaydettim; gerçek 3B modellerde günlük kota artık daha büyük."
         if player is None or not hasattr(player, "show_hologram"):
             return "Hologram masası JARVIS'in penceresinde açılır; pencere şu an yok."
         cmd = {"action": action, "request": request}

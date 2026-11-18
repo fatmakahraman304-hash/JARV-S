@@ -122,9 +122,30 @@ def clean_part(p, i: int = 0) -> dict:
     return out
 
 
+def _drop_strays(parts: list) -> list:
+    """Parts far away from the rest are mistakes (wrong units, a position given
+    relative to another part): they make the model 6 m tall and float around it
+    as specks. Keep what sits with the main body."""
+    if len(parts) < 6:
+        return parts
+    c = np.array([p["pos"] for p in parts], float)
+    r = np.array([max(p["size"]) / 2 for p in parts], float)
+    big = r >= np.percentile(r, 40)                          # the body: the larger half of the parts
+    lo = np.percentile(c[big] - r[big, None], 10, axis=0)
+    hi = np.percentile(c[big] + r[big, None], 90, axis=0)
+    span = max(float(np.max(hi - lo)), 1.0)
+    keep = [p for p, ci in zip(parts, c) if np.all(ci > lo - span * 0.6) and np.all(ci < hi + span * 0.6)]
+    return keep if len(keep) >= len(parts) * 0.6 else parts
+
+
 def clean(m) -> dict:
     m = m if isinstance(m, dict) else {}
+    if m.get("glb"):                                         # a real scanned mesh: the geometry is in the file
+        return {k: m.get(k) for k in ("name", "summary", "glb", "height_cm", "provider", "source_image", "prompt", "id", "created", "upright")} | \
+               {"parts": m.get("parts") if isinstance(m.get("parts"), list) else [], "photo": "", "photo_box": None,
+                "name": str(m.get("name") or "3B model")[:60], "summary": str(m.get("summary") or "")[:500]}
     parts = [clean_part(p, i) for i, p in enumerate((m.get("parts") if isinstance(m.get("parts"), list) else [])[:MAX_PARTS])]
+    parts = _drop_strays(parts)
     box = m.get("photo_box")
     box = [_clamp(_num(v, 0), 0, 1) for v in box[:4]] if isinstance(box, list) and len(box) >= 4 else None
     if box and (box[2] - box[0] < 0.02 or box[3] - box[1] < 0.02):
@@ -657,6 +678,9 @@ class Mesh:
         self.col = np.zeros((self.n_vert, 3), np.float32)
         self.mat = np.zeros((self.n_vert, 4), np.float32)      # metal, rough, emissive, opacity
         self.pid = np.zeros(self.n_vert, np.float32)
+        self.uv = np.zeros((self.n_vert, 2), np.float32)
+        self.draws = [(0, self.n_vert, None)]                                 # (first, count, texture index)
+        self.textures: list = []
         self.fin = np.zeros(self.n_vert, np.float32)                          # finish id
         self.ao = np.ones(self.n_vert, np.float32)                            # baked ambient occlusion
         k = 0
@@ -818,6 +842,9 @@ _CMDS = (
     ("cut", r"kesit|kesip göster|içini kes"),
     ("measure", r"ölç|ölçüleri göster|boyutlarını göster"),
     ("show_all", r"hepsini göster|tümünü göster"),
+    ("upright", r"doğrult|dik çevir|yan yatmış|ters duruyor"),
+    ("parts_engine", r"parça (modeli|motoru)"),
+    ("real_engine", r"gerçek (3 ?b|motor|model)"),
 )
 
 
@@ -827,3 +854,111 @@ def local_command(text: str) -> str:
         if re.search(pat, t):
             return name
     return ""
+
+
+# ── real scanned meshes (.glb from core/holo_ai3d) ────────────────────────────
+
+def _components(V: np.ndarray, F: np.ndarray, max_parts: int = 40):
+    """Split a mesh into its separate pieces (wheels, body, glass…): weld the
+    vertices UV seams split, then flood labels across shared edges."""
+    q = np.round((V - V.min(0)) / max(float(np.ptp(V, 0).max()), 1e-9) * 2e5).astype(np.int64)
+    _, weld = np.unique(q, axis=0, return_inverse=True)
+    weld = weld.reshape(-1)
+    Fw = weld[F]
+    n = int(weld.max()) + 1
+    lab = np.arange(n)
+    a = np.concatenate([Fw[:, 0], Fw[:, 1], Fw[:, 2]])
+    b = np.concatenate([Fw[:, 1], Fw[:, 2], Fw[:, 0]])
+    for _ in range(2000):
+        m = np.minimum(lab[a], lab[b])
+        new = lab.copy()
+        np.minimum.at(new, a, m)
+        np.minimum.at(new, b, m)
+        new = new[new]                                     # pointer jumping: converges fast
+        if np.array_equal(new, lab):
+            break
+        lab = new
+    face_lab = lab[Fw[:, 0]]
+    ids, counts = np.unique(face_lab, return_counts=True)
+    order = ids[np.argsort(-counts)]
+    keep = order[:max_parts - 1]
+    remap = {int(k): i for i, k in enumerate(keep)}
+    other = len(keep)
+    return np.array([remap.get(int(x), other) for x in face_lab]), len(keep) + (1 if len(order) > len(keep) else 0)
+
+
+class ScanMesh(Mesh):
+    """A real, textured mesh from an image-to-3D model, in the same arrays the
+    renderer and the table use for parts models."""
+
+    def __init__(self, model: dict, prims: list, upright: int = 0):
+        self.model = model
+        allV = np.vstack([p["V"] for p in prims])
+        R = rot_matrix(-90 * upright, 0, 0) if upright else np.eye(3)
+        lo, hi = (allV @ R.T).min(0), (allV @ R.T).max(0)
+        size = hi - lo
+        h = float(model.get("height_cm") or 0)
+        k = h / max(float(size[1]), 1e-9) if h > 0 else 30.0 / max(float(size.max()), 1e-9)
+        tris = sum(len(p["F"]) for p in prims)
+        self.n_vert = tris * 3
+        self.pos0 = np.zeros((self.n_vert, 3), np.float32)
+        self.nrm = np.zeros((self.n_vert, 3), np.float32)
+        self.col = np.ones((self.n_vert, 3), np.float32)
+        self.mat = np.zeros((self.n_vert, 4), np.float32)
+        self.pid = np.zeros(self.n_vert, np.float32)
+        self.uv = np.zeros((self.n_vert, 2), np.float32)
+        self.fin = np.zeros(self.n_vert, np.float32)
+        self.ao = np.ones(self.n_vert, np.float32)
+        self.textures, self.draws, self.parts, names = [], [], [], []
+        off, pid = 0, 0
+        for p in prims:
+            V = ((p["V"] @ R.T) - [(lo[0] + hi[0]) / 2, lo[1], (lo[2] + hi[2]) / 2]) * k
+            F = p["F"]
+            N = (p["N"] @ R.T) if p.get("N") is not None else vertex_normals(V.astype(np.float32), F)
+            labels, n_parts = _components(V, F) if len(prims) == 1 else (np.zeros(len(F), int), 1)
+            order = np.argsort(labels, kind="stable")
+            F, labels = F[order], labels[order]
+            m = len(F) * 3
+            idx = F.reshape(-1)
+            sl = slice(off, off + m)
+            self.pos0[sl], self.nrm[sl] = V[idx], N[idx]
+            col = np.array(p["color"][:3], np.float32)
+            self.col[sl] = (p["C"][idx, :3] * col) if p.get("C") is not None else col
+            self.mat[sl] = (min(p["metal"], 0.6), max(p["rough"], 0.35), 0.0, 1.0)
+            if p.get("UV") is not None:
+                self.uv[sl] = p["UV"][idx]
+            ti = None
+            if p.get("texture") is not None:
+                self.textures.append(p["texture"]); ti = len(self.textures) - 1
+            self.draws.append((off, m, ti))
+            for j in range(n_parts):
+                fs = np.nonzero(labels == j)[0]
+                if not len(fs):
+                    continue
+                a, b = off + fs[0] * 3, off + (fs[-1] + 1) * 3
+                self.pid[a:b] = pid
+                Vp = self.pos0[a:b]
+                self.parts.append((pid, Vp, None, np.zeros((len(fs), 3)), {}))
+                names.append(f"{p['name']} {j + 1}" if n_parts > 1 else p["name"])
+                pid += 1
+            off += m
+        self.lo, self.hi = self.pos0.min(0), self.pos0.max(0)
+        self.center = (self.lo + self.hi) / 2
+        self.size = self.hi - self.lo
+        self.radius = float(max(1.0, np.linalg.norm(self.size) / 2))
+        self.floor = float(self.lo[1])
+        self.inst_center = [q[1].mean(0) for q in self.parts]
+        self.part_center = {q[0]: c for q, c in zip(self.parts, self.inst_center)}
+        self.instances = [(q[0], {}) for q in self.parts]
+        if not model.get("parts"):
+            model["parts"] = [{"name": nm, "shape": "mesh", "size": [round(float(x), 1) for x in np.ptp(q[1], 0)]}
+                              for nm, q in zip(names, self.parts)]
+
+
+def build_mesh(model: dict, photo=None):
+    """The right mesh for a model record: a scanned .glb or the parts."""
+    if model.get("glb"):
+        from core import glb as _glb
+        data = open(model["glb"], "rb").read()
+        return ScanMesh(model, _glb.load(data), int(model.get("upright") or 0))
+    return Mesh(model, photo)
