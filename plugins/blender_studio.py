@@ -14,7 +14,7 @@ PLUGIN = {
                     ".blend dosyasının kopyasını düzenle (edit), sahneyi incele (inspect), görüntü al "
                     "(render), zaman çizelgesini PNG kare dizisi olarak işle (animation), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
                     "Sahne veya render istendiğinde open_app kullanma. new/edit için gösterim isteğini result ile belirt. "
-                    "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
+                    "Özgün tasarım tarifini eksiksiz aktar. Son tasarıma değişiklik istendiğinde edit kullan. Durum için status kullan. "
                     "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
         "action": {"type": "STRING", "description": "new | edit | inspect | render | animation | glb | open | guide | status"},
@@ -69,6 +69,11 @@ wall: name,start,end (world XY meters),height,thickness,base_z,openings list of
 {offset,width,height,sill}. Offset from start to left edge, sill from base_z. Leave doorways
 and windows as actual openings; add glazing/doors as distinct objects if requested.
 landscape: name,size,height,resolution (2..200),seed,location. Smooth height field centered at location.
+loft: name, sections (ordered closed rings of xyz points, equal count and winding, omit repeated
+first point), caps (default true), location. Design arbitrary asymmetric, twisted or tapered forms.
+Compose the distinctive silhouette, proportions, materials and relationships from the user's brief.
+Use a preset only when its shapes and layout match the brief. For novel shapes design the actual
+sections, mesh or curves. During edits keep earlier design choices unless the user changes them.
 lathe: name, profile list of [radius,z] ordered along the surface, segments (3..256),location.
 Use zero radii at the ends to close the surface, e.g. pottery, lamps, shaped product bodies.
 cable: name,points (ordered xyz coordinates),radius,closed. Smooth editable 3D curve.
@@ -167,7 +172,13 @@ def build_project(binary, source, folder, request):
     scene = invoke(binary, source, folder, "inspect")
     if not source:
         scene.update(objects=[], details=[], count=0, camera=None)
-    brief = f"{SPEC}\nUser: {request}"
+    history = []
+    if source and source.parent.parent == ROOT and source.name == "scene.blend":
+        saved = source.with_name("design.json")
+        if saved.exists():
+            history = json.loads(saved.read_text(encoding="utf8"))
+    brief = (f"{SPEC}\nEarlier design requests, oldest first: {json.dumps(history, ensure_ascii=False)}"
+             f"\nCurrent user request (takes precedence): {request}")
     phase_choice = ('For a complex brief you may instead return {"phases":["specific subtask", ...]} '
                     'with 2 to 8 ordered phases covering every requirement. Each phase will see the '
                     'saved result of the preceding one. For simple requests return steps directly.')
@@ -203,6 +214,7 @@ def build_project(binary, source, folder, request):
                     prompt += f"\nRejected response: {json.dumps(plan)}\nError: {exc}\nReturn corrected steps."
             source = stage / "scene.blend"
             scene = invoke(binary, source, stage, "inspect")
+    (folder / "design.json").write_text(json.dumps([*history, request], ensure_ascii=False), encoding="utf8")
 
 
 def process(action, request, project, topic="", *, binary=None, result="save", player=None):

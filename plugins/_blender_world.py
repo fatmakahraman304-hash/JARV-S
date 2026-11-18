@@ -238,3 +238,28 @@ def cable(step):
         control.handle_left_type = control.handle_right_type = "AUTO"
     spline.use_cyclic_u = bool(step.get("closed", False))
     bpy.context.collection.objects.link(bpy.data.objects.new(name, curve))
+
+
+def loft(step):
+    """Join corresponding points of successive closed cross sections."""
+    sections = step["sections"]
+    if not 2 <= len(sections) <= 256:
+        raise ValueError("Loft için 2–256 kesit gerekli")
+    count = integer(len(sections[0]), 3, 256)
+    verts, faces = [], []
+    for section in sections:
+        if len(section) != count:
+            raise ValueError("Kesitlerin nokta sayısı aynı olmalı")
+        for point in section:
+            if len(point) != 3:
+                raise ValueError("Her kesit noktası üç koordinat içermeli")
+            verts.append(tuple(number(v, -10000, 10000) for v in point))
+    for row in range(len(sections) - 1):
+        base = row * count
+        for j in range(count):
+            k = (j + 1) % count
+            faces.append((base + j, base + k, base + count + k, base + count + j))
+    if step.get("caps", True):
+        faces.extend((tuple(reversed(range(count))), tuple(range(len(verts)-count, len(verts)))))
+    obj = mesh_object(step["name"], verts, faces, bpy.context.collection)
+    obj.location = step.get("location", (0, 0, 0))

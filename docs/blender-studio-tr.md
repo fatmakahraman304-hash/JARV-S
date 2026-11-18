@@ -58,3 +58,9 @@ Yazılı sahne isteğini doğrudan Blender aracına göndermek için örneğin
 yazabilirsin. Özel tariflerde `/blender` öneki de aynı aracı çağırır.
 Otomatik bulma başarısızsa eklenti ayarlarında Blender bölümüne tam
 `blender.exe` yolunu kaydet ve komutu tekrarla.
+
+Yeni tasarımını `/blender` ile serbestçe tarif edebilirsin. Sonraki mesajda
+`/blender Son sahnede kanatları uzat, gövdeyi koru` gibi bir düzenleme iste.
+JARVIS oluşturduğu projenin önceki tariflerini saklar. Düzenlemede bu tarifleri
+ve kaydedilmiş sahneyi birlikte okuyabilir. Özgün, bükülen veya asimetrik
+biçimler için farklı kesitleri birleştirerek düzenlenebilir mesh üretebilir.

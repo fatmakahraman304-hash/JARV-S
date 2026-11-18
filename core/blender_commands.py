@@ -16,18 +16,23 @@ def scene_command(text):
 
     folded = unicodedata.normalize("NFKD", original.casefold().replace("ı", "i"))
     words = "".join(c for c in folded if not unicodedata.combining(c))
+    editing = bool(re.search(r"\b(duzenle|degistir|buyut|kucult|dondur|tasi|ekle|kaldir|uzat|kisalt)\b", words))
+    project_ref = bool(re.search(r"\b(mevcut|son|bu) (blender )?(proje\w*|sahne\w*)\b", words))
+    action = "edit" if editing or project_ref else "new"
+    create = re.search(r"\b(olustur|modelle|insa et|tasarla|yap)\b", words)
+    if create and not project_ref:
+        action = "new"
     if not shortcut:
-        # A request to launch the app, a question or an edit belongs to the usual dispatcher.
-        if re.search(r"\?|\b(nasil|nedir|ornegin|ornek komut|mevcut|son projede|ekle|degistir)\b", words):
+        # Keep app launches and general questions in the conversation.
+        if re.search(r"\?|\b(nasil|nedir|ornegin|ornek komut)\b", words):
             return None
-        create = re.search(r"\b(olustur|modelle|insa et|tasarla|yap)\b", words)
         context = re.search(r"\b(blender|3b|3d)\b", words) or (
             re.search(r"\b(mahalle\w*|sehir|sahne\w*|bina\w*|ev)\b", words)
             and re.search(r"\brender\w*\b", words))
-        if not (create and context):
+        if not ((create or editing) and context):
             return None
 
     render = bool(re.search(r"\brender(?:i|ini)?\s+(?:ac|al|goster)\b", words))
     project = bool(re.search(r"\bprojeyi\s+(?:(?:ve\s+)?render(?:i|ini)?\s+)?(?:ac|goster)\b", words))
     result = "both" if project and render else "open" if project else "render" if render else "save"
-    return {"action": "new", "request": original, "result": result}
+    return {"action": action, "request": original, "result": result}
