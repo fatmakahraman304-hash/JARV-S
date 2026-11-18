@@ -278,6 +278,39 @@ class SendToDeviceTest(unittest.TestCase):
         self.assertIn("inbox-${S.id}.json", js)
 
 
+class ProjectsSummaryTest(unittest.TestCase):
+    def test_staged_project_shows_current_stage(self):
+        rows = [{"id": 7, "kind": "build", "title": "Kafe sitesi", "folder": "/home/u/kafe", "status": "yarıda kaldı",
+                 "stage": 2, "stages": {"plan": {"stages": [{"title": "Plan"}, {"title": "Menü sayfası"}, {"title": "Test"}]}},
+                 "note": "menü yarım", "updated": "2026-11-18T09:00:00+00:00"},
+                {"id": 6, "kind": "edit", "title": "Hesap makinesi", "folder": "", "status": "bitti", "stage": 0,
+                 "stages": [], "note": "", "updated": "2026-11-17T09:00:00"}]
+        with mock.patch("memory.continuity.projects", return_value=rows):
+            out = sync_hub.projects_summary()
+        self.assertEqual(out[0]["current"], "Menü sayfası")
+        self.assertEqual((out[0]["stage"], out[0]["stages"], out[0]["folder"]), (2, 3, "kafe"))
+        self.assertEqual(out[1]["stages"], 0)
+
+    def test_desktop_hears_what_was_said_on_the_phone(self):
+        now = sync_hub._now()
+        turns = [{"ts": now, "device": "Telefon", "role": "user", "text": "akşam sinemaya gidiyoruz"},
+                 {"ts": now, "device": "MASAÜSTÜ", "role": "user", "text": "burada söylendi"},
+                 {"ts": "2020-01-01T00:00:00Z", "device": "Telefon", "role": "user", "text": "eski"}]
+        with mock.patch.dict(sync_hub._state, {"recent": turns}), \
+             mock.patch.object(sync_hub, "device_name", return_value="MASAÜSTÜ"):
+            ctx = sync_hub.recent_context()
+        self.assertIn("[Telefon] Kullanıcı: akşam sinemaya gidiyoruz", ctx)
+        self.assertNotIn("burada söylendi", ctx)
+        self.assertNotIn("eski", ctx)
+        with mock.patch.dict(sync_hub._state, {"recent": []}):
+            self.assertEqual(sync_hub.recent_context(), "")
+
+    def test_web_shows_them(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("projects-", js)
+        self.assertIn("function projectsText", js)
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
