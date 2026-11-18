@@ -120,13 +120,92 @@ PROVIDERS = [
 ]
 
 
+# ── paid services with a free monthly allowance (used first when a key is set) ─
+
+def _keys() -> dict:
+    try:
+        from memory.config_manager import load_api_keys
+        k = load_api_keys()
+    except Exception:
+        k = {}
+    import os
+    return {"tripo": (k.get("tripo_key") or os.environ.get("TRIPO_API_KEY") or "").strip(),
+            "meshy": (k.get("meshy_key") or os.environ.get("MESHY_API_KEY") or "").strip()}
+
+
+def _poll(get, done, timeout=420, every=4):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        r = get()
+        state = done(r)
+        if state is True:
+            return r
+        if state is False:
+            raise RuntimeError(str(r)[:200])
+        time.sleep(every)
+    raise TimeoutError("zaman aşımı")
+
+
+def _tripo(image_path: str, key: str, progress=None) -> bytes:
+    import requests
+    h = {"Authorization": f"Bearer {key}"}
+    base = "https://api.tripo3d.ai/v2/openapi"
+    with open(image_path, "rb") as f:
+        up = requests.post(f"{base}/upload", headers=h, files={"file": ("image.jpg", f, "image/jpeg")}, timeout=60).json()
+    tok = (up.get("data") or {}).get("image_token")
+    if not tok:
+        raise RuntimeError(f"yükleme: {up}")
+    task = requests.post(f"{base}/task", headers=h, timeout=60, json={
+        "type": "image_to_model", "file": {"type": "jpg", "file_token": tok}, "texture": True, "pbr": True,
+        "texture_quality": "detailed"}).json()
+    tid = (task.get("data") or {}).get("task_id")
+    if not tid:
+        raise RuntimeError(f"görev: {task}")
+    r = _poll(lambda: requests.get(f"{base}/task/{tid}", headers=h, timeout=30).json(),
+              lambda r: True if (r.get("data") or {}).get("status") == "success" else
+              (False if (r.get("data") or {}).get("status") in ("failed", "cancelled", "banned", "expired") else None))
+    out = r["data"].get("output") or {}
+    url = out.get("pbr_model") or out.get("model") or out.get("base_model")
+    return requests.get(url, timeout=120).content
+
+
+def _meshy(image_path: str, key: str, progress=None) -> bytes:
+    import base64
+    import requests
+    h = {"Authorization": f"Bearer {key}"}
+    base = "https://api.meshy.ai/openapi/v1/image-to-3d"
+    uri = "data:image/jpeg;base64," + base64.b64encode(open(image_path, "rb").read()).decode()
+    task = requests.post(base, headers=h, timeout=60, json={"image_url": uri, "enable_pbr": True, "should_texture": True,
+                                                             "should_remesh": True, "topology": "triangle"}).json()
+    tid = task.get("result")
+    if not tid:
+        raise RuntimeError(f"görev: {task}")
+    r = _poll(lambda: requests.get(f"{base}/{tid}", headers=h, timeout=30).json(),
+              lambda r: True if r.get("status") == "SUCCEEDED" else (False if r.get("status") in ("FAILED", "CANCELED", "EXPIRED") else None))
+    return requests.get(r["model_urls"]["glb"], timeout=120).content
+
+
 def image_to_3d(image_path: str, progress=None, only: str = "", log=print):
     """(glb bytes | None, provider name, message)."""
+    errors = []
+    keys = _keys()
+    for name, fn, key in (("Tripo", _tripo, keys["tripo"]), ("Meshy", _meshy, keys["meshy"])):
+        if not key or (only and only.lower() != name.lower()):
+            continue
+        if progress:
+            progress(f"GERÇEK 3B MODEL — {name} (30–120 sn)…")
+        try:
+            data = fn(image_path, key, progress)
+            if data and data[:4] == b"glTF":
+                return data, name, f"{name} ile oluşturuldu."
+            errors.append(f"{name}: glb gelmedi")
+        except Exception as exc:
+            errors.append(f"{name}: {exc}")
+            log(f"[Hologram] {name} failed: {exc}")
     if not _client_lib(log):
         return None, "", "Gerçek 3B için gradio_client kurulamadı."
     from gradio_client import Client, handle_file
     token = _token() or None
-    errors = []
     for name, space, fn in PROVIDERS:
         if only and only.lower() != name.lower():
             continue

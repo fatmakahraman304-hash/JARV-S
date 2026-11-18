@@ -180,6 +180,17 @@ def save_hf_token(token: str) -> None:
     _write_config(data)
 
 
+@_locked
+def save_holo_key(kind: str, token: str) -> None:
+    """A key for the hologram table's 3D services: "tripo" or "meshy"."""
+    if kind not in ("tripo", "meshy"):
+        raise ValueError(kind)
+    ensure_config_dir()
+    data = _read_for_write()
+    data[f"{kind}_key"] = (token or "").strip()
+    _write_config(data)
+
+
 def get_wake_word_enabled() -> bool:
     """Whether local wake-word gating is on (assistant sleeps until 'Hey Jarvis')."""
     return load_api_keys().get("wake_word_enabled", False)

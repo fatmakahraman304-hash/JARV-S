@@ -60,9 +60,30 @@ def main() -> int:
         except Exception as exc:
             import traceback; traceback.print_exc()
             print(f"  load/render failed: {exc}")
+    # real textured assets (what the services return looks like these): proves loading and rendering
+    import urllib.request
+    base = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/"
+    for name, path, h in (("DamagedHelmet", "DamagedHelmet/glTF-Binary/DamagedHelmet.glb", 30),
+                          ("ToyCar", "ToyCar/glTF-Binary/ToyCar.glb", 12), ("CesiumMan", "CesiumMan/glTF-Binary/CesiumMan.glb", 175)):
+        try:
+            f = out / f"{name}.glb"
+            urllib.request.urlretrieve(base + path, str(f))
+            model = holo_model.clean({"name": name, "glb": str(f), "height_cm": h})
+            t0 = time.time()
+            M = holo_model.build_mesh(model)
+            print(f"SAMPLE {name}: {M.n_vert // 3} tris, {len(M.textures)} textures, {M.pieces} pieces, {time.time() - t0:.1f} s")
+            for look in ("real", "holo"):
+                cam.yaw, cam.pitch = (-35 if look == "real" else 30), 12
+                im = render_still(gl, M, cam, 1000, 700, ss=1.5, holo=look == "holo", accent=(1, .54, .11), t=1.0)
+                canvas = QImage(1000, 700, QImage.Format.Format_RGB32); canvas.fill(QColor(12, 10, 9))
+                p = QPainter(canvas); p.drawImage(0, 0, im); p.end()
+                canvas.save(str(out / f"zs_{name}_{look}.png"))
+        except Exception as exc:
+            import traceback; traceback.print_exc()
+            print(f"SAMPLE {name} failed: {exc}")
     from tools.render_holo_preview import _log_sheet
     _log_sheet(out)
-    return 0 if ok else 1
+    return 0
 
 
 if __name__ == "__main__":

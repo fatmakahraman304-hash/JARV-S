@@ -17,7 +17,7 @@ PLUGIN = {
         "(ölçüleri göster, on) | isolate (request: parça adı — 'sadece kulpu göster') | show_all | hands (el kontrolü; on) | "
         "save | stl (3D yazıcı dosyası) | shot (4K görüntü kaydet) | throw (modeli at) | upright (yan yatmış modeli doğrult) | "
         "real_engine (gerçek 3B: yapay zekâ fotoğraftan dokulu gerçek model — varsayılan) | parts_engine (parça modeli) | "
-        "hf_token (request: kullanıcının verdiği ücretsiz Hugging Face anahtarı; gerçek 3B kotasını büyütür) | open | close. "
+        "hf_token (request: kullanıcının verdiği anahtar — Hugging Face hf_…, Tripo tsk_…, Meshy msy_…; gerçek 3B için) | open | close. "
         "Hologram açıkken model hakkındaki değişiklik isteklerini edit ile gönder."
     ),
     "parameters": {"type": "OBJECT", "properties": {
@@ -62,9 +62,18 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if action in ("make", "edit") and not request:
             return "Ne modellememi ya da neyi değiştirmemi istediğini söyler misin?"
         if action == "hf_token":
-            tok = request.strip()
+            tok = request.strip().strip("'\"")
+            if tok.startswith("tsk_") and len(tok) > 20:
+                from memory.config_manager import save_holo_key
+                save_holo_key("tripo", tok)
+                return "Tripo anahtarını kaydettim; gerçek 3B modeller önce Tripo ile yapılacak."
+            if tok.startswith("msy_") and len(tok) > 20:
+                from memory.config_manager import save_holo_key
+                save_holo_key("meshy", tok)
+                return "Meshy anahtarını kaydettim; gerçek 3B modeller önce Meshy ile yapılacak."
             if not tok.startswith("hf_") or len(tok) < 20:
-                return "Bu bir Hugging Face anahtarına benzemiyor; huggingface.co → Settings → Access Tokens'tan 'hf_' ile başlayan bir anahtar al."
+                return ("Bu bir anahtara benzemiyor. Ücretsiz Hugging Face anahtarı 'hf_' ile başlar (huggingface.co → Settings → "
+                        "Access Tokens); Tripo 'tsk_', Meshy 'msy_' ile başlar.")
             from memory.config_manager import save_hf_token
             save_hf_token(tok)
             return "Hugging Face anahtarını kaydettim; gerçek 3B modellerde günlük kota artık daha büyük."
