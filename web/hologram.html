@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>JARVIS · Hologram</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --pri: #ff8a1c; --acc: #ffc04d; --hot: #ffdc94; --text: #f3ece5; --dim: #9b9087; --med: #d2c7bd;
+            --line: rgba(255,150,60,.18); --line2: rgba(255,150,60,.4); --card: rgba(20,13,8,.72); }
+    html, body { height: 100%; background: #000; color: var(--text); overflow: hidden;
+                 font-family: Bahnschrift, 'Segoe UI', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: radial-gradient(90% 70% at 50% 55%, #1a0d04 0%, #070402 55%, #000 100%); }
+    [hidden] { display: none !important; }
+    button { font-family: inherit; }
+    #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+    #stage.drag { cursor: grabbing; }
+    .bar { position: fixed; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 16px 10px;
+           background: linear-gradient(#000c, #0000); z-index: 5; flex-wrap: wrap; }
+    .brand { font-size: 15px; letter-spacing: 6px; font-weight: 700; text-shadow: 0 0 12px rgba(255,138,28,.6); margin-right: auto; }
+    .brand small { display: block; font-size: 9px; letter-spacing: 4px; color: var(--dim); font-weight: 400; margin-top: 3px; }
+    .b { padding: 9px 13px; border-radius: 11px; border: 1px solid var(--line2); background: rgba(40,24,10,.6); color: var(--text); font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+    .b.pri { background: linear-gradient(145deg, #ff9a2e, #d4550a); color: #1a0d03; border: 0; font-weight: 700; }
+    .b.on { border-color: var(--acc); color: var(--acc); box-shadow: 0 0 12px rgba(255,170,60,.35); }
+    .b:disabled { opacity: .45; }
+    #info { position: fixed; left: 16px; top: 84px; width: min(300px, 40vw); z-index: 4; pointer-events: none; }
+    #info h1 { font-size: 22px; font-weight: 700; letter-spacing: .5px; text-shadow: 0 0 14px rgba(255,138,28,.5); }
+    #info .sum { font-size: 13px; color: var(--med); line-height: 1.45; margin-top: 6px; }
+    #info .dim { font-size: 12px; color: var(--acc); letter-spacing: 2px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    #parts { margin-top: 12px; max-height: 42vh; overflow: auto; pointer-events: auto; }
+    #parts div { font-size: 12.5px; color: var(--dim); padding: 3px 0 3px 10px; border-left: 2px solid var(--line); cursor: pointer; }
+    #parts div.on { color: var(--hot); border-left-color: var(--pri); }
+    #cam { position: fixed; right: 16px; bottom: 96px; width: min(260px, 34vw); aspect-ratio: 4/3; border-radius: 14px; overflow: hidden; z-index: 4;
+           border: 1px solid var(--line2); background: #000; box-shadow: 0 0 24px rgba(255,138,28,.18); }
+    #cam video, #cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #cam.mirror video, #cam.mirror #hands { transform: scaleX(-1); }
+    #cam .lbl { position: absolute; left: 8px; top: 6px; font-size: 10px; letter-spacing: 3px; color: var(--acc); text-shadow: 0 0 4px #000; }
+    #cam .sweep { position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #ffb648, transparent);
+                  box-shadow: 0 0 18px #ff9a2e; top: 0; animation: sweep 1.2s linear infinite; display: none; }
+    #cam.scanning .sweep { display: block; }
+    @keyframes sweep { from { top: 0; } to { top: 100%; } }
+    #status { position: fixed; left: 50%; top: 80px; transform: translateX(-50%); z-index: 6; font-size: 15px; letter-spacing: 3px; color: var(--acc);
+              text-shadow: 0 0 10px rgba(255,138,28,.8); text-align: center; pointer-events: none; }
+    #count { position: fixed; inset: 0; display: grid; place-items: center; z-index: 6; font-size: 22vmin; font-weight: 200; color: var(--hot);
+             text-shadow: 0 0 40px #ff8a1c; pointer-events: none; }
+    .cmd { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(640px, 94vw); z-index: 5;
+           display: flex; gap: 8px; padding: 6px; border-radius: 999px; border: 1.5px solid var(--line2); background: rgba(14,9,5,.85); box-shadow: 0 0 22px rgba(255,138,28,.16); }
+    .cmd input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text); font-size: 16px; padding: 8px 10px; font-family: inherit; }
+    .cmd .r { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line2); background: #1d1209; color: var(--acc); font-size: 18px; cursor: pointer; flex-shrink: 0; }
+    .cmd .r.live { background: radial-gradient(circle, #ff8a1c, #b84a06); color: #1a0d03; }
+    #help { position: fixed; left: 16px; bottom: 96px; z-index: 4; font-size: 12px; color: var(--dim); line-height: 1.7; max-width: 300px; }
+    #help b { color: var(--med); font-weight: 600; }
+    #toast { position: fixed; top: 14px; left: 50%; transform: translate(-50%, -10px); opacity: 0; transition: .2s; z-index: 40;
+             background: rgba(30,20,12,.96); border: 1px solid var(--line2); color: var(--acc); padding: 8px 16px; border-radius: 99px; font-size: 13px; pointer-events: none; }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .sheet { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, 94vw); max-height: 80vh; overflow: auto; z-index: 30;
+             background: #0d0907; border: 1px solid var(--line2); border-radius: 18px; padding: 16px; }
+    .sheet h2 { font-size: 14px; letter-spacing: 3px; color: var(--med); display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .sheet .row2 { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .sheet .row2 span { flex: 1; } .sheet small { color: var(--dim); }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 29; }
+    @media (max-width: 700px) {
+      .bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-right: 16px; }
+      .bar::-webkit-scrollbar { display: none; }
+      .brand { flex: 0 0 auto; font-size: 13px; letter-spacing: 4px; margin-right: 6px; } .brand small { display: none; }
+      #info { width: 72vw; top: calc(max(12px, env(safe-area-inset-top)) + 58px); } #info h1 { font-size: 18px; } #parts { display: none; }
+      #help { display: none; } #cam { bottom: 84px; width: 38vw; }
+      .bar .b { padding: 8px 10px; font-size: 12.5px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage" aria-label="Holografik model"></canvas>
+  <div id="toast"></div>
+  <div id="status"></div>
+  <div id="count" hidden></div>
+
+  <header class="bar">
+    <div class="brand">HOLOGRAM<small>JARVIS DİJİTAL MODELLEME</small></div>
+    <button class="b pri" id="b-scan" type="button">📷 Tara</button>
+    <button class="b" id="b-cam" type="button">🎥 Kamera</button>
+    <button class="b" id="b-hand" type="button">🖐 El kontrolü</button>
+    <button class="b" id="b-explode" type="button">💥 Parçala</button>
+    <button class="b" id="b-reset" type="button">⟲</button>
+    <button class="b" id="b-save" type="button">💾</button>
+    <button class="b" id="b-stl" type="button">⬇ STL</button>
+    <button class="b" id="b-lib" type="button">📂</button>
+    <a class="b" href="./" id="b-back">✕</a>
+  </header>
+
+  <section id="info">
+    <h1 id="m-name">Hologram masası</h1>
+    <div class="sum" id="m-sum">Kameraya bir nesne göster ve <b>Tara</b>'ya bas — ya da aşağıya ne modelleyeceğimi yaz.</div>
+    <div class="dim" id="m-dim"></div>
+    <div id="parts"></div>
+  </section>
+
+  <div id="cam" class="mirror" hidden><video id="video" playsinline muted autoplay></video><canvas id="hands"></canvas><div class="sweep"></div><div class="lbl" id="cam-lbl">KAMERA</div></div>
+
+  <div id="help">
+    <b>El hareketleri</b><br>
+    🤏 Tek el çimdikle + sürükle: döndür<br>
+    🤏🤏 İki elle çimdikle: aç-kapa = yakınlaştır, kaydır = taşı<br>
+    🖐 Avucu açık tut: parçala / birleştir<br>
+    ✊ Yumruk tut: sıfırla<br>
+    ☝ İşaret et: parçanın adını gör<br>
+    👋 Açık eli hızla yana savur: modeli at
+  </div>
+
+  <form class="cmd" id="cmd" autocomplete="off">
+    <button class="r" id="b-mic" type="button" aria-label="Sesle komut">🎙️</button>
+    <input id="cmd-in" placeholder="“Kanatları kırmızı yap”, “bir Iron Man kaskı modelle”…" enterkeyhint="send">
+    <button class="r" type="submit" aria-label="Gönder">➤</button>
+  </form>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <section class="sheet" id="lib" hidden><h2>MODELLERİM <button class="b" type="button" id="lib-close">✕</button></h2><div id="lib-body"></div></section>
+
+  <script src="holo-kit.js"></script>
+  <script src="holo.js"></script>
+</body>
+</html>
