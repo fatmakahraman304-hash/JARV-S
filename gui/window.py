@@ -3411,15 +3411,9 @@ class MainWindow(QMainWindow):
         plugins = self.get_plugins() if self.get_plugins else []
         cw = self.centralWidget()
         ov = PluginManagerOverlay(plugins, parent=cw)
-        ov.adjustSize()
-        ov.setGeometry(
-            (cw.width()  - ov.width())  // 2,
-            (cw.height() - ov.height()) // 2,
-            ov.width(), ov.height(),
-        )
+        ov.setGeometry(cw.rect())
         ov.show()
         ov.raise_()
-        self._plugin_manager_overlay = ov   # keep a reference so it isn't GC'd
 
     def _open_plugin_settings(self):
         sections = self.get_plugin_settings() if self.get_plugin_settings else []
