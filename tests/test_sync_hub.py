@@ -271,10 +271,14 @@ class SendToDeviceTest(unittest.TestCase):
         self.assertEqual(sent[0][1]["url"], "https://image.pollinations.ai/p/x")
         self.assertNotIn("data", sent[0][1])
         self.assertIn("adres", send_to_device.run({"device": "tv", "what": "open", "url": "dosya"}))
+        with mock.patch.object(sync_hub, "send_to_device", side_effect=lambda d, c: sent.append((d, c)) or (True, "ok")):
+            send_to_device.run({"device": "tablet", "what": "guard_on"})
+        self.assertEqual(sent[-1], ("tablet", {"kind": "guard", "on": True}))
 
     def test_web_reads_its_inbox(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("function runInbox", js)
+        self.assertIn("c.kind === 'guard'", js)
         self.assertIn("inbox-${S.id}.json", js)
 
 

@@ -400,6 +400,8 @@
         } else if (c.kind === 'code' || c.kind === 'text') {
           lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
           showCode(); $('t-code').hidden = false;
+        } else if (c.kind === 'guard') {
+          if (c.on) startGuard().then(m => sys(`${from}: ${m}`)); else sys(`${from}: ${stopGuard()}`);
         } else if (c.kind === 'say' && c.text) {
           sys(`${from}: ${c.text}`);
           if (amOwner()) { if (ws && ready) tellBrain(`${from} şu mesajı iletti: "${c.text}".`); else toast(`${from}: ${c.text}`); }
@@ -408,6 +410,66 @@
     }
     if (did) localStorage.setItem('jarvis_inbox_done', JSON.stringify(inboxDone.slice(-200)));
     return did;
+  }
+  // ── guard mode: this device's camera watches; on movement a photo goes to
+  // every other device and the one with the voice says it ──────────────────
+  let guard = null;
+  async function startGuard() {
+    if (guard) return 'Güvenlik modu zaten açık.';
+    if (!navigator.mediaDevices?.getUserMedia) return 'Bu cihazda kamera yok.';
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false }); }
+    catch { return 'Kameraya izin verilmedi.'; }
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream; await v.play().catch(() => {});
+    const small = document.createElement('canvas'); small.width = 64; small.height = 48;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    let prev = null, hits = 0, lastAlert = 0, warm = 4;
+    guard = { stream, timer: setInterval(() => {
+      if (!v.videoWidth) return;
+      sctx.drawImage(v, 0, 0, 64, 48);
+      const px = sctx.getImageData(0, 0, 64, 48).data, g = new Uint8Array(64 * 48);
+      for (let i = 0; i < g.length; i++) g[i] = (px[i * 4] * 3 + px[i * 4 + 1] * 6 + px[i * 4 + 2]) / 10;
+      if (prev) {
+        let changed = 0; for (let i = 0; i < g.length; i++) if (Math.abs(g[i] - prev[i]) > 28) changed++;
+        const moving = changed / g.length > 0.04;            // over 4 % of the picture changed
+        hits = moving ? hits + 1 : 0;
+        if (warm > 0) warm--;
+        else if (hits >= 2 && Date.now() - lastAlert > 60000) { lastAlert = Date.now(); hits = 0; guardAlert(v); }
+      }
+      prev = g;
+    }, 700) };
+    document.body.classList.add('guard'); toast('🛡️ Güvenlik modu açık'); keepAwake();
+    return 'Güvenlik modu açık: bu cihazın kamerası izliyor; hareket olursa fotoğrafı diğer cihazlara gönderip haber vereceğim. Cihazı sabit bir yere koy ve sayfayı açık bırak.';
+  }
+  function stopGuard() {
+    if (!guard) return 'Güvenlik modu zaten kapalı.';
+    clearInterval(guard.timer); guard.stream.getTracks().forEach(t => t.stop()); guard = null;
+    document.body.classList.remove('guard'); toast('Güvenlik modu kapandı');
+    return 'Güvenlik modu kapandı.';
+  }
+  async function guardAlert(v) {
+    const c = document.createElement('canvas'), sc = Math.min(1, 800 / Math.max(v.videoWidth, v.videoHeight));
+    c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    const data = c.toDataURL('image/jpeg', 0.75).split(',')[1];
+    const when = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const title = `🚨 ${devName()}: hareket algılandı (${when})`;
+    sys(title);
+    if (!Cloud.ok()) { beep(); toast(title); return; }
+    try {
+      await syncNow();
+      const targets = devices.filter(d => d.id !== S.id && online(d));
+      const f = await Cloud.read(), writes = {};
+      for (const d of targets) {
+        const name = `inbox-${d.id}.json`, box = J(f[name], []);
+        const base = { from: devName(), ts: nowIso() };
+        if (d.kind === 'pc') box.push({ ...base, id: S.id + '-g' + Date.now().toString(36), kind: 'image', data, mime: 'image/jpeg', title, text: title });
+        else box.push({ ...base, id: S.id + '-g' + Date.now().toString(36), kind: 'image', data, mime: 'image/jpeg', title },
+                      { ...base, id: S.id + '-s' + Date.now().toString(36), kind: 'say', text: `${devName()} kamerasında hareket algılandı, saat ${when}. Fotoğraf ekranda.` });
+        writes[name] = JSON.stringify(box.slice(-10));
+      }
+      if (Object.keys(writes).length) await Cloud.write(writes);
+    } catch (e) { console.warn('guard', e); }
   }
   async function sendToDevice(name, cmd) {
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; başka cihaza ulaşamıyorum.';
@@ -489,6 +551,8 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
     { name: 'status_report', description: 'Iron Man tarzı durum raporu: bütün cihazlar (açık/kapalı, pil, işlemci, bellek, disk), sıradaki hatırlatıcılar, yapılacaklar, bilgisayardaki projeler. "durum raporu", "sistemler nasıl", "cihazlarım ne durumda", "laptopun şarjı kaç".',
       parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'guard', description: 'Güvenlik modu: bu cihazın (ya da device verilirse o cihazın) kamerası odayı izler; hareket olursa fotoğraf çekip bütün cihazlara gönderir ve sesli haber verir. "odayı izle", "güvenlik modunu aç/kapat", "tableti kamera yap".',
+      parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, device: { type: 'STRING', description: 'boşsa bu cihaz' } }, required: ['on'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -559,6 +623,10 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'guard': {
+        if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'guard', on: !!a.on });
+        return a.on ? await startGuard() : stopGuard();
+      }
       case 'status_report': return await statusReport();
       case 'protocol': return protocolTool(a);
       case 'projects': { await syncNow(); return projectsText() || 'Bilgisayarlarda kayıtlı bir proje yok (ya da bilgisayar henüz bağlanmadı).'; }
@@ -941,7 +1009,7 @@
   // ── keep the screen awake while JARVIS is listening or on a big screen ──
   let wakeLock = null;
   async function keepAwake() {
-    const want = micOn || KIND === 'tv' || KIND === 'projector';
+    const want = micOn || !!guard || KIND === 'tv' || KIND === 'projector';
     try {
       if (want && !wakeLock && document.visibilityState === 'visible' && navigator.wakeLock) {
         wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; });
