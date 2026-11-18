@@ -88,6 +88,11 @@ def _notify(event: str, task: dict | None, text: str) -> None:
         if report:
             body += f"\n\n— Full report: {report}"
         _call("show_content", "BACKGROUND TASK", body[:4000])
+        try:
+            from core import sync_hub           # the user is on the phone: the result goes there too
+            sync_hub.deliver_to_voice(f"Görev bitti: {title}", body)
+        except Exception as e:
+            print(f"[Tasks] not sent to the other device: {e}")
         if deliver == "voice":
             from core import outcome
             _call("request_say",

@@ -525,6 +525,12 @@
         } else if (c.kind === 'code' || c.kind === 'text') {
           lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
           showCode(); $('t-code').hidden = false;
+        } else if (c.kind === 'report' && c.text) {
+          // a background job on the computer finished while the user was here
+          lastCode = { filename: (title || 'rapor').slice(0, 60) + '.txt', code: String(c.text), note: `${from} — ${title}` };
+          showCode(); $('t-code').hidden = false; sys(`📋 ${title}`);
+          if (amOwner()) { const note = `Bilgisayardaki arka plan görevi bitti: "${title}". Sonuç ekranda. Kullanıcıya başlığı ve ana sonucu bir iki cümleyle söyle:\n${String(c.text).slice(0, 1500)}`;
+            if (ws && ready) tellBrain(note); else connect().then(() => tellBrain(note)).catch(() => toast('📋 ' + title)); }
         } else if (c.kind === 'ring') {
           ringHere(from);
         } else if (c.kind === 'guard') {
@@ -705,6 +711,8 @@
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, question: { type: 'STRING' } } } },
     { name: 'search_history', description: 'Bütün cihazlardaki geçmiş konuşmaların kalıcı arşivinde ara: "geçen hafta ne konuşmuştuk", "annemin doğum günü hakkında ne demiştim", "dün telefonda bahsettiğim film neydi". days: kaç gün geriye (boşsa hepsi).',
       parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, days: { type: 'NUMBER' } }, required: ['query'] } },
+    { name: 'background_task', description: 'Bilgisayarda uzun bir işi arka planda başlat: araştırma yapıp rapor yazmak, bir web sitesi/uygulama kodlamak, dosyaları düzenlemek. Kullanıcı başka işlerle uğraşırken sürer; bitince sonuç bu cihaza gelir ve sen söylersin. "araştır ve rapor hazırla", "bana bir site yap", "şu projeyi bitir".',
+      parameters: { type: 'OBJECT', properties: { task: { type: 'STRING', description: 'yapılacak işin tam tarifi, Türkçe' }, kind: { type: 'STRING', description: 'research | code | other' } }, required: ['task'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -775,6 +783,15 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'background_task': {
+        const kind = String(a.kind || 'other'), task = String(a.task || '').trim();
+        if (!task) return 'Ne yapılacak?';
+        const words = kind === 'code' ? `Arka planda kodlama işi başlat (dev_agent, aşamalı proje): ${task}`
+                    : kind === 'research' ? `Arka planda araştırma görevi başlat ve rapor yaz (background task): ${task}`
+                    : `Arka planda görev olarak başlat: ${task}`;
+        const r = await sendToPc('', words);
+        return r + ' (İş bilgisayarda arka planda sürüyor; bitince sonuç bu cihaza gelecek.)';
+      }
       case 'search_history': return await Archive.search(String(a.query || ''), Number(a.days) || 0);
       case 'computer_screen': {
         const pc = findPc(a.device);
