@@ -192,8 +192,11 @@
   };
 
   // ── STL (ASCII) for 3D printing — millimetres ───────────────────────────
+  // STL names are ASCII: "Küp test" → "Kup_test"
+  H.asciiName = s => String(s || 'model').replace(/ı/g, 'i').replace(/İ/g, 'I').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'model';
   H.toSTL = (m) => {
-    const lines = [`solid ${m.name.replace(/\s+/g, '_')}`];
+    const name = H.asciiName(m.name);
+    const lines = [`solid ${name}`];
     for (const p of m.parts) {
       const V = H.partVerts(p).map(q => q.map(c => c * 10));
       for (const face of H.unit(p.shape).f) for (let i = 1; i < face.length - 1; i++) {
@@ -205,7 +208,7 @@
           ...[a, b, c].map(q => `   vertex ${f(q[0])} ${f(q[2])} ${f(q[1])}`), '  endloop', ' endfacet');   // z up for printers
       }
     }
-    lines.push(`endsolid ${m.name.replace(/\s+/g, '_')}`);
+    lines.push(`endsolid ${name}`);
     return lines.join('\n');
   };
 

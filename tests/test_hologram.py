@@ -28,7 +28,7 @@ function hand(kind) {           // 21 MediaPipe-style landmarks
 
 def run(expr: str):
     script = f"const H = require('./web/holo-kit.js');{HAND} console.log(JSON.stringify({expr}));"
-    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30, cwd=str(ROOT))
+    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, encoding="utf-8", timeout=30, cwd=str(ROOT))
     if out.returncode:
         raise AssertionError(out.stderr)
     return json.loads(out.stdout)
@@ -104,7 +104,8 @@ class KitTests(unittest.TestCase):
 
     def test_stl(self):
         stl = run("H.toSTL(H.clean({name: 'Küp test', parts: [{shape: 'box', size: [1, 1, 1], pos: [0, .5, 0]}]}))")
-        self.assertTrue(stl.startswith("solid Küp_test"))
+        self.assertTrue(stl.startswith("solid Kup_test"))
+        self.assertTrue(stl.rstrip().endswith("endsolid Kup_test"))
         self.assertEqual(stl.count("facet normal"), 12)
         self.assertIn("vertex 5.000 5.000 10.000", stl)     # mm, z up
 
