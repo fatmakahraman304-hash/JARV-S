@@ -661,7 +661,10 @@ def _cycle() -> None:
         if not cid or cid in _state["done"]:
             continue
         _state["done"].add(cid)
-        _run_command(cid, str(cmd.get("text") or ""), str(cmd.get("from") or "cihaz"))
+        if cmd.get("kind") in _ITEM_KINDS:
+            _receive_item(cid, cmd, str(cmd.get("from") or "cihaz"))
+        else:
+            _run_command(cid, str(cmd.get("text") or ""), str(cmd.get("from") or "cihaz"))
     if inbox:
         writes[inbox_name] = "[]"
 
@@ -763,6 +766,105 @@ def _update_owner(me: str) -> None:
             cb(owner in (None, me), name)
         except Exception as exc:
             _log(f"[Sync] owner callback: {exc}")
+
+
+# ── things sent to this computer (a picture, code, a link) ───────────────────
+_ITEM_KINDS = ("image", "code", "text", "open")
+
+
+def on_item(fn) -> None:
+    """fn(kind, path_or_url, title, text) — show what another device sent."""
+    _state["on_item"] = fn
+
+
+def _reply(cid: str, text: str) -> None:
+    with _state["lock"]:
+        _state["pending"].append({"id": cid, "at": time.time(), "reply": text})
+
+
+def _received_dir() -> Path:
+    for base in (Path.home() / "Documents", Path.home() / "Belgeler", Path.home() / "Desktop", Path.home()):
+        if base.exists():
+            d = base / "JARVIS" / "Gelenler"
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+                return d
+            except OSError:
+                continue
+    d = Path(__file__).resolve().parent.parent / "received"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_name(name: str, default: str) -> str:
+    import re
+    n = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", str(name or "")).strip(" ._")
+    return (n or default)[:80]
+
+
+def _show(kind: str, target: str, title: str, text: str = "") -> None:
+    cb = _state.get("on_item")
+    if cb:
+        try:
+            cb(kind, target, title, text)
+        except Exception as exc:
+            _log(f"[Sync] show: {exc}")
+
+
+def _receive_item(cid: str, cmd: dict, sender: str) -> None:
+    kind, title = cmd.get("kind"), str(cmd.get("title") or "")
+    try:
+        if kind == "open":
+            url = str(cmd.get("url") or "")
+            if not url.lower().startswith(("http://", "https://")):
+                return _reply(cid, "Geçerli bir adres değil.")
+            import webbrowser
+            webbrowser.open(url)
+            _show("open", url, title or url)
+            return _reply(cid, f"Bilgisayarda açıldı: {title or url}")
+        if kind in ("code", "text"):
+            body = str(cmd.get("text") or "")
+            name = _safe_name(cmd.get("filename") or title, "kod.txt" if kind == "code" else "not.txt")
+            path = _received_dir() / name
+            if path.exists():
+                path = path.with_name(f"{path.stem}_{time.strftime('%H%M%S')}{path.suffix}")
+            path.write_text(body, encoding="utf-8")
+            _show(kind, str(path), f"{sender}: {name}", body)
+            return _reply(cid, f"Bilgisayara kaydedildi ve ekranda: {path}")
+        if kind == "image":
+            threading.Thread(target=_receive_image, args=(cid, cmd, sender), daemon=True,
+                             name="sync-image").start()
+            return
+    except Exception as exc:
+        _reply(cid, f"Bilgisayar alamadı: {exc}")
+
+
+def _receive_image(cid: str, cmd: dict, sender: str) -> None:
+    import base64
+    try:
+        from core import image_studio
+        data, mime = b"", str(cmd.get("mime") or "image/png")
+        if cmd.get("data"):
+            data = base64.b64decode(cmd["data"])
+        elif str(cmd.get("url") or "").startswith("https://"):
+            req = urllib.request.Request(cmd["url"], headers={"User-Agent": "JARVIS/1.0"})
+            with urllib.request.urlopen(req, timeout=150) as r:
+                mime = (r.headers.get("Content-Type") or mime).split(";")[0]
+                data = r.read()
+        if len(data) < 100:
+            return _reply(cid, "Resim bilgisayara gelmedi.")
+        ext = {"image/jpeg": ".jpg", "image/webp": ".webp"}.get(mime, ".png")
+        prompt = str(cmd.get("prompt") or cmd.get("title") or "")
+        path = image_studio.out_dir() / f"{time.strftime('%Y%m%d-%H%M%S')}_{_safe_name(sender, 'cihaz')}{ext}"
+        path.write_bytes(data)
+        # remembered like one drawn here, so "değiştir" works on it too
+        image_studio._remember(path, prompt or f"{sender} gönderdi", en=cmd.get("en") or "",
+                               seed=cmd.get("seed") or None, url=cmd.get("url") or "",
+                               engine="free" if cmd.get("url") else "received")
+        _show("image", str(path), f"{sender} gönderdi" + (f": {prompt[:60]}" if prompt else ""))
+        _reply(cid, f"Resim bilgisayara kaydedildi ve ekranda: {path}")
+    except Exception as exc:
+        _reply(cid, f"Resim bilgisayara kaydedilemedi: {exc}")
 
 
 def _run_command(cid: str, text: str, sender: str) -> None:

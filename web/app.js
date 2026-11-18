@@ -362,9 +362,11 @@
     const d = findDevice(name);
     if (!d) return `"${name}" adında ya da türünde bir cihaz bulamadım. Açık cihazlar: ${devices.filter(x => x.id !== S.id).map(x => x.name).join(', ') || 'yok'}.`;
     if (d.kind === 'pc') {
-      // computers take commands in words through their own inbox format
-      const words = cmd.kind === 'open' ? `Bu bağlantıyı aç: ${cmd.url}` : cmd.kind === 'say' ? `Şunu söyle: ${cmd.text}` : `Bunu ekranda göster: ${cmd.text || cmd.url || ''}`;
-      return await sendToPc(d.name, words);
+      // Computers save pictures and code, open links (sync_hub._receive_item);
+      // `text` is the same thing in words for older versions.
+      const words = cmd.kind === 'open' ? `Bu bağlantıyı aç: ${cmd.url}` : cmd.kind === 'say' ? `Şunu söyle: ${cmd.text}` : `Bunu ekranda göster: ${cmd.text || cmd.url || cmd.title || ''}`;
+      if (cmd.kind === 'say') return await sendToPc(d.name, words);
+      return await sendToPc(d.name, words, { ...cmd, words });
     }
     const f = await Cloud.read();
     const box = J(f[`inbox-${d.id}.json`], []);
@@ -374,7 +376,7 @@
     await Cloud.write({ [`inbox-${d.id}.json`]: body });
     return `${d.name} cihazına gönderildi${online(d) ? '' : ' (şu an kapalı görünüyor; açılınca görecek)'}.`;
   }
-  async function sendToPc(name, text) {
+  async function sendToPc(name, text, item = null) {
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; bilgisayara ulaşamıyorum.';
     await syncNow();
     const pc = findPc(name);
@@ -383,7 +385,8 @@
     const id = S.id + '-' + Date.now().toString(36);
     const f = await Cloud.read();
     const inbox = J(f[`inbox-${pc.id}.json`], []);
-    inbox.push({ id, text, from: devName(), ts: nowIso() });
+    inbox.push(item ? { ...item, text: item.kind === 'code' || item.kind === 'text' ? item.text : text, id, from: devName(), ts: nowIso() }
+                    : { id, text, from: devName(), ts: nowIso() });
     await Cloud.write({ [`inbox-${pc.id}.json`]: JSON.stringify(inbox.slice(-20)) });
     for (let i = 0; i < 24; i++) {          // up to ~70 s
       await new Promise(r => setTimeout(r, 3000));
