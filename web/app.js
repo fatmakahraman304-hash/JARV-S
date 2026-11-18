@@ -1525,7 +1525,7 @@
     if (!due) return 'Ne zaman? Dakika ya da saat söylemen lazım.';
     const protocol = String(a.protocol || '').trim(), repeat = /daily|her ?gün|günlük/i.test(String(a.repeat || '')) ? 'daily' : '';
     const text = String(a.text || (protocol ? `${protocol} protokolü` : 'Zamanlayıcı')).slice(0, 200);
-    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '', ...(repeat ? { repeat } : {}), ...(protocol ? { protocol } : {}) });
+    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '', ...(repeat ? { repeat } : {}), ...(protocol ? { protocol } : {}), ...(a.op ? { op: String(a.op) } : {}) });
     reminders.sort((x, y) => x.due - y.due); saveRem(); renderRem(); syncNow();
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {}
     if (repeat) { syncNow(); }
