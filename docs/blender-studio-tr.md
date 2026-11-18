@@ -24,3 +24,25 @@ Uygulama araçları arasında özel mesh, metin, kopyalama, yüzey malzemeleri,
 bevel, subdivision, solidify, mirror, array, boolean, UV açma, kemik ve
 ağırlık grupları, poz ve nesne animasyonu, kamera ve ışık, shader ve Geometry Nodes ağları bulunur. Bilgi alma
 daha geniş konuları kapsar. Örneğin sıvı simülasyonu ve elle sculpt fırça darbeleri bu sürümün uygulama araçlarının dışındadır.
+
+## Daha büyük sahneler
+
+![Blender ile oluşturulan 11 binalı mahalle ve park](blender-mahalle.jpg)
+
+“Üç sıra ve dört sütunlu bir mahalle yap. İkinci sıranın ikinci parseli park
+olsun, binalar en çok beş katlı olsun. Gündüz ışığında yukarıdan göster.”
+Her parsel ayrı bir nesne olur. “İkinci sıranın üçüncü binasını kırmızı yap”
+gibi devam komutlarıyla proje değiştirilebilir. Mahalle aracı bina dışlarını
+ve yolları oluşturur. İç mekân için odaları, duvar boylarını, kapı ve pencere
+yerlerini ayrıca tarif et.
+
+“Seramik bir vazo yap, dar bir boynu ve geniş bir gövdesi olsun” gibi
+tasarımlar için dönel yüzey, boru ve kablolar için düzenlenebilir eğri,
+engebeli peyzaj için tohum değerinden tekrar üretilebilen arazi kullanılabilir.
+Kumaş, çarpışma yüzeyi ve aktif/pasif katı cisim ayarları proje dosyasına
+kaydedilir. Simülasyonu görmek için Blender'da zaman çizelgesini baştan oynat.
+
+Karmaşık tariflerde planlayıcı işi 2–8 aşamaya ayırabilir. Her aşama bir
+önceki kaydı açıp nesneleri okuyarak devam eder. Aşamalardan biri
+tamamlanamazsa son başarılı proje seçili kalır. “Zaman çizelgesini animasyon
+olarak render al” komutu her kareyi ayrı bir PNG olarak kaydeder.

@@ -11,10 +11,10 @@ PLUGIN = {
     "name": "blender_studio",
     "description": ("Masaüstü Blender'da Türkçe tarifle proje oluştur (new), son projeyi veya verilen "
                     ".blend dosyasının kopyasını düzenle (edit), sahneyi incele (inspect), görüntü al "
-                    "(render), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
-                    "Modelleme, malzeme, kamera, ışık veya animasyon isteklerinde kullan."),
+                    "(render), zaman çizelgesini PNG kare dizisi olarak işle (animation), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
+                    "Şehir, bina, arazi, ürün modelleme, kumaş, katı cisim fiziği ve animasyonda kullan."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | inspect | render | glb | open | guide | status"},
+        "action": {"type": "STRING", "description": "new | edit | inspect | render | animation | glb | open | guide | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
         "project": {"type": "STRING", "description": "İsteğe bağlı mevcut .blend dosyasının tam yolu"}
@@ -50,6 +50,20 @@ pose: rig name,bone, optional location/rotation/scale and frame for animation.
 mesh_edit: name,tool, optional Blender operator settings. All mesh elements selected. Tools:
 subdivide,bevel,inset,poke,triangulate,recalculate_normals,remove_doubles,unwrap,smart_project.
 render_settings: resolution_x,resolution_y,transparent, optional engine CYCLES or BLENDER_EEVEE_NEXT.
+Procedural tools (choose when suitable, then refine their objects with normal steps):
+district: name, rows and columns (1..12 each, one lot per cell), max_floors (1..24),
+parks (list of 1-based [row,col]), seed, location (grid center xyz). Each lot uses 20m pitch.
+Buildings have names "<name> Bina <row>-<col>", parks "<name> Park <row>-<col>" and roads "<name> Yollar".
+For exact building counts account for parks. District makes exterior blocks; model interiors with walls.
+wall: name,start,end (world XY meters),height,thickness,base_z,openings list of
+{offset,width,height,sill}. Offset from start to left edge, sill from base_z. Leave doorways
+and windows as actual openings; add glazing/doors as distinct objects if requested.
+landscape: name,size,height,resolution (2..200),seed,location. Smooth height field centered at location.
+lathe: name, profile list of [radius,z] ordered along the surface, segments (3..256),location.
+Use zero radii at the ends to close the surface, e.g. pottery, lamps, shaped product bodies.
+cable: name,points (ordered xyz coordinates),radius,closed. Smooth editable 3D curve.
+physics: name,type ACTIVE/PASSIVE for rigid body, CLOTH for cloth, COLLISION for cloth collider,
+optional mass. Use subdivided meshes for cloth; caches run during timeline playback.
 Plan complete geometry, composition and requested animation. For new scenes add a camera
 aimed at the subject and lighting unless explicitly unwanted. No scripts or placeholders."""
 
@@ -97,6 +111,51 @@ def project_path(value):
     return path
 
 
+def build_project(binary, source, folder, request):
+    """Resolve complex briefs in passes, committing only the final reopened scene."""
+    from core import gemini
+
+    scene = invoke(binary, source, folder, "inspect")
+    if not source:
+        scene.update(objects=[], details=[], count=0, camera=None)
+    brief = f"{SPEC}\nUser: {request}"
+    phase_choice = ('For a complex brief you may instead return {"phases":["specific subtask", ...]} '
+                    'with 2 to 8 ordered phases covering every requirement. Each phase will see the '
+                    'saved result of the preceding one. For simple requests return steps directly.')
+    prompt = f"{brief}\n{phase_choice}\nScene: {json.dumps(scene, ensure_ascii=False)}"
+    first = gemini.as_json(prompt, tier=gemini.SMART)
+    phases = first.get("phases") if isinstance(first, dict) else None
+    if phases is not None and (not isinstance(phases, list) or not 2 <= len(phases) <= 8
+                               or not all(isinstance(p, str) and p.strip() for p in phases)):
+        raise ValueError("Geçersiz Blender aşama listesi.")
+    tasks = phases or [request]
+    with tempfile.TemporaryDirectory(dir=folder) as work:
+        for index, phase in enumerate(tasks):
+            last = index == len(tasks) - 1
+            stage = folder if last else Path(work) / str(index)
+            stage.mkdir(exist_ok=True)
+            if phases:
+                prompt = (f"{brief}\nOverall plan: {json.dumps(phases, ensure_ascii=False)}"
+                          f"\nExecute ONLY phase {index + 1}: {phase}. Return steps or unsupported."
+                          f"\nCurrent scene: {json.dumps(scene, ensure_ascii=False)}")
+            for attempt in range(2):
+                plan = first if not phases and not attempt else gemini.as_json(prompt, tier=gemini.SMART)
+                if isinstance(plan, dict) and plan.get("unsupported"):
+                    raise ValueError(str(plan["unsupported"])[:400])
+                steps = plan.get("steps") if isinstance(plan, dict) else None
+                try:
+                    if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
+                        raise ValueError("Plan 1–500 işlem içermeli.")
+                    invoke(binary, source, stage, "build", steps)
+                    break
+                except ValueError as exc:
+                    if attempt:
+                        raise ValueError(f"Aşama {index + 1}: {exc}") from exc
+                    prompt += f"\nRejected response: {json.dumps(plan)}\nError: {exc}\nReturn corrected steps."
+            source = stage / "scene.blend"
+            scene = invoke(binary, source, stage, "inspect")
+
+
 def process(action, request, project, topic=""):
     binary = executable()
     if action == "guide":
@@ -119,36 +178,18 @@ def process(action, request, project, topic=""):
         return f'{report["count"]} nesne. Kamera: {report["camera"] or "yok"}. Nesneler: {names}'
     folder = Path(tempfile.mkdtemp(prefix="proje-", dir=ROOT))
     try:
+        if action == "animation":
+            invoke(binary, source, folder, "animation")
+            return f"Animasyon kareleri hazır. {folder / 'frames'}"
         if action in ("glb", "render"):
             invoke(binary, source, folder, action)
             output = folder / ("render.png" if action == "render" else "scene.glb")
         else:
-            from core import gemini
-            scene = invoke(binary, source, folder, "inspect")
-            if not source:
-                scene.update(objects=[], details=[], count=0, camera=None)
-            prompt = f"{SPEC}\nScene: {json.dumps(scene, ensure_ascii=False)}\nUser: {request}"
-            for attempt in range(2):
-                plan = gemini.as_json(prompt, tier=gemini.SMART)
-                if not isinstance(plan, dict):
-                    raise ValueError("Modelden geçerli bir Blender planı alınamadı.")
-                if plan.get("unsupported"):
-                    raise ValueError(str(plan["unsupported"])[:400])
-                steps = plan.get("steps")
-                if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
-                    raise ValueError("Plan 1–500 işlem içermeli.")
-                try:
-                    invoke(binary, source, folder, "build", steps)
-                    break
-                except ValueError as exc:
-                    if attempt:
-                        raise
-                    prompt += f"\nRejected plan: {json.dumps(steps)}\nError: {exc}\nReturn corrected plan."
+            build_project(binary, source, folder, request)
             output = folder / "scene.blend"
         if not output.is_file() or not output.stat().st_size:
             raise ValueError("Blender çıktı dosyasını oluşturamadı.")
         if action in ("new", "edit"):
-            invoke(binary, output, folder, "inspect")
             pointer = folder / "latest.tmp"
             pointer.write_text(folder.name, encoding="utf8")
             pointer.replace(ROOT / "latest.txt")
@@ -164,7 +205,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     action = p.get("action")
     if action == "status":
         return _status
-    if action not in ("new", "edit", "inspect", "open", "render", "glb", "guide"):
+    if action not in ("new", "edit", "inspect", "open", "render", "animation", "glb", "guide"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
     if action in ("new", "edit", "guide") and not request:

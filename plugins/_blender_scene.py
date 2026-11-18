@@ -160,6 +160,12 @@ def node_graph(obj, step):
 
 def apply(step):
     op, scene = step["op"], bpy.context.scene
+    if op in ("district", "wall", "landscape", "lathe", "cable"):
+        from _blender_world import cable, district, landscape, lathe, wall
+        builders = {"district": district, "wall": wall, "landscape": landscape,
+                    "lathe": lathe, "cable": cable}
+        builders[op](step)
+        return
     if op == "render_settings":
         for key in ("resolution_x", "resolution_y"):
             if key in step:
@@ -222,6 +228,25 @@ def apply(step):
             setattr(mod, field, scene.objects[value] if field == "object" else value)
     elif op in ("geometry_nodes", "shader_nodes"):
         node_graph(obj, step)
+    elif op == "physics":
+        if obj.type != "MESH":
+            raise ValueError("Fizik için mesh seçilmeli")
+        kind = step["type"]
+        if kind in ("ACTIVE", "PASSIVE"):
+            bpy.ops.object.select_all(action="DESELECT")
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            if obj.rigid_body is None:
+                bpy.ops.rigidbody.object_add()
+            obj.rigid_body.type = kind
+            obj.rigid_body.mass = step.get("mass", 1)
+        elif kind == "CLOTH":
+            mod = obj.modifiers.new("Kumaş", "CLOTH")
+            mod.settings.mass = step.get("mass", 0.3)
+        elif kind == "COLLISION":
+            obj.modifiers.new("Çarpışma", "COLLISION")
+        else:
+            raise ValueError(kind)
     elif op == "mesh_edit":
         edit_mesh(obj, step)
     elif op == "parent":
@@ -276,12 +301,21 @@ def main():
         bpy.ops.wm.save_as_mainfile(filepath=str(job / "scene.blend"))
     elif request["mode"] == "glb":
         bpy.ops.export_scene.gltf(filepath=str(job / "scene.glb"), export_format="GLB")
-    elif request["mode"] == "render":
+    elif request["mode"] in ("render", "animation"):
         if scene.camera is None:
             raise ValueError("Sahnede etkin kamera yok")
-        scene.render.filepath = str(job / "render.png")
         scene.render.image_settings.file_format = "PNG"
-        bpy.ops.render.render(write_still=True)
+        if request["mode"] == "animation":
+            scene.render.filepath = str(job / "frames" / "frame_")
+            scene.render.use_file_extension = True
+            bpy.ops.render.render(animation=True)
+            for frame in range(scene.frame_start, scene.frame_end + 1, scene.frame_step):
+                path = Path(scene.render.frame_path(frame=frame))
+                if not path.is_file() or not path.stat().st_size:
+                    raise ValueError(f"Eksik animasyon karesi: {frame}")
+        else:
+            scene.render.filepath = str(job / "render.png")
+            bpy.ops.render.render(write_still=True)
     report = {"version": bpy.app.version_string, "count": len(scene.objects),
               "objects": [[o.name, o.type] for o in list(scene.objects)[:250]],
               "camera": scene.camera.name if scene.camera else None,
@@ -301,4 +335,5 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     main()
