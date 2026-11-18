@@ -66,6 +66,7 @@
     document.body.classList.toggle('big', KIND === 'tv' || KIND === 'projector');
     document.body.classList.toggle('watch', KIND === 'watch');
     for (const k of Object.keys(KIND_NAMES)) document.body.classList.toggle('k-' + k, KIND === k);
+    $('t-holo').hidden = !(KIND === 'phone' || KIND === 'pc');      // the hologram table: phone and laptop only
     $('brand-name').textContent = (S.name || 'JARVIS').toUpperCase();
     $('brand-sub').textContent = 'AI OS · ' + (S.devName || KIND_NAMES[KIND]);
   }
@@ -924,6 +925,7 @@
         return await sendToDevice(a.device, { kind: what === 'say' ? 'say' : 'text', text: String(a.text), title });
       }
       case 'hologram': {
+        if (KIND !== 'phone' && KIND !== 'pc') return 'Hologram masası telefonda ve laptopta çalışıyor; oradan "bunu dijital olarak modelle" de.';
         const q = new URLSearchParams();
         const act = String(a.action || 'scan').toLowerCase();
         if (act === 'make' && a.request) q.set('make', String(a.request)); else if (act !== 'open') q.set('scan', '1');
