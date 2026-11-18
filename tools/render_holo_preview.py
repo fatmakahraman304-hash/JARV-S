@@ -18,9 +18,10 @@ def main() -> int:
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "holo_preview")
     size = int(sys.argv[sys.argv.index("--size") + 1]) if "--size" in sys.argv else 1400
     out.mkdir(parents=True, exist_ok=True)
-    from PyQt6.QtGui import QGuiApplication, QImage, QPainter, QColor, QRadialGradient
+    from PyQt6.QtGui import QImage, QPainter, QColor, QRadialGradient
     from PyQt6.QtCore import QPointF
-    app = QGuiApplication(sys.argv)
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication(sys.argv)
     from core import holo_model
     from gui.holo_gl import Camera, HoloGL
     from tools.holo_samples import ALL
@@ -48,6 +49,21 @@ def main() -> int:
                 name = "".join(ch for ch in holo_model.clean(m)["name"].split()[0].lower() if ch.isascii() and ch.isalnum()) or "model"
                 base.save(str(out / f"{name}_{look}_{k}.png"))
                 print(f"{name} {look} {k}: {mesh.n_vert // 3} tris, {dt * 1000:.0f} ms")
+    # the whole table as it appears in JARVIS's window
+    from unittest import mock
+    from gui import holo_panel
+    with mock.patch.object(holo_panel, "load_library", return_value=[]):
+        panel = holo_panel.HoloPanel()
+        panel.resize(1600, 900)
+        panel.set_model(holo_model.clean(ALL[3]), animate=False)
+        panel.show()
+        app.processEvents()
+        for look in ("real", "holo"):
+            panel.command({"action": look})
+            panel.sel = 1
+            app.processEvents()
+            panel.grab().save(str(out / f"zz_panel_{look}.png"))
+        panel.hide()
     print("renderer:", gl.renderer_name)
     if "--log-preview" in sys.argv:
         _log_sheet(out)
