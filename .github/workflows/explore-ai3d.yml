@@ -1,0 +1,14 @@
+name: explore ai3d
+on:
+  push:
+    branches: [explore-ai3d]
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.12"}
+      - run: pip install gradio_client
+      - run: python tools/explore_ai3d.py
