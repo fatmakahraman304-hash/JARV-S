@@ -311,6 +311,13 @@ class JarvisUI:
         core.chess_game.get_game(), safe to use from any thread."""
         self._win._chess_sig.emit(bool(opened))
 
+    def show_hologram(self, cmd: dict) -> None:
+        """Thread-safe: open the hologram table in the window and pass it a
+        command — {"action": scan | make | edit | say | explode | assemble |
+        reset | real | holo | hands | save | stl | throw | close | open,
+        "request": text, "hands": bool}."""
+        self._win._holo_sig.emit(dict(cmd or {}))
+
     def show_control_center(self, opened: bool = True) -> None:
         """Thread-safe: open (or close) the Control Centre — Jarvis's network
         of capabilities and the live activity feed."""

@@ -1,4 +1,4 @@
-"""Hologram table (web/hologram.html, web/holo-kit.js, plugins/hologram.py)."""
+"""Hologram table on the phone (web/hologram.html, web/holo-kit.js)."""
 import json
 import re
 import shutil
@@ -128,25 +128,6 @@ class PageTests(unittest.TestCase):
         self.assertIn("name: 'hologram'", app)
         self.assertIn("case 'hologram':", app)
         self.assertIn("hologram.html", (ROOT / "web" / "index.html").read_text(encoding="utf-8"))
-
-
-class PluginTests(unittest.TestCase):
-    def test_urls(self):
-        from plugins import hologram
-        u = hologram.build_url("scan", setup={"g": "AIzaX", "t": "", "i": "", "n": "JARVIS"})
-        self.assertTrue(u.startswith("https://fatmakahraman304-hash.github.io/JARV-S/hologram.html?scan=1&hands=1#s="))
-        import base64
-        blob = u.split("#s=")[1]
-        self.assertEqual(json.loads(base64.urlsafe_b64decode(blob + "=" * (-len(blob) % 4)))["g"], "AIzaX")
-        self.assertIn("make=bir+Iron+Man+kask", hologram.build_url("make", "bir Iron Man kaskı", hands=False))
-        self.assertNotIn("#s=", hologram.build_url("open", setup={}))
-
-    def test_run_opens_the_browser(self):
-        from plugins import hologram
-        with mock.patch("webbrowser.open", return_value=True) as w, mock.patch.object(hologram, "_setup", return_value={}):
-            r = hologram.run({"action": "scan"})
-        self.assertIn("kameraya göster", r)
-        self.assertIn("hologram.html?scan=1", w.call_args[0][0])
 
 
 if __name__ == "__main__":
