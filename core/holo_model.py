@@ -173,7 +173,8 @@ def _fan(n: int, offset: int, reverse: bool) -> list:
     return [(a, c, b) for a, b, c in tri] if reverse else tri
 
 
-def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 96, corner_deg: float = 42.0, smooth: bool = True):
+def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 96, corner_deg: float = 42.0, smooth: bool = True,
+           caps: bool = True):
     """profile: [[r 0..1, y 0..1]] bottom → top. Smooth runs between sharp
     corners, flat caps where the profile ends away from the axis."""
     pr = [(float(r), float(y)) for r, y in profile]
@@ -208,7 +209,7 @@ def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 96, co
         # outward winding: flip when the profile goes downward
         out.append((V, None, F[:, ::-1].copy()))
     for (r, y), top in ((pr[0], False), (pr[-1], True)):
-        if r > 1e-4:
+        if caps and r > 1e-4:
             V = np.zeros((seg + 1, 3), np.float32)
             V[0] = (0, y0 + y * h, 0)
             V[1:, 0], V[1:, 1], V[1:, 2] = ca * r * rx, y0 + y * h, sa * r * rz
@@ -481,8 +482,8 @@ def surfaces(p: dict) -> list:
         return _torus(sx, sy, sz)
     if s == "wedge":
         return _wedge(sx, sy, sz)
-    if s == "lathe":
-        return _lathe(p["profile"], sx / 2, sz / 2, -sy / 2, sy)
+    if s == "lathe":                                 # open where the profile does not reach the axis (rims, tyres, rings)
+        return _lathe(p["profile"], sx / 2, sz / 2, -sy / 2, sy, caps=False)
     if s == "extrude":
         return _extrude(p["outline"], sx, sy, sz)
     if s == "tube":

@@ -28,7 +28,8 @@ Shapes (pick the one that matches the real form, not the simplest):
 - "rounded_box": devices, cases, remotes, phones, books, furniture panels; add "radius" (cm) for the corner/edge round-over.
 - "lathe": anything turned/round in plan — bottles, cups, mugs, cans, lamps, vases, knobs, lenses, wheels, bowls, bulbs.
   Add "profile": [[r, y], ...] from bottom to top, r = radius as a fraction 0..1 of size x/2, y = height fraction 0..1.
-  Use 6–16 points to follow the real silhouette (lip, neck, shoulder, foot). Start/end at r = 0 to close it.
+  Use 6–16 points to follow the real silhouette (lip, neck, shoulder, foot). Start/end at r = 0 to close it; a profile
+  that does not reach r = 0 stays open there (rims, tyres, rings, tubes, lamp shades).
 - "extrude": flat-sided outlines — phone silhouettes, brackets, logos, letters, blades, plates, shaped panels.
   Add "outline": [[x, y], ...] in -1..1 of size x/2 and size y/2, counter-clockwise, 4–40 points; depth = size z;
   optional "bevel" (cm).

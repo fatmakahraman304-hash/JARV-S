@@ -71,8 +71,11 @@ KEYBOARD = {"name": "Mekanik klavye", "summary": "Alüminyum kasalı, 60% mekani
     {"name": "USB-C", "shape": "rounded_box", "size": [0.9, 0.35, 0.4], "pos": [-11, 1.6, -5.3], "radius": 0.15, "color": "#222222", "metal": 1, "rough": 0.3}]}
 
 WHEEL = {"name": "Spor jant", "summary": "Beş çift kollu, parlak işlenmiş alüminyum jant ve lastik.", "parts": [
-    {"name": "Lastik", "shape": "torus", "size": [64, 22, 64], "pos": [0, 32, 0], "rot": [90, 0, 0], "color": "#151515", "rough": 0.85, "finish": "rubber"},
-    {"name": "Jant çemberi", "shape": "lathe", "size": [46, 20, 46], "pos": [0, 32, 0], "rot": [90, 0, 0], "color": "#b9bcc2", "metal": 1, "rough": 0.2, "finish": "brushed",
+    {"name": "Lastik", "shape": "lathe", "size": [64, 22, 64], "pos": [0, 32, 0], "rot": [90, 0, 0], "color": "#151515", "rough": 0.85, "finish": "rubber",
+     "profile": [[0.72, 0], [0.9, 0.02], [0.985, 0.14], [1, 0.5], [0.985, 0.86], [0.9, 0.98], [0.72, 1]]},
+    {"name": "Diş", "shape": "rounded_box", "size": [3, 1.4, 19], "pos": [0, 63.7, 0], "radius": 0.4, "color": "#101010", "rough": 0.9, "finish": "rubber",
+     "radial": {"count": 48, "axis": "z", "center": [0, 32, 0]}},
+    {"name": "Jant çemberi", "shape": "lathe", "size": [47, 20, 47], "pos": [0, 32, 0], "rot": [90, 0, 0], "color": "#b9bcc2", "metal": 1, "rough": 0.2, "finish": "brushed",
      "profile": [[0.92, 0], [1, 0.05], [0.93, 0.15], [0.93, 0.85], [1, 0.95], [0.92, 1]]},
     {"name": "Göbek", "shape": "lathe", "size": [14, 6, 14], "pos": [0, 32, 7], "rot": [90, 0, 0], "color": "#2b2d31", "metal": 1, "rough": 0.3,
      "profile": [[0, 0], [1, 0], [0.95, 0.6], [0.6, 1], [0, 1]]},
