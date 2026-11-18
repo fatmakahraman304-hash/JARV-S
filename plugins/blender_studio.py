@@ -25,6 +25,12 @@ PLUGIN = {
     }, "required": ["action"]},
 }
 
+PLUGIN_SETTINGS = {
+    "title": "Blender",
+    "fields": [{"key": "executable", "type": "text", "label": "Blender çalıştırılabilir dosyası",
+                "placeholder": "Otomatik bulmak için boş bırak"}],
+}
+
 ROOT = Path.home() / "JARVIS" / "Blender"
 WORKER = Path(__file__).with_name("_blender_scene.py")
 _lock = threading.Lock()
@@ -106,12 +112,13 @@ def windows_candidates():
 
 
 def executable():
-    override = os.environ.get("JARVIS_BLENDER_EXE")
+    from memory.config_manager import get_plugin_setting
+    override = get_plugin_setting("blender_studio", "executable") or os.environ.get("JARVIS_BLENDER_EXE")
     if override:
         path = Path(override.strip('"')).expanduser()
-        if path.is_file():
+        if path.is_file() and (os.name != "nt" or path.name.lower() == "blender.exe"):
             return str(path)
-        raise ValueError("JARVIS_BLENDER_EXE geçersiz. blender.exe dosyasının tam yolunu kontrol et.")
+        raise ValueError("Blender yolu geçersiz. Eklenti ayarındaki veya JARVIS_BLENDER_EXE değişkenindeki yolu kontrol et.")
     if os.name == "nt":
         for path in windows_candidates():
             if path.is_file():
@@ -122,7 +129,7 @@ def executable():
     mac = Path("/Applications/Blender.app/Contents/MacOS/Blender")
     if mac.is_file():
         return str(mac)
-    raise ValueError("Blender bulunamadı. Blender'ı açıp tekrar dene veya JARVIS_BLENDER_EXE değişkenine tam yolunu yaz.")
+    raise ValueError("Blender bulunamadı. Eklenti ayarlarında Blender bölümüne blender.exe dosyasının tam yolunu yaz.")
 
 
 def invoke(binary, source, folder, mode, steps=(), query=""):
