@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install -y -q libxi6 libxkbcommon0 libsm6 libgl1 libegl1 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon-x11-0 libwayland-client0
       - name: Blender ${{ matrix.version }}
         run: |
-          curl -sSL -o blender.tar.xz "https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz"
+          curl -sSL --retry 4 --retry-all-errors -o blender.tar.xz "https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz"
           mkdir -p "$HOME/blender" && tar -xf blender.tar.xz -C "$HOME/blender" --strip-components=1
           echo "$HOME/blender" >> "$GITHUB_PATH"
           "$HOME/blender/blender" --version | head -1

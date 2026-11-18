@@ -39,7 +39,7 @@ def main() -> None:
         try:
             out = studio.hologram_render(binary, str(f), w=960, h=540, samples=48, height_m=height)
             shots.append(Image.open(out).convert("RGB"))
-            print("rendered", f.name)
+            print("rendered", f.name, (out.parent / "frame.json").read_text()[:3000])
         except Exception as exc:
             print("render failed", f.name, exc)
     if not shots:

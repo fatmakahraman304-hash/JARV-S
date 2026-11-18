@@ -428,6 +428,14 @@ def studio(job, request):
         scene.view_settings.view_transform = "Filmic"
     r.image_settings.file_format = "PNG"
     r.filepath = str(job / "render.png")
+    bpy.context.view_layer.update()
+    from bpy_extras.object_utils import world_to_camera_view
+    ndc = [world_to_camera_view(scene, cam, c) for c in corners]
+    frame = {"box": [list(lo), list(hi)], "camera": list(cam.location), "aim": list(aim),
+             "ndc_x": [min(p.x for p in ndc), max(p.x for p in ndc)], "ndc_y": [min(p.y for p in ndc), max(p.y for p in ndc)],
+             "objects": [[o.name, o.type, o.parent.name if o.parent else None, list(o.matrix_world.translation)]
+                         for o in scene.objects][:30]}
+    (job / "frame.json").write_text(json.dumps(frame), encoding="utf8")
     bpy.ops.wm.save_as_mainfile(filepath=str(job / "scene.blend"))
     bpy.ops.render.render(write_still=True)
 
