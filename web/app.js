@@ -1598,6 +1598,21 @@
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
+  // ── the computer panel: buttons straight to the computer's JARVIS ───────
+  $('t-pc').onclick = () => {
+    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "Jarvis\'i her cihaza kur" de.';
+    openSheet('s-pc');
+  };
+  document.querySelectorAll('#s-pc [data-q]').forEach(b => b.onclick = async () => {
+    b.disabled = true; toast('Gönderiliyor…');
+    try { toast(await sendToPc('', 'quick:' + b.dataset.q)); } finally { b.disabled = false; }
+  });
+  $('pc-shot').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await runTool('computer_screen', {})); };
+  $('pc-status').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch { return; } send({ realtimeInput: { text: 'Durum raporu ver.' } }); };
+  $('pc-ask').addEventListener('submit', async (e) => {
+    e.preventDefault(); const t = $('pc-inp').value.trim(); if (!t) return; $('pc-inp').value = '';
+    toast('Bilgisayara gönderildi…'); const r = await sendToPc('', t); sys('💻 ' + r); toast(r.slice(0, 120));
+  });
   // Shared from another app (Android "Paylaş → JARVIS", manifest share_target):
   // JARVIS asks what to do with it — open on the TV, send to the computer …
   (function sharedIn() {
