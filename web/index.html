@@ -28,6 +28,13 @@
     button { font-family: inherit; }
     .app { height: 100%; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; max-width: 620px; margin: 0 auto;
            padding: max(10px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom)); }
+    /* iPhone with a home bar (14 Pro Max …): the buttons sit just above the bar
+       instead of a full bar's height above it, so nothing is left empty below. */
+    @supports (padding: max(0px)) {
+      @media (display-mode: standalone) {
+        .app { padding-bottom: max(8px, calc(env(safe-area-inset-bottom) - 20px)); padding-top: max(10px, calc(env(safe-area-inset-top) - 6px)); }
+      }
+    }
     .top { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; }
     .ib { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: rgba(40,26,14,.45);
           color: var(--acc); font-size: 18px; display: grid; place-items: center; cursor: pointer; }
