@@ -128,13 +128,16 @@ def image_to_3d(image_path: str, progress=None, only: str = "", log=print):
     token = _token() or None
     errors = []
     for name, space, fn in PROVIDERS:
-        if only and only.lower() not in name.lower():
+        if only and only.lower() != name.lower():
             continue
         if progress:
             progress(f"GERÇEK 3B MODEL — {name} (30–120 sn)…")
         t0 = time.time()
         try:
-            c = Client(space, hf_token=token, verbose=False)
+            try:
+                c = Client(space, token=token, verbose=False)          # gradio_client ≥ 1.x
+            except TypeError:
+                c = Client(space, hf_token=token, verbose=False)       # older releases
             path = fn(c, image_path, handle_file)
             if path and Path(path).stat().st_size > 1000:
                 data = Path(path).read_bytes()
