@@ -1,7 +1,10 @@
 """Durable local history outside the installation; committed after every event."""
+import heapq
 import json
 import os
+import re
 import sqlite3
+import unicodedata
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -100,7 +103,7 @@ def prompt_context():
             "claim as proof of success. Pending jobs need status inspection.]\n" + resume_text()
             + "\n[APPLICATION JOBS]\n" + "\n".join(f"{n}: {s}" for n, s, _, _ in applications())[:1500]
             + ("\n[UNFINISHED CODING PROJECTS — when the user says 'kaldığımız yerden devam et' "
-               "or similar, call dev_agent with mode='resume']\n" + jobs if jobs else ""))
+               "or similar, first resolve which task they mean from the latest user turns. Use dev_agent resume only for a matching coding project.]\n" + jobs if jobs else ""))
 
 
 # ── coding projects: a journal that survives restarts and updates ────────────
@@ -193,4 +196,30 @@ def search(query, limit=8):
     with connect() as db:
         rows = db.execute("SELECT time,role,text FROM events WHERE text LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?",
                           ("%" + term + "%", max(1, min(limit, 30)))).fetchall()
+    if not rows and str(query).strip():
+        # Exact matches still search the complete journal. For conversational
+        # wording, rank recent turns by coverage, then by recency.
+        def terms(value):
+            folded = unicodedata.normalize("NFKD", value.casefold().replace("ı", "i"))
+            plain = "".join(ch for ch in folded if not unicodedata.combining(ch))
+            return set(re.findall(r"[^\W_]+", plain))
+
+        stop = {"bir", "ile", "icin", "olan", "bana", "benim", "hani", "ne", "diye",
+                "the", "and", "for", "was", "about", "what"}
+        wanted = {w for w in terms(str(query)) if len(w) >= 2 and w not in stop}
+        if wanted:
+            def candidates(db):
+                for event_id, date, role, text in db.execute(
+                    "SELECT id,time,role,text FROM events ORDER BY id DESC LIMIT 1500"
+                ):
+                    words = terms(text)
+                    exact = wanted & words
+                    # Handles common Turkish endings such as 'kanat' / 'kanatları'.
+                    partial = sum(any(len(w) >= 4 and other.startswith(w) for other in words)
+                                  for w in wanted - exact)
+                    coverage = len(exact) + partial
+                    if coverage and coverage * 2 >= len(wanted):
+                        yield coverage, len(exact), event_id, (date, role, text)
+            with connect() as db:
+                rows = [item[-1] for item in heapq.nlargest(max(1, min(limit, 30)), candidates(db))]
     return "\n".join(f"{date[:16]} | {role}: {text[:800]}" for date, role, text in rows)

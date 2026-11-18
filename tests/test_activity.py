@@ -16,6 +16,7 @@ class ActivityTests(unittest.TestCase):
             self.assertIn(key, activity.NODE_LABEL)
 
     def test_outcome_status_is_respected(self):
+        self.assertEqual(activity.status_of("status=started action=build"), "info")
         self.assertEqual(activity.status_of("status=done action=x"), "ok")
         self.assertEqual(activity.status_of("status=failed action=x reason=y"), "fail")
         self.assertEqual(activity.status_of("status=unverified action=x reason=y"), "warn")

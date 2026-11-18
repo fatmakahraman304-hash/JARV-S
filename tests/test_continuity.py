@@ -22,6 +22,16 @@ class ContinuityTests(unittest.TestCase):
         self.assertEqual(len(c.recent(100)), 24)
         self.assertIn('görev', c.prompt_context())
         self.assertEqual(len(c.recent(100)), 24)  # reading is not consuming
+    def test_recall_matches_reordered_turkish_terms_and_preserves_exact_lookup(self):
+        c.record("Kullanıcı", "Kanatları mor olan bir tasarım istiyorum.")
+        c.record("Kullanıcı", "Mor bir lamba tasarla.")
+        c.record("Kullanıcı", "Bir park çiz.")
+        found = c.search("MOR KANAT", limit=1)
+        self.assertIn("Kanatları mor", found)
+        self.assertNotIn("lamba", found)
+        self.assertIn("Bir park çiz", c.search("park çiz", limit=1))
+        self.assertEqual(c.search("zeplin"), "")
+
     def test_interrupted_jobs_are_not_replayed(self):
         c.set_application('CapCut', 'geliştiriliyor', 'test bekliyor')
         c.recover_jobs()
