@@ -52,3 +52,9 @@ Windows'ta JARVIS, çalışan Blender veya Blender Launcher işleminin klasörü
 `JARVIS_BLENDER_EXE` ortam değişkenine dosyanın tam yolunu verip JARVIS'i yeniden
 başlatabilirsin. “Mahalleyi oluştur, projeyi ve renderi aç” isteği kaydedilen
 projeyi Blender'da açar ve PNG çıktısını JARVIS'te gösterir.
+
+Yazılı sahne isteğini doğrudan Blender aracına göndermek için örneğin
+“Gazimağusa esintili, 11 binalı ve bir parklı sahil mahallesi oluştur. Projeyi ve renderi aç”
+yazabilirsin. Özel tariflerde `/blender` öneki de aynı aracı çağırır.
+Otomatik bulma başarısızsa eklenti ayarlarında Blender bölümüne tam
+`blender.exe` yolunu kaydet ve komutu tekrarla.

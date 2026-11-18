@@ -1363,6 +1363,12 @@ class JarvisLive:
         if not self._awake:
             self.ui.write_log("SYS: I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first.")
             return
+        from core.blender_commands import scene_command
+        scene = scene_command(text)
+        if scene is not None:
+            result = self._plugin_registry.run("blender_studio", scene, player=self.ui)
+            self.ui.write_log(f"SYS: {result}")
+            return
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]},
@@ -1613,6 +1619,11 @@ class JarvisLive:
         })
 
         parts = [time_ctx, identity_ctx]
+        if "blender_studio" in _names:
+            parts.append("For spoken Blender scene or neighborhood creation with project/render output, "
+                         "call blender_studio(action=new) with the full request and result=both when "
+                         "both outputs are requested. A generic app launch cannot create a scene. "
+                         "Report tool status accurately and only perform research if requested.")
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
