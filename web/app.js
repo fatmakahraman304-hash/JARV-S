@@ -750,6 +750,8 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
+    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi laptop üzerinden kontrol et: uygulama aç, YouTube/Google\'da ara, odaklı kutuya yaz, kumanda tuşu, ses, Wi-Fi\'ye bağla, ekranına bak, JARVIS\'i üzerinde aç. command: ne yapılacağı Türkçe ("YouTube\'da Tarkan aç", "sesi kıs", "internete bağlan: AğAdı şifre", "ekranına bak"). Kumanda ekranı için open: true.',
+      parameters: { type: 'OBJECT', properties: { command: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -820,6 +822,11 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'projector': {
+        if (a.open) { $('t-remote').click(); if (!a.command) return 'Kumanda ekranı açıldı.'; }
+        if (!a.command) return 'Ne yapayım?';
+        return await sendToPc('', `Projeksiyon/TV (android_device aracı): ${a.command}`);
+      }
       case 'chess': return chessTool(a);
       case 'coffee_fortune': {
         openSheet('s-fal');
@@ -1325,6 +1332,19 @@
   $('ch-hint').onclick = () => toast(chessHint());
   $('ch-teach').onclick = () => { chess.teach = !chess.teach; saveChess(); renderChess(); toast(chess.teach ? '🎓 Öğretme modu açık' : 'Öğretme modu kapandı'); };
 
+  // ── projector / Android TV remote: the laptop drives it over ADB ────────
+  // (core/adb_control.py); this page sends "adb:…" to the laptop's mailbox.
+  async function remote(kind, arg) {
+    const r = await sendToPc('', `adb:${kind}:${arg}`);
+    return r.replace(/^[^:]+: /, '');
+  }
+  $('t-remote').onclick = () => { const pc = findPc(''); $('rm-note').textContent = pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}). İlk kez: laptoptaki JARVIS'e "projeksiyonu kur" de.` : 'Bağlı bilgisayar yok: kumanda laptoptaki JARVIS üzerinden çalışır.'; openSheet('s-remote'); };
+  document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
+  document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
+  $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
+  $('rm-type').onclick = async () => { const t = $('rm-inp').value.trim(); if (!t) { toast('Önce yazacağını kutuya yaz.'); return; } $('rm-inp').value = ''; toast(await remote('type', t)); };
+  $('rm-look').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await sendToPc('', 'Projeksiyonun ekranına bak ve ne olduğunu söyle.')); };
+
   // ── coffee-cup reading (for fun): photos of the cup → Gemini looks ───────
   let falImages = [];
   $('fal-in').addEventListener('change', async (e) => {
@@ -1543,7 +1563,7 @@
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
-      `Hava durumu için weather, döviz için currency kullan (gerçek veri). Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol, satranç için chess (öğret denirse teach), kahve falı için coffee_fortune kullan. `+
+      `Hava durumu için weather, döviz için currency kullan (gerçek veri). Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol, satranç için chess (öğret denirse teach), kahve falı için coffee_fortune, projeksiyon/TV kontrolü için projector kullan. `+
       `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak; geçmiş bir konuşma sorulursa search_history ile arşive bak. ` +
       `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +

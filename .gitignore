@@ -66,3 +66,5 @@ screenshots/
 /config/device_id
 /config/jarvis_kurulum_qr.png
 /config/shared_reminders.json
+/tools/platform-tools/
+/config/android_devices.json

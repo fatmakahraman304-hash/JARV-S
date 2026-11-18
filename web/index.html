@@ -98,6 +98,8 @@
     #s-chess select { background: var(--card); color: var(--text); border: 1px solid var(--line2); border-radius: 10px; padding: 9px; }
     .thumbs { display: flex; gap: 8px; margin-top: 10px; } .thumbs img { width: 30%; border-radius: 10px; border: 1px solid var(--line2); }
     .falout { margin-top: 12px; white-space: pre-line; line-height: 1.6; font-size: 15px; }
+    .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 280px; margin: 8px auto 0; }
+    .pad .btn { padding: 16px 0; font-size: 18px; }
     .pcgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .btn.pri { background: linear-gradient(145deg, #ff9a2e, #d4550a); color: #1a0d03; border: 0; font-weight: 700; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
@@ -197,6 +199,7 @@
         <button class="chip" id="t-rem" type="button" hidden>⏰</button>
         <button class="chip" id="t-pc" type="button">💻 Bilgisayar</button>
         <button class="chip" id="t-agenda" type="button">📅 Ajanda</button>
+        <button class="chip" id="t-remote" type="button">📽️ Kumanda</button>
         <button class="chip" id="t-chess" type="button">♟️ Satranç</button>
         <button class="chip" id="t-fal" type="button">☕ Fal</button>
         <button class="chip" id="t-update" type="button">⬆ Güncelle</button>
@@ -241,6 +244,23 @@
     <h2>CİHAZLAR <button class="ib" data-close type="button">✕</button></h2>
     <p>Hepsi aynı hafızayı kullanır. Bilgisayarlara buradan ya da sesle komut verebilirsin: <i>"laptopta sunumu aç"</i>.</p>
     <div id="devs"></div>
+  </section>
+
+  <section class="sheet" id="s-remote" hidden>
+    <h2>PROJEKSİYON / TV <button class="ib" data-close type="button">✕</button></h2>
+    <p id="rm-note">Laptoptaki JARVIS üzerinden (Wi-Fi + ADB). İlk kez: laptopa "projeksiyonu kur" de.</p>
+    <div class="pad">
+      <span></span><button class="btn" data-k="up" type="button">▲</button><span></span>
+      <button class="btn" data-k="left" type="button">◀</button><button class="btn pri" data-k="ok" type="button">OK</button><button class="btn" data-k="right" type="button">▶</button>
+      <span></span><button class="btn" data-k="down" type="button">▼</button><span></span>
+    </div>
+    <div class="pcgrid" style="margin-top:10px">
+      <button class="btn" data-k="back" type="button">↩ Geri</button><button class="btn" data-k="home" type="button">⌂ Ana ekran</button><button class="btn" data-k="play_pause" type="button">⏯</button>
+      <button class="btn" data-k="volume_down" type="button">🔉</button><button class="btn" data-k="mute" type="button">🔇</button><button class="btn" data-k="volume_up" type="button">🔊</button>
+      <button class="btn" data-app="youtube" type="button">YouTube</button><button class="btn" data-app="netflix" type="button">Netflix</button><button class="btn" data-k="power" type="button">⏻</button>
+    </div>
+    <form class="ask" id="rm-ask" autocomplete="off" style="margin-top:12px"><input id="rm-inp" placeholder="Projeksiyonda ara / yaz…" enterkeyhint="search"><button class="mic send" type="submit" aria-label="Gönder">➤</button></form>
+    <div class="row" style="margin-top:8px"><button class="btn" id="rm-type" type="button">⌨️ Kutuya yaz</button><button class="btn" id="rm-look" type="button">👁 Ekranına bak</button></div>
   </section>
 
   <section class="sheet" id="s-chess" hidden>

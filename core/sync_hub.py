@@ -1297,6 +1297,23 @@ def _run_command(cid: str, text: str, sender: str) -> None:
             except Exception:
                 pass
         return
+    if text.startswith("adb:"):
+        # the phone's projector/TV remote: "adb:key:up", "adb:app:youtube", "adb:type:…", "adb:url:…"
+        def go():
+            try:
+                from core import adb_control as A
+                _, kind, arg = (text.split(":", 2) + ["", ""])[:3]
+                dev = ""                        # the projector/TV used last
+                fn = {"key": lambda: A.press(arg, dev), "app": lambda: A.open_app(arg, dev),
+                      "type": lambda: A.type_text(arg, dev, True), "url": lambda: A.open_url(arg, dev),
+                      "search": lambda: A.search(arg, "youtube", dev)}.get(kind)
+                ok, msg = fn() if fn else (False, "bilinmeyen kumanda komutu")
+            except Exception as exc:
+                msg = f"Kumanda: {exc}"
+            with _state["lock"]:
+                _state["pending"].append({"id": cid, "at": time.time(), "reply": msg})
+        threading.Thread(target=go, daemon=True, name="sync-adb").start()
+        return
     if text.startswith("quick:"):
         from core import remote_control
         ok, msg, extra = remote_control.perform(text.split(":", 1)[1].strip())
