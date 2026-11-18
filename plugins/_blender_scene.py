@@ -400,12 +400,23 @@ def studio(job, request):
     right = fwd.cross(Vector((0, 0, 1))).normalized()
     up = right.cross(fwd)
     corners = [Vector((x, y, z)) for x in (lo.x, hi.x) for y in (lo.y, hi.y) for z in (lo.z, hi.z)]
+    pts = []                                # the model's own vertices (sampled), not its box: a tight, centred frame
+    total = sum(len(o.data.vertices) for o in meshes)
+    step = max(1, total // 30000)
+    for o in meshes:
+        mw = o.matrix_world
+        vs = o.data.vertices
+        pts += [mw @ vs[i].co for i in range(0, len(vs), step)]
+    pts = pts or corners
+    xs, ys, zs = ([(p - aim).dot(a) for p in pts] for a in (right, up, v))
+    # shift the aim so the silhouette is centred (orthographic estimate), then solve the distance exactly
+    aim = aim + right * (max(xs) + min(xs)) / 2 + up * (max(ys) + min(ys)) / 2
     dist = 0.0
-    for c in corners:                       # every corner of the box inside the frame, with a small margin
-        rel = c - aim
+    for p in pts:
+        rel = p - aim
         x, y, z = rel.dot(right), rel.dot(up), rel.dot(v)
-        dist = max(dist, z + abs(x) / (tx * 0.86), z + abs(y) / (ty * 0.80))
-    dist = max(dist, radius * 1.2)
+        dist = max(dist, z + abs(x) / (tx * 0.84), z + abs(y) / (ty * 0.80))
+    dist = max(dist, radius * 0.9)
     cam.location = aim + v * dist
     cam.rotation_euler = (aim - cam.location).to_track_quat("-Z", "Y").to_euler()
     cam_data.clip_start, cam_data.clip_end = dist * 0.01, dist * 50
@@ -430,7 +441,7 @@ def studio(job, request):
     r.filepath = str(job / "render.png")
     bpy.context.view_layer.update()
     from bpy_extras.object_utils import world_to_camera_view
-    ndc = [world_to_camera_view(scene, cam, c) for c in corners]
+    ndc = [world_to_camera_view(scene, cam, c) for c in pts[::max(1, len(pts) // 2000)]]
     frame = {"box": [list(lo), list(hi)], "camera": list(cam.location), "aim": list(aim),
              "ndc_x": [min(p.x for p in ndc), max(p.x for p in ndc)], "ndc_y": [min(p.y for p in ndc), max(p.y for p in ndc)],
              "objects": [[o.name, o.type, o.parent.name if o.parent else None, list(o.matrix_world.translation)]

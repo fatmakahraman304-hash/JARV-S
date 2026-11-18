@@ -147,6 +147,12 @@ class RealBlender(unittest.TestCase):
         out = studio.hologram_render(studio.executable(), str(glb), w=480, h=270, samples=16, height_m=0.1)
         self.assertTrue(out.read_bytes().startswith(b"\x89PNG"))
         self.assertTrue((out.parent / "scene.blend").is_file())
+        frame = json.loads((out.parent / "frame.json").read_text())
+        (x0, x1), (y0, y1) = frame["ndc_x"], frame["ndc_y"]
+        self.assertTrue(0.0 <= x0 < x1 <= 1.0 and 0.0 <= y0 < y1 <= 1.0, frame)     # all of it in the picture
+        self.assertGreater(max(x1 - x0, y1 - y0), 0.7, frame)                      # and filling it
+        self.assertLess(abs((x0 + x1) / 2 - 0.5), 0.06, frame)                     # centred
+        self.assertLess(abs((y0 + y1) / 2 - 0.5), 0.06, frame)
         keep = os.environ.get("BLENDER_RENDER_DIR")
         if keep:
             Path(keep).mkdir(parents=True, exist_ok=True)
