@@ -57,8 +57,9 @@
     if (touch) return 'phone';
     return 'pc';
   }
-  const KIND_NAMES = { phone: 'Telefon', tablet: 'Tablet', tv: 'Televizyon', projector: 'Projeksiyon', watch: 'Akıllı saat', pc: 'Bilgisayar' };
-  const ICON = { phone: '📱', tablet: '📱', tv: '📺', projector: '📽️', watch: '⌚', pc: '💻' };
+  const KIND_NAMES = { phone: 'Telefon', tablet: 'Tablet', tv: 'Televizyon', projector: 'Projeksiyon', watch: 'Akıllı saat', pc: 'Bilgisayar', receiver: 'Alıcı (projeksiyonu kontrol eder)' };
+  const ICON = { phone: '📱', tablet: '📱', tv: '📺', projector: '📽️', watch: '⌚', pc: '💻', receiver: '📡' };
+  const ALICI_APK = 'https://github.com/fatmakahraman304-hash/JARV-S/releases/download/alici/jarvis-alici.apk';
   let KIND = detectKind();
   function applyKind() {
     KIND = detectKind();
@@ -520,7 +521,7 @@
   const KIND_WORDS = { phone: /telefon|phone|cep/, tablet: /tablet|ipad/, tv: /tv|televizyon|tele/, projector: /projeksiyon|projekt/, watch: /saat|watch/, pc: /bilgisayar|laptop|pc|dizüstü|masaüstü/ };
   function findDevice(name, list = devices) {
     const n = String(name || '').toLocaleLowerCase('tr').trim();
-    const others = list.filter(d => d.id !== S.id);
+    const others = list.filter(d => d.id !== S.id && d.kind !== 'receiver');   // the Alıcı takes only remote commands
     if (!n) return null;
     const byName = others.find(d => (d.name || '').toLocaleLowerCase('tr') === n) || others.find(d => (d.name || '').toLocaleLowerCase('tr').includes(n));
     if (byName) return byName;
@@ -750,8 +751,8 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi laptop üzerinden kontrol et: uygulama aç, YouTube/Google\'da ara, odaklı kutuya yaz, kumanda tuşu, ses, Wi-Fi\'ye bağla, ekranına bak, JARVIS\'i üzerinde aç. command: ne yapılacağı Türkçe ("YouTube\'da Tarkan aç", "sesi kıs", "internete bağlan: AğAdı şifre", "ekranına bak"). Kumanda ekranı için open: true.',
-      parameters: { type: 'OBJECT', properties: { command: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
+    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki JARVIS Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (JARVIS\'i projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
+      parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -823,9 +824,19 @@
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
       case 'projector': {
-        if (a.open) { $('t-remote').click(); if (!a.command) return 'Kumanda ekranı açıldı.'; }
-        if (!a.command) return 'Ne yapayım?';
-        return await sendToPc('', `Projeksiyon/TV (android_device aracı): ${a.command}`);
+        if (a.open) { $('t-remote').click(); if (!a.op) return 'Kumanda ekranı açıldı.'; }
+        const op = String(a.op || '').toLowerCase();
+        if (!op) return 'Ne yapayım? (op gerekli)';
+        await syncNow();
+        const rx = receiver();
+        if (rx && online(rx)) {
+          const r = await sendToReceiver(rx, { op, arg: String(a.arg || ''), where: a.where || 'youtube', password: a.password || '', question: a.question || '', enter: true });
+          if (op === 'look') { setTimeout(() => syncNow(), 2500); setTimeout(() => syncNow(), 6000); return r + ' Görüntü gelince ekranda açılacak; o zaman ne olduğunu anlat.'; }
+          return r;
+        }
+        const pc = findPc('');
+        if (pc && online(pc)) return await sendToPc('', `Projeksiyon/TV (android_device aracı): ${op} ${a.arg || ''} ${a.where || ''} ${a.question || ''}`.trim());
+        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona JARVIS Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
       }
       case 'chess': return chessTool(a);
       case 'coffee_fortune': {
@@ -1334,16 +1345,37 @@
 
   // ── projector / Android TV remote: the laptop drives it over ADB ────────
   // (core/adb_control.py); this page sends "adb:…" to the laptop's mailbox.
-  async function remote(kind, arg) {
-    const r = await sendToPc('', `adb:${kind}:${arg}`);
-    return r.replace(/^[^:]+: /, '');
+  // The JARVIS Alıcı app on the projector (android-receiver/) works even when
+  // the laptop is off; without it, the laptop drives the projector over ADB.
+  const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
+  async function sendToReceiver(d, cmd) {
+    const id = S.id + '-r' + Date.now().toString(36);
+    const f = await Cloud.read();
+    const box = J(f[`inbox-${d.id}.json`], []);
+    box.push({ ...cmd, id, from: devName(), reply_to: S.id, ts: nowIso() });
+    await Cloud.write({ [`inbox-${d.id}.json`]: JSON.stringify(box.slice(-10)) });
+    for (let i = 0; i < 10; i++) {               // ~20 s
+      await new Promise(r => setTimeout(r, 2000));
+      try { const hit = J((await Cloud.read())[`outbox-${d.id}.json`], []).find(o => o.id === id); if (hit) return hit.reply; } catch {}
+    }
+    return `${d.controls || 'Projeksiyon'} komutu aldı ama yanıt vermedi (açık mı?).`;
+  }
+  async function remote(kind, arg, extra = {}) {
+    if (!Cloud.ok()) return 'Ortak hafıza kurulu değil.';
+    await syncNow();
+    const rx = receiver();
+    if (rx && online(rx)) return await sendToReceiver(rx, { op: kind, arg, ...extra });
+    const pc = findPc('');
+    if (pc && online(pc)) { const r = await sendToPc('', `adb:${kind}:${arg}`); return r.replace(/^[^:]+: /, ''); }
+    return rx ? 'Projeksiyondaki JARVIS Alıcı şu an çevrimdışı (projeksiyon kapalı ya da internete bağlı değil).'
+              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona JARVIS Alıcı uygulamasını kur ya da laptopu aç.';
   }
   $('t-remote').onclick = () => { const pc = findPc(''); $('rm-note').textContent = pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}). İlk kez: laptoptaki JARVIS'e "projeksiyonu kur" de.` : 'Bağlı bilgisayar yok: kumanda laptoptaki JARVIS üzerinden çalışır.'; openSheet('s-remote'); };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
   $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
   $('rm-type').onclick = async () => { const t = $('rm-inp').value.trim(); if (!t) { toast('Önce yazacağını kutuya yaz.'); return; } $('rm-inp').value = ''; toast(await remote('type', t)); };
-  $('rm-look').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await sendToPc('', 'Projeksiyonun ekranına bak ve ne olduğunu söyle.')); };
+  $('rm-look').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await remote('look', '', { question: '' })); setTimeout(() => syncNow(), 3000); };
 
   // ── coffee-cup reading (for fun): photos of the cup → Gemini looks ───────
   let falImages = [];
@@ -1918,6 +1950,13 @@
     await Cloud.write({ [`push-sub-${S.id}.json`]: JSON.stringify(sub.toJSON()) });
     return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki JARVIS açıkken).';
   }
+  $('f-alici').onclick = () => { window.open(ALICI_APK, '_blank'); $('f-status').textContent = 'İndirilen jarvis-alici.apk\'yı aç ve kur (bilinmeyen kaynaklara izin ver). Sonra "Alıcıyı bağla"ya bas.'; };
+  $('f-alici-link').onclick = () => {
+    const j = JSON.stringify({ g: '', t: S.tok || '', i: S.gist || '', n: S.name || '', d: devName() });
+    const code = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (!S.tok || !S.gist) { $('f-status').textContent = 'Önce ortak hafıza (GitHub anahtarı) kurulu olmalı.'; return; }
+    location.href = 'jarvisalici://setup?s=' + code;
+  };
   $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
   // ── the computer panel: buttons straight to the computer's JARVIS ───────
   $('t-pc').onclick = () => {
