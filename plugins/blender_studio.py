@@ -1,6 +1,7 @@
 """Build versioned Blender projects from spoken directions."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -12,10 +13,13 @@ PLUGIN = {
     "description": ("Masaüstü Blender'da Türkçe tarifle proje oluştur (new), son projeyi veya verilen "
                     ".blend dosyasının kopyasını düzenle (edit), sahneyi incele (inspect), görüntü al "
                     "(render), zaman çizelgesini PNG kare dizisi olarak işle (animation), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
-                    "Şehir, bina, arazi, ürün modelleme, kumaş, katı cisim fiziği ve animasyonda kullan."),
+                    "Sahne veya render istendiğinde open_app kullanma. new/edit için gösterim isteğini result ile belirt. "
+                    "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
+                    "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
         "action": {"type": "STRING", "description": "new | edit | inspect | render | animation | glb | open | guide | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
+        "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
         "project": {"type": "STRING", "description": "İsteğe bağlı mevcut .blend dosyasının tam yolu"}
     }, "required": ["action"]},
@@ -68,19 +72,57 @@ Plan complete geometry, composition and requested animation. For new scenes add 
 aimed at the subject and lighting unless explicitly unwanted. No scripts or placeholders."""
 
 
+def running_blenders():
+    import psutil
+    for process in psutil.process_iter(["name", "exe"]):
+        try:
+            name = (process.info["name"] or "").lower()
+            path = process.info["exe"]
+            if path and name in ("blender.exe", "blender-launcher.exe"):
+                yield Path(path).with_name("blender.exe")
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+
+
+def windows_candidates():
+    yield from running_blenders()
+    import winreg
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        try:
+            with winreg.OpenKey(hive, r"Software\Microsoft\Windows\CurrentVersion\App Paths\blender.exe") as key:
+                yield Path(os.path.expandvars(winreg.QueryValueEx(key, None)[0].strip('"')))
+        except OSError:
+            pass
+    for variable in ("ProgramW6432", "ProgramFiles", "LOCALAPPDATA", "ProgramFiles(x86)"):
+        root = os.environ.get(variable)
+        if not root:
+            continue
+        base = Path(root)
+        for parent in (base, base / "Programs"):
+            paths = (parent / "Blender Foundation").glob("Blender */blender.exe")
+            yield from sorted(paths, key=lambda p: tuple(map(int, re.findall(r"\d+", p.parent.name))),
+                              reverse=True)
+        yield base / "Steam/steamapps/common/Blender/blender.exe"
+
+
 def executable():
+    override = os.environ.get("JARVIS_BLENDER_EXE")
+    if override:
+        path = Path(override.strip('"')).expanduser()
+        if path.is_file():
+            return str(path)
+        raise ValueError("JARVIS_BLENDER_EXE geçersiz. blender.exe dosyasının tam yolunu kontrol et.")
+    if os.name == "nt":
+        for path in windows_candidates():
+            if path.is_file():
+                return str(path)
     found = shutil.which("blender")
     if found:
         return found
-    if os.name == "nt":
-        base = Path(os.environ.get("ProgramFiles", "C:/Program Files"))
-        candidates = sorted((base / "Blender Foundation").glob("Blender */blender.exe"))
-    else:
-        candidates = [Path("/Applications/Blender.app/Contents/MacOS/Blender")]
-    for path in reversed(candidates):
-        if path.is_file():
-            return str(path)
-    raise ValueError("Blender bulunamadı. Blender'ı kur veya PATH'e ekle.")
+    mac = Path("/Applications/Blender.app/Contents/MacOS/Blender")
+    if mac.is_file():
+        return str(mac)
+    raise ValueError("Blender bulunamadı. Blender'ı açıp tekrar dene veya JARVIS_BLENDER_EXE değişkenine tam yolunu yaz.")
 
 
 def invoke(binary, source, folder, mode, steps=(), query=""):
@@ -156,8 +198,8 @@ def build_project(binary, source, folder, request):
             scene = invoke(binary, source, stage, "inspect")
 
 
-def process(action, request, project, topic=""):
-    binary = executable()
+def process(action, request, project, topic="", *, binary=None, result="save", player=None):
+    binary = binary or executable()
     if action == "guide":
         from core import gemini
         with tempfile.TemporaryDirectory() as temp:
@@ -193,6 +235,17 @@ def process(action, request, project, topic=""):
             pointer = folder / "latest.tmp"
             pointer.write_text(folder.name, encoding="utf8")
             pointer.replace(ROOT / "latest.txt")
+            # Keep the verified project even if a requested preview fails.
+            try:
+                if result in ("open", "both"):
+                    subprocess.Popen([binary, "--disable-autoexec", str(output)])
+                if result in ("render", "both"):
+                    preview = process("render", "", output, binary=binary, player=player)
+                    return f"Blender projesi hazır. {output}  {preview}"
+            except Exception as exc:
+                return f"Blender projesi kaydedildi: {output}. Gösterim tamamlanamadı: {exc}"
+        if action == "render" and player is not None and hasattr(player, "show_image"):
+            player.show_image(str(output), "Blender render")
         return f'{"Görüntü" if action == "render" else "GLB" if action == "glb" else "Blender projesi"} hazır. {output}'
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)
@@ -213,10 +266,18 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if not _lock.acquire(blocking=False):
         return "Bir Blender işlemi sürüyor. Durumunu sorabilirsin."
 
+    try:
+        binary = executable()
+    except Exception as exc:
+        _status = f"Blender işlemi başlamadı. {exc}"
+        _lock.release()
+        return _status
+
     def work():
         global _status
         try:
-            _status = process(action, request, p.get("project"), p.get("topic") or "")
+            _status = process(action, request, p.get("project"), p.get("topic") or "",
+                              binary=binary, result=p.get("result") or "save", player=player)
         except Exception as exc:
             _status = f"Blender işlemi tamamlanamadı. {exc}"
         finally:
@@ -224,6 +285,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             _lock.release()
         if player is not None:
             player.write_log(message)
+            if hasattr(player, "request_say"):
+                player.request_say("Blender aracının doğrulanmış sonucunu kullanıcıya kısaca bildir. "
+                                   "Yeni bir işlem başlatma. Sonuç: " + message)
 
     _status = "Blender işlemi sürüyor."
     try:

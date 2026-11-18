@@ -46,3 +46,9 @@ Karmaşık tariflerde planlayıcı işi 2–8 aşamaya ayırabilir. Her aşama b
 önceki kaydı açıp nesneleri okuyarak devam eder. Aşamalardan biri
 tamamlanamazsa son başarılı proje seçili kalır. “Zaman çizelgesini animasyon
 olarak render al” komutu her kareyi ayrı bir PNG olarak kaydeder.
+
+Windows'ta JARVIS, çalışan Blender veya Blender Launcher işleminin klasöründeki
+`blender.exe` dosyasını da bulabilir. Özel bir kurulumu elle seçmek için
+`JARVIS_BLENDER_EXE` ortam değişkenine dosyanın tam yolunu verip JARVIS'i yeniden
+başlatabilirsin. “Mahalleyi oluştur, projeyi ve renderi aç” isteği kaydedilen
+projeyi Blender'da açar ve PNG çıktısını JARVIS'te gösterir.
