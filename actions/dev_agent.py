@@ -1953,6 +1953,11 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
                 _update(status, result=result, finished=time.time())
             finally:
                 _job_lock.release()
+        try:
+            from core import sync_hub           # the user is on the phone: tell it there too
+            sync_hub.deliver_to_voice(f"Kodlama işi bitti: {name} ({status})", result)
+        except Exception:
+            pass
         if speak:
             speak(f"[DEV_AGENT_DONE] {result[:900]} | Tell the user briefly, in one "
                   f"or two sentences, what was done. Do not read file paths aloud.")

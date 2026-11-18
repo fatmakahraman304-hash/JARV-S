@@ -71,6 +71,7 @@
     .sheet p { font-size: 13.5px; line-height: 1.5; color: var(--med); }
     .sheet a { color: var(--acc); }
     .btn { padding: 11px 14px; border-radius: 11px; border: 1px solid var(--line2); background: rgba(255,138,28,.12); color: var(--text); font-size: 14px; cursor: pointer; }
+    .pcgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .btn.pri { background: linear-gradient(145deg, #ff9a2e, #d4550a); color: #1a0d03; border: 0; font-weight: 700; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .msg { padding: 9px 12px; border-radius: 12px; margin: 6px 0; font-size: 14px; line-height: 1.45; max-width: 90%; }
@@ -167,6 +168,7 @@
         <button class="chip" id="t-code" type="button" hidden>⌨️ Son kod</button>
         <button class="chip" id="t-image" type="button">🎨 Resim</button>
         <button class="chip" id="t-rem" type="button" hidden>⏰</button>
+        <button class="chip" id="t-pc" type="button">💻 Bilgisayar</button>
         <button class="chip" id="t-update" type="button">⬆ Güncelle</button>
       </div>
     </section>
@@ -202,6 +204,17 @@
     <h2>CİHAZLAR <button class="ib" data-close type="button">✕</button></h2>
     <p>Hepsi aynı hafızayı kullanır. Bilgisayarlara buradan ya da sesle komut verebilirsin: <i>"laptopta sunumu aç"</i>.</p>
     <div id="devs"></div>
+  </section>
+
+  <section class="sheet" id="s-pc" hidden>
+    <h2>BİLGİSAYAR <button class="ib" data-close type="button">✕</button></h2>
+    <p id="pc-note">Bilgisayardaki JARVIS'e doğrudan komut.</p>
+    <div class="pcgrid">
+      <button class="btn" data-q="volume_down" type="button">🔉 Ses −</button><button class="btn" data-q="mute" type="button">🔇 Sessiz</button><button class="btn" data-q="volume_up" type="button">🔊 Ses +</button>
+      <button class="btn" data-q="prev" type="button">⏮ Önceki</button><button class="btn" data-q="play_pause" type="button">⏯ Oynat</button><button class="btn" data-q="next" type="button">⏭ Sonraki</button>
+      <button class="btn" id="pc-shot" type="button">🖥️ Ekranı gör</button><button class="btn" data-q="lock" type="button">🔒 Kilitle</button><button class="btn" id="pc-status" type="button">📊 Durum</button>
+    </div>
+    <form class="ask" id="pc-ask" autocomplete="off" style="margin-top:12px"><input id="pc-inp" placeholder="Bilgisayara komut: Spotify'ı aç…" enterkeyhint="send"><button class="mic send" type="submit" aria-label="Gönder">➤</button></form>
   </section>
 
   <section class="sheet" id="s-code" hidden>

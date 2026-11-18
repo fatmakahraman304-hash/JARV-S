@@ -1110,6 +1110,20 @@ def _queue_to(dev_id: str, cmd: dict) -> None:
         _state["out_cmds"].append((dev_id, item))
 
 
+def deliver_to_voice(title: str, text: str) -> str:
+    """When another device has the voice (the user is on the phone), send a
+    finished result there: it shows it and says the headline. Returns the
+    device name, or "" when this computer has the voice or nothing is linked."""
+    owner = _state.get("owner")
+    if not owner or owner == device_id() or not settings().get("gist_id"):
+        return ""
+    dev = next((d for d in devices() if d.get("id") == owner), None)
+    if not dev or dev.get("kind") == "pc":
+        return ""
+    _queue_to(owner, {"kind": "report", "title": str(title)[:200], "text": str(text)[:20000]})
+    return str(dev.get("name") or "")
+
+
 def _send_screenshot(cid: str, cmd: dict) -> None:
     """The phone asked to see this computer's screen: a picture of it goes
     back to that device, which shows it and lets its brain look at it."""

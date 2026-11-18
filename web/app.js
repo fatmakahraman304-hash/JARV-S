@@ -525,6 +525,12 @@
         } else if (c.kind === 'code' || c.kind === 'text') {
           lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
           showCode(); $('t-code').hidden = false;
+        } else if (c.kind === 'report' && c.text) {
+          // a background job on the computer finished while the user was here
+          lastCode = { filename: (title || 'rapor').slice(0, 60) + '.txt', code: String(c.text), note: `${from} — ${title}` };
+          showCode(); $('t-code').hidden = false; sys(`📋 ${title}`);
+          if (amOwner()) { const note = `Bilgisayardaki arka plan görevi bitti: "${title}". Sonuç ekranda. Kullanıcıya başlığı ve ana sonucu bir iki cümleyle söyle:\n${String(c.text).slice(0, 1500)}`;
+            if (ws && ready) tellBrain(note); else connect().then(() => tellBrain(note)).catch(() => toast('📋 ' + title)); }
         } else if (c.kind === 'ring') {
           ringHere(from);
         } else if (c.kind === 'guard') {
@@ -705,6 +711,8 @@
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, question: { type: 'STRING' } } } },
     { name: 'search_history', description: 'Bütün cihazlardaki geçmiş konuşmaların kalıcı arşivinde ara: "geçen hafta ne konuşmuştuk", "annemin doğum günü hakkında ne demiştim", "dün telefonda bahsettiğim film neydi". days: kaç gün geriye (boşsa hepsi).',
       parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, days: { type: 'NUMBER' } }, required: ['query'] } },
+    { name: 'background_task', description: 'Bilgisayarda uzun bir işi arka planda başlat: araştırma yapıp rapor yazmak, bir web sitesi/uygulama kodlamak, dosyaları düzenlemek. Kullanıcı başka işlerle uğraşırken sürer; bitince sonuç bu cihaza gelir ve sen söylersin. "araştır ve rapor hazırla", "bana bir site yap", "şu projeyi bitir".',
+      parameters: { type: 'OBJECT', properties: { task: { type: 'STRING', description: 'yapılacak işin tam tarifi, Türkçe' }, kind: { type: 'STRING', description: 'research | code | other' } }, required: ['task'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -775,6 +783,15 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'background_task': {
+        const kind = String(a.kind || 'other'), task = String(a.task || '').trim();
+        if (!task) return 'Ne yapılacak?';
+        const words = kind === 'code' ? `Arka planda kodlama işi başlat (dev_agent, aşamalı proje): ${task}`
+                    : kind === 'research' ? `Arka planda araştırma görevi başlat ve rapor yaz (background task): ${task}`
+                    : `Arka planda görev olarak başlat: ${task}`;
+        const r = await sendToPc('', words);
+        return r + ' (İş bilgisayarda arka planda sürüyor; bitince sonuç bu cihaza gelecek.)';
+      }
       case 'search_history': return await Archive.search(String(a.query || ''), Number(a.days) || 0);
       case 'computer_screen': {
         const pc = findPc(a.device);
@@ -1027,8 +1044,8 @@
 
   // ── protocols: one command, many steps (plugins/protocol.py has the same
   // names, steps and storage: preferences / "protokol: <ad>") ───────────────
-  const PROTOCOLS = {"sabah": ["Günaydın de; bugünün tarihini ve Google aramasıyla bulunduğun yerin hava durumunu kısaca söyle", "Bugünün hatırlatıcılarını ve yapılacaklar listesini oku", "Yarım kalan proje varsa durumunu tek cümleyle söyle"], "çalışma": ["Bilgisayarda çalan müziği durdur ve sesi yüzde 20'ye indir", "Yapılacaklar listesini oku ve hangisiyle başlamak istediğini sor", "45 dakika sonrasına 'mola ver' hatırlatıcısı kur"], "film": ["Televizyonda YouTube'u aç (send_to_device, open); ne izlemek istediğini sor", "Bilgisayarda çalan müziği durdur", "Film bitince haber vermek için süre isterse hatırlatıcı kur"], "uyku": ["Yarının hatırlatıcılarını ve yapılacakları kısaca söyle", "Sabah için hatırlatıcı/alarm isteyip istemediğini sor, isterse kur", "İyi geceler de ve bilgisayarı kilitle"]};
-  const PROTO_ALIASES = {"günaydın": "sabah", "sabah": "sabah", "çalış": "çalışma", "iş": "çalışma", "odak": "çalışma", "film": "film", "sinema": "film", "dizi": "film", "uyku": "uyku", "gece": "uyku", "yat": "uyku"};
+  const PROTOCOLS = {"sabah": ["Günaydın de; bugünün tarihini ve Google aramasıyla bulunduğun yerin hava durumunu kısaca söyle", "Bugünün hatırlatıcılarını ve yapılacaklar listesini oku", "Yarım kalan proje varsa durumunu tek cümleyle söyle"], "çalışma": ["Bilgisayarda çalan müziği durdur ve sesi yüzde 20'ye indir", "Yapılacaklar listesini oku ve hangisiyle başlamak istediğini sor", "45 dakika sonrasına 'mola ver' hatırlatıcısı kur"], "film": ["Televizyonda YouTube'u aç (send_to_device, open); ne izlemek istediğini sor", "Bilgisayarda çalan müziği durdur", "Film bitince haber vermek için süre isterse hatırlatıcı kur"], "akşam": ["Bugün bütün cihazlarda neler konuştuğumuzu ve yapılanları arşivden kısaca özetle", "Biten yapılacakları sor, bitenleri listeden çıkar", "Yarının hatırlatıcılarını söyle ve eklenecek bir şey var mı sor"], "uyku": ["Yarının hatırlatıcılarını ve yapılacakları kısaca söyle", "Sabah için hatırlatıcı/alarm isteyip istemediğini sor, isterse kur", "İyi geceler de ve bilgisayarı kilitle"]};
+  const PROTO_ALIASES = {"günaydın": "sabah", "sabah": "sabah", "çalış": "çalışma", "iş": "çalışma", "odak": "çalışma", "akşam": "akşam", "gün sonu": "akşam", "film": "film", "sinema": "film", "dizi": "film", "uyku": "uyku", "gece": "uyku", "yat": "uyku"};
   const PROTO = 'protokol: ';
   const protoNorm = n => String(n || '').toLocaleLowerCase('tr').replace('protokolü', '').replace('protokol', '').replace('moduna', '').replace('modu', '').trim().replace(/\s+/g, ' ').replace(/^[-: ]+|[-: ]+$/g, '');
   function savedProtocols() {
@@ -1581,6 +1598,21 @@
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
+  // ── the computer panel: buttons straight to the computer's JARVIS ───────
+  $('t-pc').onclick = () => {
+    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "Jarvis\'i her cihaza kur" de.';
+    openSheet('s-pc');
+  };
+  document.querySelectorAll('#s-pc [data-q]').forEach(b => b.onclick = async () => {
+    b.disabled = true; toast('Gönderiliyor…');
+    try { toast(await sendToPc('', 'quick:' + b.dataset.q)); } finally { b.disabled = false; }
+  });
+  $('pc-shot').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await runTool('computer_screen', {})); };
+  $('pc-status').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch { return; } send({ realtimeInput: { text: 'Durum raporu ver.' } }); };
+  $('pc-ask').addEventListener('submit', async (e) => {
+    e.preventDefault(); const t = $('pc-inp').value.trim(); if (!t) return; $('pc-inp').value = '';
+    toast('Bilgisayara gönderildi…'); const r = await sendToPc('', t); sys('💻 ' + r); toast(r.slice(0, 120));
+  });
   // Shared from another app (Android "Paylaş → JARVIS", manifest share_target):
   // JARVIS asks what to do with it — open on the TV, send to the computer …
   (function sharedIn() {

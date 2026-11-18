@@ -541,6 +541,19 @@ class ArchiveTest(unittest.TestCase):
         self.assertIn("history-${t.ts.slice(0, 7)}.json", js)
 
 
+class DeliverToVoiceTest(unittest.TestCase):
+    def test_result_goes_to_the_phone_when_it_has_the_voice(self):
+        devs = [{"id": "w-phone", "name": "Telefon", "kind": "phone", "seen": sync_hub._now()}]
+        with mock.patch.dict(sync_hub._state, {"owner": "w-phone", "devices": devs, "out_cmds": []}), \
+             mock.patch.object(sync_hub, "settings", return_value={"gist_id": "g"}):
+            self.assertEqual(sync_hub.deliver_to_voice("Görev bitti: araştırma", "sonuç"), "Telefon")
+            dev, item = sync_hub._state["out_cmds"][0]
+        self.assertEqual((dev, item["kind"], item["text"]), ("w-phone", "report", "sonuç"))
+        with mock.patch.dict(sync_hub._state, {"owner": None, "devices": devs, "out_cmds": []}), \
+             mock.patch.object(sync_hub, "settings", return_value={"gist_id": "g"}):
+            self.assertEqual(sync_hub.deliver_to_voice("x", "y"), "")              # this computer speaks
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
