@@ -344,6 +344,12 @@
       parameters: { type: 'OBJECT', properties: { app: { type: 'STRING' }, query: { type: 'STRING' }, to: { type: 'STRING', description: 'telefon numarası ya da e-posta' } }, required: ['app'] } },
     { name: 'screen_share', description: 'Bu cihazın ekranını görmek için kullanıcıdan ekran paylaşımı iste (kullanıcı onaylamalı).',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' } }, required: ['on'] } },
+    { name: 'reminder', description: 'Bu cihazda hatırlatıcı / zamanlayıcı: "10 dakika sonra hatırlat", "saat 18:30\'da ilacı söyle", "zamanlayıcı kur". action: set | list | cancel. Zamanı gelince cihaz çalar, bildirim gösterir ve sen söylersin.',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'set | list | cancel' }, text: { type: 'STRING', description: 'ne hatırlatılacak' },
+        minutes: { type: 'NUMBER', description: 'kaç dakika sonra (saniye için 0.5 gibi)' }, at: { type: 'STRING', description: 'saat "HH:MM" ya da "YYYY-MM-DD HH:MM"' },
+        id: { type: 'STRING', description: 'iptal için hatırlatıcı numarası ya da metni' } }, required: ['action'] } },
+    { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
   let lastCode = null;
   async function runTool(name, a) {
@@ -366,13 +372,17 @@
         return done ? 'Silindi.' : 'Bulunamadı.';
       }
       case 'search_memory': {
-        const q = String(a.query || '').toLocaleLowerCase('tr').split(/\s+/).filter(Boolean);
+        // Turkish adds endings ("annemin", "annemle"): compare word stems.
+        const stem = w => w.length > 5 ? w.slice(0, Math.max(4, w.length - 3)) : w;
+        const q = String(a.query || '').toLocaleLowerCase('tr').split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 1).map(stem);
         const hits = [];
         for (const c of CATS) for (const [k, v] of Object.entries(memory[c] || {})) {
           const s = (k + ' ' + entry(v).value).toLocaleLowerCase('tr');
-          if (q.some(w => s.includes(w))) hits.push(`${c}/${k}: ${entry(v).value}`);
+          const score = q.filter(w => s.includes(w)).length;
+          if (score) hits.push([score, `${c}/${k}: ${entry(v).value}`]);
         }
-        return hits.slice(0, 12).join('\n') || 'Hafızada bununla ilgili bir şey yok.';
+        hits.sort((x, y) => y[0] - x[0]);
+        return hits.slice(0, 12).map(h => h[1]).join('\n') || 'Hafızada bununla ilgili bir şey yok.';
       }
       case 'list_devices': {
         await syncNow();
@@ -394,7 +404,20 @@
         if (!w) askUser('Bağlantı', `${a.title || url} açılsın mı?`, () => window.open(url, '_blank'));
         return 'Açıldı.';
       }
-      case 'make_image': return await makeImage(String(a.prompt || ''), String(a.mode || 'new') === 'edit', String(a.aspect_ratio || ''));
+      case 'make_image': {
+        // Drawing can take half a minute; the conversation goes on meanwhile and
+        // JARVIS says so when the picture is on screen.
+        const edit = String(a.mode || 'new') === 'edit';
+        if (imgBusy) return 'Önceki resmi hâlâ çiziyorum; o bitince bunu yaparım.';
+        if (edit && !lastImage) return 'Değiştirilecek resim yok; önce yeni bir resim çizeyim mi?';
+        makeImage(String(a.prompt || ''), edit, String(a.aspect_ratio || ''))
+          .then(msg => { if (!/ekranda/.test(msg)) toast(msg); tellBrain(msg + (/ekranda/.test(msg) ? '' : ' Kullanıcıya nedenini kısaca söyle.')); })
+          .catch(e => tellBrain('Resim üretilemedi: ' + (e.message || e)));
+        return edit ? 'Resmi değiştirmeye başladım; arka planda sürüyor, bitince ekrana gelecek. Kullanıcıya kısaca "değiştiriyorum" de, "yapamam" deme.'
+                    : 'Çizmeye başladım; arka planda sürüyor, 10-30 saniyede ekrana gelecek. Kullanıcıya kısaca "çiziyorum" de, "yapamam" deme.';
+      }
+      case 'reminder': return reminderTool(a);
+      case 'todo': return todoTool(a);
       case 'open_app': return openApp(String(a.app || ''), String(a.query || ''), String(a.to || ''));
       case 'camera': return a.on ? await startVideo('camera', a.facing === 'front' ? 'user' : 'environment') : (stopVideo(), 'Kamera kapandı.');
       case 'screen_share':
@@ -585,8 +608,128 @@
   function askUser(title, text, fn) { $('ask-title').textContent = title.toUpperCase(); $('ask-text').textContent = text; askFn = fn; openSheet('s-ask'); }
   $('ask-yes').onclick = () => { closeSheets(); if (askFn) askFn(); askFn = null; };
 
+  // Something finished in the background (a picture, a reminder): the brain
+  // hears it as a note and tells the user in its own voice.
+  function tellBrain(note) {
+    if (ws && ready && amOwner()) send({ realtimeInput: { text: `(Sistem notu, kullanıcı söylemedi) ${note} Bunu kullanıcıya tek kısa cümleyle söyle.` } });
+    else sys(note);
+  }
+
+  // ── shared to-do list: kept in shared memory (notes/"yapılacak: …"), so the
+  // computer and every device see the same list ─────────────────────────────
+  const TODO = 'yapılacak: ';
+  function todoTool(a) {
+    const act = String(a.action || 'list').toLowerCase(), item = String(a.item || '').trim();
+    memory.notes = memory.notes || {};
+    const items = Object.entries(memory.notes).filter(([k]) => k.startsWith(TODO));
+    const persist = () => { localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow(); };
+    const drop = (k) => { delete memory.notes[k]; memory._deleted = memory._deleted || {}; memory._deleted['notes/' + k] = nowIso(); };
+    if (act === 'add') {
+      if (!item) return 'Neyi ekleyeyim?';
+      memory.notes[TODO + item.slice(0, 120)] = { value: 'açık', updated: nowIso() }; persist();
+      return `Listeye eklendi: ${item}`;
+    }
+    if (act === 'done') {
+      const q = item.toLocaleLowerCase('tr');
+      const hit = items.find(([k]) => k.slice(TODO.length).toLocaleLowerCase('tr').includes(q));
+      if (!q || !hit) return 'Listede böyle bir şey bulamadım.';
+      drop(hit[0]); persist();
+      if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
+      return `Tamamlandı ve listeden çıktı: ${hit[0].slice(TODO.length)}`;
+    }
+    if (act === 'clear_done' || act === 'clear') {
+      const n = items.length; items.forEach(([k]) => drop(k)); persist();
+      if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
+      return `${n} madde silindi.`;
+    }
+    return items.length ? items.map(([k], i) => `${i + 1}. ${k.slice(TODO.length)}`).join('\n') : 'Yapılacaklar listesi boş.';
+  }
+
+  // ── reminders and timers on this device ─────────────────────────────────
+  let reminders = J(localStorage.getItem('jarvis_rem'), []);
+  const saveRem = () => localStorage.setItem('jarvis_rem', JSON.stringify(reminders));
+  function parseWhen(a) {
+    const min = Number(a.minutes);
+    if (min > 0) return Date.now() + min * 60000;
+    const at = String(a.at || '').trim();
+    let m = /^(\d{4}-\d{2}-\d{2})[ T](\d{1,2})[:.](\d{2})$/.exec(at);
+    if (m) { const t = new Date(`${m[1]}T${m[2].padStart(2, '0')}:${m[3]}:00`).getTime(); return isNaN(t) ? 0 : t; }
+    m = /^(\d{1,2})[:.](\d{2})$/.exec(at);
+    if (m) { const d = new Date(); d.setHours(+m[1], +m[2], 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); return d.getTime(); }
+    return 0;
+  }
+  const remTime = t => new Date(t).toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  function reminderTool(a) {
+    const act = String(a.action || 'set').toLowerCase();
+    if (act === 'list') return reminders.length ? reminders.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') : 'Kurulu hatırlatıcı yok.';
+    if (act === 'cancel') {
+      const k = String(a.id || a.text || '').toLocaleLowerCase('tr').trim();
+      const before = reminders.length;
+      if (!k || k === 'hepsi' || k === 'all') reminders = [];
+      else reminders = reminders.filter((r, i) => String(i + 1) !== k && !r.text.toLocaleLowerCase('tr').includes(k));
+      saveRem(); renderRem();
+      return before === reminders.length ? 'Böyle bir hatırlatıcı bulamadım.' : `${before - reminders.length} hatırlatıcı iptal edildi.`;
+    }
+    const due = parseWhen(a);
+    if (!due) return 'Ne zaman? Dakika ya da saat söylemen lazım.';
+    const text = String(a.text || 'Zamanlayıcı').slice(0, 200);
+    reminders.push({ id: Date.now().toString(36), text, due });
+    reminders.sort((x, y) => x.due - y.due); saveRem(); renderRem();
+    try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {}
+    return `Tamam: ${remTime(due)} — ${text}. (Bu sayfa açık kaldıkça bu cihaz çalar.)`;
+  }
+  function beep() {
+    try { ensureOut(); const t0 = outCtx.currentTime;
+      for (let i = 0; i < 3; i++) { const o = outCtx.createOscillator(), g = outCtx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(outCtx.destination);
+        g.gain.setValueAtTime(0.0001, t0 + i * 0.35); g.gain.exponentialRampToValueAtTime(0.3, t0 + i * 0.35 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.35 + 0.25);
+        o.start(t0 + i * 0.35); o.stop(t0 + i * 0.35 + 0.3); } } catch {}
+  }
+  function renderRem() {
+    const b = $('t-rem'); if (!b) return;
+    b.hidden = !reminders.length; b.textContent = reminders.length ? `⏰ ${reminders.length}` : '⏰';
+    b.title = reminders.map(r => `${remTime(r.due)} — ${r.text}`).join('\n');
+  }
+  setInterval(() => {
+    const now = Date.now(), due = reminders.filter(r => r.due <= now);
+    if (!due.length) return;
+    reminders = reminders.filter(r => r.due > now); saveRem(); renderRem();
+    for (const r of due) {
+      const late = now - r.due > 10 * 60000 ? ' (geç kaldı, sayfa kapalıydı)' : '';
+      toast('⏰ ' + r.text + late); beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('JARVIS hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
+      sys('⏰ Hatırlatma: ' + r.text + late);
+      if (amOwner()) {
+        if (ws && ready) tellBrain(`Hatırlatma zamanı: ${r.text}.`);
+        else connect().then(() => tellBrain(`Hatırlatma zamanı: ${r.text}.`)).catch(() => {});
+      }
+    }
+  }, 5000);
+
+  // ── keep the screen awake while JARVIS is listening or on a big screen ──
+  let wakeLock = null;
+  async function keepAwake() {
+    const want = micOn || KIND === 'tv' || KIND === 'projector';
+    try {
+      if (want && !wakeLock && document.visibilityState === 'visible' && navigator.wakeLock) {
+        wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!want && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch { wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+
+  // ── network: say so when it drops, pick up again when it is back ────────
+  window.addEventListener('offline', () => { setState('offline'); toast('İnternet bağlantısı koptu'); });
+  window.addEventListener('online', () => { toast('İnternet geri geldi'); if (wantLive || micOn) connect().catch(() => {}); else setState('idle'); });
+
   // ── the brain: Gemini Live ───────────────────────────────────────────────
   let ws = null, ready = false, wantLive = false, variant = +(localStorage.getItem('jarvis_variant') || 0), connecting = null;
+  // Gemini closes a live session every ~10 minutes and on network blips. With the
+  // resumption handle the next session carries on the same conversation instead
+  // of starting from nothing (the desktop does the same in main.py).
+  const RESUME_MS = 2 * 3600e3;
+  let resume = J(sessionStorage.getItem('jarvis_resume'), null);
+  const resumeHandle = () => (resume && Date.now() - resume.t < RESUME_MS ? resume.h : '');
+  function setResume(h) { resume = h ? { h, t: Date.now() } : null; try { h ? sessionStorage.setItem('jarvis_resume', JSON.stringify(resume)) : sessionStorage.removeItem('jarvis_resume'); } catch {} }
   function systemText() {
     const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'JARVIS'}: ${t.text}`).join('\n');
     const pcs = devices.filter(d => d.kind === 'pc').map(d => `${d.name} (${online(d) ? 'açık' : 'kapalı'})`).join(', ') || 'yok';
@@ -597,7 +740,10 @@
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
-      `Bu cihazda uygulama açmak için open_app kullan. Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
+      `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo kullan. `+
+      `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak. ` +
+      `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
+      `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
       `Önceki konuşmalar ve yarım işler aşağıda; "kaldığımız yerden devam" denirse oradan sür, bilgisayardaki yarım projeler için computer_command ile "yarım kalan işe devam et" gönder.\n\n` +
       `Bugün: ${new Date().toLocaleString('tr-TR', { dateStyle: 'full', timeStyle: 'short' })}.\nBilgisayarlar: ${pcs}.\n\n` +
       `ORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}`;
@@ -608,7 +754,8 @@
     const setup = { model, systemInstruction: { parts: [{ text: systemText() }] },
                     tools: [{ functionDeclarations: TOOLS }, { googleSearch: {} }],
                     inputAudioTranscription: {}, outputAudioTranscription: {} };
-    if (v % 2 === 0) { setup.generationConfig = { responseModalities: ['AUDIO'], speechConfig: voice }; setup.contextWindowCompression = { slidingWindow: {} }; }
+    if (v % 2 === 0) { setup.generationConfig = { responseModalities: ['AUDIO'], speechConfig: voice }; setup.contextWindowCompression = { slidingWindow: {} };
+                       setup.sessionResumption = resumeHandle() && v === variant ? { handle: resumeHandle() } : {}; }
     else { setup.responseModalities = ['AUDIO']; setup.speechConfig = voice; }
     return { setup };
   }
@@ -634,8 +781,10 @@
           }
           onServer(msg);
         };
+        const usedHandle = v % 2 === 0 && v === variant && !!resumeHandle();
         sock.onclose = (e) => {
           if (!opened) {
+            if (usedHandle) { setResume(''); attempt(); return; }     // stale handle: start fresh, same variant
             tries++;
             if (/key|API_KEY|permission|unauth/i.test(e.reason || '') ) { connecting = null; setState('setup'); sys('Gemini anahtarı geçersiz: ' + e.reason); reject(new Error(e.reason)); return; }
             if (tries < 4) { console.warn('setup variant failed', v, e.code, e.reason); attempt(); return; }
@@ -683,7 +832,11 @@
       }
       send({ toolResponse: { functionResponses: responses } });
     }
-    if (m.goAway) { /* the server will close soon; onclose reconnects */ }
+    if (m.sessionResumptionUpdate) {
+      const u = m.sessionResumptionUpdate;
+      if (u.newHandle && u.resumable !== false) setResume(u.newHandle);
+    }
+    if (m.goAway) { /* the server will close soon; onclose reconnects and resumes */ }
   }
   function closeTurnsOf(role) { transcript.forEach(t => { if (t.open && t.role === role) { t.open = false; queueRecent(t.role, t.text); } }); }
   let syncT; function syncSoon() { clearTimeout(syncT); syncT = setTimeout(() => syncNow(), 4000); }
@@ -746,7 +899,7 @@
       micNode = micCtx.createScriptProcessor(4096, 1, 1); micNode.onaudioprocess = e => handle(e.inputBuffer.getChannelData(0));
       src.connect(micNode); micNode.connect(micCtx.destination);
     }
-    micOn = true; $('mic').classList.add('live'); $('mic').textContent = '⏹'; beatDirty = true;
+    micOn = true; $('mic').classList.add('live'); $('mic').textContent = '⏹'; beatDirty = true; keepAwake();
     if (!playing()) setState('listening');
     if (KIND === 'watch' && navigator.vibrate) navigator.vibrate(30);
   }
@@ -757,6 +910,7 @@
     if (micStream) micStream.getTracks().forEach(t => t.stop()); micStream = null;
     $('mic').classList.remove('live'); $('mic').textContent = '🎙️';
     send({ realtimeInput: { audioStreamEnd: true } });
+    keepAwake();
     if (state === 'listening') setState('idle');
   }
   $('mic').onclick = () => { if (micOn) { resumeMic = false; stopMic(); } else { claimHere(); startMic(); } };
@@ -884,6 +1038,12 @@
   $('upd-this').onclick = updateThis;
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
+  renderRem(); keepAwake();
+  $('t-rem').onclick = () => {
+    if (!reminders.length) return;
+    askUser('Hatırlatıcılar', reminders.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') + '\n\nHepsi iptal edilsin mi?',
+      () => { reminders = []; saveRem(); renderRem(); toast('Hatırlatıcılar iptal edildi'); });
+  };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
   checkVersion();
 
