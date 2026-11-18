@@ -207,6 +207,9 @@ class HoloPanel(QWidget):
         self.holo = False
         self.explode, self.explode_to = 0.0, 0.0
         self.sel, self.hover = -1, -1
+        self.cut = None                       # section view: fraction across the model (0 left … 1 right), None off
+        self.measure = False
+        self.iso = -1                         # the part shown alone
         self.cursor = None                    # (x, y) widget fractions (pointing finger / mouse)
         self.status, self.status_until = "", 0.0
         self.count = ""
@@ -233,8 +236,9 @@ class HoloPanel(QWidget):
         top.setSpacing(8)
         top.addStretch()
         self.btns = {}
-        for key, text, kind in (("scan", "📷  TARA", "primary"), ("hands", "🖐  EL", "off"), ("look", "◐  HOLOGRAM", "choice"),
-                                ("explode", "💥  PARÇALA", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
+        for key, text, kind in (("scan", "📷  TARA", "primary"), ("detail", "🔎  DETAY", "choice"), ("hands", "🖐  EL", "off"),
+                                ("look", "◐  HOLOGRAM", "choice"), ("explode", "💥  PARÇALA", "off"), ("cut", "✂  KESİT", "off"),
+                                ("measure", "📏  ÖLÇ", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
                                 ("shot", "📸 4K", "dim"), ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"), ("close", "✕", "dim")):
             b = QPushButton(text)
             b.setFixedHeight(34)
@@ -310,6 +314,7 @@ class HoloPanel(QWidget):
     def set_model(self, m: dict | None, animate: bool = True):
         self.model = m
         self.sel = self.hover = -1
+        self.iso = -1
         self.explode = self.explode_to = 0.0
         self._mark("explode", False)
         self.throw_t = 0.0
@@ -329,6 +334,11 @@ class HoloPanel(QWidget):
         req = str(cmd.get("request") or "").strip()
         self.last_input = time.monotonic()
         if a == "say":
+            import re as _re
+            m_iso = _re.search(r"sadece (.+?) (göster|kalsın|görünsün)", req.casefold())
+            if m_iso and self.model:
+                self.command({"action": "isolate", "request": m_iso.group(1)})
+                return
             local = holo_model.local_command(req)
             if local:
                 a = local
@@ -344,6 +354,29 @@ class HoloPanel(QWidget):
             else:
                 m = self.model
                 self._job("GÜNCELLENİYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).edit(m, req), keep_view=True)
+        elif a == "detail":
+            if not self.model:
+                self.flash("Önce bir model tara ya da iste")
+            else:
+                m = self.model
+                frames = [self.worker.jpeg()] if self.worker and self.worker.frame is not None and m.get("photo") else []
+                self._job("AYRINTILANDIRILIYOR", lambda: __import__("core.holo_scan", fromlist=["x"]).detail(m, [f for f in frames if f], progress=self._progress), keep_view=True)
+        elif a == "cut":
+            on = cmd.get("on")
+            self.cut = (0.5 if self.cut is None else None) if on is None else (0.5 if on else None)
+            self._mark("cut", self.cut is not None)
+            if self.cut is not None:
+                self.flash("✂ Kesit: Shift + tekerlek ile kaydır")
+        elif a == "measure":
+            self.measure = not self.measure if cmd.get("on") is None else bool(cmd.get("on"))
+            self._mark("measure", self.measure)
+        elif a == "isolate":
+            i = self._find_part(req) if req else (self.sel if self.sel >= 0 else self.hover)
+            self.iso = -1 if i is None or i < 0 or i == self.iso else i
+            if self.iso >= 0:
+                self.flash(f"🔍 {self.model['parts'][self.iso]['name']} — çift tıkla ya da 'hepsini göster' de")
+        elif a == "show_all":
+            self.iso = -1
         elif a in ("explode", "assemble"):
             self.explode_to = 0.0 if a == "assemble" or self.explode_to > 0.5 else 1.0
             self._mark("explode", self.explode_to > 0.5)
@@ -386,6 +419,19 @@ class HoloPanel(QWidget):
                 m, msg = None, f"Hata: {exc}"
             self.results.put((m, msg, keep_view))
         threading.Thread(target=run, daemon=True, name="holo-gemini").start()
+
+    def _find_part(self, name: str):
+        if not self.model:
+            return None
+        q = name.casefold().strip()
+        names = [p["name"].casefold() for p in self.model["parts"]]
+        for i, n in enumerate(names):
+            if n == q:
+                return i
+        for i, n in enumerate(names):
+            if q and (q in n or n in q):
+                return i
+        return None
 
     def _progress(self, text: str):
         self.status, self.status_until = text, time.monotonic() + 600       # read by paintEvent on the Qt thread
@@ -575,10 +621,14 @@ class HoloPanel(QWidget):
                 explode = max(explode, (1 - k) ** 2 * 1.6)
                 if k >= 1:
                     self.build_t = 0.0
-            kw = dict(holo=self.holo, accent=(acc.redF(), acc.greenF(), acc.blueF()), t=t, explode=explode, sel=sel)
+            cut = 1e9
+            if self.cut is not None:
+                cut = float(self.mesh.lo[0] + self.cut * self.mesh.size[0] - self.mesh.center[0])
+            kw = dict(holo=self.holo, accent=(acc.redF(), acc.greenF(), acc.blueF()), t=t, explode=explode, sel=sel, cut=cut, iso=self.iso)
             # standing still in the real look: one supersampled frame, kept until something moves
             key = (id(self.mesh), round(self.cam.yaw, 2), round(self.cam.pitch, 2), round(self.cam.zoom, 4),
-                   round(self.cam.pan[0], 4), round(self.cam.pan[1], 4), round(explode, 3), sel, w, h)
+                   round(self.cam.pan[0], 4), round(self.cam.pan[1], 4), round(explode, 3), sel, w, h, round(cut, 3), self.iso,
+                   self.gl.ao_ready(self.mesh) if self.gl.ok else True)
             still = not self.holo and not self.build_t and not self.throw_t
             if key != self._last_key:
                 self._last_key, self._key_since, self._still_img = key, time.monotonic(), None
@@ -601,6 +651,8 @@ class HoloPanel(QWidget):
             else:
                 p.drawImage(QPointF(0, 0), img)
             self._labels(p, w, h, dpr, sel)
+            if self.measure:
+                self._dimensions(p, w, h, dpr)
         else:
             self._empty(p, W, H, t)
         self._hud(p, W, H)
@@ -643,6 +695,28 @@ class HoloPanel(QWidget):
         p.setFont(px_font(11))
         p.drawText(QPointF(lx + 4, ly + 16), " × ".join(f"{v:g}" for v in (round(s, 1) for s in part["size"])) + f" cm · {part['shape']}")
 
+    def _dimensions(self, p, w, h, dpr):
+        """Width, height and depth drawn on the model's bounding box, in cm."""
+        lo, hi = self.mesh.lo, self.mesh.hi
+        pts = {k: v for k, v in (("a", (lo[0], lo[1], hi[2])), ("b", (hi[0], lo[1], hi[2])), ("c", (hi[0], lo[1], lo[2])),
+                                 ("d", (hi[0], hi[1], hi[2])))}
+        S = self.cam.project(self.mesh, list(pts.values()), w, h)
+        if (S[:, 2] <= 0).any():
+            return
+        P = {k: QPointF(S[i, 0] / dpr, S[i, 1] / dpr) for i, k in enumerate(pts)}
+        p.setFont(px_font(12))
+        for (k1, k2), val in ((("a", "b"), self.mesh.size[0]), (("b", "c"), self.mesh.size[2]), (("b", "d"), self.mesh.size[1])):
+            a, b = P[k1], P[k2]
+            p.setPen(QPen(qcol(C.ACC2), 1.4, Qt.PenStyle.DashLine))
+            p.drawLine(a, b)
+            p.setPen(QPen(qcol(C.ACC2), 1.4))
+            for q in (a, b):
+                p.drawEllipse(q, 2.5, 2.5)
+            mid = (a + b) / 2
+            text = f"{val:.1f} cm"
+            p.fillRect(QRectF(mid.x() - 30, mid.y() - 10, 60, 18), with_alpha(qcol(C.BG), 0.75))
+            p.drawText(QRectF(mid.x() - 30, mid.y() - 10, 60, 18), Qt.AlignmentFlag.AlignCenter, text)
+
     def _hud(self, p, W, H):
         if self.model:
             p.setPen(qcol(C.TEXT))
@@ -655,7 +729,7 @@ class HoloPanel(QWidget):
                 p.setPen(qcol(C.ACC))
                 p.setFont(px_font(11.5))
                 dims = " × ".join(str(round(v)) for v in self.mesh.size)
-                p.drawText(QPointF(22, 172), f"{dims} CM  ·  {len(self.model['parts'])} PARÇA  ·  {'HOLOGRAM' if self.holo else 'GERÇEKÇİ'}")
+                p.drawText(QPointF(22, 172), f"{dims} CM  ·  {self.mesh.pieces} PARÇA  ·  {self.mesh.n_vert // 3:,} ÜÇGEN  ·  {'HOLOGRAM' if self.holo else 'GERÇEKÇİ'}".replace(",", "."))
                 p.setFont(px_font(11))
                 for k, part in enumerate(self.model["parts"][:24]):
                     on = k == (self.sel if self.sel >= 0 else self.hover)
@@ -741,10 +815,19 @@ class HoloPanel(QWidget):
             self.cursor = None
 
     def mouseDoubleClickEvent(self, _e):
-        self.command({"action": "explode"})
+        if self.iso >= 0:
+            self.command({"action": "show_all"})
+        elif self.hover >= 0:
+            self.command({"action": "isolate"})
+        else:
+            self.command({"action": "explode"})
 
     def wheelEvent(self, e):
         self.last_input = time.monotonic()
+        if self.cut is not None and e.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            d = e.angleDelta().y() or e.angleDelta().x()
+            self.cut = max(0.0, min(1.0, self.cut + (0.03 if d > 0 else -0.03)))
+            return
         self.cam.zoom = max(0.25, min(6, self.cam.zoom * (1.1 if e.angleDelta().y() > 0 else 0.9)))
 
     def keyPressEvent(self, e):

@@ -12,14 +12,16 @@ PLUGIN = {
         "modele çevirir; kullanıcı elleriyle (kameraya göstererek) ya da fareyle döndürür, büyütür, parçalara ayırır. "
         "action: scan ('bunu dijital olarak modelle', 'kameradakini tara') | make (request: 'bana bir Iron Man kaskı "
         "modelle') | edit (request: açık modeli değiştir — 'kanatları kırmızı yap', 'tekerlek ekle', 'daha büyük yap') | "
-        "explode ('parçalarına ayır') | assemble | reset | real (gerçekçi görünüm) | holo (hologram görünümü) | "
-        "hands (el kontrolünü aç/kapat; on) | save | stl (3D yazıcı dosyası) | throw (modeli at) | open | close. "
+        "detail ('daha fazla ayrıntı ekle', 'detaylandır': açık modele bir ayrıntı turu daha) | explode ('parçalarına ayır') | "
+        "assemble | reset | real (gerçekçi görünüm) | holo (hologram görünümü) | cut (kesit görünümü, on) | measure "
+        "(ölçüleri göster, on) | isolate (request: parça adı — 'sadece kulpu göster') | show_all | hands (el kontrolü; on) | "
+        "save | stl (3D yazıcı dosyası) | shot (4K görüntü kaydet) | throw (modeli at) | open | close. "
         "Hologram açıkken model hakkındaki değişiklik isteklerini edit ile gönder."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "scan | make | edit | explode | assemble | reset | real | holo | hands | save | stl | throw | open | close"},
+        "action": {"type": "STRING", "description": "scan | make | edit | detail | explode | assemble | reset | real | holo | cut | measure | isolate | show_all | hands | save | stl | shot | throw | open | close"},
         "request": {"type": "STRING", "description": "make / edit için ne istendiği"},
-        "on": {"type": "BOOLEAN", "description": "hands için: aç (true) / kapat (false)"},
+        "on": {"type": "BOOLEAN", "description": "hands / cut / measure için: aç (true) / kapat (false)"},
         "hands": {"type": "BOOLEAN", "description": "açarken el kontrolü de başlasın mı"},
     }, "required": ["action"]},
 }
@@ -28,6 +30,12 @@ REPLIES = {
     "scan": "Hologram masasını açtım. Nesneyi kameraya göster; üçten geriye sayınca biraz çevir, gerisini ben hallederim.",
     "make": "Hologram masasında tasarlıyorum, birkaç saniye.",
     "edit": "Modeli güncelliyorum.",
+    "detail": "Bir ayrıntı turu daha yapıyorum; yeni parçalar birazdan eklenecek.",
+    "cut": "Kesit görünümü.",
+    "measure": "Ölçüler ekranda.",
+    "isolate": "O parçayı tek başına gösteriyorum.",
+    "show_all": "Bütün parçalar görünüyor.",
+    "shot": "4K görüntüyü Belgeler'deki JARVIS Modeller klasörüne kaydediyorum.",
     "explode": "Parçalarına ayırıyorum.",
     "assemble": "Birleştirdim.",
     "reset": "Görünümü sıfırladım.",
@@ -46,12 +54,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         p = parameters or {}
         action = str(p.get("action") or "scan").lower().strip()
         request = str(p.get("request") or "").strip()
-        if action in ("make", "edit") and not request:
+        if action in ("make", "edit", "isolate") and not request and action != "isolate":
             return "Ne modellememi ya da neyi değiştirmemi istediğini söyler misin?"
         if player is None or not hasattr(player, "show_hologram"):
             return "Hologram masası JARVIS'in penceresinde açılır; pencere şu an yok."
         cmd = {"action": action, "request": request}
-        if action == "hands":
+        if action in ("hands", "cut", "measure"):
             cmd["on"] = p.get("on") is not False
         if p.get("hands") or action == "scan":
             cmd["hands"] = bool(p.get("hands", action == "scan"))

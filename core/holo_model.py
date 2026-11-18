@@ -24,6 +24,9 @@ EXPLODE = 0.85                    # how far apart "parçala" pushes the parts (�
 SHAPES = ("box", "rounded_box", "cylinder", "cone", "sphere", "hemisphere", "capsule", "torus",
           "wedge", "lathe", "extrude", "tube", "loft")
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+# surface finishes the shader draws procedurally (index = id in the vertex data)
+FINISHES = ("none", "brushed", "carbon", "leather", "fabric", "wood", "knurl", "rubber", "paint", "matte", "concrete", "glass")
+MAX_PARTS, MAX_INSTANCES = 500, 3000
 
 
 # ── cleaning what the model returns ───────────────────────────────────────────
@@ -73,7 +76,24 @@ def clean_part(p, i: int = 0) -> dict:
         "rough": _clamp(_num(p.get("rough"), 0.5), 0.04, 1.0),
         "emissive": _clamp(_num(p.get("emissive"), 0.0), 0.0, 1.0),
         "opacity": _clamp(_num(p.get("opacity"), 1.0), 0.08, 1.0),
+        "finish": str(p.get("finish") or "none").lower() if str(p.get("finish") or "none").lower() in FINISHES else "none",
     }
+    mir = str(p.get("mirror") or "").lower()
+    if mir in ("x", "z", "xz"):
+        out["mirror"] = mir
+    arr = p.get("array")
+    if isinstance(arr, dict):
+        n = int(_clamp(_num(arr.get("count"), 1), 1, 64))
+        if n > 1:
+            out["array"] = {"count": n, "step": [_clamp(v, -500, 500) for v in _vec(arr.get("step"), [size[0] * 1.2, 0, 0])],
+                            **({"rot": [_clamp(v, -180, 180) for v in _vec(arr.get("rot"), [0, 0, 0])]} if arr.get("rot") else {})}
+    rad = p.get("radial")
+    if isinstance(rad, dict):
+        n = int(_clamp(_num(rad.get("count"), 1), 1, 72))
+        if n > 1:
+            ax = str(rad.get("axis") or "y").lower()
+            out["radial"] = {"count": n, "axis": ax if ax in ("x", "y", "z") else "y",
+                             "center": [_clamp(v, -4000, 4000) for v in _vec(rad.get("center"), [0, out["pos"][1], 0])]}
     if shape == "rounded_box":
         out["radius"] = _clamp(_num(p.get("radius"), min(size) * 0.15), 0.0, min(size) / 2)
     if shape == "lathe":
@@ -104,7 +124,7 @@ def clean_part(p, i: int = 0) -> dict:
 
 def clean(m) -> dict:
     m = m if isinstance(m, dict) else {}
-    parts = [clean_part(p, i) for i, p in enumerate((m.get("parts") if isinstance(m.get("parts"), list) else [])[:320])]
+    parts = [clean_part(p, i) for i, p in enumerate((m.get("parts") if isinstance(m.get("parts"), list) else [])[:MAX_PARTS])]
     box = m.get("photo_box")
     box = [_clamp(_num(v, 0), 0, 1) for v in box[:4]] if isinstance(box, list) and len(box) >= 4 else None
     if box and (box[2] - box[0] < 0.02 or box[3] - box[1] < 0.02):
@@ -227,16 +247,20 @@ def _rounded_box(sx, sy, sz, r, n: int = 12):
     if r < 1e-3:
         return _box(sx, sy, sz)
     inner = h - r
-    # grid parameters crowded near the edges so the round-overs are smooth
-    lin = np.linspace(-1, 1, 2 * n)
-    s = np.unique(np.round(np.concatenate([np.linspace(-1, 1, n), np.sign(lin) * (1 - (1 - np.abs(lin)) ** 3)]), 6))
+    # samples only where the surface bends: the flat middle of each face is one
+    # span, the round-over gets n steps (per axis: its own edge fraction)
+    def axis_samples(j):
+        c = inner[j] / h[j]
+        ramp = c + (1 - c) * np.sin(np.linspace(0, np.pi / 2, n // 2 + 2))
+        return np.unique(np.round(np.concatenate([-ramp[::-1], ramp]), 6))
+    S3 = [axis_samples(j) for j in range(3)]
     out = []
     for axis in range(3):
         for sgn in (-1, 1):
             u, v = [(1, 2), (2, 0), (0, 1)][axis]
-            k = len(s)
-            G = np.zeros((k * k, 3))
-            uu, vv = np.meshgrid(s, s, indexing="ij")
+            su, sv = S3[u], S3[v]
+            G = np.zeros((len(su) * len(sv), 3))
+            uu, vv = np.meshgrid(su, sv, indexing="ij")
             G[:, axis] = sgn * h[axis]
             G[:, u] = uu.ravel() * h[u]
             G[:, v] = vv.ravel() * h[v]
@@ -246,7 +270,7 @@ def _rounded_box(sx, sy, sz, r, n: int = 12):
             N = np.where(ln > 1e-9, d / np.maximum(ln, 1e-9), 0)
             N[ln[:, 0] <= 1e-9, axis] = sgn
             V = core + N * r
-            F = _grid_faces(k, k, False)
+            F = _grid_faces(len(su), len(sv), False)
             if (sgn > 0) == (axis == 1):
                 F = F[:, ::-1]
             out.append((V.astype(np.float32), N.astype(np.float32), F.copy()))
@@ -490,10 +514,31 @@ def vertex_normals(V: np.ndarray, F: np.ndarray) -> np.ndarray:
     return (N / np.maximum(ln, 1e-12)).astype(np.float32)
 
 
+_SURF_CACHE: dict = {}
+
+
+def _cached_surfaces(p: dict):
+    key = (p["shape"], tuple(round(v, 4) for v in p["size"]), p.get("radius"), str(p.get("profile")), str(p.get("outline")),
+           str(p.get("path")), str(p.get("sections")), p.get("round"))
+    hit = _SURF_CACHE.get(key)
+    if hit is None:
+        if len(_SURF_CACHE) > 400:
+            _SURF_CACHE.clear()
+        hit = _SURF_CACHE[key] = surfaces(p)
+    return hit
+
+
 def part_mesh(p: dict):
     """(V, N, F) of one part in model space."""
     Vs, Ns, Fs, off = [], [], [], 0
-    for V, N, F in surfaces(p):
+    flip = p.get("_flip")
+    for V, N, F in _cached_surfaces(p):
+        if flip:                                     # a mirror copy: reflect, keep the faces outward
+            j = "xyz".index(flip)
+            V = V.copy(); V[:, j] = -V[:, j]
+            if N is not None:
+                N = N.copy(); N[:, j] = -N[:, j]
+            F = F[:, ::-1].copy()
         if N is None:
             N = vertex_normals(V, F)
         elif len(F):                                # winding must agree with the given normals
@@ -511,6 +556,70 @@ def part_mesh(p: dict):
     return V.astype(np.float32), N.astype(np.float32), F.astype(np.int32)
 
 
+def _axis_rot(axis: str, deg: float) -> np.ndarray:
+    return rot_matrix(deg if axis == "x" else 0, deg if axis == "y" else 0, deg if axis == "z" else 0)
+
+
+def _euler(R: np.ndarray) -> list:
+    """Degrees (X, then Y, then Z) of a rotation matrix — inverse of rot_matrix."""
+    sy = -R[2, 0]
+    sy = max(-1.0, min(1.0, sy))
+    y = math.asin(sy)
+    if abs(sy) < 0.9999:
+        x = math.atan2(R[2, 1], R[2, 2]); z = math.atan2(R[1, 0], R[0, 0])
+    else:
+        x = math.atan2(-R[1, 2], R[1, 1]); z = 0.0
+    return [math.degrees(v) % 360 for v in (x, y, z)]
+
+
+def expand(model: dict) -> list:
+    """Every piece to draw: (part index, part) with arrays, radial copies and
+    mirrors applied — so "12 vent slats" or "8 bolts round the rim" or "the
+    left and right ear cups" cost the model one line each."""
+    out = []
+    for i, p in enumerate(model["parts"]):
+        base = {k: v for k, v in p.items() if k not in ("mirror", "array", "radial")}
+        copies = [base]
+        if p.get("array"):
+            a = p["array"]
+            copies = []
+            for k in range(a["count"]):
+                q = dict(base)
+                q["pos"] = [base["pos"][j] + a["step"][j] * k for j in range(3)]
+                if a.get("rot"):
+                    q["rot"] = [(base["rot"][j] + a["rot"][j] * k) % 360 for j in range(3)]
+                copies.append(q)
+        if p.get("radial"):
+            r = p["radial"]
+            c = np.asarray(r["center"], float)
+            more = []
+            for q in copies:
+                for k in range(r["count"]):
+                    R = _axis_rot(r["axis"], 360.0 * k / r["count"])
+                    qq = dict(q)
+                    qq["pos"] = list(R @ (np.asarray(q["pos"], float) - c) + c)
+                    qq["rot"] = _euler(R @ rot_matrix(*q["rot"]))
+                    more.append(qq)
+            copies = more
+        if p.get("mirror"):
+            more = list(copies)
+            for ax in p["mirror"]:
+                j = "xyz".index(ax)
+                for q in list(more):
+                    qq = dict(q)
+                    qq["pos"] = list(q["pos"]); qq["pos"][j] = -qq["pos"][j]
+                    rx, ry, rz = q["rot"]
+                    qq["rot"] = [rx, (-ry) % 360, (-rz) % 360] if ax == "x" else [(-rx) % 360, (-ry) % 360, rz]
+                    qq["_flip"] = ax
+                    more.append(qq)
+            copies = more
+        for q in copies:
+            out.append((i, q))
+            if len(out) >= MAX_INSTANCES:
+                return out
+    return out
+
+
 def hex_rgb(h: str) -> tuple:
     return tuple(int(h[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
 
@@ -522,20 +631,24 @@ class Mesh:
     def __init__(self, model: dict, photo: np.ndarray | None = None):
         self.model = model
         parts = []
-        for i, p in enumerate(model["parts"]):
+        self.instances = expand(model)
+        for i, p in self.instances:
             V, N, F = part_mesh(p)
             if len(F):
-                parts.append((i, V, N, F))
+                parts.append((i, V, N, F, p))
         self.parts = parts
-        allv = np.vstack([v for _, v, _, _ in parts]) if parts else np.zeros((1, 3), np.float32)
+        allv = np.vstack([q[1] for q in parts]) if parts else np.zeros((1, 3), np.float32)
         self.lo, self.hi = allv.min(0), allv.max(0)
         self.center = (self.lo + self.hi) / 2
         self.size = self.hi - self.lo
         self.radius = float(max(1.0, np.linalg.norm(self.size) / 2))
         self.floor = float(self.lo[1])
-        cents = [v.mean(0) for _, v, _, _ in parts]
-        self.part_center = {i: c for (i, _, _, _), c in zip(parts, cents)}
-        n_tri = sum(len(f) for *_, f in parts)
+        acc: dict = {}
+        for i, V, *_ in parts:
+            acc.setdefault(i, []).append(V.mean(0))
+        self.part_center = {i: np.mean(v, 0) for i, v in acc.items()}          # a group's centre
+        self.inst_center = [V.mean(0) for _, V, *_ in parts]                     # each piece's own
+        n_tri = sum(len(q[3]) for q in parts)
         self.n_vert = n_tri * 3
         # flat triangle arrays (non-indexed: simplest for the shader and STL)
         self.pos0 = np.zeros((self.n_vert, 3), np.float32)
@@ -543,9 +656,10 @@ class Mesh:
         self.col = np.zeros((self.n_vert, 3), np.float32)
         self.mat = np.zeros((self.n_vert, 4), np.float32)      # metal, rough, emissive, opacity
         self.pid = np.zeros(self.n_vert, np.float32)
+        self.fin = np.zeros(self.n_vert, np.float32)                          # finish id
+        self.ao = np.ones(self.n_vert, np.float32)                            # baked ambient occlusion
         k = 0
-        for i, V, N, F in parts:
-            p = model["parts"][i]
+        for i, V, N, F, p in parts:
             m = len(F) * 3
             idx = F.reshape(-1)
             self.pos0[k:k + m] = V[idx]
@@ -553,6 +667,7 @@ class Mesh:
             self.col[k:k + m] = hex_rgb(p["color"])
             self.mat[k:k + m] = (p["metal"], p["rough"], p["emissive"], p["opacity"])
             self.pid[k:k + m] = i
+            self.fin[k:k + m] = FINISHES.index(p.get("finish", "none"))
             k += m
         if photo is not None and model.get("photo_box"):
             self._project_photo(photo, model["photo_box"])
@@ -576,11 +691,15 @@ class Mesh:
             return self.pos0
         out = self.pos0.copy()
         k = 0
-        for i, V, N, F in self.parts:
+        for n, (i, V, N, F, _p) in enumerate(self.parts):
             m = len(F) * 3
-            out[k:k + m] += (self.part_center[i] - self.center) * explode * EXPLODE
+            out[k:k + m] += (self.inst_center[n] - self.center) * explode * EXPLODE
             k += m
         return out
+
+    @property
+    def pieces(self) -> int:
+        return len(self.parts)
 
     def stl(self) -> bytes:
         """Binary STL in millimetres, z up (what slicers expect)."""
@@ -694,6 +813,10 @@ _CMDS = (
     ("stl", r"\bstl\b|3 ?d yazıcı|yazdırılabilir|dışa aktar"),
     ("throw", r"çöpe at|modeli sil|fırlat"),
     ("close", r"hologramı kapat|masayı kapat|hologramdan çık"),
+    ("detail", r"detaylandır|daha fazla (ayrıntı|detay|parça)|ayrıntı ekle|detay ekle"),
+    ("cut", r"kesit|kesip göster|içini kes"),
+    ("measure", r"ölç|ölçüleri göster|boyutlarını göster"),
+    ("show_all", r"hepsini göster|tümünü göster"),
 )
 
 
