@@ -34,7 +34,7 @@ GL_FLOAT = 0x1406
 GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT = 0x4000, 0x0100, 0x0400
 GL_POLYGON_OFFSET_FILL = 0x8037
 STRIDE = 14                       # pos3 nrm3 col3 mat4 pid1
-SHADOW = 2048
+SHADOW = 4096
 _KEY = np.array([-0.45, 0.72, 0.52]); _KEY /= np.linalg.norm(_KEY)
 _LU = np.cross([0.0, 1.0, 0.0], _KEY); _LU /= np.linalg.norm(_LU)
 _LV = np.cross(_KEY, _LU)
@@ -63,7 +63,8 @@ varying vec4 v_mat;
 varying float v_pid;
 void main() {
     vec3 wp = a_pos - u_off;
-    if (u_pass > 1.5) {                    // flatten onto the floor along the light
+    if (u_pass > 2.5) wp.y = -wp.y;        // floor reflection: the model upside down under the floor
+    else if (u_pass > 1.5) {               // flatten onto the floor along the light
         float t = wp.y / max(-u_ldir.y, 0.05);
         wp = vec3(wp.x + u_ldir.x * t, 0.002, wp.z + u_ldir.z * t);
     }
@@ -141,24 +142,34 @@ vec3 env(vec3 r, float rough) {
 float ggx(float nh, float a) { float a2 = a * a; float d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (PI * d * d); }
 float vis(float nl, float nv, float a) { float k = a * 0.5; return 1.0 / ((nl * (1.0 - k) + k) * (nv * (1.0 - k) + k)); }
 float lit(float soft) {
-    // soft shadow from the key light: 16-tap percentage-closer filtering
+    // soft shadow from the key light: 24-tap Poisson disc, rotated per pixel
     if (u_has_shadow < 0.5) return 1.0;
     vec2 uv = v_lp.xy * 0.5 + 0.5;
     if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 1.0;
     float d = v_lp.z * 0.5 + 0.5, s = 0.0;
-    for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) {
-        vec2 o = (vec2(float(i), float(j)) - 1.5) * soft;
+    float ang = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+    mat2 R = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+    for (int i = 0; i < 24; i++) {
+        float fi = float(i);
+        float r = sqrt((fi + 0.5) / 24.0);
+        float th = fi * 2.39996323;
+        vec2 o = R * vec2(cos(th), sin(th)) * r * soft * 2.6;
         vec2 e = texture2D(u_shadow, uv + o).rg;
-        s += (d - 0.0035 <= e.x + e.y / 255.0) ? 1.0 : 0.0;
+        s += (d - 0.0022 <= e.x + e.y / 255.0) ? 1.0 : 0.0;
     }
-    return s / 16.0;
+    return s / 24.0;
 }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
 void main() {
     vec3 V = normalize(u_eye - v_wp);
-    if (u_pass > 1.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, u_shadow_a); return; }
-    if (u_pass > 0.5) {                                   // the floor
+    if (u_pass > 1.5 && u_pass < 2.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, u_shadow_a); return; }
+    float refl = 1.0;
+    if (u_pass > 2.5) {                                    // reflection: fade with depth and towards the floor's edge
+        refl = 0.22 * exp(-(-v_wp.y) / max(u_height * 0.35, 0.5)) * (1.0 - smoothstep(0.3, 1.0, length(v_wp.xz) / (u_radius * 1.6)));
+        V = normalize(u_eye - vec3(v_wp.x, -v_wp.y, v_wp.z));
+    }
+    if (u_pass > 0.5 && u_pass < 1.5) {                  // the floor
         float r = length(v_wp.xz) / (u_radius * 1.6);
         if (u_holo > 0.5) {
             float rings = 0.0;
@@ -187,6 +198,7 @@ void main() {
         if (u_alpha_pass > 0.5 && opacity >= 0.99) discard;
     }
     vec3 N = normalize(v_n);
+    if (u_pass > 2.5) N.y = -N.y;
     if (dot(N, V) < 0.0) N = -N;                          // thin parts: lit from both sides
     float nv = clamp(dot(N, V), 1e-3, 1.0);
     bool sel = abs(v_pid - u_sel) < 0.5;
@@ -230,6 +242,7 @@ void main() {
     col = aces(col * 1.05);
     col = pow(col, vec3(1.0 / 2.2));
     float alpha = u_alpha_pass > 0.5 ? clamp(opacity + 0.5 * pow(1.0 - nv, 3.0), 0.0, 1.0) : 1.0;
+    alpha *= refl;
     gl_FragColor = vec4(col * alpha, alpha);
 }
 """
@@ -366,18 +379,28 @@ class HoloGL:
             return False
 
     def _ensure_fbo(self, w, h):
+        """Framebuffers by size (the live view and the still frame each keep
+        theirs). 8× multisampling for normal sizes, fewer samples for huge ones."""
         from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
-        if self._fbo is not None and self._fbo_size == (w, h):
+        cache = self.__dict__.setdefault("_fbos", {})
+        if (w, h) in cache:
+            self._fbo, self._fbo_size = cache[(w, h)], (w, h)
             return
+        px = w * h
+        tries = (8, 4, 0) if px <= 4_200_000 else (4, 2, 0) if px <= 9_000_000 else (2, 0)
         fmt = QOpenGLFramebufferObjectFormat()
         fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
-        fmt.setSamples(4)
-        fbo = QOpenGLFramebufferObject(QSize(w, h), fmt)
-        if not fbo.isValid():
-            fmt.setSamples(0)
+        fbo = None
+        for n in tries:
+            fmt.setSamples(n)
             fbo = QOpenGLFramebufferObject(QSize(w, h), fmt)
-        if not fbo.isValid():
+            if fbo.isValid():
+                break
+        if fbo is None or not fbo.isValid():
             raise RuntimeError("çerçeve arabelleği oluşturulamadı")
+        if len(cache) >= 2:                                   # keep the newest two sizes
+            cache.pop(next(iter(cache)))
+        cache[(w, h)] = fbo
         self._fbo, self._fbo_size = fbo, (w, h)
 
     def _light(self, prog, mesh):
@@ -508,6 +531,13 @@ class HoloGL:
             self._u("u_off", off)
             if not holo:
                 self._attrs(self._vbo, True)
+                # the reflection in the floor's gloss
+                self._u("u_pass", 3.0); self._u("u_has_shadow", 0.0)
+                gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True)
+                gl.glEnable(GL_BLEND); gl.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
+                gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
+                gl.glClear(GL_DEPTH_BUFFER_BIT)
+                self._u("u_has_shadow", 1.0)
                 # the model: opaque parts, then glass
                 self._u("u_pass", 0.0)
                 gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True)
@@ -538,6 +568,30 @@ class HoloGL:
             except Exception:
                 pass
             return None
+
+
+def render_still(gl: "HoloGL", mesh, cam: Camera, w: int, h: int, ss: float = 1.5, **kw) -> QImage | None:
+    """A finished frame: rendered ss× larger (and 8× multisampled) then scaled
+    down smoothly — edges and thin details come out clean, as in a 4K render."""
+    from PyQt6.QtCore import Qt
+    big = None
+    for k in (ss, 1.5, 1.25, 1.0):
+        k = min(k, math.sqrt(14_000_000 / max(1, w * h)))        # at most ~14 million pixels
+        k = max(1.0, k)
+        bw, bh = int(w * k), int(h * k)
+        if bw > 8192 or bh > 8192:
+            continue
+        big = gl.render(mesh, cam, bw, bh, **kw)
+        if big is not None:
+            break
+        if gl.ok is False and gl._ctx is not None:                  # a too-large buffer: try smaller
+            gl.ok = True
+            gl.__dict__.get("_fbos", {}).pop((bw, bh), None)
+    if big is None:
+        return None
+    if big.width() == w:
+        return big
+    return big.scaled(w, h, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
 class SoftRenderer:

@@ -23,7 +23,7 @@ def main() -> int:
     from PyQt6.QtWidgets import QApplication
     app = QApplication(sys.argv)
     from core import holo_model
-    from gui.holo_gl import Camera, HoloGL
+    from gui.holo_gl import Camera, HoloGL, render_still
     from tools.holo_samples import ALL
     gl, cam = HoloGL(), Camera()
     w, h = size, int(size * 0.62)
@@ -33,7 +33,7 @@ def main() -> int:
             for k, (yaw, pitch, ex) in enumerate(((-32, 18, 0.0), (35, 10, 0.0), (-20, 25, 1.0))):
                 cam.yaw, cam.pitch = yaw, pitch
                 t0 = time.perf_counter()
-                img = gl.render(mesh, cam, w, h, holo=look == "holo", accent=(1.0, 0.54, 0.11), t=1.3, explode=ex, sel=1 if k == 1 else -1)
+                img = render_still(gl, mesh, cam, w, h, ss=2.0, holo=look == "holo", accent=(1.0, 0.54, 0.11), t=1.3, explode=ex, sel=1 if k == 1 else -1)
                 dt = time.perf_counter() - t0
                 if img is None:
                     print("GPU path failed:", gl.error)
@@ -49,6 +49,16 @@ def main() -> int:
                 name = "".join(ch for ch in holo_model.clean(m)["name"].split()[0].lower() if ch.isascii() and ch.isalnum()) or "model"
                 base.save(str(out / f"{name}_{look}_{k}.png"))
                 print(f"{name} {look} {k}: {mesh.n_vert // 3} tris, {dt * 1000:.0f} ms")
+    # one real 4K frame
+    cam.yaw, cam.pitch = -28, 14
+    mesh = holo_model.Mesh(holo_model.clean(ALL[3]))
+    t0 = time.perf_counter()
+    img = render_still(gl, mesh, cam, 3840, 2160, ss=1.5, holo=False, accent=(1.0, 0.54, 0.11), t=1.3)
+    print(f"4K still: {img.width() if img else 0}x{img.height() if img else 0}, {(time.perf_counter() - t0) * 1000:.0f} ms")
+    if img is not None:
+        img.save(str(out / "zz_4k_helmet.png"))
+        crop = img.copy(1500, 500, 1280, 794)
+        crop.save(str(out / "zz_4k_crop.png"))
     # the whole table as it appears in JARVIS's window
     from unittest import mock
     from gui import holo_panel
@@ -75,7 +85,7 @@ def _log_sheet(out: Path) -> None:
     import base64
     from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, Qt
     from PyQt6.QtGui import QImage, QPainter
-    files = sorted(out.glob("*.png"))
+    files = sorted(f for f in out.glob("*.png") if "zz_4k_helmet" not in f.name)
     for start in range(0, len(files), 6):
         group = files[start:start + 6]
         tw, th = 640, 397

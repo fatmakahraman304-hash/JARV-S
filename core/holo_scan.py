@@ -45,9 +45,11 @@ Materials: real colours from the photo; metal 1 for bare metal, 0 for plastic/wo
 polished/glossy, 0.4–0.6 satin, 0.8–1 matte; emissive > 0 only for things that glow (screens on, LEDs); opacity < 1
 only for glass/clear plastic.
 
-Detail: 12 to 70 parts. Model what makes it recognisable and real — proportions first, then the functional details
-(buttons, ports, screens, lenses, seams, feet, handles, labels as thin panels, grilles as several slats). Parts touch or
-overlap like the real thing; nothing floats. Symmetric things are symmetric."""
+Detail: 40 to 150 parts — this is a high-end product visualisation, not a toy. Proportions first, then every visible
+detail: buttons, ports, screens and their bezels, lenses with their rings, seams and panel gaps (thin dark strips), screws,
+feet, hinges, handles, vents and grilles as several slats, labels and logos as thin panels, edge bevels and trim strips,
+inner surfaces you can see. Prefer the curved shapes (loft, lathe, rounded_box, tube) over plain boxes wherever the real
+surface is curved. Parts touch or overlap like the real thing; nothing floats. Symmetric things are symmetric."""
 
 
 def _part(jpeg: bytes):
@@ -67,9 +69,19 @@ def _small_jpeg_b64(jpeg: bytes, side: int = 640) -> str:
         return base64.b64encode(jpeg).decode() if len(jpeg) < 900_000 else ""
 
 
-def _ask(contents, timeout_ms: int = 120_000):
+def _config():
+    try:
+        from google.genai import types
+        return types.GenerateContentConfig(response_mime_type="application/json", max_output_tokens=60000, temperature=0.35)
+    except Exception:
+        return None
+
+
+def _ask(contents, timeout_ms: int = 180_000):
     from core import gemini
-    data = gemini.as_json(contents, tier=gemini.SMART, timeout_ms=timeout_ms)
+    data = gemini.as_json(contents, tier=gemini.SMART, config=_config(), timeout_ms=timeout_ms)
+    if data is None:                     # some ladders refuse the JSON config: ask once more without it
+        data = gemini.as_json(contents, tier=gemini.SMART, timeout_ms=timeout_ms)
     if isinstance(data, dict) and isinstance(data.get("parts"), list):
         return data
     return None
@@ -85,7 +97,34 @@ def _finish(data: dict, photo_b64: str = "", keep: dict | None = None):
     return m
 
 
-def scan(frames: list[bytes]):
+REFINE = """Here is the first version of the model as JSON:
+{model}
+
+Make it more detailed and more real. Keep every existing part (you may correct a part's size, position, shape or
+material when it is clearly wrong), and ADD 30 to 90 new parts for the details a close-up would show: seams and panel
+gaps, screws, small buttons and LEDs, port openings, vent slats, label panels, bevel and trim strips, rims and rings,
+inner surfaces, feet, cable ends. Use the same JSON format and return the WHOLE model (all old and new parts).
+{fmt}"""
+
+
+def _refine(m: dict, images=(), progress=None) -> dict:
+    """A second pass that keeps the model and adds the close-up detail."""
+    import json
+    if progress:
+        progress("AYRINTILANDIRILIYOR…")
+    cur = json.dumps({k: m[k] for k in ("name", "summary", "photo_box", "parts")}, ensure_ascii=False)
+    data = _ask([REFINE.format(model=cur, fmt=FORMAT), *(_part(f) for f in images)])
+    if not data:
+        return m
+    better = _finish(data, m.get("photo", ""), keep=m)
+    if better and len(better["parts"]) >= len(m["parts"]):
+        if not better.get("photo_box"):
+            better["photo_box"] = m.get("photo_box")
+        return better
+    return m
+
+
+def scan(frames: list[bytes], progress=None, refine: bool = True):
     """frames: JPEG bytes of the same object from slightly different angles."""
     frames = [f for f in frames if f][:4]
     if not frames:
@@ -102,10 +141,12 @@ def scan(frames: list[bytes]):
     m = _finish(data, _small_jpeg_b64(frames[0]))
     if m is None:
         return None, "Net bir nesne göremedim; yakına tut, iyi ışıkta tekrar dene."
+    if refine:
+        m = _refine(m, frames[:2], progress)
     return m, f"{m['name']}: {len(m['parts'])} parça."
 
 
-def create(text: str):
+def create(text: str, progress=None, refine: bool = True):
     prompt = (f"You are JARVIS designing a 3D model for Tony Stark's holographic workbench from this request (any language): "
               f"\"{text}\". Make it look like the real thing at its real size, with the details a designer would include. "
               "photo_box: null.\n\n" + FORMAT)
@@ -113,7 +154,11 @@ def create(text: str):
     if data is None:
         return None, "Modeli tasarlayamadım: beyne ulaşılamadı."
     m = _finish(data)
-    return (m, f"{m['name']}: {len(m['parts'])} parça.") if m else (None, "Boş bir model geldi.")
+    if m is None:
+        return None, "Boş bir model geldi."
+    if refine:
+        m = _refine(m, (), progress)
+    return m, f"{m['name']}: {len(m['parts'])} parça."
 
 
 def edit(model: dict, text: str):
