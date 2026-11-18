@@ -283,11 +283,191 @@ def apply(step):
         raise ValueError(f"Desteklenmeyen işlem: {op}")
 
 
+def run_script(job, request):
+    """A bpy script JARVIS wrote: run it; a failure becomes a report with the traceback
+    (JARVIS reads it and fixes the script)."""
+    import traceback
+    if request.get("empty"):
+        for obj in list(bpy.context.scene.objects):
+            bpy.data.objects.remove(obj, do_unlink=True)
+    code = (job / "script.py").read_text(encoding="utf8")
+    out = job / "out"
+    out.mkdir(exist_ok=True)
+    env = {"__name__": "__main__", "OUT": out, "bpy": bpy}
+    try:
+        exec(compile(code, "jarvis_script.py", "exec"), env)
+        bpy.context.view_layer.update()
+    except Exception:
+        tb = traceback.format_exc()
+        lines = code.splitlines()
+        hit = [int(n) for n in __import__("re").findall(r'jarvis_script.py", line (\d+)', tb)]
+        if hit and 0 < hit[-1] <= len(lines):
+            tb += f"\nFailing line {hit[-1]}: {lines[hit[-1] - 1].strip()}"
+        return tb
+    scene = bpy.context.scene
+    scene.frame_set(scene.frame_start)
+    bpy.ops.wm.save_as_mainfile(filepath=str(job / "scene.blend"))
+    return ""
+
+
+def studio(job, request):
+    """A product-photo render of a model file (the hologram's GLB): the model
+    stands on a seamless floor that only catches its shadow, lit by a key, a
+    fill and a rim softbox plus a soft sky, framed by a 70 mm camera; Cycles
+    with denoising. Also saves the scene, ready to open in Blender."""
+    from mathutils import Vector
+    scene = bpy.context.scene
+    for obj in list(scene.objects):
+        bpy.data.objects.remove(obj, do_unlink=True)
+    before = set(bpy.data.objects)
+    path = request["model"]
+    if path.lower().endswith((".glb", ".gltf")):
+        bpy.ops.import_scene.gltf(filepath=path)
+    elif path.lower().endswith(".obj"):
+        bpy.ops.wm.obj_import(filepath=path)
+    else:
+        bpy.ops.wm.stl_import(filepath=path)
+    meshes = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
+    if not meshes:
+        raise ValueError("Modelde çizilecek yüzey yok")
+    bpy.context.view_layer.update()
+    pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+    lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    height = float(request.get("height_m") or 0) or max(hi - lo)
+    k = height / max(hi.z - lo.z, 1e-6) if request.get("height_m") else 1.0
+    root = bpy.data.objects.new("JARVIS Model", None)
+    scene.collection.objects.link(root)
+    for o in [o for o in bpy.data.objects if o not in before and o.parent is None and o is not root]:
+        o.parent = root
+    root.scale = (k, k, k)
+    bpy.context.view_layer.update()
+
+    def world_box():
+        pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+        return (Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts))),
+                Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts))))
+    for _ in range(2):                         # measure what is really there, then stand it centred on the floor
+        lo, hi = world_box()
+        root.location -= Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))
+        bpy.context.view_layer.update()
+    lo, hi = world_box()
+    print(f"JARVIS studio box: {tuple(round(v, 4) for v in lo)} .. {tuple(round(v, 4) for v in hi)}")
+    size = hi - lo
+    radius = max(size.length / 2, 0.01)
+    for o in meshes:
+        for p in o.data.polygons:
+            p.use_smooth = p.use_smooth or len(o.data.polygons) > 2000
+    # floor: a shadow catcher, so the background stays the studio colour
+    bpy.ops.mesh.primitive_plane_add(size=radius * 40, location=(0, 0, 0))
+    floor = bpy.context.active_object
+    floor.name = "Zemin"
+    floor.is_shadow_catcher = True
+    # lights: softboxes sized to the model
+    def area(name, loc, power, size_k, color=(1, 1, 1)):
+        light = bpy.data.lights.new(name, "AREA")
+        light.energy = power * radius ** 2 * 40
+        light.size = radius * size_k
+        light.color = color
+        obj = bpy.data.objects.new(name, light)
+        scene.collection.objects.link(obj)
+        obj.location = Vector(loc) * radius
+        obj.rotation_euler = (Vector((0, 0, size.z * 0.45)) - obj.location).to_track_quat("-Z", "Y").to_euler()
+    area("Ana ışık", (-2.6, -2.4, 3.2), 30, 2.4, (1.0, 0.97, 0.92))
+    area("Dolgu", (3.2, -1.6, 1.4), 9, 3.2, (0.9, 0.95, 1.0))
+    area("Kontur", (0.8, 3.4, 2.8), 26, 1.6)
+    world = scene.world or bpy.data.worlds.new("World")
+    scene.world = world
+    world.use_nodes = True
+    bg = world.node_tree.nodes.get("Background")
+    bg.inputs["Color"].default_value = (0.045, 0.043, 0.042, 1)
+    bg.inputs["Strength"].default_value = 1.0
+    # camera
+    cam_data = bpy.data.cameras.new("Kamera")
+    cam_data.lens = 70
+    cam = bpy.data.objects.new("Kamera", cam_data)
+    scene.collection.objects.link(cam)
+    scene.camera = cam
+    yaw = math.radians(float(request.get("yaw", -32)))
+    pitch = math.radians(float(request.get("pitch", 14)))
+    aim = Vector((0, 0, size.z * 0.48))
+    aspect = float(request.get("width", 1920)) / float(request.get("height", 1080))
+    cam_data.sensor_fit = "HORIZONTAL"
+    tx = math.tan(cam_data.angle_x / 2) if aspect >= 1 else math.tan(cam_data.angle_x / 2)
+    ty = tx / aspect
+    v = Vector((math.sin(yaw) * math.cos(pitch), -math.cos(yaw) * math.cos(pitch), math.sin(pitch)))   # aim -> camera
+    fwd = -v
+    right = fwd.cross(Vector((0, 0, 1))).normalized()
+    up = right.cross(fwd)
+    corners = [Vector((x, y, z)) for x in (lo.x, hi.x) for y in (lo.y, hi.y) for z in (lo.z, hi.z)]
+    pts = []                                # the model's own vertices (sampled), not its box: a tight, centred frame
+    total = sum(len(o.data.vertices) for o in meshes)
+    step = max(1, total // 30000)
+    for o in meshes:
+        mw = o.matrix_world
+        vs = o.data.vertices
+        pts += [mw @ vs[i].co for i in range(0, len(vs), step)]
+    pts = pts or corners
+    xs, ys, zs = ([(p - aim).dot(a) for p in pts] for a in (right, up, v))
+    # shift the aim so the silhouette is centred (orthographic estimate), then solve the distance exactly
+    aim = aim + right * (max(xs) + min(xs)) / 2 + up * (max(ys) + min(ys)) / 2
+    dist = 0.0
+    for p in pts:
+        rel = p - aim
+        x, y, z = rel.dot(right), rel.dot(up), rel.dot(v)
+        dist = max(dist, z + abs(x) / (tx * 0.84), z + abs(y) / (ty * 0.80))
+    dist = max(dist, radius * 0.9)
+    cam.location = aim + v * dist
+    cam.rotation_euler = (aim - cam.location).to_track_quat("-Z", "Y").to_euler()
+    cam_data.clip_start, cam_data.clip_end = dist * 0.01, dist * 50
+    # render
+    r = scene.render
+    r.engine = "CYCLES"
+    scene.cycles.samples = int(request.get("samples", 128))
+    scene.cycles.use_denoising = True
+    try:
+        scene.cycles.device = "GPU" if request.get("gpu") else "CPU"
+    except Exception:
+        pass
+    r.resolution_x, r.resolution_y = int(request.get("width", 1920)), int(request.get("height", 1080))
+    r.resolution_percentage = 100
+    r.film_transparent = False
+    try:
+        scene.view_settings.view_transform = "AgX"
+        scene.view_settings.look = "AgX - Medium High Contrast"
+    except Exception:
+        scene.view_settings.view_transform = "Filmic"
+    r.image_settings.file_format = "PNG"
+    r.filepath = str(job / "render.png")
+    bpy.context.view_layer.update()
+    from bpy_extras.object_utils import world_to_camera_view
+    ndc = [world_to_camera_view(scene, cam, c) for c in pts[::max(1, len(pts) // 2000)]]
+    frame = {"box": [list(lo), list(hi)], "camera": list(cam.location), "aim": list(aim),
+             "ndc_x": [min(p.x for p in ndc), max(p.x for p in ndc)], "ndc_y": [min(p.y for p in ndc), max(p.y for p in ndc)],
+             "objects": [[o.name, o.type, o.parent.name if o.parent else None, list(o.matrix_world.translation)]
+                         for o in scene.objects][:30]}
+    (job / "frame.json").write_text(json.dumps(frame), encoding="utf8")
+    bpy.ops.wm.save_as_mainfile(filepath=str(job / "scene.blend"))
+    bpy.ops.render.render(write_still=True)
+
+
 def main():
     job = Path(sys.argv[sys.argv.index("--") + 1])
     request = json.loads((job / "request.json").read_text(encoding="utf8"))
     scene = bpy.context.scene
-    if request["mode"] == "build":
+    if request["mode"] == "script":
+        error = run_script(job, request)
+        scene = bpy.context.scene
+        report = {"version": bpy.app.version_string, "error": error, "count": len(scene.objects),
+                  "objects": [[o.name, o.type] for o in list(scene.objects)[:250]],
+                  "camera": scene.camera.name if scene.camera else None,
+                  "files": [str(p) for p in sorted((job / "out").glob("*"))]}
+        (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")
+        return
+    if request["mode"] == "studio":
+        studio(job, request)
+        scene = bpy.context.scene
+    elif request["mode"] == "build":
         if request["empty"]:
             for obj in list(scene.objects):
                 bpy.data.objects.remove(obj, do_unlink=True)
@@ -299,7 +479,7 @@ def main():
                 raise ValueError(f"Adım {index}: {exc}") from exc
         scene.frame_set(scene.frame_start)
         bpy.ops.wm.save_as_mainfile(filepath=str(job / "scene.blend"))
-    elif request["mode"] == "glb":
+    if request["mode"] == "glb":
         bpy.ops.export_scene.gltf(filepath=str(job / "scene.glb"), export_format="GLB")
     elif request["mode"] in ("render", "animation"):
         if scene.camera is None:

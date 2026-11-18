@@ -762,7 +762,7 @@ def export_glb(mesh, model: dict) -> bytes:
             pass
     prims = []
     for _i, V, N, F, p in getattr(mesh, "parts", []) or []:
-        r, g, b = hex_rgb(p.get("color", "#cccccc"))
+        r, g, b = (c ** 2.2 for c in hex_rgb(p.get("color", "#cccccc")))       # glTF colour factors are linear
         prims.append({"V": V, "N": N, "F": F, "name": p.get("name", ""), "color": [r, g, b, float(p.get("opacity", 1.0))],
                       "metal": float(p.get("metal", 0.0)), "rough": float(p.get("rough", 0.5))})
     if not prims:                                                 # a scanned mesh without parts: one soup
@@ -861,6 +861,7 @@ def gesture_step(st: dict, hands: list, t: float) -> dict:
 
 
 _CMDS = (
+    ("blender", r"blender"),
     ("scan", r"^(tara|modelle|dijitalleştir)\b|(bunu|şunu|kameradakini|elimdekini) (dijital olarak )?(modelle|tara|dijitalleştir)"),
     ("explode", r"parçala|parçalara ayır|patlat|içini göster"),
     ("assemble", r"birleştir|topla|parçaları kapat"),

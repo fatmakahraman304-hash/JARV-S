@@ -74,3 +74,10 @@ screenshots/
 /memory/screen_time.json
 /memory/pc_extras.json
 /memory/*.json.tmp
+# hologram + Blender learning (personal, made on this PC)
+/memory/holo_models.json
+/memory/holo_glb/
+/memory/holo_thumbs/
+/memory/holo_current.glb
+/memory/hand_landmarker.task
+/memory/blender_lessons.json

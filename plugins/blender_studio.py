@@ -13,15 +13,21 @@ PLUGIN = {
     "description": ("Masaüstü Blender'da Türkçe tarifle proje oluştur (new), son projeyi veya verilen "
                     ".blend dosyasının kopyasını düzenle (edit), sahneyi incele (inspect), görüntü al "
                     "(render), zaman çizelgesini PNG kare dizisi olarak işle (animation), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
+                    "Her şeyi Python ile yapmak için script (JARVIS bpy betiği yazar, hata çıkarsa kendisi düzeltir ve öğrenir). "
+                    "Kullanıcı Blender hakkında bir şey öğretirse teach; JARVIS'in bir konuyu kendi kendine öğrenmesi için study "
+                    "(notlar çıkarır, Blender'da deneyip doğrular); öğrendiklerini sormak için lessons. "
+                    "Hologramdaki modeli Blender'da fotoğraf gerçekliğinde çekmek için hologram (Cycles stüdyo render'ı); "
+                    "Blender yüklü değilse install. "
                     "Sahne veya render istendiğinde open_app kullanma. new/edit için gösterim isteğini result ile belirt. "
                     "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
                     "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | inspect | render | animation | glb | open | guide | status"},
+        "action": {"type": "STRING", "description": "new | edit | script | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
         "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
-        "project": {"type": "STRING", "description": "İsteğe bağlı mevcut .blend dosyasının tam yolu"}
+        "project": {"type": "STRING", "description": "İsteğe bağlı mevcut .blend dosyasının tam yolu"},
+        "model": {"type": "STRING", "description": "hologram için isteğe bağlı .glb/.obj/.stl yolu (boşsa hologramdaki son model)"}
     }, "required": ["action"]},
 }
 
@@ -33,6 +39,7 @@ PLUGIN_SETTINGS = {
 
 ROOT = Path.home() / "JARVIS" / "Blender"
 WORKER = Path(__file__).with_name("_blender_scene.py")
+HOLO_GLB = Path(__file__).resolve().parent.parent / "memory" / "holo_current.glb"     # the hologram writes its model here
 _lock = threading.Lock()
 _status = "Henüz bir Blender işlemi başlatılmadı."
 SPEC = """Output JSON {"steps":[...]} or {"unsupported":"Türkçe açıklama"} if any
@@ -132,8 +139,8 @@ def executable():
     raise ValueError("Blender bulunamadı. Eklenti ayarlarında Blender bölümüne blender.exe dosyasının tam yolunu yaz.")
 
 
-def invoke(binary, source, folder, mode, steps=(), query=""):
-    request = {"mode": mode, "steps": steps, "query": query, "empty": source is None}
+def invoke(binary, source, folder, mode, steps=(), query="", **extra):
+    request = {"mode": mode, "steps": steps, "query": query, "empty": source is None, **extra}
     (folder / "request.json").write_text(json.dumps(request), encoding="utf8")
     cmd = [binary, "--background", "--factory-startup", "--disable-autoexec"]
     if source:
@@ -144,7 +151,27 @@ def invoke(binary, source, folder, mode, steps=(), query=""):
         lines = (result.stdout + "\n" + result.stderr).splitlines()
         detail = next((s for s in reversed(lines) if "Error:" in s), "Blender işlemi tamamlanamadı")
         raise ValueError(detail[:400])
-    return json.loads((folder / "report.json").read_text(encoding="utf8"))
+    report = json.loads((folder / "report.json").read_text(encoding="utf8"))
+    if report.get("error"):
+        raise ValueError(report["error"])
+    return report
+
+
+def run_script(binary, source, folder, code):
+    """One bpy script in Blender; a failure raises ValueError with the full traceback."""
+    (folder / "script.py").write_text(code, encoding="utf8")
+    return invoke(binary, source, folder, "script")
+
+
+def script_project(binary, source, folder, request, scene=None, log=print):
+    """The model writes a bpy script; Blender runs it; errors go back until it works."""
+    from plugins import _blender_brain as brain
+    scene = scene if scene is not None else invoke(binary, source, folder, "inspect")
+    if not source:
+        scene.update(objects=[], details=[], count=0, camera=None)
+    _code, tries = brain.run_with_fixes(request, scene, scene.get("version", "4"),
+                                        lambda code: run_script(binary, source, folder, code), log=log)
+    return tries
 
 
 def project_path(value):
@@ -167,17 +194,44 @@ def build_project(binary, source, folder, request):
     scene = invoke(binary, source, folder, "inspect")
     if not source:
         scene.update(objects=[], details=[], count=0, camera=None)
-    brief = f"{SPEC}\nUser: {request}"
+    from plugins import _blender_brain as brain
+    lessons = brain.lessons_prompt(request, ("recipe", "tip", "fix"), 3)
+    brief = f"{SPEC}\n{lessons}\nUser: {request}"
     phase_choice = ('For a complex brief you may instead return {"phases":["specific subtask", ...]} '
                     'with 2 to 8 ordered phases covering every requirement. Each phase will see the '
                     'saved result of the preceding one. For simple requests return steps directly.')
     prompt = f"{brief}\n{phase_choice}\nScene: {json.dumps(scene, ensure_ascii=False)}"
     first = gemini.as_json(prompt, tier=gemini.SMART)
+    if isinstance(first, dict) and first.get("unsupported") or not isinstance(first, dict):
+        # beyond the step language (or no plan): write real Python instead
+        why = str(first.get("unsupported"))[:400] if isinstance(first, dict) else "Plan alınamadı."
+        try:
+            script_project(binary, source, folder, request, scene)
+        except ValueError as exc:
+            raise ValueError(f"{why} (Python betiğiyle de olmadı: {exc})") from exc
+        brain.remember("fix", request, "Adım dili yetmedi; Python betiğiyle yapıldı.", why)
+        return
     phases = first.get("phases") if isinstance(first, dict) else None
     if phases is not None and (not isinstance(phases, list) or not 2 <= len(phases) <= 8
                                or not all(isinstance(p, str) and p.strip() for p in phases)):
         raise ValueError("Geçersiz Blender aşama listesi.")
     tasks = phases or [request]
+    try:
+        _run_phases(binary, source, folder, request, brief, prompt, first, phases, tasks, scene)
+    except ValueError as exc:
+        # the step plan could not do it: a bpy script can do anything Blender can
+        try:
+            script_project(binary, source, folder, request, None if source else dict(scene, objects=[], count=0),
+                           log=lambda m: None)
+        except ValueError as exc2:
+            raise ValueError(f"{exc} (Python betiğiyle de olmadı: {exc2})") from exc
+        brain.remember("fix", request, "Adım dili yetmedi; Python betiğiyle yapıldı.", str(exc))
+
+
+def _run_phases(binary, source, folder, request, brief, prompt, first, phases, tasks, scene):
+    from core import gemini
+    from plugins import _blender_brain as brain
+    done = []
     with tempfile.TemporaryDirectory(dir=folder) as work:
         for index, phase in enumerate(tasks):
             last = index == len(tasks) - 1
@@ -196,6 +250,7 @@ def build_project(binary, source, folder, request):
                     if not isinstance(steps, list) or not 1 <= len(steps) <= 500:
                         raise ValueError("Plan 1–500 işlem içermeli.")
                     invoke(binary, source, stage, "build", steps)
+                    done.append(steps)
                     break
                 except ValueError as exc:
                     if attempt:
@@ -203,10 +258,99 @@ def build_project(binary, source, folder, request):
                     prompt += f"\nRejected response: {json.dumps(plan)}\nError: {exc}\nReturn corrected steps."
             source = stage / "scene.blend"
             scene = invoke(binary, source, stage, "inspect")
+    brain.remember("recipe", request, done[0] if len(done) == 1 else {"phases": phases, "steps": done})
 
 
-def process(action, request, project, topic="", *, binary=None, result="save", player=None):
+def study(binary, topic, request=""):
+    """JARVIS teaches itself a Blender topic: notes + a tiny demo script, kept only if the demo really runs."""
+    from core import gemini
+    from plugins import _blender_brain as brain
+    with tempfile.TemporaryDirectory() as temp:
+        info = invoke(binary, None, Path(temp), "reference", query=topic or request)
+    version = info.get("version", "4")
+    ask = (f"{brain.KNOWLEDGE}\nYou are learning Blender {version}'s Python API on the topic: {request or topic}.\n"
+           f"Local operator matches: {json.dumps(info.get('operators', [])[:40])}\n"
+           'Return JSON {"notes": "8-15 short, exact English bullet points: the bpy calls, property and socket names, '
+           'pitfalls (version-correct)", "demo": "a SHORT complete bpy script (background mode, no file IO) that '
+           'exercises these calls on a fresh scene"}')
+    data = gemini.as_json(ask, tier=gemini.SMART)
+    if not isinstance(data, dict) or not data.get("notes"):
+        raise ValueError("Bu konuyu öğrenemedim: beyinden not gelmedi.")
+    notes = data["notes"] if isinstance(data["notes"], str) else "\n".join(map(str, data["notes"]))
+    demo = brain.clean_code(str(data.get("demo") or ""))
+    verified = False
+    for _ in range(3):
+        why = brain.check_code(demo)
+        try:
+            if why:
+                raise ValueError(why)
+            with tempfile.TemporaryDirectory() as temp:
+                run_script(binary, None, Path(temp), demo)
+            verified = True
+            break
+        except ValueError as exc:
+            demo = brain.clean_code(gemini.text(
+                f"{brain.KNOWLEDGE}\nThis Blender {version} demo script failed:\n{demo}\nError:\n{str(exc)[-2500:]}\n"
+                "Return only the corrected complete script.", tier=gemini.SMART) or "")
+    if not verified:
+        raise ValueError("Notları çıkardım ama Blender'da deneyince çalışmadı; yanlış bilgi öğrenmemek için kaydetmedim.")
+    brain.remember("tip", f"{request or topic}", f"{notes}\nWorking example:\n{demo[:2500]}")
+    return f"'{request or topic}' konusunu öğrendim ve Blender {version}'da deneyip doğruladım."
+
+
+def hologram_render(binary, model, player=None, w=1920, h=1080, samples=128, height_m=0.0):
+    """The hologram's model as a studio photograph from Cycles."""
+    src = Path(model) if model else HOLO_GLB
+    if not src.is_file():
+        raise ValueError("Hologramda Blender'a gönderilecek model yok. Önce hologramda bir model aç.")
+    ROOT.mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix="hologram-", dir=ROOT))
+    invoke(binary, None, folder, "studio", model=str(src), width=w, height=h, samples=samples, height_m=height_m)
+    out = folder / "render.png"
+    if not out.is_file() or not out.stat().st_size:
+        raise ValueError("Blender render dosyasını oluşturamadı.")
+    pointer = folder / "latest.tmp"
+    pointer.write_text(folder.name, encoding="utf8")
+    pointer.replace(ROOT / "latest.txt")                       # "projeyi aç" opens this studio scene
+    if player is not None and hasattr(player, "show_image"):
+        player.show_image(str(out), "Blender stüdyo render'ı")
+    return out
+
+
+def install():
+    """Blender from winget (Windows). Returns a sentence about what happened."""
+    if os.name != "nt":
+        return "Bu bilgisayarda Blender'ı paket yöneticisiyle kur (Linux: 'sudo snap install blender --classic', Mac: blender.org)."
+    winget = shutil.which("winget")
+    if not winget:
+        return "winget bulunamadı. Blender'ı blender.org/download adresinden kur, sonra bana söyle."
+    r = subprocess.run([winget, "install", "-e", "--id", "BlenderFoundation.Blender", "--accept-package-agreements",
+                        "--accept-source-agreements", "--silent"], capture_output=True, timeout=1800,
+                       encoding="utf8", errors="replace")
+    tail = (r.stdout + r.stderr).strip().splitlines()[-1:] or [""]
+    try:
+        return f"Blender kuruldu: {executable()}"
+    except ValueError:
+        return f"Blender kurulumu bitmedi (winget çıkış kodu {r.returncode}): {tail[0][:200]}"
+
+
+def process(action, request, project, topic="", *, binary=None, result="save", player=None, model=""):
+    if action == "install":
+        return install()
+    if action == "lessons":
+        from plugins import _blender_brain as brain
+        return brain.summary()
+    if action == "teach":
+        from plugins import _blender_brain as brain
+        brain.remember("tip", request, request)
+        return "Tamam, Blender'da bunu öğrendim; bundan sonraki işlerde kullanacağım."
     binary = binary or executable()
+    if action == "study":
+        return study(binary, topic, request)
+    if action == "hologram":
+        out = hologram_render(binary, model or project if str(model or project or "").lower().endswith((".glb", ".gltf", ".obj", ".stl")) else "",
+                              player=player)
+        return f"Blender stüdyo render'ı hazır. {out}"
     if action == "guide":
         from core import gemini
         with tempfile.TemporaryDirectory() as temp:
@@ -215,7 +359,7 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
                   f"yanıtla. Bir işlem yaptığını söyleme. Yerel API eşleşmeleri: "
                   f"{json.dumps(report['operators'])}. Soru: {request}")
         return gemini.text(prompt, tier=gemini.SMART) or "Blender açıklaması alınamadı."
-    source = None if action == "new" else project_path(project)
+    source = None if action == "new" or (action == "script" and not project) else project_path(project)
     if action == "open":
         subprocess.Popen([binary, "--disable-autoexec", str(source)])
         return f"Blender'a açma isteği gönderildi. {source}"
@@ -233,12 +377,15 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         if action in ("glb", "render"):
             invoke(binary, source, folder, action)
             output = folder / ("render.png" if action == "render" else "scene.glb")
+        elif action == "script":
+            script_project(binary, source, folder, request)
+            output = folder / "scene.blend"
         else:
             build_project(binary, source, folder, request)
             output = folder / "scene.blend"
         if not output.is_file() or not output.stat().st_size:
             raise ValueError("Blender çıktı dosyasını oluşturamadı.")
-        if action in ("new", "edit"):
+        if action in ("new", "edit", "script"):
             pointer = folder / "latest.tmp"
             pointer.write_text(folder.name, encoding="utf8")
             pointer.replace(ROOT / "latest.txt")
@@ -265,18 +412,26 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     action = p.get("action")
     if action == "status":
         return _status
-    if action not in ("new", "edit", "inspect", "open", "render", "animation", "glb", "guide"):
+    if action not in ("new", "edit", "script", "inspect", "open", "render", "animation", "glb", "guide", "teach", "study",
+                      "lessons", "hologram", "install"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
-    if action in ("new", "edit", "guide") and not request:
+    if action in ("new", "edit", "guide", "script", "teach") and not request:
         return "Blender'da ne yapmamı istersin?"
+    if action == "study" and not (request or p.get("topic")):
+        return "Blender'da hangi konuyu öğreneyim?"
+    if action in ("lessons", "teach"):
+        try:
+            return process(action, request, None)
+        except Exception as exc:
+            return f"Blender hafızasına ulaşamadım: {exc}"
     if not _lock.acquire(blocking=False):
         return "Bir Blender işlemi sürüyor. Durumunu sorabilirsin."
 
     try:
-        binary = executable()
+        binary = None if action == "install" else executable()
     except Exception as exc:
-        _status = f"Blender işlemi başlamadı. {exc}"
+        _status = f"Blender işlemi başlamadı. {exc} İstersen 'Blender'ı kur' de, kendim kurayım."
         _lock.release()
         return _status
 
@@ -284,7 +439,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         global _status
         try:
             _status = process(action, request, p.get("project"), p.get("topic") or "",
-                              binary=binary, result=p.get("result") or "save", player=player)
+                              binary=binary, result=p.get("result") or "save", player=player, model=p.get("model") or "")
         except Exception as exc:
             _status = f"Blender işlemi tamamlanamadı. {exc}"
         finally:

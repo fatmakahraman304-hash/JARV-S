@@ -1,0 +1,48 @@
+name: Blender check
+
+on:
+  pull_request:
+    paths:
+      - "plugins/blender_studio.py"
+      - "plugins/_blender_*.py"
+      - "tests/test_blender_*.py"
+      - "tools/blender_studio_preview.py"
+      - ".github/workflows/blender-check.yml"
+  workflow_dispatch:
+
+jobs:
+  blender:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: "4.2.3"
+            series: "4.2"
+          - version: "5.0.0"
+            series: "5.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: System libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libxi6 libxkbcommon0 libsm6 libgl1 libegl1 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon-x11-0 libwayland-client0
+      - name: Blender ${{ matrix.version }}
+        run: |
+          curl -sSL --retry 4 --retry-all-errors -o blender.tar.xz "https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz"
+          mkdir -p "$HOME/blender" && tar -xf blender.tar.xz -C "$HOME/blender" --strip-components=1
+          echo "$HOME/blender" >> "$GITHUB_PATH"
+          "$HOME/blender/blender" --version | head -1
+      - name: Python packages
+        run: pip install -q numpy pillow psutil
+      - name: Blender tests
+        env:
+          BLENDER_RENDER_DIR: ${{ runner.temp }}/renders
+        run: |
+          python -m unittest -v tests.test_blender_brain tests.test_blender_studio tests.test_blender_world tests.test_blender_discovery
+      - name: Studio render preview (contact sheet in the log)
+        if: always()
+        run: python tools/blender_studio_preview.py
