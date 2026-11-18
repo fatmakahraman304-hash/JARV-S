@@ -316,8 +316,8 @@ void main() {
     col += amb * alb * (1.0 - metal) * ao;
     col += env(R, rough) * Fe * (1.0 - 0.6 * rough) * mix(0.55, 1.0, sh) * mix(ao, 1.0, 0.25);
     if (coat > 0.5) col += env(R, 0.03) * (0.04 + 0.96 * pow(1.0 - nv, 5.0)) * mix(0.6, 1.0, sh) * ao;
-    float ao = mix(0.45, 1.0, smoothstep(0.0, u_radius * 0.18, v_wp.y));       // contact darkening near the floor
-    col *= ao;
+    float contact = mix(0.72, 1.0, smoothstep(0.0, u_radius * 0.12, v_wp.y));  // a little extra darkening right at the floor
+    col *= contact;
     col += pow(v_col, vec3(2.2)) * v_mat.z * 3.0;                                // screens, LEDs
     if (sel) col += u_accent * (0.25 + 0.9 * pow(1.0 - nv, 2.0));
     col = aces(col * 1.05);
