@@ -2935,6 +2935,11 @@ class JarvisLive:
                                   f"burada sessizim, yazdıklarını yine yaparım.")
             sync_hub.on_owner_change(_on_owner)
             sync_hub.on_update(self.ui.start_update)
+            try:
+                from actions.reminder import on_shared_reminder
+                sync_hub.on_reminder(on_shared_reminder)     # set on the phone → said here too
+            except Exception as e:
+                print(f"[Sync] shared reminders off: {e}")
             if sync_hub.start(_inject_remote):
                 print("[Sync] Shared memory and device mailbox are on.")
         except Exception as e:

@@ -32,6 +32,7 @@ import urllib.error
 import urllib.request
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 API = "https://api.github.com"
 NAMESPACE = "everywhere"               # plugin config block holding token + gist id
@@ -52,7 +53,8 @@ REPLY_WAIT = 90.0                      # how long a command waits for Jarvis's a
 _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": [],
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
           "status": "kapalı", "done": set(), "claim": "", "active": True,
-          "owner": None, "on_owner": None, "devices": []}
+          "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
+          "rem_known": None}
 
 
 def _log(msg: str) -> None:
@@ -290,6 +292,109 @@ def _ts(iso: str) -> float:
         return 0.0
 
 
+# ── shared reminders (reminders.json; web/app.js mergeReminders) ────────────
+REM_KEEP_MS = 24 * 3600 * 1000
+_REM_FILE = Path(__file__).resolve().parent.parent / "config" / "shared_reminders.json"
+
+
+def merge_reminders(a, b, now_ms: float | None = None) -> list[dict]:
+    """Union by id; a cancellation on any side wins; a day after it was due an
+    entry is dropped. Same rule as mergeReminders in web/app.js."""
+    now_ms = time.time() * 1000 if now_ms is None else now_ms
+    by: dict[str, dict] = {}
+    for r in list(a or []) + list(b or []):
+        if not isinstance(r, dict) or not r.get("id"):
+            continue
+        try:
+            due = float(r.get("due") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not due:
+            continue
+        old = by.get(r["id"])
+        merged = {**(old or {}), **r, "due": due}
+        merged["cancelled"] = (old or {}).get("cancelled") or r.get("cancelled") or ""
+        by[r["id"]] = merged
+    out = [r for r in by.values() if r["due"] > now_ms - REM_KEEP_MS]
+    return sorted(out, key=lambda r: r["due"])
+
+
+def _rem_sig(items) -> str:
+    return "\n".join(f"{r.get('id')}|{float(r.get('due') or 0):.0f}|{r.get('text', '')}|{r.get('cancelled') or ''}"
+                     for r in items)
+
+
+def new_reminder_id() -> str:
+    return f"{device_id()}-{int(time.time() * 1000):x}"
+
+
+def add_reminder(text: str, due_ts: float, rid: str = "") -> str:
+    """Share a reminder set on this computer with every device. Returns its id."""
+    rid = rid or new_reminder_id()
+    with _state["lock"]:
+        _state["rem_new"].append({"id": rid, "text": str(text)[:200], "due": int(due_ts * 1000),
+                                  "from": device_name(), "cancelled": ""})
+    _known().add(rid)
+    _save_known()
+    return rid
+
+
+def on_reminder(fn) -> None:
+    """fn(event, reminder) — event "new" for one set on another device,
+    "cancelled" for one cancelled anywhere."""
+    _state["on_reminder"] = fn
+
+
+def _known() -> set:
+    if _state["rem_known"] is None:
+        try:
+            _state["rem_known"] = set(json.loads(_REM_FILE.read_text("utf-8")).get("known", []))
+        except Exception:
+            _state["rem_known"] = set()
+    return _state["rem_known"]
+
+
+def _save_known() -> None:
+    try:
+        _REM_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _REM_FILE.write_text(json.dumps({"known": sorted(_known())[-500:]}), "utf-8")
+    except OSError:
+        pass
+
+
+def _sync_reminders(files: dict, writes: dict, now: float) -> None:
+    try:
+        cloud = json.loads(files.get("reminders.json") or "[]")
+    except Exception:
+        cloud = []
+    with _state["lock"]:
+        mine, _state["rem_new"] = _state["rem_new"], []
+    merged = merge_reminders(cloud if isinstance(cloud, list) else [], mine, now * 1000)
+    known, cb, changed = _known(), _state.get("on_reminder"), False
+    for r in merged:
+        key_c = r["id"] + "#cancelled"
+        if r["id"] not in known:
+            known.add(r["id"])
+            changed = True
+            if not r.get("cancelled") and r["due"] > now * 1000 and cb:
+                try:
+                    cb("new", r)
+                except Exception as exc:
+                    _log(f"[Sync] reminder: {exc}")
+        if r.get("cancelled") and key_c not in known:
+            known.add(key_c)
+            changed = True
+            if cb:
+                try:
+                    cb("cancelled", r)
+                except Exception as exc:
+                    _log(f"[Sync] reminder: {exc}")
+    if changed:
+        _save_known()
+    if _rem_sig(merged) != _rem_sig(merge_reminders(cloud if isinstance(cloud, list) else [], [], now * 1000)):
+        writes["reminders.json"] = json.dumps(merged, ensure_ascii=False)
+
+
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
     """The id of the one device that should speak, or None when none is on.
     Same rule as voiceOwner() in web/app.js — keep the two in step."""
@@ -382,7 +487,7 @@ def _cycle() -> None:
     writes: dict[str, str] = {}
     force = now - _state["last_memory"] > MEMORY_EVERY or now - _state["last_beat"] > HEARTBEAT_EVERY
     with _state["lock"]:
-        has_turns = bool(_state["turns"])
+        has_turns = bool(_state["turns"]) or bool(_state["rem_new"])
         answered = [p for p in _state["pending"] if p.get("reply") is not None or now - p["at"] > REPLY_WAIT]
     files, tag, err = read_gist(token, gid, "" if (force or has_turns or answered) else _state["etag"])
     if err:
@@ -468,6 +573,9 @@ def _cycle() -> None:
             recent = []
         recent = (recent if isinstance(recent, list) else []) + turns
         writes["recent.json"] = json.dumps(recent[-RECENT_MAX:], ensure_ascii=False)
+
+    # 3b. reminders, shared by every device
+    _sync_reminders(files, writes, now)
 
     # 4. memory, both ways
     if now - _state["last_memory"] > MEMORY_EVERY:

@@ -146,6 +146,88 @@ class UpdateAllTest(unittest.TestCase):
         self.assertIn("Güncelleme başladı", sync_hub._state["pending"][0]["reply"])
 
 
+class SharedRemindersTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self._patches = [mock.patch.object(sync_hub, "_REM_FILE", Path(self._tmp.name) / "rem.json"),
+                         mock.patch.dict(sync_hub._state, {"rem_new": [], "rem_known": None, "on_reminder": None})]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patches:
+            p.stop()
+        self._tmp.cleanup()
+
+    def test_merge_union_cancel_wins_old_dropped(self):
+        now = 1_800_000_000_000
+        a = [{"id": "x", "text": "süt", "due": now + 60_000, "cancelled": ""},
+             {"id": "old", "text": "o", "due": now - 2 * 86_400_000}]
+        b = [{"id": "x", "text": "süt", "due": now + 60_000, "cancelled": "2026-11-18T09:00:00Z"},
+             {"id": "y", "text": "ilaç", "due": now + 100_000}]
+        m = sync_hub.merge_reminders(a, b, now)
+        self.assertEqual([(r["id"], bool(r["cancelled"])) for r in m], [("x", True), ("y", False)])
+
+    def test_phone_reminder_reaches_desktop_once_and_cancel_follows(self):
+        events = []
+        sync_hub.on_reminder(lambda ev, r: events.append((ev, r["id"])))
+        now = time.time()
+        phone = [{"id": "w1-a", "text": "ilaç iç", "due": (now + 600) * 1000, "from": "Telefon", "cancelled": ""}]
+        writes = {}
+        sync_hub._sync_reminders({"reminders.json": json.dumps(phone)}, writes, now)
+        self.assertEqual(events, [("new", "w1-a")])
+        self.assertNotIn("reminders.json", writes)          # nothing new to send
+        sync_hub._sync_reminders({"reminders.json": json.dumps(phone)}, writes, now)
+        self.assertEqual(events, [("new", "w1-a")])          # not twice
+        phone[0]["cancelled"] = "2026-11-18T10:00:00Z"
+        sync_hub._sync_reminders({"reminders.json": json.dumps(phone)}, writes, now)
+        self.assertEqual(events[-1], ("cancelled", "w1-a"))
+
+    def test_desktop_reminder_is_written_for_the_devices(self):
+        events = []
+        sync_hub.on_reminder(lambda ev, r: events.append(ev))
+        now = time.time()
+        rid = sync_hub.add_reminder("toplantı", now + 3600)
+        writes = {}
+        sync_hub._sync_reminders({}, writes, now)
+        sent = json.loads(writes["reminders.json"])
+        self.assertEqual([r["id"] for r in sent], [rid])
+        self.assertEqual(events, [])                          # our own: no callback
+
+    def test_desktop_says_phone_reminder_and_drops_it_when_cancelled(self):
+        from actions import reminder
+
+        class Eng:
+            def __init__(self):
+                self.r = []
+
+            def list(self):
+                return list(self.r)
+
+            def add(self, **kw):
+                kw["id"] = str(len(self.r))
+                self.r.append(kw)
+
+            def remove(self, rid):
+                self.r = [x for x in self.r if x["id"] != rid]
+        eng = Eng()
+        r = {"id": "w1-b", "text": "ilaç", "due": (time.time() + 600) * 1000, "from": "Telefon"}
+        with mock.patch("core.routines.desktop.engine", return_value=eng):
+            reminder.on_shared_reminder("new", r)
+            reminder.on_shared_reminder("new", r)                 # once only
+            self.assertEqual(len(eng.r), 1)
+            self.assertEqual(eng.r[0]["source"], "shared:w1-b")
+            self.assertIn("ilaç", eng.r[0]["text"])
+            reminder.on_shared_reminder("cancelled", r)
+            self.assertEqual(eng.r, [])
+
+    def test_web_uses_the_same_file(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("reminders.json", js)
+        self.assertIn("function mergeReminders", js)
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")

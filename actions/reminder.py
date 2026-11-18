@@ -314,9 +314,15 @@ def reminder(
     # scheduler fails, the reminder still reaches the phone, and the other way
     # round. Nothing happens here unless the cloud agent is paired.
     phone = _mirror_to_cloud(message, target_dt)
+    # Every device JARVIS runs on (phone, tablet, TV …) learns about it through
+    # the shared gist; at that moment the one that has the voice says it.
+    shared_id = _share_with_devices(message, target_dt)
+    if shared_id:
+        phone += " Every device JARVIS runs on knows it too; whichever is active at that moment says it."
     # The assistant also says it aloud at that moment when it is running — a
     # routine (core/routines), independent of the system notification below.
-    phone += _add_spoken_routine(message, target_dt)
+    phone += _add_spoken_routine(message, target_dt,
+                                 source=f"shared:{shared_id}" if shared_id else "reminder")
 
     try:
         script_path = _write_notify_script(task_name, safe_msg, os_name)
@@ -345,7 +351,49 @@ def reminder(
     return f"Reminder set for {friendly_time}.{phone}"
 
 
-def _add_spoken_routine(message: str, target_dt: datetime) -> str:
+def _share_with_devices(message: str, target_dt: datetime) -> str:
+    """Put the reminder in the shared list (core/sync_hub). "" when the
+    devices are not linked."""
+    try:
+        from core import sync_hub
+        s = sync_hub.settings()
+        if not (s.get("github_token") and s.get("gist_id")):
+            return ""
+        return sync_hub.add_reminder(message, target_dt.timestamp())
+    except Exception as e:
+        print(f"[Reminder] not shared with the devices: {e}")
+        return ""
+
+
+def on_shared_reminder(event: str, r: dict) -> None:
+    """A reminder set or cancelled on another device (phone, tablet …).
+    New: said aloud here at that time (only heard if this computer has the
+    voice — main.py's voice yielding). Cancelled: the spoken copy goes."""
+    try:
+        from core.routines import desktop
+        eng = desktop.engine()
+        if eng is None:
+            return
+        source = f"shared:{r.get('id')}"
+        if event == "cancelled":
+            for routine in eng.list():
+                if routine.get("source") == source:
+                    eng.remove(routine["id"])
+            return
+        due = float(r.get("due") or 0) / 1000.0
+        text = str(r.get("text") or "").strip() or "Hatırlatma"
+        if due <= datetime.now().timestamp():
+            return
+        if any(routine.get("source") == source for routine in eng.list()):
+            return
+        eng.add(name=text[:60], kind="say", text=f"Hatırlatma: {text}",
+                trigger={"type": "time", "rule": {"type": "once", "at_ts": due}}, source=source)
+        print(f"[Reminder] from {r.get('from') or 'another device'}: {text[:60]}")
+    except Exception as e:
+        print(f"[Reminder] shared reminder not set here: {e}")
+
+
+def _add_spoken_routine(message: str, target_dt: datetime, source: str = "reminder") -> str:
     try:
         from core.routines import desktop
         eng = desktop.engine()
@@ -353,7 +401,7 @@ def _add_spoken_routine(message: str, target_dt: datetime) -> str:
             return ""
         eng.add(name=message[:60] or "Reminder", kind="say", text=message,
                 trigger={"type": "time", "rule": {"type": "once", "at_ts": target_dt.timestamp()}},
-                source="reminder")
+                source=source)
         return " It will also be said aloud at that time while the assistant is running."
     except Exception as e:
         print(f"[Reminder] spoken copy not set: {e}")
