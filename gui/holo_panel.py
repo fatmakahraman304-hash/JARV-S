@@ -55,6 +55,9 @@ def load_library() -> list:
 
 
 def save_to_library(model: dict) -> None:
+    if not model.get("id"):                                # every saved model needs its own id (gallery, thumbnails)
+        import uuid
+        model["id"] = uuid.uuid4().hex[:12]
     lib = [m for m in load_library() if m.get("id") != model.get("id")] + [model]
     LIBRARY.parent.mkdir(parents=True, exist_ok=True)
     tmp = LIBRARY.with_suffix(".tmp")
