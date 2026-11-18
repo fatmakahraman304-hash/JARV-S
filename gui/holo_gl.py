@@ -169,7 +169,7 @@ void main() {
         refl = 0.22 * exp(-(-v_wp.y) / max(u_height * 0.35, 0.5)) * (1.0 - smoothstep(0.3, 1.0, length(v_wp.xz) / (u_radius * 1.6)));
         V = normalize(u_eye - vec3(v_wp.x, -v_wp.y, v_wp.z));
     }
-    if (u_pass > 0.5) {                                   // the floor
+    if (u_pass > 0.5 && u_pass < 1.5) {                  // the floor
         float r = length(v_wp.xz) / (u_radius * 1.6);
         if (u_holo > 0.5) {
             float rings = 0.0;
