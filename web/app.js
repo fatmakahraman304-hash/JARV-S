@@ -210,6 +210,7 @@
       localStorage.setItem('jarvis_recent', JSON.stringify(recent));
       renderDevices();
       updateOwner();
+      batteryWatch();
       watchUpdateFile(f);
       return f;
     } catch (e) { console.warn('sync', e); updateOwner(); return null; }
@@ -237,6 +238,27 @@
   (async () => { try { const b = await navigator.getBattery?.(); if (!b) return;
     const upd = () => { battery = { battery: Math.round(b.level * 100), charging: !!b.charging }; };
     upd(); b.addEventListener('levelchange', upd); b.addEventListener('chargingchange', upd); } catch {} })();
+  // Low battery anywhere: said once by the device that has the voice
+  // (core/sync_hub.low_battery is the same rule).
+  const batAlerted = new Set(J(sessionStorage.getItem('jarvis_bat'), []));
+  function lowBattery(list) {
+    const out = [];
+    for (const d of list) {
+      if (d.battery == null) continue;
+      if (d.charging || d.battery > 30) { batAlerted.delete(d.id); continue; }
+      if (d.battery <= 15 && online(d) && !batAlerted.has(d.id)) { batAlerted.add(d.id); out.push(d); }
+    }
+    try { sessionStorage.setItem('jarvis_bat', JSON.stringify([...batAlerted])); } catch {}
+    return out;
+  }
+  function batteryWatch() {
+    const me = { id: S.id, name: devName(), kind: KIND, seen: new Date().toISOString(), ...battery };
+    const low = lowBattery([me, ...devices.filter(d => d.id !== S.id)]);
+    if (!low.length || !amOwner()) return;
+    const names = low.map(d => `${d.name} %${d.battery}`).join(', ');
+    toast('🔋 Pil azaldı: ' + names); sys('🔋 Pil azaldı: ' + names);
+    if (ws && ready) tellBrain(`Pili azalan cihaz: ${names}. Şarja takmasını öner.`);
+  }
   function healthText(d) {
     const L = [];
     if (d.battery != null) L.push(`pil %${d.battery}${d.charging ? ' (şarjda)' : ''}`);

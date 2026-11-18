@@ -382,6 +382,31 @@ class StatusReportTest(unittest.TestCase):
         self.assertIn("PROJELER", out)
 
 
+class LowBatteryTest(unittest.TestCase):
+    def test_announced_once_until_charged(self):
+        now = sync_hub._now()
+        alerted = set()
+        phone = {"id": "p", "name": "Telefon", "battery": 12, "charging": False, "seen": now}
+        self.assertEqual([d["id"] for d in sync_hub.low_battery([phone], alerted)], ["p"])
+        self.assertEqual(sync_hub.low_battery([phone], alerted), [])            # once
+        sync_hub.low_battery([dict(phone, charging=True)], alerted)              # plugged in: forgotten
+        self.assertEqual(len(sync_hub.low_battery([phone], alerted)), 1)          # low again: said again
+        self.assertEqual(sync_hub.low_battery([{"id": "x", "seen": now}], alerted), [])   # no battery info
+
+    def test_only_the_voice_owner_speaks(self):
+        said = []
+        now = sync_hub._now()
+        low = [{"id": "p", "name": "Telefon", "battery": 9, "charging": False, "seen": now}]
+        with mock.patch.dict(sync_hub._state, {"devices": low, "owner": "p", "inject": said.append, "bat_alerted": set()}), \
+             mock.patch.object(sync_hub, "health", return_value={}):
+            sync_hub._battery_watch("me")
+        self.assertEqual(said, [])
+        with mock.patch.dict(sync_hub._state, {"devices": low, "owner": "me", "inject": said.append, "bat_alerted": set()}), \
+             mock.patch.object(sync_hub, "health", return_value={}):
+            sync_hub._battery_watch("me")
+        self.assertIn("Telefon %9", said[0])
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
