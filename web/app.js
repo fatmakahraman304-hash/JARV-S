@@ -405,51 +405,130 @@
     }
     return 'Bilinmeyen araç.';
   }
-  // ── pictures: Gemini's image models, straight from this device ──────────
+  // ── pictures: Gemini's image models when the key has quota; otherwise
+  // Gemini's free text model describes the picture and a free, keyless painter
+  // (Pollinations / FLUX) draws it. Gemini image models have no free tier
+  // ("429 … limit: 0"), so without this a free key could never draw.
   const IMAGE_MODELS = ['gemini-3.1-flash-image', 'gemini-3-pro-image', 'gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
+  const TEXT_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
+  const NOQ_KEY = 'jarvis_img_noq', NOQ_REST = 6 * 3600e3;
   let lastImage = (() => { try { return JSON.parse(sessionStorage.getItem('jarvis_img') || 'null'); } catch { return null; } })();
   let imgBusy = false;
+  const geminiResting = () => { try { return Number(localStorage.getItem(NOQ_KEY) || 0) > Date.now(); } catch { return false; } };
+  const restGemini = (on) => { try { on ? localStorage.setItem(NOQ_KEY, String(Date.now() + NOQ_REST)) : localStorage.removeItem(NOQ_KEY); } catch {} };
+  const noQuota = (e) => /limit: 0|free_tier|billing|^40[34]\b/i.test(e);
+  function keepImage(img) {
+    lastImage = img;
+    try { sessionStorage.setItem('jarvis_img', JSON.stringify(lastImage)); }
+    catch { try { sessionStorage.setItem('jarvis_img', JSON.stringify({ ...img, data: '' })); } catch {} }
+  }
+  async function geminiImage(prompt, edit, aspect) {
+    const parts = edit && lastImage?.data
+      ? [{ inlineData: { mimeType: lastImage.mime, data: lastImage.data } }, { text: 'Edit this image: ' + prompt + '\nKeep everything else the same unless asked.' }]
+      : [{ text: prompt }];
+    const gen = { responseModalities: ['TEXT', 'IMAGE'] };
+    if (/^\d+:\d+$/.test(aspect)) gen.imageConfig = { aspectRatio: aspect };
+    const errors = [];
+    for (const model of IMAGE_MODELS) {
+      let js;
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key },
+          body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: gen }) });
+        js = await r.json();
+        if (!r.ok) { errors.push(`${r.status} ${js.error?.message || ''}`); if ([404, 403, 429, 500, 503].includes(r.status)) continue; break; }
+      } catch (e) { errors.push(String(e.message || e)); continue; }
+      let text = '';
+      for (const c of js.candidates || []) for (const p of c.content?.parts || []) {
+        const d = p.inlineData || p.inline_data;
+        if (d?.data && !p.thought) return { img: { data: d.data, mime: d.mimeType || 'image/png', prompt }, text };
+        if (p.text && !p.thought) text += p.text;
+      }
+      if (js.promptFeedback?.blockReason) return { blocked: true };
+      errors.push(text || 'resim dönmedi');
+    }
+    return { errors };
+  }
+  async function describe(prompt, base) {
+    const ask = base
+      ? `You rewrite image-generation prompts. Prompt of the existing picture:\n${base}\n\nThe user wants this change (any language): ${prompt}\nWrite the full new prompt in English: keep everything the same (subject, composition, style, colours, lighting) except what the change asks. Answer with the prompt only, at most 90 words.`
+      : `Turn this picture request (any language) into one vivid English prompt for an image generator: subject, setting, style, lighting, composition. Keep any text that must appear in the picture exactly as given, in quotes. Answer with the prompt only, at most 80 words.\n\nRequest: ${prompt}`;
+    if (S.key) for (const model of TEXT_MODELS) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: ask }] }] }) });
+        if (!r.ok) continue;
+        const js = await r.json();
+        const out = (js.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('').trim()
+          .replace(/^"|"$/g, '').replace(/^(new )?prompt\s*:\s*/i, '');
+        if (out.length >= 10) return out.slice(0, 1500);
+      } catch {}
+    }
+    return base ? `${base}. Change: ${prompt}` : prompt;
+  }
+  function imageSize(aspect) {
+    const m = /^(\d+):(\d+)$/.exec(aspect || ''); if (!m) return [1024, 1024];
+    const a = +m[1], b = +m[2]; if (!a || !b) return [1024, 1024];
+    const [w, h] = a >= b ? [1024, 1024 * b / a] : [1024 * a / b, 1024];
+    return [Math.max(64, Math.round(w / 64) * 64), Math.max(64, Math.round(h / 64) * 64)];
+  }
+  const blobToB64 = (blob) => new Promise((res, rej) => { const f = new FileReader(); f.onload = () => res(String(f.result).split(',')[1] || ''); f.onerror = rej; f.readAsDataURL(blob); });
+  async function freeImage(en, aspect, seed) {
+    const [w, h] = imageSize(aspect);
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(en)}?width=${w}&height=${h}&seed=${seed}&model=flux&nologo=true&enhance=false&referrer=jarvis`;
+    let err = '';
+    for (let i = 0; i < 3; i++) {
+      try {
+        const r = await fetch(url);
+        if (r.ok) {
+          const blob = await r.blob();
+          if (blob.type.startsWith('image/') && blob.size > 1000) return { data: await blobToB64(blob), mime: blob.type, url };
+          err = 'resim dönmedi';
+        } else err = String(r.status);
+        if (r.status && ![429, 500, 502, 503, 504].includes(r.status)) break;
+      } catch (e) {
+        // Fetch blocked (CORS / network): the <img> tag can still show it.
+        const ok = await new Promise(res => { const im = new Image(); im.onload = () => res(true); im.onerror = () => res(false); im.src = url; });
+        if (ok) return { data: '', mime: 'image/jpeg', url };
+        err = String(e.message || e);
+      }
+      await new Promise(r => setTimeout(r, err === '429' ? 16000 : 4000));
+    }
+    return { err };
+  }
   async function makeImage(prompt, edit, aspect) {
     if (!prompt) return 'Ne çizeyim?';
-    if (!S.key) return 'Gemini anahtarı yok.';
     if (imgBusy) return 'Önceki resmi hâlâ çiziyorum.';
     if (edit && !lastImage) return 'Değiştirilecek resim yok; önce bir resim çizeyim mi?';
     imgBusy = true; toast(edit ? '🎨 Resim değiştiriliyor…' : '🎨 Çiziliyor…');
-    const parts = edit ? [{ inlineData: { mimeType: lastImage.mime, data: lastImage.data } }, { text: 'Edit this image: ' + prompt + '\nKeep everything else the same unless asked.' }]
-                       : [{ text: prompt }];
-    const gen = { responseModalities: ['TEXT', 'IMAGE'] };
-    if (/^\d+:\d+$/.test(aspect)) gen.imageConfig = { aspectRatio: aspect };
-    let last = '';
     try {
-      for (const model of IMAGE_MODELS) {
-        let js;
-        try {
-          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key },
-            body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: gen }) });
-          js = await r.json();
-          if (!r.ok) { last = `${r.status} ${js.error?.message || ''}`; if ([404, 403, 429, 500, 503].includes(r.status)) continue; break; }
-        } catch (e) { last = String(e.message || e); continue; }
-        let text = '';
-        for (const c of js.candidates || []) for (const p of c.content?.parts || []) {
-          const d = p.inlineData || p.inline_data;
-          if (d?.data && !p.thought) {
-            lastImage = { data: d.data, mime: d.mimeType || 'image/png', prompt };
-            try { sessionStorage.setItem('jarvis_img', JSON.stringify(lastImage)); } catch {}
-            showImage(text);
-            return edit ? 'Resim değiştirildi ve ekranda.' : 'Resim çizildi ve ekranda.';
-          }
-          if (p.text && !p.thought) text += p.text;
+      let errors = [];
+      if (S.key && !geminiResting() && !(edit && !lastImage.data)) {
+        const g = await geminiImage(prompt, edit, aspect);
+        if (g.blocked) return 'Bu resmi güvenlik kuralları yüzünden çizemiyorum.';
+        if (g.img) {
+          restGemini(false); keepImage({ ...g.img, prompt: edit ? `${lastImage.prompt} → ${prompt}` : prompt });
+          showImage(g.text);
+          return edit ? 'Resim değiştirildi ve ekranda.' : 'Resim çizildi ve ekranda.';
         }
-        last = text || (js.promptFeedback?.blockReason ? 'blocked' : 'resim dönmedi');
-        if (last === 'blocked') break;
+        errors = g.errors || [];
+        if (errors.length && errors.every(noQuota)) restGemini(true);
+        console.warn('[resim] Gemini çizemedi, ücretsiz ressama geçiliyor:', errors.at(-1));
       }
+      const base = edit ? (lastImage.en || lastImage.prompt || '') : '';
+      const seed = edit && lastImage.seed ? lastImage.seed : Math.floor(Math.random() * 2e9) + 1;
+      const en = await describe(prompt, base);
+      const f = await freeImage(en, aspect, seed);
+      if (f.err) return 'Resim üretilemedi (' + [...errors.slice(-1), 'ücretsiz ressam: ' + f.err].join('; ').slice(0, 200) + '). Biraz sonra tekrar deneyeyim mi?';
+      keepImage({ data: f.data, mime: f.mime, url: f.url, en, seed, prompt: edit ? `${lastImage.prompt} → ${prompt}` : prompt });
+      showImage('');
+      return edit ? 'Resim değiştirildi ve ekranda.' : 'Resim çizildi ve ekranda.';
     } finally { imgBusy = false; }
-    return last === 'blocked' ? 'Bu resmi güvenlik kuralları yüzünden çizemiyorum.' : 'Resim üretilemedi: ' + last.slice(0, 160);
   }
   function showImage(note) {
     if (!lastImage) return;
-    $('img-view').src = `data:${lastImage.mime};base64,${lastImage.data}`;
+    $('img-view').src = lastImage.data ? `data:${lastImage.mime};base64,${lastImage.data}` : (lastImage.url || '');
     $('img-note').textContent = note || lastImage.prompt || '';
     openSheet('s-image');
     if (KIND === 'tv' || KIND === 'projector') { try { $('img-view').requestFullscreen?.(); } catch {} }
@@ -462,11 +541,12 @@
     const msg = await makeImage(t, true, '');
     if (!/değiştirildi/.test(msg)) toast(msg);
   });
-  function imageBlob() { const b = atob(lastImage.data), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: lastImage.mime }); }
-  $('img-dl').onclick = () => { if (!lastImage) return; const a = document.createElement('a'); a.href = URL.createObjectURL(imageBlob());
+  function imageBlob() { if (!lastImage.data) return null; const b = atob(lastImage.data), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: lastImage.mime }); }
+  $('img-dl').onclick = () => { if (!lastImage) return; if (!lastImage.data) { window.open(lastImage.url, '_blank'); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(imageBlob());
     a.download = 'jarvis-' + Date.now() + (lastImage.mime.includes('jpeg') ? '.jpg' : '.png'); a.click(); };
   $('img-share').onclick = async () => {
     if (!lastImage) return;
+    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'JARVIS' }); } catch { window.open(lastImage.url, '_blank'); } return; }
     const file = new File([imageBlob()], 'jarvis.png', { type: lastImage.mime });
     try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'JARVIS' }); else $('img-dl').click(); } catch {}
   };
