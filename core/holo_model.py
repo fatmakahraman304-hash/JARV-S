@@ -154,7 +154,7 @@ def clean(m) -> dict:
     return {"name": str(m.get("name") or "Model")[:60], "summary": str(m.get("summary") or "")[:500],
             "parts": parts, "id": str(m.get("id") or ""), "created": str(m.get("created") or ""),
             "photo": m.get("photo") if isinstance(m.get("photo"), str) and len(m.get("photo")) < 1_500_000 else "",
-            "photo_box": box}
+            "photo_box": box, "draft": bool(m.get("draft"))}
 
 
 # ── surfaces: (V, N | None, F) in part space, real centimetres ─────────────

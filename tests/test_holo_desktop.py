@@ -393,3 +393,38 @@ class ExportTests(unittest.TestCase):
     def test_gallery_commands(self):
         self.assertEqual(hm.local_command("galeriyi aç"), "lib")
         self.assertEqual(hm.local_command("dışa aktar"), "stl")
+
+
+@unittest.skipUnless(HAS_QT, "PyQt6 not installed")
+class DraftFallbackTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import os
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt6.QtWidgets import QApplication
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_quota_failure_gives_photo_draft_and_asks_for_key(self):
+        import tempfile
+        from unittest import mock
+        from core import holo_ai3d, holo_scan
+        from gui.holo_panel import HoloPanel
+        with tempfile.TemporaryDirectory() as t:
+            ref = Path(t) / "ref.jpg"
+            ref.write_bytes(b"\xff\xd8fake")
+            panel = HoloPanel()
+            draft = hm.clean({"name": "Kask", "parts": [{"shape": "sphere", "size": [20, 20, 20]}]})
+            with mock.patch.object(holo_ai3d, "reference_image", return_value=(str(ref), "")), \
+                 mock.patch.object(holo_ai3d, "GLB_DIR", Path(t)), \
+                 mock.patch.object(holo_ai3d, "measure", return_value={}), \
+                 mock.patch.object(holo_ai3d, "image_to_3d", return_value=(None, "", "Kota dolmuş; hf_token ekle.")), \
+                 mock.patch.object(holo_scan, "scan", return_value=(draft, "Kask hazır.")) as scan, \
+                 mock.patch.object(holo_scan, "create") as create:
+                m, msg = panel._make("bir Iron Man kaskı")
+            self.assertTrue(m["draft"])
+            self.assertIn("TASLAK", msg)
+            scan.assert_called_once()                       # modelled from the photoreal picture, not from text
+            create.assert_not_called()
+            self.assertTrue(panel._need_key)
+            self.assertEqual(panel._retry[1], "bir Iron Man kaskı")
+            self.assertTrue(hm.clean(m)["draft"])

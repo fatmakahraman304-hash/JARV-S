@@ -445,7 +445,10 @@ class HoloPanel(QWidget):
         elif a in ("video", "turntable"):
             self._turntable()
         elif a == "key":
-            self._ask_key()
+            if self._ask_key() and self._retry:
+                jpeg, prompt, source = self._retry
+                self._retry = None
+                self._job("GERÇEK 3B YENİDEN DENENİYOR", lambda: self._real_from_photo(jpeg, prompt, source))
         elif a == "cancel":
             self.cancel()
         elif a == "lib":
@@ -498,6 +501,8 @@ class HoloPanel(QWidget):
         info = holo_ai3d.measure(prompt, jpeg)
         glb, provider, msg = holo_ai3d.image_to_3d(source, progress=self._progress, log=print)
         if not glb:
+            self._retry = (jpeg, prompt, source)               # what to try again once a key is added
+            self._need_key = "hf_token" in msg                 # quota gone / no key: the fix is a free key
             return None, msg
         m = holo_ai3d.build(glb, provider, info, source=source, prompt=prompt)
         return m, f"{m['name']}: gerçek 3B model ({provider})."
@@ -507,14 +512,23 @@ class HoloPanel(QWidget):
             from core import holo_ai3d
             self._progress("REFERANS GÖRÜNTÜ ÇİZİLİYOR…")
             ref, note = holo_ai3d.reference_image(text)
+            from core import holo_scan
             if ref:
-                m, msg = self._real_from_photo(Path(ref).read_bytes(), text, ref)
+                ref_bytes = Path(ref).read_bytes()
+                m, msg = self._real_from_photo(ref_bytes, text, ref)
                 if m:
                     return m, msg
                 note = msg
-            from core import holo_scan
+                # no real 3D: model the parts from the photoreal picture (its real colours projected on) — far closer than text alone
+                self._progress("TASLAK: FOTOĞRAFTAN PARÇA MODELİ…")
+                m, msg = holo_scan.scan([ref_bytes], progress=self._progress)
+                if m:
+                    m["draft"] = True
+                    return m, f"{msg} (TASLAK — gerçek 3B olmadı: {note[:120]})"
             m, msg = holo_scan.create(text, progress=self._progress)
-            return m, (f"{msg} (Gerçek 3B olmadı: {note[:120]} — parça modeli yaptım.)" if m and note else msg)
+            if m:
+                m["draft"] = True
+            return m, (f"{msg} (TASLAK — gerçek 3B olmadı: {note[:120]})" if m and note else msg)
         from core import holo_scan
         return holo_scan.create(text, progress=self._progress)
 
@@ -570,7 +584,8 @@ class HoloPanel(QWidget):
                     note = msg
                     m, msg = holo_scan.scan(frames, progress=self._progress)
                     if note and m:
-                        msg = f"{msg} (Gerçek 3B olmadı: {note[:120]} — parça modeli yaptım.)"
+                        m["draft"] = True
+                        msg = f"{msg} (TASLAK — gerçek 3B olmadı: {note[:120]})"
                 put(m, msg)
             except Exception as exc:
                 put(None, f"Tarama hatası: {exc}")
@@ -589,7 +604,34 @@ class HoloPanel(QWidget):
             self.busy, self.count, self.status_until = False, "", 0
             self.flash("İptal edildi")
 
-    def _ask_key(self):
+    _retry = None
+    _need_key = False
+    _asked_key = False
+
+    def _offer_key(self):
+        """The real-3D services said no (daily free GPU quota used up / no key): ask once for a
+        free key and, if one is given, make the same model again — this time for real."""
+        from PyQt6.QtWidgets import QMessageBox
+        box = QMessageBox(self)
+        box.setWindowTitle("Gerçekçi model için anahtar gerekiyor")
+        box.setText("Bu model TASLAK: fotoğraf kalitesinde gerçek 3B modeli yapan yapay zekâ servisleri "
+                    "ücretsiz günlük kotanın dolduğunu söyledi.\n\n"
+                    "Ücretsiz bir Hugging Face anahtarı (2 dakika) kotayı senin hesabına bağlar:\n"
+                    "1) huggingface.co → ücretsiz hesap aç\n"
+                    "2) Settings → Access Tokens → Create new token → Read\n"
+                    "3) hf_ ile başlayan anahtarı buraya yapıştır.\n\n"
+                    "Daha çok model için Tripo (tsk_…) ya da Meshy (msy_…) ücretsiz aylık kredisi de olur.")
+        box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        box.button(QMessageBox.StandardButton.Ok).setText("🔑 Anahtar gir")
+        box.button(QMessageBox.StandardButton.Cancel).setText("Sonra")
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            return
+        if self._ask_key() and self._retry:
+            jpeg, prompt, source = self._retry
+            self._retry = None
+            self._job("GERÇEK 3B YENİDEN DENENİYOR", lambda: self._real_from_photo(jpeg, prompt, source))
+
+    def _ask_key(self) -> bool:
         """A text box for the Hugging Face / Tripo / Meshy key (the real-3D engine's quota)."""
         from PyQt6.QtWidgets import QInputDialog, QLineEdit
         try:
@@ -606,6 +648,8 @@ class HoloPanel(QWidget):
         if ok and text.strip():
             from plugins import hologram
             self.flash(hologram.run({"action": "hf_token", "request": text.strip()}, None), 6)
+            return True
+        return False
 
     def _turntable(self):
         """A 6-second 360° turntable video (1920×1080, MP4) of the model."""
@@ -831,6 +875,9 @@ class HoloPanel(QWidget):
             else:
                 self.flash(msg, 6)
                 self.note.emit(f"SYS: 🧊 {msg}")
+            if self._need_key and not self._asked_key and self.isVisible():
+                self._asked_key, self._need_key = True, False
+                QTimer.singleShot(400, self._offer_key)
         self.explode += (self.explode_to - self.explode) * 0.14
         if abs(self.explode - self.explode_to) < 0.002:
             self.explode = self.explode_to
@@ -1009,12 +1056,16 @@ class HoloPanel(QWidget):
                 p.setFont(px_font(11.5))
                 dims = " × ".join(str(round(v)) for v in self.mesh.size)
                 p.drawText(QPointF(22, 172), f"{dims} CM  ·  {self.mesh.pieces} PARÇA  ·  {self.mesh.n_vert // 3:,} ÜÇGEN  ·  {'HOLOGRAM' if self.holo else 'GERÇEKÇİ'}".replace(",", "."))
+                if self.model.get("draft"):
+                    p.setPen(QColor(255, 176, 48))
+                    p.setFont(px_font(11, mono=False))
+                    p.drawText(QPointF(22, 186), "⚠ TASLAK — gerçek 3B için 🔑 ücretsiz anahtar gir")
                 p.setFont(px_font(11))
                 for k, part in enumerate(self.model["parts"][:24]):
                     on = k == (self.sel if self.sel >= 0 else self.hover)
                     p.setPen(qcol(C.ACC2) if on else with_alpha(qcol(C.TEXT_DIM), 0.85))
-                    p.drawText(QPointF(30, 198 + k * 17), part["name"])
-                    p.fillRect(QRectF(22, 188 + k * 17, 2, 13), qcol(C.PRI) if on else with_alpha(qcol(C.BORDER_B), 0.6))
+                    p.drawText(QPointF(30, 206 + k * 17), part["name"])
+                    p.fillRect(QRectF(22, 196 + k * 17, 2, 13), qcol(C.PRI) if on else with_alpha(qcol(C.BORDER_B), 0.6))
         # camera preview with the hands drawn on it
         if self.worker and self.worker.frame is not None:
             with self.worker.lock:
