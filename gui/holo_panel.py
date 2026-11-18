@@ -580,7 +580,11 @@ class HoloPanel(QWidget):
         if z <= 0:
             return
         x, y = x / dpr, y / dpr
-        lx, ly = x + 80, y - 60
+        lo, hi = self.mesh.lo, self.mesh.hi                 # the label sits clear of the model
+        corners = [[a, b, c] for a in (lo[0], hi[0]) for b in (lo[1], hi[1]) for c in (lo[2], hi[2])]
+        right = float(self.cam.project(self.mesh, corners, w, h)[:, 0].max()) / dpr
+        lx = min(max(x + 60, right + 30), self.width() - 230)
+        ly = max(70.0, y - 60)
         p.setPen(QPen(qcol(C.ACC2), 1.3))
         p.drawLine(QPointF(x, y), QPointF(lx, ly))
         p.drawLine(QPointF(lx, ly), QPointF(lx + 190, ly))
