@@ -21,6 +21,13 @@ IDLE_SECONDS = 90.0
 EVERY_USER_TURNS = 10
 
 _lock = threading.Lock()
+
+
+def _log(msg: str) -> None:
+    try:
+        print(msg)
+    except Exception:                 # a Windows console that cannot print Turkish letters
+        print(msg.encode("ascii", "replace").decode())
 _buf: list[tuple[str, str]] = []
 _timer: threading.Timer | None = None
 
@@ -92,8 +99,8 @@ def run() -> int:
         update = apply(facts, memory)
         if update:
             update_memory(update)
-            print(f"[Learner] {sum(len(v) for v in update.values())} yeni bilgi öğrenildi")
+            _log(f"[Learner] {sum(len(v) for v in update.values())} yeni bilgi öğrenildi")
         return sum(len(v) for v in update.values())
     except Exception as exc:
-        print(f"[Learner] {exc}")
+        _log(f"[Learner] {exc}")
         return 0
