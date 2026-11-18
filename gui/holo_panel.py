@@ -55,10 +55,21 @@ def load_library() -> list:
 
 
 def save_to_library(model: dict) -> None:
+    if not model.get("id"):                                # every saved model needs its own id (gallery, thumbnails)
+        import uuid
+        model["id"] = uuid.uuid4().hex[:12]
     lib = [m for m in load_library() if m.get("id") != model.get("id")] + [model]
     LIBRARY.parent.mkdir(parents=True, exist_ok=True)
     tmp = LIBRARY.with_suffix(".tmp")
     tmp.write_text(json.dumps(lib[-40:], ensure_ascii=False), encoding="utf-8")
+    tmp.replace(LIBRARY)
+
+
+def delete_from_library(model_id) -> None:
+    lib = [m for m in load_library() if m.get("id") != model_id]
+    LIBRARY.parent.mkdir(parents=True, exist_ok=True)
+    tmp = LIBRARY.with_suffix(".tmp")
+    tmp.write_text(json.dumps(lib, ensure_ascii=False), encoding="utf-8")
     tmp.replace(LIBRARY)
 
 
@@ -257,7 +268,7 @@ class HoloPanel(QWidget):
         for key, text, kind in (("scan", "📷  TARA", "primary"), ("engine", "🧠  GERÇEK 3B", "choice"), ("detail", "🔎  DETAY", "choice"), ("hands", "🖐  EL", "off"),
                                 ("look", "◐  HOLOGRAM", "choice"), ("explode", "💥  PARÇALA", "off"), ("cut", "✂  KESİT", "off"),
                                 ("measure", "📏  ÖLÇ", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
-                                ("shot", "📸 4K", "dim"), ("video", "🎬", "dim"), ("stl", "⬇ STL", "dim"), ("lib", "📂", "dim"),
+                                ("shot", "📸 4K", "dim"), ("video", "🎬", "dim"), ("stl", "⬇ DIŞA AKTAR", "dim"), ("lib", "📂", "dim"),
                                 ("key", "🔑", "dim"), ("close", "✕", "dim")):
             b = QPushButton(text)
             b.setFixedHeight(34)
@@ -323,7 +334,7 @@ class HoloPanel(QWidget):
     def _mark(self, key, on):
         b = self.btns.get(key)
         if b:
-            b.setStyleSheet(btn_css("on" if on else "off", "center"))
+            b.setStyleSheet(btn_css("on" if on else ("dim" if key in ("lib",) else "off"), "center"))
 
     def flash(self, text: str, seconds: float = 3.5):
         self.status, self.status_until = text, time.monotonic() + seconds
@@ -438,7 +449,7 @@ class HoloPanel(QWidget):
         elif a == "cancel":
             self.cancel()
         elif a == "lib":
-            self._cycle_library()
+            self._toggle_gallery()
         elif a == "throw":
             if self.model:
                 save_to_library(self.model)
@@ -602,6 +613,7 @@ class HoloPanel(QWidget):
             self.flash("Videoya alınacak model yok")
             return
         import cv2
+        from gui.holo_gl import bloom
         W, H, N = 1920, 1080, 180
         EXPORT_DIR.mkdir(parents=True, exist_ok=True)
         safe = "".join(ch if ch.isalnum() else "_" for ch in self.model["name"]).strip("_") or "model"
@@ -621,7 +633,7 @@ class HoloPanel(QWidget):
                                      t=i / 30.0, explode=self.explode) or self.soft.render(self.mesh, self.cam, W, H, holo=self.holo,
                                                                                        accent=(acc.redF(), acc.greenF(), acc.blueF()), t=i / 30.0)
                 frame = bg.copy()
-                p = QPainter(frame); p.drawImage(0, 0, img); p.end()
+                p = QPainter(frame); p.drawImage(0, 0, bloom(img, 0.9 if self.holo else 0.45)); p.end()
                 frame = frame.convertToFormat(QImage.Format.Format_RGB888)
                 ptr = frame.constBits(); ptr.setsize(frame.sizeInBytes())
                 arr = np.frombuffer(ptr, np.uint8).reshape(H, frame.bytesPerLine())[:, :W * 3].reshape(H, W, 3)
@@ -643,27 +655,38 @@ class HoloPanel(QWidget):
             self.flash("🖐 Ellerini kameraya göster: çimdikle döndür, iki elle yakınlaştır")
 
     def _stl(self):
+        """STL (3D printer), OBJ (Blender / CAD) and GLB (textured, everywhere) side by side."""
         if not self.mesh:
             self.flash("İndirilecek model yok")
             return
         EXPORT_DIR.mkdir(parents=True, exist_ok=True)
         safe = "".join(ch if ch.isalnum() else "_" for ch in self.model["name"]).strip("_") or "model"
-        path = EXPORT_DIR / f"{safe}.stl"
-        path.write_bytes(self.mesh.stl())
-        self.flash(f"⬇ {path}")
-        self.note.emit(f"SYS: 🧊 STL kaydedildi: {path}")
+        done = []
+        for ext, make in (("stl", self.mesh.stl), ("obj", lambda: holo_model.export_obj(self.mesh)),
+                          ("glb", lambda: holo_model.export_glb(self.mesh, self.model))):
+            try:
+                (EXPORT_DIR / f"{safe}.{ext}").write_bytes(make())
+                done.append(ext.upper())
+            except Exception as exc:
+                self.note.emit(f"SYS: 🧊 {ext.upper()} kaydedilemedi: {exc}")
+        if done:
+            self.flash(f"⬇ {' + '.join(done)} → {EXPORT_DIR / safe}", 6)
+            self.note.emit(f"SYS: 🧊 Dışa aktarıldı ({', '.join(done)}): {EXPORT_DIR / safe}")
+        else:
+            self.flash("Dışa aktarılamadı")
 
     def _shot(self):
         """A 3840×2160 render of what is on the table, saved as PNG."""
         if not self.mesh:
             self.flash("Görüntülenecek model yok")
             return
-        from gui.holo_gl import render_still
+        from gui.holo_gl import bloom, render_still
         W, H = 3840, 2160
         acc = qcol(C.PRI)
         kw = dict(holo=self.holo, accent=(acc.redF(), acc.greenF(), acc.blueF()), t=time.monotonic() - self._t0,
                   explode=self.explode, sel=-1)
         img = render_still(self.gl, self.mesh, self.cam, W, H, ss=1.5, **kw) or self.soft.render(self.mesh, self.cam, W, H, **kw)
+        img = bloom(img, 0.9 if self.holo else 0.45)
         out = QImage(W, H, QImage.Format.Format_ARGB32_Premultiplied)
         p = QPainter(out)
         self._background(p, W, H)
@@ -684,6 +707,96 @@ class HoloPanel(QWidget):
         bg.setColorAt(0.55, qcol(C.BG))
         bg.setColorAt(1, QColor(0, 0, 0))
         p.fillRect(QRectF(0, 0, W, H), bg)
+
+    THUMBS = ROOT / "memory" / "holo_thumbs"
+
+    def _thumb(self, m: dict) -> QImage | None:
+        """A small render of a saved model (made once, kept beside the library)."""
+        f = self.THUMBS / f"{m.get('id', 'x')}.png"
+        if f.exists():
+            img = QImage(str(f))
+            if not img.isNull():
+                return img
+        try:
+            from gui.holo_gl import Camera
+            mesh = holo_model.build_mesh(holo_model.clean(m))
+            cam = Camera()
+            cam.yaw, cam.pitch = -30, 14
+            img = self.gl.render(mesh, cam, 320, 220, holo=False, accent=(1.0, 0.54, 0.11), t=1.0) \
+                or self.soft.render(mesh, cam, 320, 220, holo=False, accent=(1.0, 0.54, 0.11), t=1.0)
+            out = QImage(320, 220, QImage.Format.Format_ARGB32_Premultiplied)
+            p = QPainter(out)
+            g = QRadialGradient(QPointF(160, 130), 220)
+            g.setColorAt(0, QColor(30, 26, 22)); g.setColorAt(1, QColor(4, 3, 3))
+            p.fillRect(0, 0, 320, 220, g); p.drawImage(0, 0, img); p.end()
+            self.THUMBS.mkdir(parents=True, exist_ok=True)
+            out.save(str(f))
+            return out
+        except Exception:
+            return None
+
+    def _toggle_gallery(self):
+        """The saved models as a grid of pictures: click to open, right-click to delete."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QIcon, QPixmap
+        from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QListView, QMenu
+        g = getattr(self, "gallery", None)
+        if g is not None and g.isVisible():
+            g.hide()
+            self._mark("lib", False)
+            return
+        lib = load_library()
+        if not lib:
+            self.flash("Henüz kayıtlı model yok — 💾 ile kaydet")
+            return
+        if g is None:
+            g = self.gallery = QListWidget(self)
+            g.setViewMode(QListView.ViewMode.IconMode)
+            g.setIconSize(QSize(240, 165))
+            g.setGridSize(QSize(262, 205))
+            g.setResizeMode(QListView.ResizeMode.Adjust)
+            g.setMovement(QListView.Movement.Static)
+            g.setWordWrap(True)
+            g.setFont(px_font(12))
+            g.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            g.setStyleSheet(f"QListWidget {{ background: rgba(6,5,4,235); color: {C.TEXT}; border: 1px solid {C.BORDER_B};"
+                            f" border-radius: 14px; padding: 12px; }} QListWidget::item:selected {{ background: {C.PRI_GHO};"
+                            f" border: 1px solid {C.PRI}; border-radius: 8px; }}")
+
+            def open_item(it):
+                mid = it.data(Qt.ItemDataRole.UserRole)
+                for m in load_library():
+                    if m.get("id") == mid:
+                        self.set_model(holo_model.clean(m))
+                        self.cam.reset()
+                        self.flash(f"📂 {m.get('name', '')}")
+                g.hide()
+                self._mark("lib", False)
+
+            def menu(pos):
+                it = g.itemAt(pos)
+                if it is None:
+                    return
+                mn = QMenu(g)
+                act = mn.addAction("🗑  Sil")
+                if mn.exec(g.mapToGlobal(pos)) == act:
+                    mid = it.data(Qt.ItemDataRole.UserRole)
+                    delete_from_library(mid)
+                    (self.THUMBS / f"{mid}.png").unlink(missing_ok=True)
+                    g.takeItem(g.row(it))
+            g.itemClicked.connect(open_item)
+            g.customContextMenuRequested.connect(menu)
+        g.clear()
+        for m in reversed(lib):
+            img = self._thumb(m)
+            kind = "🧠" if m.get("glb") else "🧩"
+            it = QListWidgetItem(QIcon(QPixmap.fromImage(img)) if img is not None else QIcon(), f"{kind} {m.get('name', 'model')}")
+            it.setData(Qt.ItemDataRole.UserRole, m.get("id"))
+            g.addItem(it)
+        r = self.rect().adjusted(60, 64, -60, -70)
+        g.setGeometry(r)
+        g.show(); g.raise_()
+        self._mark("lib", True)
 
     def _cycle_library(self):
         lib = load_library()
@@ -983,6 +1096,12 @@ class HoloPanel(QWidget):
         if not self.hands_on:
             self.cursor = None
 
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        g = getattr(self, "gallery", None)
+        if g is not None and g.isVisible():
+            g.setGeometry(self.rect().adjusted(60, 64, -60, -70))
+
     def mouseDoubleClickEvent(self, _e):
         if self.iso >= 0:
             self.command({"action": "show_all"})
@@ -1002,7 +1121,9 @@ class HoloPanel(QWidget):
     def keyPressEvent(self, e):
         k = e.key()
         if k == Qt.Key.Key_Escape:
-            if self.busy:
+            if getattr(self, "gallery", None) is not None and self.gallery.isVisible():
+                self._toggle_gallery()
+            elif self.busy:
                 self.cancel()
             else:
                 self.back_requested.emit()

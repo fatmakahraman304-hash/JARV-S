@@ -79,6 +79,25 @@ def main() -> int:
         cam.reset()
     except Exception as exc:
         print("PBR sample skipped:", exc)
+    # gallery + bloom
+    try:
+        from gui.holo_gl import bloom
+        import gui.holo_panel as hp
+        from tools import holo_samples
+        hp.LIBRARY = out / "lib.json"
+        hp.HoloPanel.THUMBS = out / "thumbs"
+        for spec in (holo_samples.MUG, holo_samples.HEADPHONES, holo_samples.WHEEL):
+            hp.save_to_library(holo_model.clean(spec))
+        gp = hp.HoloPanel(); gp.resize(1280, 794); gp.show(); app.processEvents()
+        gp.command({"action": "lib"}); app.processEvents()
+        gp.grab().save(str(out / "zz_gallery.png"))
+        gp.hide()
+        cam.reset()
+        im = render_still(gl, holo_model.build_mesh(holo_model.clean(holo_samples.PHONE)), cam, w, h, ss=1.5, holo=True,
+                          accent=(1.0, 0.54, 0.11), t=1.3)
+        bloom(im, 0.9).save(str(out / "zz_bloom.png"))
+    except Exception as exc:
+        print("gallery/bloom skipped:", exc)
     # the whole table as it appears in JARVIS's window
     from unittest import mock
     from gui import holo_panel
