@@ -432,6 +432,8 @@
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
     { name: 'projects', description: 'Bilgisayarda JARVIS\'in yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
       parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'protocol', description: 'Protokoller (Iron Man tarzı): tek komutla sırayla birçok iş. "çalışma protokolü", "film moduna geç", "uyku protokolü", "günaydın", "protokollerim neler", "yeni protokol kaydet". action: run | list | save | delete. run bir adım listesi döner: o adımları sırayla araçlarınla yap.',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -502,6 +504,7 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'protocol': return protocolTool(a);
       case 'projects': { await syncNow(); return projectsText() || 'Bilgisayarlarda kayıtlı bir proje yok (ya da bilgisayar henüz bağlanmadı).'; }
       case 'send_to_device': {
         const what = String(a.what || 'open').toLowerCase(), title = String(a.title || '');
@@ -715,6 +718,47 @@
     else sys(note);
   }
 
+  // ── protocols: one command, many steps (plugins/protocol.py has the same
+  // names, steps and storage: preferences / "protokol: <ad>") ───────────────
+  const PROTOCOLS = {"sabah": ["Günaydın de; bugünün tarihini ve Google aramasıyla bulunduğun yerin hava durumunu kısaca söyle", "Bugünün hatırlatıcılarını ve yapılacaklar listesini oku", "Yarım kalan proje varsa durumunu tek cümleyle söyle"], "çalışma": ["Bilgisayarda çalan müziği durdur ve sesi yüzde 20'ye indir", "Yapılacaklar listesini oku ve hangisiyle başlamak istediğini sor", "45 dakika sonrasına 'mola ver' hatırlatıcısı kur"], "film": ["Televizyonda YouTube'u aç (send_to_device, open); ne izlemek istediğini sor", "Bilgisayarda çalan müziği durdur", "Film bitince haber vermek için süre isterse hatırlatıcı kur"], "uyku": ["Yarının hatırlatıcılarını ve yapılacakları kısaca söyle", "Sabah için hatırlatıcı/alarm isteyip istemediğini sor, isterse kur", "İyi geceler de ve bilgisayarı kilitle"]};
+  const PROTO_ALIASES = {"günaydın": "sabah", "sabah": "sabah", "çalış": "çalışma", "iş": "çalışma", "odak": "çalışma", "film": "film", "sinema": "film", "dizi": "film", "uyku": "uyku", "gece": "uyku", "yat": "uyku"};
+  const PROTO = 'protokol: ';
+  const protoNorm = n => String(n || '').toLocaleLowerCase('tr').replace('protokolü', '').replace('protokol', '').replace('moduna', '').replace('modu', '').trim().replace(/\s+/g, ' ').replace(/^[-: ]+|[-: ]+$/g, '');
+  function savedProtocols() {
+    const out = {};
+    for (const [k, v] of Object.entries(memory.preferences || {})) if (k.startsWith(PROTO)) out[k.slice(PROTO.length)] = entry(v).value.split('|').map(x => x.trim()).filter(Boolean);
+    return out;
+  }
+  function protocolTool(a) {
+    const act = String(a.action || 'run').toLowerCase(), n = protoNorm(a.name), saved = savedProtocols();
+    const names = [...new Set([...Object.keys(PROTOCOLS), ...Object.keys(saved)])];
+    if (act === 'list') return `Protokoller: ${names.join(', ')}. Hangisini başlatayım?`;
+    if (act === 'save') {
+      const steps = (Array.isArray(a.steps) ? a.steps : String(a.steps || '').split(/\n|\|/)).map(x => String(x).trim()).filter(Boolean);
+      if (!n || !steps.length) return 'Protokolün adı ve adımları lazım.';
+      const text = steps.join(' | ');
+      if (text.length > 370) return 'Bu protokol çok uzun; adımları kısalt (en fazla 370 harf).';
+      memory.preferences = memory.preferences || {}; memory.preferences[PROTO + n] = { value: text, updated: nowIso() };
+      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow();
+      return `'${n}' protokolü kaydedildi (${steps.length} adım); bütün cihazlar biliyor.`;
+    }
+    if (act === 'delete') {
+      if (!(n in saved)) return 'Böyle kayıtlı bir protokol yok.';
+      delete memory.preferences[PROTO + n]; memory._deleted = memory._deleted || {}; memory._deleted['preferences/' + PROTO + n] = nowIso();
+      localStorage.setItem('jarvis_mem', JSON.stringify(memory));
+      if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
+      return `'${n}' protokolü silindi.`;
+    }
+    let key = '', steps = null;
+    if (n && saved[n]) { key = n; steps = saved[n]; }
+    if (!steps && n) { const k = Object.keys(saved).find(k => k.includes(n) || n.includes(k)); if (k) { key = k; steps = saved[k]; } }
+    if (!steps && n) { const base = PROTO_ALIASES[n] || Object.entries(PROTO_ALIASES).find(([k]) => n.includes(k))?.[1]; if (base) { key = base; steps = saved[base] || PROTOCOLS[base]; } }
+    if (!steps) return `'${a.name || ''}' diye bir protokol yok. Var olanlar: ${names.join(', ')}. İstersen adımlarını söyle, kaydedeyim.`;
+    toast(`⚡ ${key.toLocaleUpperCase('tr')} PROTOKOLÜ`);
+    return `${key.toLocaleUpperCase('tr')} PROTOKOLÜ BAŞLADI. Şimdi bu adımları sırayla, kendi araçlarınla yap (bilgisayarın yapacağı işler için computer_command, başka cihaz için send_to_device); yapamadığını atla ve sonunda ne yaptığını kısaca söyle:\n` +
+      steps.map((x, i) => `${i + 1}. ${x}`).join('\n');
+  }
+
   // ── shared to-do list: kept in shared memory (notes/"yapılacak: …"), so the
   // computer and every device see the same list ─────────────────────────────
   const TODO = 'yapılacak: ';
@@ -860,7 +904,7 @@
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
-      `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device kullan. `+
+      `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol kullan. `+
       `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak. ` +
       `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
