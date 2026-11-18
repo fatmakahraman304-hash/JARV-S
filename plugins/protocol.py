@@ -51,6 +51,11 @@ DEFAULTS = {
         "Bilgisayarda çalan müziği durdur",
         "Film bitince haber vermek için süre isterse hatırlatıcı kur",
     ],
+    "akşam": [
+        "Bugün bütün cihazlarda neler konuştuğumuzu ve yapılanları arşivden kısaca özetle",
+        "Biten yapılacakları sor, bitenleri listeden çıkar",
+        "Yarının hatırlatıcılarını söyle ve eklenecek bir şey var mı sor",
+    ],
     "uyku": [
         "Yarının hatırlatıcılarını ve yapılacakları kısaca söyle",
         "Sabah için hatırlatıcı/alarm isteyip istemediğini sor, isterse kur",
@@ -59,7 +64,7 @@ DEFAULTS = {
 }
 
 _ALIASES = {"günaydın": "sabah", "sabah": "sabah", "çalış": "çalışma", "iş": "çalışma", "odak": "çalışma",
-            "film": "film", "sinema": "film", "dizi": "film", "uyku": "uyku", "gece": "uyku", "yat": "uyku"}
+            "akşam": "akşam", "gün sonu": "akşam", "film": "film", "sinema": "film", "dizi": "film", "uyku": "uyku", "gece": "uyku", "yat": "uyku"}
 
 
 def _norm(name: str) -> str:
