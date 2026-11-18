@@ -55,7 +55,8 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "status": "kapalı", "done": set(), "claim": "", "active": True,
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
           "rem_known": None, "out_cmds": [], "recent": [], "img_new": [], "gallery": [],
-          "arch_queue": [], "arch_last": 0.0, "arch_id": ""}
+          "arch_queue": [], "arch_last": 0.0, "arch_id": "",
+          "push_keys": None, "push_subs": {}, "pushed": set(), "push_gone": set()}
 
 
 def _log(msg: str) -> None:
@@ -384,6 +385,7 @@ def _sync_reminders(files: dict, writes: dict, now: float) -> None:
         mine, _state["rem_new"] = _state["rem_new"], []
     merged = merge_reminders(cloud if isinstance(cloud, list) else [], mine, now * 1000)
     _state["reminders"] = merged
+    _push_due_reminders(merged, now)
     known, cb, changed = _known(), _state.get("on_reminder"), False
     for r in merged:
         key_c = r["id"] + "#cancelled"
@@ -751,6 +753,109 @@ def search_archive(query: str, days: float = 0) -> str:
     return f"Arşivden ({len(rows)} satır arandı):\n" + "\n".join(lines)[:6000]
 
 
+# ── notifications to devices whose JARVIS page is closed (core/webpush) ─────
+def _push_setup(files: dict, writes: dict) -> None:
+    """The VAPID keys are shared in push.json (made by the first computer);
+    each device that turned notifications on has push-sub-<id>.json."""
+    try:
+        keys = json.loads(files.get("push.json") or "{}")
+    except Exception:
+        keys = {}
+    if not (keys.get("publicKey") and keys.get("privateKey")):
+        try:
+            from core import webpush
+            priv, pub = webpush.new_keys()
+            keys = {"publicKey": pub, "privateKey": priv}
+            writes["push.json"] = json.dumps(keys)
+        except Exception as exc:
+            _log(f"[Push] keys: {exc}")
+            keys = {}
+    _state["push_keys"] = keys or None
+    subs = {}
+    for name, text in files.items():
+        if name.startswith("push-sub-") and name.endswith(".json"):
+            try:
+                sub = json.loads(text or "{}")
+            except Exception:
+                continue
+            if isinstance(sub, dict) and sub.get("endpoint"):
+                subs[name[len("push-sub-"):-len(".json")]] = sub
+    _state["push_subs"] = subs
+    for dev_id in list(_state["push_gone"]):
+        writes[f"push-sub-{dev_id}.json"] = "{}"
+        _state["push_gone"].discard(dev_id)
+
+
+def push_to(dev_id: str, title: str, body: str, tag: str = "jarvis") -> bool:
+    """Send a notification to `dev_id` if it turned notifications on. In the
+    background; True when one was sent off."""
+    sub = (_state.get("push_subs") or {}).get(dev_id)
+    keys = _state.get("push_keys") or {}
+    if not sub or not keys.get("privateKey"):
+        return False
+
+    def go():
+        try:
+            from core import webpush
+            ok, status = webpush.send(sub, {"title": title[:120], "body": body[:400], "tag": tag},
+                                      keys["privateKey"], keys["publicKey"])
+            if status in (404, 410):           # unsubscribed or expired: forget it
+                _state["push_gone"].add(dev_id)
+            elif not ok:
+                _log(f"[Push] {dev_id}: {status}")
+        except Exception as exc:
+            _log(f"[Push] {exc}")
+    threading.Thread(target=go, daemon=True, name="webpush").start()
+    return True
+
+
+def _offline_subscribers(now: float | None = None) -> list[str]:
+    seen = {d.get("id"): d for d in devices()}
+    return [dev for dev in (_state.get("push_subs") or {})
+            if dev != device_id() and not (seen.get(dev) and device_online(seen[dev], now))]
+
+
+_WHAT = {"image": "bir resim gönderdi", "code": "kod gönderdi", "text": "bir yazı gönderdi",
+         "open": "bir bağlantı gönderdi", "report": "bir sonuç gönderdi", "say": "bir mesaj gönderdi",
+         "ring": "bu cihazı arıyor", "guard": "güvenlik modunu değiştirdi"}
+
+
+def _push_inboxes(files: dict, now: float) -> None:
+    """Something waits in the inbox of a device whose page is closed (sent by
+    this computer or by another device — a guard photo, a report, a link): a
+    notification says so, once per item."""
+    seen = _state.setdefault("inbox_seen", set())
+    first = not _state.get("inbox_primed")
+    for dev in _offline_subscribers(now):
+        try:
+            box = json.loads(files.get(f"inbox-{dev}.json") or "[]")
+        except Exception:
+            continue
+        fresh = [it for it in box if isinstance(it, dict) and it.get("id") and it["id"] not in seen]
+        for it in fresh:
+            seen.add(it["id"])
+        if fresh and not first:
+            it = fresh[-1]
+            alarm = it.get("kind") == "image" and "hareket" in str(it.get("title", "")).lower()
+            push_to(dev, ("🚨 " if alarm else "") + f"{it.get('from') or 'JARVIS'} {_WHAT.get(it.get('kind'), 'bir şey gönderdi')}",
+                    str(it.get("title") or it.get("text") or "Açınca görürsün.")[:300],
+                    tag="alarm" if alarm else "inbox")
+    _state["inbox_primed"] = True
+
+
+def _push_due_reminders(merged: list[dict], now: float) -> None:
+    """A reminder comes due: devices whose page is closed get a notification."""
+    pushed = _state["pushed"]
+    for r in merged:
+        if r.get("cancelled") or r["id"] in pushed:
+            continue
+        if now * 1000 - 600_000 <= r["due"] <= now * 1000:
+            pushed.add(r["id"])
+            title = "⚡ Protokol zamanı" if r.get("protocol") else "⏰ JARVIS hatırlatıyor"
+            for dev in _offline_subscribers(now):
+                push_to(dev, title, str(r.get("text") or ""), tag=f"rem-{r['id']}")
+
+
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
     """The id of the one device that should speak, or None when none is on.
     Same rule as voiceOwner() in web/app.js — keep the two in step."""
@@ -935,6 +1040,11 @@ def _cycle() -> None:
         recent = recent + turns
         writes["recent.json"] = json.dumps(recent[-RECENT_MAX:], ensure_ascii=False)
     _state["recent"] = recent[-RECENT_MAX:]
+
+    # 3-. notifications: shared keys and who turned them on
+    _push_setup(files, writes)
+
+    _push_inboxes(files, now)
 
     # 3a. things this computer sends to the phone, tablet, TV …
     _deliver_out(files, writes)
