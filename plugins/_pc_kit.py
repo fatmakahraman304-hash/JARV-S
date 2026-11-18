@@ -13,6 +13,17 @@ DATA = ROOT / "memory"
 _lock = threading.Lock()
 
 
+def out(text: str) -> None:
+    """print() that never fails: a Windows console in cp1252 cannot show
+    Turkish letters and would raise UnicodeEncodeError."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", "replace").decode("ascii"))
+    except Exception:
+        pass
+
+
 def load(name: str, default=None):
     try:
         return json.loads((DATA / name).read_text(encoding="utf-8"))
@@ -34,7 +45,7 @@ def log(player, text: str) -> None:
             player.write_log(f"JARVIS: {text}")
         except Exception:
             pass
-    print(f"[pc] {text}")
+    out(f"[pc] {text}")
 
 
 def say_at(ts: float, text: str, source: str, share: bool = True) -> str:
@@ -48,7 +59,7 @@ def say_at(ts: float, text: str, source: str, share: bool = True) -> str:
             eng.add(name=text[:60], kind="say", text=text,
                     trigger={"type": "time", "rule": {"type": "once", "at_ts": ts}}, source=source)
     except Exception as exc:
-        print(f"[pc] spoken copy not set: {exc}")
+        out(f"[pc] spoken copy not set: {exc}")
     if not share:
         return ""
     try:
@@ -57,7 +68,7 @@ def say_at(ts: float, text: str, source: str, share: bool = True) -> str:
         if s.get("github_token") and s.get("gist_id"):
             return sync_hub.add_reminder(text, ts)
     except Exception as exc:
-        print(f"[pc] not shared: {exc}")
+        out(f"[pc] not shared: {exc}")
     return ""
 
 

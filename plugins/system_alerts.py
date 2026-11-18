@@ -62,7 +62,7 @@ def _loop(player):
                 kit.log(player, text)
                 kit.say_soon(text, "system_alerts")
         except Exception as exc:
-            print(f"[alerts] {exc}")
+            kit.out(f"[alerts] {exc}")
         for _ in range(STEP):
             if not _state["on"]:
                 return

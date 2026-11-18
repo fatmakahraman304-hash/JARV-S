@@ -120,7 +120,7 @@ def _loop():
                 if n % 4 == 0:
                     kit.save(FILE, data)
         except Exception as exc:
-            print(f"[screen_time] {exc}")
+            kit.out(f"[screen_time] {exc}")
     kit.save(FILE, data)
 
 

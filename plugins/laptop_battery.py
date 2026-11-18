@@ -64,7 +64,7 @@ def _loop(player):
                     kit.say_soon(msg, "laptop_battery")
                 _watch["last"] = b.percent
         except Exception as exc:
-            print(f"[battery] {exc}")
+            kit.out(f"[battery] {exc}")
         for _ in range(60):
             if not _watch["on"]:
                 return
