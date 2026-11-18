@@ -435,6 +435,47 @@ class LowBatteryTest(unittest.TestCase):
             sync_hub._battery_watch("me")
         self.assertIn("Telefon %9", said[0])
 
+    def test_full_disk_said_once_a_day(self):
+        said = []
+        now = sync_hub._now()
+        pcs = [{"id": "pc2", "name": "Laptop", "kind": "pc", "seen": now, "disk": 96}]
+        with mock.patch.dict(sync_hub._state, {"devices": pcs, "owner": "me", "inject": said.append,
+                                               "bat_alerted": set(), "disk_alerted": set()}), \
+             mock.patch.object(sync_hub, "health", return_value={}):
+            sync_hub._battery_watch("me")
+            sync_hub._battery_watch("me")
+        self.assertEqual(len(said), 1)
+        self.assertIn("Laptop diski %96", said[0])
+
+
+class GalleryTest(unittest.TestCase):
+    def test_merge_keeps_links_only_and_newest(self):
+        a = [{"id": "1", "url": "https://x/1", "ts": "2026-11-18T10:00:00Z", "prompt": "aslan"},
+             {"id": "bad", "url": "", "ts": "2026-11-18T11:00:00Z"}]
+        b = [{"id": "2", "url": "https://x/2", "ts": "2026-11-18T12:00:00Z", "prompt": "logo"}]
+        self.assertEqual([g["id"] for g in sync_hub.merge_gallery(a, b)], ["1", "2"])
+
+    def test_new_picture_is_written_and_listed(self):
+        with mock.patch.dict(sync_hub._state, {"img_new": [], "gallery": []}):
+            sync_hub.add_image("kırmızı tilki", "https://image.pollinations.ai/prompt/x", seed=5)
+            sync_hub.add_image("yerel", "C:/resim.png")                      # no link: not shared
+            writes = {}
+            files = {"images.json": json.dumps([{"id": "o", "url": "https://x/o", "ts": "2026-01-01T00:00:00Z", "prompt": "eski"}])}
+            # run only the gallery step of the cycle
+            cloud_g = json.loads(files["images.json"])
+            with sync_hub._state["lock"]:
+                new_g, sync_hub._state["img_new"] = sync_hub._state["img_new"], []
+            merged = sync_hub.merge_gallery(cloud_g, new_g)
+            self.assertEqual([g["prompt"] for g in merged], ["eski", "kırmızı tilki"])
+        from plugins import gallery
+        with mock.patch.object(sync_hub, "gallery", return_value=merged):
+            out = gallery.run({"action": "list"})
+            self.assertTrue(out.splitlines()[1].startswith("1. kırmızı tilki"))
+            sent = []
+            with mock.patch.object(sync_hub, "send_to_device", side_effect=lambda d, c: sent.append(c) or (True, "ok")):
+                gallery.run({"action": "send", "query": "eski", "device": "tv"})
+            self.assertEqual(sent[0]["url"], "https://x/o")
+
 
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):

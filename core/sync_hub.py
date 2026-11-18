@@ -54,7 +54,7 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
           "status": "kapalı", "done": set(), "claim": "", "active": True,
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
-          "rem_known": None, "out_cmds": [], "recent": []}
+          "rem_known": None, "out_cmds": [], "recent": [], "img_new": [], "gallery": []}
 
 
 def _log(msg: str) -> None:
@@ -576,6 +576,7 @@ def status_report() -> str:
 
 # ── low battery: said once, by the device that has the voice ────────────────
 LOW_BATTERY = 15
+DISK_FULL = 92
 RECHARGED = 30
 
 
@@ -601,17 +602,52 @@ def _battery_watch(me: str) -> None:
     alerted = _state.setdefault("bat_alerted", set())
     mine = {"id": me, "name": device_name(), "kind": "pc", "seen": _now(), **health()}
     low = low_battery(devices() + [mine], alerted)
-    if not low or _state.get("owner") not in (None, me):
+    notes = []
+    if low:
+        notes.append("Pili azalan cihaz: " + ", ".join(f"{d.get('name')} %{d.get('battery')}" for d in low)
+                     + ". Şarja takmasını öner.")
+    # a nearly full disk on any computer: once a day
+    day = time.strftime("%Y-%m-%d")
+    for d in devices() + [mine]:
+        if d.get("disk") is not None and d["disk"] >= DISK_FULL and device_online(d):
+            key = f"{d.get('id')}:{day}"
+            if key not in _state.setdefault("disk_alerted", set()):
+                _state["disk_alerted"].add(key)
+                notes.append(f"{d.get('name')} diski %{d['disk']} dolu; yer açmayı öner.")
+    if not notes or _state.get("owner") not in (None, me):
         return
     inject = _state.get("inject")
-    names = ", ".join(f"{d.get('name')} %{d.get('battery')}" for d in low)
-    _log(f"[Sync] pil azaldı: {names}")
+    _log("[Sync] uyarı: " + " ".join(notes))
     if inject:
         try:
-            inject(f"[Sistem notu, kullanıcı söylemedi] Pili azalan cihaz: {names}. "
-                   f"Kullanıcıya tek kısa cümleyle söyle ve şarja takmasını öner.")
+            inject("[Sistem notu, kullanıcı söylemedi] " + " ".join(notes) + " Kullanıcıya kısaca söyle.")
         except Exception:
             pass
+
+
+# ── shared picture gallery (images.json): every device's pictures that can be
+# opened from a link (the free painter's) ─────────────────────────────────────
+GALLERY_MAX = 40
+
+
+def merge_gallery(a, b) -> list[dict]:
+    by = {}
+    for g in list(a or []) + list(b or []):
+        if isinstance(g, dict) and g.get("id") and str(g.get("url", "")).startswith("https://"):
+            by[g["id"]] = {**by.get(g["id"], {}), **g}
+    return sorted(by.values(), key=lambda g: str(g.get("ts", "")))[-GALLERY_MAX:]
+
+
+def add_image(prompt: str, url: str, **extra) -> None:
+    if not str(url).startswith("https://"):
+        return
+    with _state["lock"]:
+        _state["img_new"].append({"id": f"{device_id()}-{int(time.time() * 1000):x}", "prompt": str(prompt)[:200],
+                                  "url": url, "from": device_name(), "ts": _now(), **extra})
+
+
+def gallery() -> list[dict]:
+    return list(_state.get("gallery") or [])
 
 
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
@@ -706,7 +742,8 @@ def _cycle() -> None:
     writes: dict[str, str] = {}
     force = now - _state["last_memory"] > MEMORY_EVERY or now - _state["last_beat"] > HEARTBEAT_EVERY
     with _state["lock"]:
-        has_turns = bool(_state["turns"]) or bool(_state["rem_new"]) or bool(_state["out_cmds"])
+        has_turns = (bool(_state["turns"]) or bool(_state["rem_new"]) or bool(_state["out_cmds"])
+                     or bool(_state["img_new"]))
         answered = [p for p in _state["pending"] if p.get("reply") is not None or now - p["at"] > REPLY_WAIT]
     files, tag, err = read_gist(token, gid, "" if (force or has_turns or answered) else _state["etag"])
     if err:
@@ -800,6 +837,18 @@ def _cycle() -> None:
 
     # 3a. things this computer sends to the phone, tablet, TV …
     _deliver_out(files, writes)
+
+    # 3c. the picture gallery
+    try:
+        cloud_g = json.loads(files.get("images.json") or "[]")
+    except Exception:
+        cloud_g = []
+    with _state["lock"]:
+        new_g, _state["img_new"] = _state["img_new"], []
+    merged_g = merge_gallery(cloud_g if isinstance(cloud_g, list) else [], new_g)
+    _state["gallery"] = merged_g
+    if new_g:
+        writes["images.json"] = json.dumps(merged_g, ensure_ascii=False)
 
     # 3b. reminders, shared by every device
     _sync_reminders(files, writes, now)
