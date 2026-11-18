@@ -99,7 +99,13 @@
       return [w, h];
     }
 
+    // api.fps caps the frame rate (battery savers, watches); api.paused stops
+    // drawing but keeps the last frame on screen. 0 = no cap.
+    api.fps = opts.fps || 0; api.paused = false;
+    let drawn = 0;
     function frame(now) {
+      if (api.paused || (api.fps > 0 && now - drawn < 1000 / api.fps - 2)) { requestAnimationFrame(frame); return; }
+      drawn = now;
       const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
       const st = api.state, thinking = st === 'thinking', speaking = st === 'speaking';
       const asleep = st === 'sleeping' || st === 'offline';

@@ -65,6 +65,7 @@
     KIND = detectKind();
     document.body.classList.toggle('big', KIND === 'tv' || KIND === 'projector');
     document.body.classList.toggle('watch', KIND === 'watch');
+    for (const k of Object.keys(KIND_NAMES)) document.body.classList.toggle('k-' + k, KIND === k);
     $('brand-name').textContent = (S.name || 'JARVIS').toUpperCase();
     $('brand-sub').textContent = 'AI OS · ' + (S.devName || KIND_NAMES[KIND]);
   }
@@ -72,6 +73,10 @@
   const devName = () => S.devName || KIND_NAMES[KIND];
 
   // ── little UI helpers ───────────────────────────────────────────────────
+  // Device modules (web/dev-*.js) listen here: emit() calls every handler and
+  // returns true when one of them says it took care of the event.
+  const hooks = {};
+  function emit(ev, ...a) { let took = false; for (const f of hooks[ev] || []) { try { if (f(...a) === true) took = true; } catch (e) { console.warn('hook', ev, e); } } return took; }
   let toastT;
   function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 2800); }
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -90,6 +95,7 @@
   function setState(s) {
     state = s; core.state = (s === 'listening' || s === 'connecting') ? 'idle' : (s === 'setup' ? 'sleeping' : s);
     $('st-title').textContent = STATES[s][0]; $('st-sub').textContent = STATES[s][1];
+    emit('state', s);
     if (s === 'idle' && typeof amOwner === 'function' && !amOwner()) {
       $('st-title').textContent = 'Sessiz'; $('st-sub').textContent = `Sesli yanıt: ${ownerName}. Konuşmak için mikrofona dokun.`;
     }
@@ -482,17 +488,18 @@
   // what is coming up, the to-do list, projects, and any device that needs care.
   let hudWeather = '';
   async function refreshHudWeather() {
-    if (!document.body.classList.contains('big')) return;
+    if (!hudOn() && !hooks.weather) return;
     try {
       const city = S.city || '';
       const { js, place } = await weatherData(city);
       const c = js.current || {}, d = js.daily || {};
       hudWeather = `${WICON(c.weather_code)} ${Math.round(c.temperature_2m)}°C ${WMO[c.weather_code] || ''} · ${Math.round(d.temperature_2m_min?.[0])}–${Math.round(d.temperature_2m_max?.[0])}°C${city ? ' · ' + place.split(',')[0] : ''}`;
-      renderHud();
+      renderHud(); emit('weather', hudWeather);
     } catch { /* no location permission on a TV: set a city in settings */ }
   }
+  const hudOn = () => document.body.classList.contains('big') || document.body.classList.contains('panels');
   function renderHud() {
-    if (!document.body.classList.contains('big')) return;
+    if (!hudOn()) return;
     try { renderHudNow(); } catch { /* called before the reminder code has loaded: next sync draws it */ }
   }
   function renderHudNow() {
@@ -538,7 +545,9 @@
       inboxDone.push(c.id); did = true;
       const from = c.from || 'Başka bir cihaz', title = String(c.title || '');
       try {
-        if (c.kind === 'open' && /^https?:\/\//i.test(c.url || '')) {
+        if (c.kind === 'open' && /^https?:\/\//i.test(c.url || '') && emit('open', c)) {
+          sys(`${from} gönderdi: ${title || c.url}`);
+        } else if (c.kind === 'open' && /^https?:\/\//i.test(c.url || '')) {
           sys(`${from} bir bağlantı gönderdi: ${title || c.url}`);
           const w = window.open(c.url, '_blank');
           if (!w) askUser('Açılsın mı?', `${from}: ${title || c.url}`, () => window.open(c.url, '_blank'));
@@ -756,9 +765,11 @@
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
+  const extraTools = {}, extraPrompt = [];
   let lastCode = null;
   async function runTool(name, a) {
     a = a || {};
+    if (extraTools[name]) return await extraTools[name](a);
     switch (name) {
       case 'remember': {
         const c = CATS.includes(a.category) ? a.category : 'notes';
@@ -1539,6 +1550,7 @@
     remFired.push(...due.map(r => r.id)); saveRem(); renderRem();
     for (const r of due) {
       if (now - r.due > 2 * 3600e3) continue;      // long past (this device was off): don't ring now
+      if (emit('reminder', r)) continue;           // a device module did it (e.g. projector sleep timer)
       const late = now - r.due > 10 * 60000 ? ' (geç kaldı, sayfa kapalıydı)' : '';
       toast('⏰ ' + r.text + late);
       if (amOwner()) { beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }
@@ -1601,7 +1613,7 @@
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
       `Önceki konuşmalar ve yarım işler aşağıda; "kaldığımız yerden devam" denirse oradan sür, bilgisayardaki yarım projeler için computer_command ile "yarım kalan işe devam et" gönder.\n\n` +
       `Bugün: ${new Date().toLocaleString('tr-TR', { dateStyle: 'full', timeStyle: 'short' })}.\nBilgisayarlar: ${pcs}.\n\n` +
-      `BİLGİSAYARDAKİ PROJELER:\n${projectsText() || '(yok)'}\n\nORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}`;
+      `BİLGİSAYARDAKİ PROJELER:\n${projectsText() || '(yok)'}\n\nORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}` + extraPrompt.map(f => { try { return '\n\n' + f(); } catch { return ''; } }).join('');
   }
   function setupMsg(v) {
     const model = LIVE_MODELS[v >= 2 ? 1 : 0];
@@ -1675,7 +1687,7 @@
       if (sc.turnComplete) {
         if (pendingText && !hadAudio && !transcript.some(t => t.open && t.role === 'jarvis')) addTurn('jarvis', pendingText);
         pendingText = ''; hadAudio = false;
-        outOpen = false; closeTurns(); syncSoon(); if (!playing()) setState(micOn ? 'listening' : 'idle'); }
+        outOpen = false; closeTurns(); syncSoon(); emit('turn'); if (!playing()) setState(micOn ? 'listening' : 'idle'); }
     }
     if (m.toolCall?.functionCalls) {
       setState('thinking');
@@ -1995,6 +2007,29 @@
   };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
   checkVersion();
+
+  // ── device modules: web/dev-*.js reach the app only through this object ──
+  window.JARVIS = {
+    get kind() { return KIND; }, S, save, $, esc, toast, sys, openSheet, closeSheets, askUser,
+    on(ev, fn) { (hooks[ev] = hooks[ev] || []).push(fn); if (ev === 'weather' && hudWeather) fn(hudWeather); },
+    tool(decl, fn) { if (!TOOLS.some(t => t.name === decl.name)) TOOLS.push(decl); extraTools[decl.name] = fn; },
+    prompt(fn) { extraPrompt.push(fn); },
+    ask(text) { $('inp').value = String(text); $('ask').requestSubmit(); },
+    // the user said it: send to the brain without putting it in the input box
+    async say(text) { claimHere(); closeTurns(); transcript.push({ role: 'user', text, open: false }); queueRecent('user', text); renderLog();
+      try { await connect(); } catch { return false; } setState('thinking'); send({ realtimeInput: { text } }); return true; },
+    async look(data, mime, question) { claimHere(); try { await connect(); } catch { return false; }
+      send({ realtimeInput: { video: { data, mimeType: mime || 'image/jpeg' } } });
+      tellBrain(`Kullanıcı ekrana bir resim bıraktı; ona bak ve ${question || 'ne gördüğünü kısaca söyle'}.`); setState('thinking'); return true; },
+    get micOn() { return micOn; }, get micLevel() { return micLvl; }, get state() { return state; }, get speaking() { return playing(); },
+    get lastInteract() { return lastInteract; }, touch() { lastInteract = Date.now(); },
+    startMic() { if (!micOn) { claimHere(); return startMic(); } }, stopMic() { if (micOn) { resumeMic = false; stopMic(); } },
+    hush() { stopPlayback(); if (state === 'speaking') setState(micOn ? 'listening' : 'idle'); },
+    core, beep, ringHere, remote, sendToDevice, runTool, reminderTool, todoTool, pendingRem, remTime, online, findDevice, syncNow,
+    get devices() { return devices.slice(); }, get memory() { return memory; }, get gallery() { return gallery.slice(); },
+    get battery() { return { ...battery }; }, get weather() { return hudWeather; }, get owner() { return amOwner(); },
+    get transcript() { return transcript.slice(); }, get receiver() { return receiver(); }, findPc, renderHud, refreshHudWeather,
+  };
 
   // ── start ────────────────────────────────────────────────────────────────
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
