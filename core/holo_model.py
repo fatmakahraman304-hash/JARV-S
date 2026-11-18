@@ -22,7 +22,7 @@ import numpy as np
 
 EXPLODE = 0.85                    # how far apart "parçala" pushes the parts (× their distance from the centre)
 SHAPES = ("box", "rounded_box", "cylinder", "cone", "sphere", "hemisphere", "capsule", "torus",
-          "wedge", "lathe", "extrude", "tube")
+          "wedge", "lathe", "extrude", "tube", "loft")
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -83,6 +83,15 @@ def clean_part(p, i: int = 0) -> dict:
         pts = _points2(p.get("outline"))
         out["outline"] = pts if len(pts) >= 3 else [[-1, -1], [1, -1], [1, 1], [-1, 1]]
         out["bevel"] = _clamp(_num(p.get("bevel"), 0.0), 0.0, min(size) / 3)
+    if shape == "loft":
+        secs = []
+        for q in (p.get("sections") if isinstance(p.get("sections"), list) else [])[:40]:
+            if isinstance(q, (list, tuple)) and len(q) >= 3:
+                v = [_num(x, 0.0) for x in list(q)[:5]] + [0.0] * (5 - min(5, len(q)))
+                secs.append([_clamp(v[0], 0, 1), _clamp(v[1], 0, 1), _clamp(v[2], 0, 1), _clamp(v[3], -1, 1), _clamp(v[4], -1, 1)])
+        secs.sort(key=lambda r: r[0])
+        out["sections"] = secs if len(secs) >= 2 else [[0, 1, 1, 0, 0], [1, 1, 1, 0, 0]]
+        out["round"] = _clamp(_num(p.get("round"), 2.0), 1.2, 10.0)
     if shape == "tube":
         path = []
         for q in (p.get("path") if isinstance(p.get("path"), list) else [])[:120]:
@@ -396,6 +405,33 @@ def _tube(path, radius, seg: int = 20):
     return out
 
 
+def _loft(sections, rnd, sx, sy, sz, seg: int = 40):
+    """A body through cross-sections stacked along y: [[y, width, depth, dx, dz]]
+    (fractions of the part's size), each a superellipse — 2 round, 4+ boxy."""
+    S = np.asarray(sections, np.float64)
+    if len(S) >= 3:
+        S = catmull(S, 5)
+        S[:, 1:3] = np.clip(S[:, 1:3], 0, None)
+    t = np.linspace(0, 2 * np.pi, seg, endpoint=False)
+    ct, st = np.cos(t), np.sin(t)
+    e = 2.0 / rnd
+    ux, uz = np.sign(ct) * np.abs(ct) ** e, np.sign(st) * np.abs(st) ** e
+    rows = len(S)
+    V = np.zeros((rows * seg, 3), np.float32)
+    for k, (y, w, d, dx, dz) in enumerate(S):
+        V[k * seg:(k + 1) * seg, 0] = dx * sx / 2 + ux * w * sx / 2
+        V[k * seg:(k + 1) * seg, 1] = -sy / 2 + y * sy
+        V[k * seg:(k + 1) * seg, 2] = dz * sz / 2 + uz * d * sz / 2
+    out = [(V, None, _grid_faces(rows, seg, True)[:, ::-1].copy())]
+    for k, top in ((0, False), (rows - 1, True)):
+        if S[k][1] > 1e-3 and S[k][2] > 1e-3:
+            ring = V[k * seg:(k + 1) * seg]
+            Vc = np.vstack([ring.mean(0), ring]).astype(np.float32)
+            Fc = np.asarray([(0, 1 + i, 1 + (i + 1) % seg) for i in range(seg)], np.int32)
+            out.append((Vc, np.tile([0, 1 if top else -1, 0], (seg + 1, 1)).astype(np.float32), Fc))
+    return out
+
+
 def surfaces(p: dict) -> list:
     """The part's surfaces in its own frame (centred, not yet rotated)."""
     sx, sy, sz = p["size"]
@@ -427,6 +463,8 @@ def surfaces(p: dict) -> list:
         return _extrude(p["outline"], sx, sy, sz)
     if s == "tube":
         return _tube(p["path"], sx / 2)
+    if s == "loft":
+        return _loft(p["sections"], p.get("round", 2.0), sx, sy, sz)
     return _box(sx, sy, sz)
 
 

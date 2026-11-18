@@ -34,6 +34,10 @@ Shapes (pick the one that matches the real form, not the simplest):
   optional "bevel" (cm).
 - "tube": handles, cables, frames, pipes, wires, straps. Add "path": [[x, y, z], ...] in cm relative to pos
   (3–20 points along the centre line); size x = tube diameter.
+- "loft": organic or sculpted bodies — helmets, car bodies, shoes, computer mice, game controllers, fuselages, bottles
+  that are not round, animal bodies, faces. Add "sections": [[y, width, depth, dx, dz], ...] bottom to top (4–14 rows):
+  y height fraction 0..1, width/depth fractions 0..1 of size x / size z, dx/dz centre offsets -1..1 (curves, overhangs);
+  "round": 2 for elliptical sections, 3–5 for rounded-rectangular. Several lofts can be combined.
 - "box", "cylinder", "cone", "sphere" (any ellipsoid), "hemisphere", "capsule", "torus" (size y = ring thickness),
   "wedge" (slopes down from -x to +x).
 

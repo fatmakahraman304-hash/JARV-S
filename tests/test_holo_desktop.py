@@ -26,7 +26,8 @@ def consistent(V, N, F):
 class ShapeTests(unittest.TestCase):
     EXTRA = {"lathe": {"profile": [[0, 0], [0.9, 0], [1, 0.1], [0.8, 0.6], [0.35, 0.8], [0.35, 1]]},
              "extrude": {"outline": [[-1, -1], [1, -1], [1, 0.2], [0, 1], [-1, 0.2]]},
-             "tube": {"path": [[0, 0, 0], [3, 4, 0], [6, 5, 2], [9, 3, 4]]}}
+             "tube": {"path": [[0, 0, 0], [3, 4, 0], [6, 5, 2], [9, 3, 4]]},
+             "loft": {"sections": [[0, 0.6, 0.8, 0, 0], [0.4, 1, 1, 0, 0], [0.8, 0.7, 0.9, 0, 0], [1, 0.3, 0.4, 0, 0]], "round": 3}}
 
     def test_every_shape_fills_its_box_with_outward_faces(self):
         for shape in hm.SHAPES:
