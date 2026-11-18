@@ -32,7 +32,13 @@ from pathlib import Path
 
 from core import claude_coding, codex_coding
 
-AGENT_TIMEOUT = 25 * 60          # one agent round, seconds
+AGENT_TIMEOUT = 45 * 60          # one agent round, seconds (a whole site or app takes a while)
+
+# Claude Code works with the strongest model the user's plan has: Opus first
+# (Claude Opus 5.5 today — the alias always means the newest Opus), Sonnet if
+# Opus is not available on the plan or is overloaded. Settable under the
+# "coding" plugin config as {"model": "opus" | "sonnet" | a full model id}.
+CLAUDE_MODELS = ("opus", "sonnet")
 
 # Shell commands Claude Code may run on its own: running and testing code.
 _CLAUDE_BASH = [
@@ -41,8 +47,16 @@ _CLAUDE_BASH = [
     "go test", "go build", "go run", "cargo test", "cargo build", "cargo run",
     "dotnet build", "dotnet test", "mvn test", "gradle test", "make",
     "git status", "git diff", "git log", "ls", "dir", "cat", "type", "find", "grep",
+    # building, checking and running more kinds of project
+    "pip3 install", "python -m", "py -m", "uv", "poetry", "deno", "bun", "tsc", "eslint", "prettier",
+    "ruff", "black", "mypy", "flutter", "dart", "java", "javac", "gcc", "g++", "clang", "cmake",
+    "php", "composer", "ruby", "bundle", "rustc", "go mod", "go vet", "dotnet run", "dotnet new",
+    "npm create", "npm init", "npm ci", "npm ls", "mkdir", "echo", "where", "which", "head", "tail", "wc",
 ]
-_CLAUDE_TOOLS = ["Read", "Edit", "MultiEdit", "Write", "Glob", "Grep", "LS", "TodoWrite"] + \
+# WebSearch/WebFetch: the agent looks up current docs and APIs like a person
+# would, instead of guessing from memory.
+_CLAUDE_TOOLS = ["Read", "Edit", "MultiEdit", "Write", "Glob", "Grep", "LS", "TodoWrite",
+                 "WebSearch", "WebFetch", "NotebookEdit"] + \
     [f"Bash({c}:*)" for c in _CLAUDE_BASH]
 
 AGENT_PROVIDERS = {claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID}
@@ -64,19 +78,29 @@ def available(provider: str) -> bool:
 
 def _brief(instruction: str, guide: str, extra: str) -> str:
     return (
-        "You are the coding agent of JARVIS, working directly in this project folder.\n\n"
+        "You are the coding agent of JARVIS, working directly in this project folder. Work like a "
+        "senior engineer who owns the result: the user asked by voice and will not review your diff, "
+        "so what you hand back must simply work.\n\n"
         f"TASK (from the user, often in Turkish):\n{instruction}\n\n"
         + (f"PROJECT RULES — follow them exactly:\n{guide}\n\n" if guide else "")
         + (f"{extra}\n\n" if extra else "")
-        + "How to work:\n"
-        "1. Read the code that matters before changing it; reuse what the project already has.\n"
-        "2. Make focused, exact edits. Never delete or rewrite files wholesale to make a small change, "
+        + "How to work — think hard before you edit:\n"
+        "1. Understand first. Read the code that matters, find how the project already does similar "
+        "things and reuse it. If the task is ambiguous, choose the most sensible reading the user "
+        "would expect and say which in your summary — do not stop to ask.\n"
+        "2. Plan. For anything bigger than a small fix, write a short TodoWrite list and work through it.\n"
+        "3. Build it completely. No placeholders, no 'TODO: implement', no fake data standing in for "
+        "real logic, no half-finished screens. A website gets real content, a responsive layout and "
+        "working links; an app gets its real features. Look up current library docs with WebSearch/"
+        "WebFetch instead of guessing APIs.\n"
+        "4. Make focused, exact edits. Never rewrite or delete files wholesale to make a small change, "
         "never touch secrets, keys or local settings files, never delete the user's data.\n"
-        "3. Run the project's tests (and a quick run or import of what you changed). If something "
-        "fails because of your change, fix it and run again until it passes.\n"
-        "4. Do not commit, push or change git history.\n"
-        "5. Finish with a short summary IN TURKISH of what you changed and how you tested it — "
-        "two to four sentences, no code."
+        "5. Verify like a careful reviewer. Run the tests (add tests for new logic where the project has "
+        "a test setup), run or import what you changed, build it if it builds. Read your own diff once "
+        "for bugs, edge cases and leftovers. If anything fails, fix it and run again until it passes.\n"
+        "6. Do not commit, push or change git history.\n"
+        "7. Finish with a short summary IN TURKISH: what you built or changed, how you checked it, and "
+        "how to open or run it — three to five sentences, no code."
     )
 
 
@@ -157,22 +181,71 @@ def _claude_event(line: str, log) -> str:
     return ""
 
 
-def _run_claude(folder: Path, prompt: str, log) -> str:
-    exe = claude_coding._executable()
+def claude_models() -> list[str]:
+    """The models to try with Claude Code, strongest first."""
+    try:
+        from memory.config_manager import get_plugin_config
+        chosen = str(get_plugin_config("coding").get("model") or "").strip()
+    except Exception:
+        chosen = ""
+    out = [chosen] if chosen else []
+    out += [m for m in CLAUDE_MODELS if m not in out]
+    return out
+
+
+def _claude_cmd(exe: str, model: str) -> list[str]:
     cmd = [exe, "--print", "--output-format", "stream-json", "--verbose",
            "--permission-mode", "acceptEdits",
            "--allowedTools", ",".join(_CLAUDE_TOOLS),
            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
            "--no-session-persistence"]
+    if model:
+        cmd += ["--model", model]
+        if model != "sonnet":
+            cmd += ["--fallback-model", "sonnet"]      # Opus overloaded: Sonnet carries on
+    return cmd
+
+
+def _model_refused(diag: str) -> bool:
+    d = diag.casefold()
+    return any(w in d for w in ("invalid model", "model not found", "not available", "does not have access",
+                                "no access to", "unknown model", "not_found_error", "fallback-model"))
+
+
+def _run_claude(folder: Path, prompt: str, log) -> str:
+    exe = claude_coding._executable()
+    models = claude_models()
+    for i, model in enumerate(models + [""]):
+        if i:
+            log(f"  {models[i - 1]} kullanılamadı; {model or 'varsayılan model'} ile devam.")
+        else:
+            log(f"  Model: {model} (Claude Code)")
+        text, code, lines, err = _claude_once(exe, model, folder, prompt, log)
+        if text:
+            return text
+        diag = err + "\n".join(lines[-5:])
+        if not _model_refused(diag):
+            break
+    return _claude_fail(code, lines, err)
+
+
+def _claude_once(exe: str, model: str, folder: Path, prompt: str, log):
     result = {"text": ""}
 
     def on_line(line):
         txt = _claude_event(line, log)
         if txt:
             result["text"] = txt
-    code, lines, err = _stream(cmd, folder, prompt, on_line, AGENT_TIMEOUT)
-    if result["text"]:
-        return result["text"]
+    try:
+        code, lines, err = _stream(_claude_cmd(exe, model), folder, prompt, on_line, AGENT_TIMEOUT)
+    except RuntimeError as exc:                 # an error event: maybe the model was refused
+        if _model_refused(str(exc)):
+            return "", 1, [str(exc)], str(exc)
+        raise
+    return result["text"], code, lines, err
+
+
+def _claude_fail(code, lines, err) -> str:
     diag = (err + "\n".join(lines[-5:])).casefold()
     if any(w in diag for w in ("not logged in", "please run /login", "401")):
         raise RuntimeError("Claude Code oturumu kapalı. PowerShell'de claude auth login çalıştır.")
