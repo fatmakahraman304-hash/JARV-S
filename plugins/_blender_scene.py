@@ -160,10 +160,10 @@ def node_graph(obj, step):
 
 def apply(step):
     op, scene = step["op"], bpy.context.scene
-    if op in ("district", "wall", "landscape", "lathe", "cable"):
-        from _blender_world import cable, district, landscape, lathe, wall
+    if op in ("district", "wall", "landscape", "lathe", "cable", "loft"):
+        from _blender_world import cable, district, landscape, lathe, loft, wall
         builders = {"district": district, "wall": wall, "landscape": landscape,
-                    "lathe": lathe, "cable": cable}
+                    "lathe": lathe, "cable": cable, "loft": loft}
         builders[op](step)
         return
     if op == "render_settings":

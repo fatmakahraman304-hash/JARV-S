@@ -19,6 +19,8 @@ class WorldWorkflow(unittest.TestCase):
             {"op": "wall", "name": "Duvar", "start": [-5, -34], "end": [5, -34],
              "openings": [{"offset": 1, "width": 1, "height": 2},
                           {"offset": 6, "width": 2, "height": 1.2, "sill": 1}]},
+            {"op": "loft", "name": "Bükülen kanat", "sections": [
+                [[0,0,0], [2,0,0], [1,1,0]], [[0,1,2], [1,2,3], [0,3,2]]]},
             {"op": "lathe", "name": "Vazo", "profile": [[0, 0], [1, 0], [.7, 2], [.5, 2], [0, .2]]},
             {"op": "cable", "name": "Kablo", "points": [[1, 2, 3], [2, 4, 2], [5, 2, 3]]},
             {"op": "physics", "name": "Vazo", "type": "ACTIVE"},
@@ -59,6 +61,7 @@ class WorldWorkflow(unittest.TestCase):
             with patch.object(gemini, "as_json", return_value={"steps": [
                     {"op": "transform", "name": "Liman Bina 1-2", "location": [-10, -20, 2]}]}):
                 studio.process("edit", "Binayı yükselt", None)
+                self.assertIn("On bir bina, park ve çevresi", gemini.as_json.call_args.args[0])
             self.assertNotEqual(original, studio.project_path(None))
             studio.process("animation", "", None)
             frames = sorted(Path(tmp).glob("*/frames/*.png"))

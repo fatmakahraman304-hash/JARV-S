@@ -12,7 +12,9 @@ class BlenderCommands(unittest.TestCase):
         self.assertEqual(scene_command("Blender'da bir ev modelle, render al")["result"], "render")
         self.assertEqual(scene_command("/blender Fütüristik lamba, projeyi aç")["result"], "open")
         self.assertEqual(scene_command("Blender'da bir ev tasarla")["result"], "save")
+        self.assertEqual(scene_command("Blender’da mevcut projeye bir kanat ekle")["action"], "edit")
+        self.assertEqual(scene_command("/blender Son sahnede kanatları büyüt")["action"], "edit")
         for text in ("Blender'ı aç", "Blender'da nasıl ev yapılır?", "Bir mahalle resmi yap",
-                     "Blender'da mevcut projeye bir bina ekle", "Blender'da bina oluşturma",
+                     "Blender'da bina oluşturma",
                      "[FILE_UPLOADED] Blender projesi oluştur"):
             self.assertIsNone(scene_command(text), text)
