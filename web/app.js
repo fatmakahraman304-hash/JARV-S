@@ -183,6 +183,11 @@
       const cloudMem = J(f['memory.json'], {});
       if (JSON.stringify(cloudMem) !== JSON.stringify(memory)) writes['memory.json'] = JSON.stringify(memory);
       if (recentQueue.length) { recent = recent.concat(recentQueue).slice(-40); recentQueue = []; writes['recent.json'] = JSON.stringify(recent); }
+      const cloudRem = J(f['reminders.json'], []);
+      reminders = mergeReminders(reminders, cloudRem);
+      const remSig = L => L.map(r => [r.id, +r.due, r.text, r.cancelled || ''].join('|')).join('\n');
+      if (remSig(mergeReminders(cloudRem, [])) !== remSig(reminders)) writes['reminders.json'] = JSON.stringify(reminders);
+      saveRem(); renderRem();
       if (beatDirty || !lastBeat || Date.now() - lastBeat > (isActive() ? 20000 : 60000)) {
         lastBeat = Date.now(); beatDirty = false;
         writes['device-' + S.id + '.json'] = JSON.stringify(myBeat());
@@ -645,9 +650,25 @@
     return items.length ? items.map(([k], i) => `${i + 1}. ${k.slice(TODO.length)}`).join('\n') : 'Yapılacaklar listesi boş.';
   }
 
-  // ── reminders and timers on this device ─────────────────────────────────
+  // ── reminders and timers, shared by every device ────────────────────────
+  // Kept in reminders.json in the shared gist (desktop: core/sync_hub.py
+  // merge_reminders), so one set on the phone is known to the computer and the
+  // other way round. Every device marks it due on its own; only the device that
+  // has the voice says it out loud.
   let reminders = J(localStorage.getItem('jarvis_rem'), []);
-  const saveRem = () => localStorage.setItem('jarvis_rem', JSON.stringify(reminders));
+  let remFired = J(localStorage.getItem('jarvis_rem_fired'), []);
+  const saveRem = () => { localStorage.setItem('jarvis_rem', JSON.stringify(reminders)); localStorage.setItem('jarvis_rem_fired', JSON.stringify(remFired.slice(-200))); };
+  const REM_KEEP = 24 * 3600e3;
+  function mergeReminders(a, b, now = Date.now()) {
+    const by = new Map();
+    for (const r of [...(a || []), ...(b || [])]) {
+      if (!r || !r.id || !(+r.due)) continue;
+      const old = by.get(r.id);
+      by.set(r.id, old ? { ...old, ...r, cancelled: old.cancelled || r.cancelled || '' } : { ...r, cancelled: r.cancelled || '' });
+    }
+    return [...by.values()].filter(r => +r.due > now - REM_KEEP).sort((x, y) => x.due - y.due);
+  }
+  const pendingRem = () => reminders.filter(r => !r.cancelled && !remFired.includes(r.id) && r.due > Date.now() - 60000);
   function parseWhen(a) {
     const min = Number(a.minutes);
     if (min > 0) return Date.now() + min * 60000;
@@ -661,22 +682,23 @@
   const remTime = t => new Date(t).toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   function reminderTool(a) {
     const act = String(a.action || 'set').toLowerCase();
-    if (act === 'list') return reminders.length ? reminders.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') : 'Kurulu hatırlatıcı yok.';
+    const open = pendingRem();
+    if (act === 'list') return open.length ? open.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}${r.from ? ` (${r.from})` : ''}`).join('\n') : 'Kurulu hatırlatıcı yok.';
     if (act === 'cancel') {
       const k = String(a.id || a.text || '').toLocaleLowerCase('tr').trim();
-      const before = reminders.length;
-      if (!k || k === 'hepsi' || k === 'all') reminders = [];
-      else reminders = reminders.filter((r, i) => String(i + 1) !== k && !r.text.toLocaleLowerCase('tr').includes(k));
-      saveRem(); renderRem();
-      return before === reminders.length ? 'Böyle bir hatırlatıcı bulamadım.' : `${before - reminders.length} hatırlatıcı iptal edildi.`;
+      const all = !k || k === 'hepsi' || k === 'all';
+      const hit = open.filter((r, i) => all || String(i + 1) === k || r.text.toLocaleLowerCase('tr').includes(k));
+      hit.forEach(r => { r.cancelled = nowIso(); });
+      saveRem(); renderRem(); if (hit.length) syncNow();
+      return hit.length ? `${hit.length} hatırlatıcı iptal edildi (bütün cihazlarda).` : 'Böyle bir hatırlatıcı bulamadım.';
     }
     const due = parseWhen(a);
     if (!due) return 'Ne zaman? Dakika ya da saat söylemen lazım.';
     const text = String(a.text || 'Zamanlayıcı').slice(0, 200);
-    reminders.push({ id: Date.now().toString(36), text, due });
-    reminders.sort((x, y) => x.due - y.due); saveRem(); renderRem();
+    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '' });
+    reminders.sort((x, y) => x.due - y.due); saveRem(); renderRem(); syncNow();
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {}
-    return `Tamam: ${remTime(due)} — ${text}. (Bu sayfa açık kaldıkça bu cihaz çalar.)`;
+    return `Tamam: ${remTime(due)} — ${text}.` + (Cloud.ok() ? ' Bütün cihazlar biliyor; o an hangisi açıksa o söyler.' : ' (Bu sayfa açık kaldıkça bu cihaz çalar.)');
   }
   function beep() {
     try { ensureOut(); const t0 = outCtx.currentTime;
@@ -686,16 +708,19 @@
   }
   function renderRem() {
     const b = $('t-rem'); if (!b) return;
-    b.hidden = !reminders.length; b.textContent = reminders.length ? `⏰ ${reminders.length}` : '⏰';
-    b.title = reminders.map(r => `${remTime(r.due)} — ${r.text}`).join('\n');
+    const open = pendingRem();
+    b.hidden = !open.length; b.textContent = open.length ? `⏰ ${open.length}` : '⏰';
+    b.title = open.map(r => `${remTime(r.due)} — ${r.text}`).join('\n');
   }
   setInterval(() => {
-    const now = Date.now(), due = reminders.filter(r => r.due <= now);
+    const now = Date.now(), due = reminders.filter(r => r.due <= now && !r.cancelled && !remFired.includes(r.id));
     if (!due.length) return;
-    reminders = reminders.filter(r => r.due > now); saveRem(); renderRem();
+    remFired.push(...due.map(r => r.id)); saveRem(); renderRem();
     for (const r of due) {
+      if (now - r.due > 2 * 3600e3) continue;      // long past (this device was off): don't ring now
       const late = now - r.due > 10 * 60000 ? ' (geç kaldı, sayfa kapalıydı)' : '';
-      toast('⏰ ' + r.text + late); beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+      toast('⏰ ' + r.text + late);
+      if (amOwner()) { beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }
       try { if ('Notification' in window && Notification.permission === 'granted') new Notification('JARVIS hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
       sys('⏰ Hatırlatma: ' + r.text + late);
       if (amOwner()) {
@@ -1040,9 +1065,9 @@
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
   $('t-rem').onclick = () => {
-    if (!reminders.length) return;
-    askUser('Hatırlatıcılar', reminders.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') + '\n\nHepsi iptal edilsin mi?',
-      () => { reminders = []; saveRem(); renderRem(); toast('Hatırlatıcılar iptal edildi'); });
+    const open = pendingRem(); if (!open.length) return;
+    askUser('Hatırlatıcılar', open.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') + '\n\nHepsi iptal edilsin mi?',
+      () => { toast(reminderTool({ action: 'cancel', id: 'hepsi' })); });
   };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
   checkVersion();
