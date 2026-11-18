@@ -7,8 +7,9 @@ had time to reset. The order, best first:
 
     1. Claude Code        (agent in the project folder, subscription)
     2. Codex CLI          (agent in the project folder, subscription)
-    3. JARVIS's own agent (core/jarvis_agent.py: same way of working, free
-                           brains — Gemini key, OpenRouter free, Ollama)
+    3. JARVIS's own agent (core/jarvis_agent.py: same way of working; thinks with
+                           DeepSeek, Gemini as backup). With a DeepSeek key
+                           it comes FIRST — the user chose DeepSeek to code.
     4. the coding API chosen under ENGINE & PROVIDERS → CODING, if it is an API
     5. Gemini's own ladder (always there, the last resort)
 
@@ -111,7 +112,13 @@ def ladder(chosen: str = "", installed=None) -> list[str]:
     if installed is None:
         from core import agent_coding
         installed = agent_coding.available
-    out = [p for p in AGENTS if installed(p)]
+    order = list(AGENTS)
+    try:                         # the user chose DeepSeek as the coder: JARVIS's agent leads
+        if jarvis_agent.deepseek_ready():
+            order = [jarvis_agent.PROVIDER_ID] + [p for p in order if p != jarvis_agent.PROVIDER_ID]
+    except Exception:
+        pass
+    out = [p for p in order if installed(p)]
     if chosen and chosen not in AGENTS and chosen not in ("auto",):
         out.append(chosen)
     out = [p for p in out if not resting(p)]

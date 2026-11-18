@@ -7,15 +7,12 @@ project, reads the files it needs, makes exact edits, runs the code and the
 tests, reads the errors and fixes them until it works — and only borrows a
 "brain" to think with, choosing the best one that is free right now:
 
-    0. DeepSeek, if a key was added (new accounts get free tokens for a month,
-       then it is pay-as-you-go and very cheap; a strong coder). An empty
-       balance answers 402 and the next brain takes over.
-    1. Gemini, with the key JARVIS already has (the best free model the key
-       can use is found by asking Google which models exist — model names
-       change every few months, so none is hard-coded as the only choice)
-    2. OpenRouter's free models (a free account key; "openrouter/free" picks a
-       free model that can use tools)
-    3. Ollama on this computer (fully offline, free forever, e.g. qwen2.5-coder)
+    1. DeepSeek — the user's chosen coder (new accounts get free tokens for a
+       month, then it is pay-as-you-go and very cheap). An empty balance
+       answers 402 and Gemini takes over.
+    2. Gemini, with the key JARVIS already has, as the backup (the best model
+       the key can use is found by asking Google which models exist — model
+       names change every few months, so none is hard-coded)
 
 If one brain is at its limit, the next takes over in the middle of the job;
 the work done so far (the files) stays.
@@ -351,7 +348,7 @@ class GeminiBrain:
 
 
 class OpenAIBrain:
-    """Any OpenAI-compatible chat API with tools: OpenRouter, Ollama, Groq …"""
+    """An OpenAI-compatible chat API with tools (DeepSeek)."""
 
     def __init__(self, base_url: str, key: str, model: str, label: str):
         self.base, self.key, self.model = base_url.rstrip("/"), key, model
@@ -374,8 +371,6 @@ class OpenAIBrain:
         body = {"model": self.model, "messages": msgs, "temperature": 0.2,
                 "tools": [{"type": "function", "function": t} for t in TOOLS]}
         headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
-        if "openrouter" in self.base:
-            headers.update({"HTTP-Referer": "https://github.com/fatmakahraman304-hash/JARV-S", "X-Title": "JARVIS"})
         js = _http_json(f"{self.base}/chat/completions", body, headers, timeout=300)
         if js.get("error"):
             raise BrainError(str(js["error"])[:300])
@@ -445,19 +440,6 @@ def gemini_models(key: str) -> list[str]:
     return _gemini_cache["models"]
 
 
-def _ollama_model() -> str:
-    try:
-        js = _http_json("http://127.0.0.1:11434/api/tags", None, {}, timeout=3)
-    except BrainError:
-        return ""
-    names = [m.get("name", "") for m in js.get("models") or []]
-    for want in ("coder", "qwen", "deepseek", "llama", ""):
-        for n in names:
-            if want in n.lower():
-                return n
-    return ""
-
-
 def brains() -> list:
     """Every brain that can work right now, best first."""
     cfg = _settings()
@@ -468,18 +450,16 @@ def brains() -> list:
     key = _gemini_key()
     if key and cfg.get("use_gemini", True) is not False:
         out += [GeminiBrain(key, m) for m in gemini_models(key)]
-    if cfg.get("openrouter_key"):
-        for m in (cfg.get("openrouter_models") or ["openrouter/free"]):
-            out.append(OpenAIBrain("https://openrouter.ai/api/v1", cfg["openrouter_key"], m, "OpenRouter"))
-    om = cfg.get("ollama_model") or _ollama_model()
-    if om:
-        out.append(OpenAIBrain(cfg.get("ollama_url") or "http://127.0.0.1:11434/v1", "", om, "Ollama"))
     return out
 
 
 def available() -> bool:
     cfg = _settings()
-    return bool(_gemini_key() or cfg.get("openrouter_key") or cfg.get("ollama_model") or cfg.get("deepseek_key"))
+    return bool(cfg.get("deepseek_key") or _gemini_key())
+
+
+def deepseek_ready() -> bool:
+    return bool(_settings().get("deepseek_key"))
 
 
 # ── the loop ─────────────────────────────────────────────────────────────────
@@ -500,8 +480,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("JARVIS'in kod ajanı için beyin yok: Gemini anahtarı, OpenRouter anahtarı "
-                           "ya da Ollama gerekiyor.")
+        raise RuntimeError("JARVIS'in kod ajanı için beyin yok: DeepSeek ya da Gemini anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
     log(f"  JARVIS ajanı: {brain.name}")
