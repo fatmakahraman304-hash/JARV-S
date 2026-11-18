@@ -209,3 +209,46 @@ class RouterTest(unittest.TestCase):
         self.assertTrue(self.r.resting("claude_code") > 0)
         with self.assertRaises(RuntimeError):      # a real error is not hidden by switching
             dev_agent._with_agents(["codex_cli"], lambda ag: (_ for _ in ()).throw(RuntimeError("bad diff")), None)
+
+
+class OpusFirstTest(unittest.TestCase):
+    def test_opus_first_with_sonnet_fallback(self):
+        from core import agent_coding
+        with mock.patch("memory.config_manager.get_plugin_config", return_value={}):
+            self.assertEqual(agent_coding.claude_models(), ["opus", "sonnet"])
+        cmd = agent_coding._claude_cmd("claude", "opus")
+        self.assertEqual(cmd[cmd.index("--model") + 1], "opus")
+        self.assertEqual(cmd[cmd.index("--fallback-model") + 1], "sonnet")
+        self.assertIn("WebSearch", cmd[cmd.index("--allowedTools") + 1])
+        self.assertNotIn("--fallback-model", agent_coding._claude_cmd("claude", "sonnet"))
+
+    def test_refused_model_steps_down(self):
+        from core import agent_coding
+        tried = []
+
+        def once(exe, model, folder, prompt, log):
+            tried.append(model)
+            if model == "opus":
+                return "", 1, ["Error: model not available on your plan"], ""
+            return "Tamamlandı.", 0, [], ""
+        with mock.patch("core.claude_coding._executable", return_value="claude"), \
+             mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch.object(agent_coding, "_claude_once", side_effect=once):
+            self.assertEqual(agent_coding._run_claude(Path("."), "p", lambda m: None), "Tamamlandı.")
+        self.assertEqual(tried, ["opus", "sonnet"])
+
+    def test_brief_asks_for_complete_verified_work(self):
+        from core import agent_coding
+        b = agent_coding._brief("bir site yap", "", "")
+        self.assertIn("No placeholders", b)
+        self.assertIn("think hard", b)
+
+    def test_setup_plugin_reports_and_saves_model(self):
+        from plugins import coding_setup
+        with mock.patch("core.agent_coding.available", return_value=False):
+            self.assertIn("Claude Code kurulu değil", coding_setup.run({"action": "status"}))
+        saved = {}
+        with mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch("memory.config_manager.save_plugin_config", side_effect=lambda ns, v: saved.update({ns: v})):
+            coding_setup.run({"action": "model", "name": "sonnet"})
+        self.assertEqual(saved["coding"]["model"], "sonnet")
