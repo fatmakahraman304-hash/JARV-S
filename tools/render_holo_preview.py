@@ -45,11 +45,38 @@ def main() -> int:
                 p.fillRect(0, 0, w, h, g)
                 p.drawImage(0, 0, img)
                 p.end()
-                name = holo_model.clean(m)["name"].split()[0].lower()
+                name = "".join(ch for ch in holo_model.clean(m)["name"].split()[0].lower() if ch.isascii() and ch.isalnum()) or "model"
                 base.save(str(out / f"{name}_{look}_{k}.png"))
                 print(f"{name} {look} {k}: {mesh.n_vert // 3} tris, {dt * 1000:.0f} ms")
     print("renderer:", gl.renderer_name)
+    if "--log-preview" in sys.argv:
+        _log_sheet(out)
     return 0
+
+
+def _log_sheet(out: Path) -> None:
+    """Contact sheets as base64 JPEG in the log (when artifacts can't be fetched)."""
+    import base64
+    from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+    from PyQt6.QtGui import QImage, QPainter
+    files = sorted(out.glob("*.png"))
+    for start in range(0, len(files), 6):
+        group = files[start:start + 6]
+        tw, th = 640, 397
+        sheet = QImage(tw * 2, th * 3, QImage.Format.Format_RGB32)
+        sheet.fill(0)
+        p = QPainter(sheet)
+        for i, f in enumerate(group):
+            img = QImage(str(f)).scaled(tw, th, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            p.drawImage((i % 2) * tw, (i // 2) * th, img)
+        p.end()
+        ba = QByteArray(); buf = QBuffer(ba); buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        sheet.save(buf, "JPG", 82)
+        data = base64.b64encode(bytes(ba)).decode()
+        print(f"SHEET-BEGIN {start // 6}")
+        for k in range(0, len(data), 4000):
+            print("SHEET:" + data[k:k + 4000])
+        print("SHEET-END")
 
 
 if __name__ == "__main__":

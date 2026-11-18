@@ -31,7 +31,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: xcb
-        run: xvfb-run -s "-screen 0 1920x1080x24" python tools/render_holo_preview.py out --size 1400
+        run: xvfb-run -s "-screen 0 1920x1080x24" python tools/render_holo_preview.py out --size 1400 --log-preview
       - name: Render (Windows, Qt software OpenGL)
         if: runner.os == 'Windows'
         env:
