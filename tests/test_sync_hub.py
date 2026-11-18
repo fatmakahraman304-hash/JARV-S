@@ -375,6 +375,15 @@ class ComputerReceivesTest(unittest.TestCase):
             self.assertEqual(image_studio.last_image().read_bytes(), png)
         self.assertEqual(self.shown[0][0], "image")
 
+    def test_screenshot_goes_back_to_the_phone(self):
+        with mock.patch.dict(sync_hub._state, {"out_cmds": []}), \
+             mock.patch("core.remote_control.screenshot_jpeg", return_value=b"\xff\xd8jpeg"):
+            sync_hub._send_screenshot("s1", {"kind": "screenshot", "reply_to": "w-phone", "question": "indirme bitti mi"})
+            dev, item = sync_hub._state["out_cmds"][0]
+        self.assertEqual(dev, "w-phone")
+        self.assertEqual((item["kind"], item["see"], item["question"]), ("image", True, "indirme bitti mi"))
+        self.assertIn("gönderildi", sync_hub._state["pending"][-1]["reply"])
+
     def test_link_opens_in_browser(self):
         with mock.patch("webbrowser.open") as op:
             sync_hub._receive_item("o1", {"kind": "open", "url": "https://maps.google.com"}, "Telefon")
@@ -475,6 +484,61 @@ class GalleryTest(unittest.TestCase):
             with mock.patch.object(sync_hub, "send_to_device", side_effect=lambda d, c: sent.append(c) or (True, "ok")):
                 gallery.run({"action": "send", "query": "eski", "device": "tv"})
             self.assertEqual(sent[0]["url"], "https://x/o")
+
+
+class ArchiveTest(unittest.TestCase):
+    def setUp(self):
+        self.store = {"old": json.dumps([{"ts": "2026-10-01T10:00:00Z", "device": "Telefon", "role": "user",
+                                          "text": "annemin doğum günü 3 Mart"},
+                                         {"ts": "2026-10-01T10:00:05Z", "device": "Telefon", "role": "jarvis",
+                                          "text": "Not ettim efendim."}])}
+        self.writes = []
+
+        def read(token, gid, etag=""):
+            if gid == "arch":
+                return {"history-2026-10.json": self.store["old"],
+                        **{k: v for k, v in self.store.items() if k.startswith("history-")}}, "", ""
+            return {"archive.json": json.dumps({"gist": "arch"})}, "", ""
+
+        def write(token, gid, files):
+            self.writes.append((gid, files))
+            self.store.update(files)
+            return True
+        self._p = [mock.patch.object(sync_hub, "read_gist", side_effect=read),
+                   mock.patch.object(sync_hub, "write_files", side_effect=write),
+                   mock.patch.object(sync_hub, "settings", return_value={"github_token": "t", "gist_id": "main"}),
+                   mock.patch.dict(sync_hub._state, {"arch_queue": [], "arch_last": 0.0, "arch_id": ""})]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def test_search_finds_with_the_line_around_it(self):
+        out = sync_hub.search_archive("annemin doğum günü ne zaman")
+        self.assertIn("3 Mart", out)
+        self.assertIn("Not ettim", out)
+        self.assertIn("bulamadım", sync_hub.search_archive("uzay gemisi"))
+
+    def test_own_turns_are_written_by_month(self):
+        sync_hub._state["thread"] = object()
+        try:
+            sync_hub.note_turn("Kullanıcı", "yarın sinemaya gidiyoruz")
+        finally:
+            sync_hub._state["thread"] = None
+        sync_hub._archive_flush("t", {"archive.json": json.dumps({"gist": "arch"})}, time.time())
+        gid, files = self.writes[-1]
+        self.assertEqual(gid, "arch")
+        name = next(iter(files))
+        self.assertTrue(name.startswith("history-20"))
+        self.assertIn("sinemaya", files[name])
+        self.assertEqual(sync_hub._state["arch_queue"], [])
+
+    def test_web_uses_the_same_archive(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("'archive.json'", js)
+        self.assertIn("history-${t.ts.slice(0, 7)}.json", js)
 
 
 class WebPageWiringTest(unittest.TestCase):
