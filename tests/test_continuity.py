@@ -32,6 +32,19 @@ class ContinuityTests(unittest.TestCase):
         self.assertIn("Bir park çiz", c.search("park çiz", limit=1))
         self.assertEqual(c.search("zeplin"), "")
 
+    def test_fact_recall_ranks_distinct_turkish_clues(self):
+        facts = {"preferences": {"ışık": "Bahçede sarı",
+                                 "çalışma_odası": "Mor ışıkları seviyorum",
+                                 "çalışma_saatleri": "Sabah"}}
+        with patch.object(m, "load_memory", return_value=facts):
+            result = m.search_memory("benim ISIK calisma", limit=1)
+            self.assertIn("Mor ışıkları seviyorum", result)
+            self.assertNotIn("Bahçede", result)
+            self.assertNotIn("Sabah", result)
+            self.assertIn("Bahçede", m.search_memory("IŞIK", limit=1))
+            self.assertIn("Bahçede", m.search_memory(""))
+            self.assertNotIn("Bahçede", m.search_memory("benim"))
+
     def test_interrupted_jobs_are_not_replayed(self):
         c.set_application('CapCut', 'geliştiriliyor', 'test bekliyor')
         c.recover_jobs()
