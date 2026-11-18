@@ -311,6 +311,49 @@ class ProjectsSummaryTest(unittest.TestCase):
         self.assertIn("function projectsText", js)
 
 
+class ComputerReceivesTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.shown = []
+        self._p = [mock.patch.dict(sync_hub._state, {"pending": [], "on_item": lambda *a: self.shown.append(a)}),
+                   mock.patch.object(sync_hub, "_received_dir", return_value=Path(self.tmp.name))]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+        self.tmp.cleanup()
+
+    def test_code_is_saved_and_shown(self):
+        sync_hub._receive_item("c1", {"kind": "code", "filename": "../site/index.html", "text": "<h1>Merhaba</h1>"}, "Telefon")
+        saved = list(Path(self.tmp.name).iterdir())
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0].read_text(encoding="utf-8"), "<h1>Merhaba</h1>")
+        self.assertNotIn("..", saved[0].name.split("_")[0])
+        self.assertEqual(self.shown[0][0], "code")
+        self.assertIn("kaydedildi", sync_hub._state["pending"][0]["reply"])
+
+    def test_picture_data_is_saved_and_remembered(self):
+        import base64
+        from core import image_studio
+        png = b"\x89PNG" + b"0" * 500
+        with mock.patch.object(image_studio, "out_dir", return_value=Path(self.tmp.name)), \
+             mock.patch.object(image_studio, "_STATE", Path(self.tmp.name) / "st.json"):
+            sync_hub._receive_image("i1", {"kind": "image", "data": base64.b64encode(png).decode(),
+                                           "mime": "image/png", "prompt": "tilki"}, "Telefon")
+            self.assertEqual(image_studio.last_image().read_bytes(), png)
+        self.assertEqual(self.shown[0][0], "image")
+
+    def test_link_opens_in_browser(self):
+        with mock.patch("webbrowser.open") as op:
+            sync_hub._receive_item("o1", {"kind": "open", "url": "https://maps.google.com"}, "Telefon")
+            op.assert_called_once_with("https://maps.google.com")
+            sync_hub._receive_item("o2", {"kind": "open", "url": "file:///etc/passwd"}, "Telefon")
+            self.assertEqual(op.call_count, 1)
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")

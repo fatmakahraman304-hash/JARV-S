@@ -2945,6 +2945,14 @@ class JarvisLive:
                 sync_hub.on_reminder(on_shared_reminder)     # set on the phone → said here too
             except Exception as e:
                 print(f"[Sync] shared reminders off: {e}")
+            def _on_item(kind, target, title, text, ui=self.ui):
+                # a picture, code or link another device sent to this computer
+                if kind == "image":
+                    ui.show_image(target, title)
+                elif kind in ("code", "text"):
+                    ui.show_content(title, text)
+                ui.write_log(f"SYS: {title or target}")
+            sync_hub.on_item(_on_item)
             if sync_hub.start(_inject_remote):
                 print("[Sync] Shared memory and device mailbox are on.")
         except Exception as e:
