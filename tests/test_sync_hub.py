@@ -354,6 +354,34 @@ class ComputerReceivesTest(unittest.TestCase):
             self.assertEqual(op.call_count, 1)
 
 
+class StatusReportTest(unittest.TestCase):
+    def test_devices_with_health_and_reminders(self):
+        now = sync_hub._now()
+        devs = [{"id": "w1", "name": "Telefon", "kind": "phone", "seen": now, "battery": 14, "charging": False},
+                {"id": "w2", "name": "Salon", "kind": "tv", "seen": "2020-01-01T00:00:00Z"}]
+        rem = [{"id": "r", "text": "ilaç", "due": (time.time() + 3600) * 1000, "cancelled": ""}]
+        with mock.patch.dict(sync_hub._state, {"devices": devs, "reminders": rem}), \
+             mock.patch.object(sync_hub, "health", return_value={"cpu": 12, "battery": 80, "charging": True}), \
+             mock.patch.object(sync_hub, "settings", return_value={"gist_id": "g"}):
+            out = sync_hub.status_report()
+        self.assertIn("Telefon (telefon): açık, pil %14", out)
+        self.assertIn("Salon (televizyon): kapalı", out)
+        self.assertIn("pil %80 (şarjda), işlemci %12", out)
+        self.assertIn("ilaç", out)
+
+    def test_health_has_numbers(self):
+        h = sync_hub.health()
+        self.assertIsInstance(h.get("cpu", 0), int)
+
+    def test_plugin_runs(self):
+        from plugins import status_report
+        with mock.patch.object(sync_hub, "status_report", return_value="CİHAZLAR:\n- x"), \
+             mock.patch.object(sync_hub, "projects_summary", return_value=[]):
+            out = status_report.run({})
+        self.assertIn("CİHAZLAR", out)
+        self.assertIn("PROJELER", out)
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")

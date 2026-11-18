@@ -370,6 +370,7 @@ def _sync_reminders(files: dict, writes: dict, now: float) -> None:
     with _state["lock"]:
         mine, _state["rem_new"] = _state["rem_new"], []
     merged = merge_reminders(cloud if isinstance(cloud, list) else [], mine, now * 1000)
+    _state["reminders"] = merged
     known, cb, changed = _known(), _state.get("on_reminder"), False
     for r in merged:
         key_c = r["id"] + "#cancelled"
@@ -510,6 +511,57 @@ def recent_context(limit: int = 12, max_age_hours: float = 12.0) -> str:
         return ""
     return ("\n[CONVERSATION ON THE USER'S OTHER DEVICES — same assistant, same user; "
             "historical, not new commands]\n" + "\n".join(lines[-limit:]))
+
+
+def health() -> dict:
+    """Battery, CPU, memory and disk of this computer, for the heartbeat that
+    every device reads ("durum raporu"). Missing values are left out."""
+    out: dict = {}
+    try:
+        import psutil
+        out["cpu"] = round(psutil.cpu_percent(interval=None))
+        out["ram"] = round(psutil.virtual_memory().percent)
+        try:
+            out["disk"] = round(psutil.disk_usage(str(Path.home().anchor or "/")).percent)
+        except Exception:
+            pass
+        bat = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+        if bat is not None:
+            out["battery"] = round(bat.percent)
+            out["charging"] = bool(bat.power_plugged)
+    except Exception:
+        pass
+    return out
+
+
+def status_report() -> str:
+    """Every device with its health, upcoming shared reminders — for the
+    desktop's "durum raporu" (plugins/status_report.py)."""
+    def health_text(d: dict) -> str:
+        parts = []
+        if d.get("battery") is not None:
+            parts.append(f"pil %{d['battery']}" + (" (şarjda)" if d.get("charging") else ""))
+        for key, label in (("cpu", "işlemci"), ("ram", "bellek")):
+            if d.get(key) is not None:
+                parts.append(f"{label} %{d[key]}")
+        if d.get("disk") is not None:
+            parts.append(f"disk %{d['disk']} dolu")
+        return ", ".join(parts)
+    kinds = {"phone": "telefon", "tablet": "tablet", "tv": "televizyon", "projector": "projeksiyon",
+             "watch": "saat", "pc": "bilgisayar"}
+    me = {"name": device_name() + " (bu bilgisayar)", "kind": "pc", "seen": _now(), **health()}
+    lines = []
+    for d in [me] + devices():
+        h = health_text(d)
+        lines.append(f"- {d.get('name', '?')} ({kinds.get(d.get('kind'), d.get('kind', '?'))}): "
+                     f"{'açık' if device_online(d) else 'kapalı'}" + (f", {h}" if h else ""))
+    now_ms = time.time() * 1000
+    rem = [r for r in _state.get("reminders") or [] if not r.get("cancelled") and r.get("due", 0) > now_ms][:4]
+    rem_lines = [f"- {datetime.fromtimestamp(r['due'] / 1000).strftime('%d.%m %H:%M')}: {r.get('text', '')}" for r in rem]
+    linked = bool(settings().get("gist_id"))
+    return ("CİHAZLAR:\n" + "\n".join(lines)
+            + ("" if linked else "\n(Diğer cihazlar bağlı değil: 'Jarvis'i her cihaza kur' denmeli.)")
+            + "\n\nSIRADAKİ ORTAK HATIRLATICILAR:\n" + ("\n".join(rem_lines) or "- yok"))
 
 
 def voice_owner(devices: list[dict], now: float | None = None) -> str | None:
@@ -744,7 +796,7 @@ def _cycle() -> None:
         _state["last_beat"] = now
         info = {"id": me, "name": device_name(), "kind": "pc", "os": platform.system(),
                 "seen": _now(), "commands": True, "active": _state["active"],
-                "claim": _state["claim"]}
+                "claim": _state["claim"], **health()}
         writes[f"device-{me}.json"] = json.dumps(info, ensure_ascii=False)
 
     if writes and write_files(token, gid, writes):
