@@ -131,6 +131,15 @@ uniform float u_cut;           // geometry with x beyond this is cut away (secti
 uniform float u_iso;           // the one part shown solid, the rest ghosted; -1 = all solid
 uniform sampler2D u_tex;       // a scanned model's colour texture
 uniform float u_has_tex;
+uniform sampler2D u_mr;        // and its PBR maps: metal/roughness (b/g), normal, emissive, occlusion (r)
+uniform sampler2D u_nrm;
+uniform sampler2D u_emi;
+uniform sampler2D u_occ;
+uniform float u_has_mr;
+uniform float u_has_nrm;
+uniform float u_has_emi;
+uniform float u_has_occ;
+uniform float u_nrm_scale;
 varying vec3 v_lp;
 varying vec2 v_ext;
 varying vec2 v_uv;
@@ -272,7 +281,25 @@ void main() {
     }
     vec3 alb = pow(base_rgb(), vec3(2.2));
     float metal = v_mat.x, rough = max(v_mat.y, 0.045);
-    float fid = floor(v_ext.x + 0.5), coat = 0.0, ao = v_ext.y;
+    vec2 tuv = vec2(v_uv.x, 1.0 - v_uv.y);
+    vec3 emi_map = vec3(0.0);
+    float occ_map = 1.0;
+    if (u_has_mr > 0.5) { vec3 mr = texture2D(u_mr, tuv).rgb; rough = clamp(rough * mr.g, 0.045, 1.0); metal = clamp(metal * mr.b, 0.0, 1.0); }
+    if (u_has_nrm > 0.5) {
+        // tangent frame from screen derivatives (no tangents needed in the file)
+        vec3 dp1 = dFdx(v_wp), dp2 = dFdy(v_wp);
+        vec2 du1 = dFdx(tuv), du2 = dFdy(tuv);
+        vec3 p2 = cross(dp2, N), p1 = cross(N, dp1);
+        vec3 T = p2 * du1.x + p1 * du2.x;
+        vec3 B = p2 * du1.y + p1 * du2.y;
+        float inv = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-20));
+        vec3 tn = texture2D(u_nrm, tuv).xyz * 2.0 - 1.0;
+        tn.xy *= u_nrm_scale;
+        N = normalize(mat3(T * inv, -B * inv, N) * tn);
+    }
+    if (u_has_emi > 0.5) emi_map = pow(texture2D(u_emi, tuv).rgb, vec3(2.2));
+    if (u_has_occ > 0.5) occ_map = texture2D(u_occ, tuv).r;
+    float fid = floor(v_ext.x + 0.5), coat = 0.0, ao = v_ext.y * occ_map;
     if (fid > 0.5 && fid < 10.5) {
         // a real surface texture, at true scale, faded out where it would only shimmer
         vec3 T = normalize(abs(N.y) < 0.95 ? cross(N, vec3(0.0, 1.0, 0.0)) : cross(N, vec3(1.0, 0.0, 0.0)));
@@ -325,7 +352,7 @@ void main() {
     if (coat > 0.5) col += env(R, 0.03) * (0.04 + 0.96 * pow(1.0 - nv, 5.0)) * mix(0.6, 1.0, sh) * ao;
     float contact = mix(0.72, 1.0, smoothstep(0.0, u_radius * 0.12, v_wp.y));  // a little extra darkening right at the floor
     col *= contact;
-    col += pow(v_col, vec3(2.2)) * v_mat.z * 3.0;                                // screens, LEDs
+    col += (u_has_emi > 0.5 ? emi_map * max(v_mat.z, 1.0) : pow(base_rgb(), vec3(2.2)) * v_mat.z) * 3.0;   // screens, LEDs
     if (sel) col += u_accent * (0.25 + 0.9 * pow(1.0 - nv, 2.0));
     col = aces(col * 1.05);
     col = pow(col, vec3(1.0 / 2.2));
@@ -553,44 +580,58 @@ class HoloGL:
         self._vbo.release()
         self._mesh, self._explode = mesh, explode
 
-    def _textures(self, mesh):
-        """GPU textures of a scanned mesh (made once per mesh), with mipmaps."""
+    def _gl_tex(self, arr):
         from PyQt6.QtOpenGL import QOpenGLTexture
+        a = np.ascontiguousarray(arr)
+        img = QImage(a.data, a.shape[1], a.shape[0], a.shape[1] * 4, QImage.Format.Format_RGBA8888).copy()
+        t = QOpenGLTexture(img, QOpenGLTexture.MipMapGeneration.GenerateMipMaps)
+        t.setMinificationFilter(QOpenGLTexture.Filter.LinearMipMapLinear)
+        t.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
+        t.setWrapMode(QOpenGLTexture.WrapMode.Repeat)
+        try:
+            t.setMaximumAnisotropy(8.0)
+        except Exception:
+            pass
+        return t
+
+    def _textures(self, mesh):
+        """GPU textures of a scanned mesh (made once per mesh): per draw a dict
+        of base / mr / normal / emissive / occlusion maps."""
         cache = self.__dict__.setdefault("_tex", {})
         if cache.get("mesh") is not mesh:
-            for t in cache.get("list", []):
-                try:
-                    t.destroy()
-                except Exception:
-                    pass
+            for d in cache.get("list", []):
+                for t in d.values():
+                    try:
+                        t.destroy()
+                    except Exception:
+                        pass
             lst = []
-            for arr in getattr(mesh, "textures", []) or []:
-                a = np.ascontiguousarray(arr)
-                img = QImage(a.data, a.shape[1], a.shape[0], a.shape[1] * 4, QImage.Format.Format_RGBA8888).copy()
-                t = QOpenGLTexture(img, QOpenGLTexture.MipMapGeneration.GenerateMipMaps)
-                t.setMinificationFilter(QOpenGLTexture.Filter.LinearMipMapLinear)
-                t.setMagnificationFilter(QOpenGLTexture.Filter.Linear)
-                t.setWrapMode(QOpenGLTexture.WrapMode.Repeat)
-                try:
-                    t.setMaximumAnisotropy(8.0)
-                except Exception:
-                    pass
-                lst.append(t)
+            for entry in getattr(mesh, "textures", []) or []:
+                if not isinstance(entry, dict):
+                    entry = {"base": entry}
+                lst.append({k: self._gl_tex(v) for k, v in entry.items() if k != "normal_scale" and v is not None})
+                lst[-1]["_scale"] = entry.get("normal_scale", 1.0)
             cache.update(mesh=mesh, list=lst)
         return cache["list"]
 
+    _UNITS = (("base", 1, "u_has_tex"), ("mr", 2, "u_has_mr"), ("normal", 3, "u_has_nrm"), ("emissive", 4, "u_has_emi"),
+              ("occlusion", 5, "u_has_occ"))
+
     def _draw_model(self, mesh):
-        """The model, range by range, each with its texture (unit 1)."""
+        """The model, range by range, each with its maps."""
         gl = self._gl
         texs = self._textures(mesh) if getattr(mesh, "textures", None) else []
         for first, count, ti in getattr(mesh, "draws", [(0, mesh.n_vert, None)]):
-            if ti is not None and ti < len(texs):
-                texs[ti].bind(1)
-                self._u("u_has_tex", 1.0)
-            else:
-                self._u("u_has_tex", 0.0)
+            d = texs[ti] if ti is not None and ti < len(texs) else {}
+            for key, unit, flag in self._UNITS:
+                t = d.get(key)
+                if t is not None:
+                    t.bind(unit)
+                self._u(flag, 1.0 if t is not None else 0.0)
+            self._u("u_nrm_scale", float(d.get("_scale", 1.0)))
             gl.glDrawArrays(GL_TRIANGLES, first, count)
-        self._u("u_has_tex", 0.0)
+        for _key, _unit, flag in self._UNITS:
+            self._u(flag, 0.0)
 
     def _attrs(self, vbo, on: bool):
         prog = self._prog
@@ -735,7 +776,8 @@ class HoloGL:
                 for pname in (0x2802, 0x2803):                             # clamp to edge
                     gl.glTexParameteri(0x0DE1, pname, 0x812F)
                 prog.setUniformValue("u_shadow", 0)
-            prog.setUniformValue("u_tex", 1)
+            for name, unit in (("u_tex", 1), ("u_mr", 2), ("u_nrm", 3), ("u_emi", 4), ("u_occ", 5)):
+                prog.setUniformValue(name, unit)
             gl.glDisable(GL_CULL_FACE)
             # floor
             self._u("u_off", (0, 0, 0)); self._u("u_pass", 1.0)

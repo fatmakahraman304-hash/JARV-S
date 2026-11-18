@@ -356,3 +356,20 @@ class RealEngineTests(unittest.TestCase):
             self.assertIn("kaydettim", hologram.run({"action": "hf_token", "request": "hf_" + "a" * 30}, None))
             save.assert_called_once()
             self.assertIn("benzemiyor", hologram.run({"action": "hf_token", "request": "abc"}, None))
+
+
+class PanelHelperTests(unittest.TestCase):
+    def test_sharpest_frame(self):
+        import cv2
+        rng = np.random.default_rng(1)
+        sharp = (rng.random((120, 160)) * 255).astype(np.uint8)
+        blur = cv2.GaussianBlur(sharp, (15, 15), 6)
+        enc = lambda im: cv2.imencode(".jpg", im)[1].tobytes()
+        frames = [enc(blur), enc(sharp), enc(blur)]
+        if not HAS_QT:
+            self.skipTest("PyQt6 not installed")
+        from gui.holo_panel import sharpest
+        self.assertEqual(sharpest(frames), frames[1])
+
+    def test_new_commands(self):
+        self.assertEqual([hm.local_command(t) for t in ("dönen video çek", "iptal et")], ["video", "cancel"])

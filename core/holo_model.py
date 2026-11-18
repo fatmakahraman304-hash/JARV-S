@@ -845,6 +845,8 @@ _CMDS = (
     ("upright", r"doğrult|dik çevir|yan yatmış|ters duruyor"),
     ("parts_engine", r"parça (modeli|motoru)"),
     ("real_engine", r"gerçek (3 ?b|motor|model)"),
+    ("video", r"video(su)? (çek|al|kaydet|yap)|dönen video|turntable"),
+    ("cancel", r"iptal|vazgeç|dur$"),
 )
 
 
@@ -924,12 +926,18 @@ class ScanMesh(Mesh):
             self.pos0[sl], self.nrm[sl] = V[idx], N[idx]
             col = np.array(p["color"][:3], np.float32)
             self.col[sl] = (p["C"][idx, :3] * col) if p.get("C") is not None else col
-            self.mat[sl] = (min(p["metal"], 0.6), max(p["rough"], 0.35), 0.0, 1.0)
+            maps = p.get("maps") or {}
+            emis = float(max(p.get("emissive") or [0.0]))
+            if "mr" in maps:                                   # the texture carries the real metal/roughness
+                self.mat[sl] = (p["metal"], p["rough"], emis, 1.0)
+            else:                                              # factors only: services leave them at 1 — tame them
+                self.mat[sl] = (min(p["metal"], 0.6), max(p["rough"], 0.35), emis, 1.0)
             if p.get("UV") is not None:
                 self.uv[sl] = p["UV"][idx]
             ti = None
-            if p.get("texture") is not None:
-                self.textures.append(p["texture"]); ti = len(self.textures) - 1
+            if p.get("texture") is not None or maps:
+                self.textures.append({"base": p.get("texture"), **maps, "normal_scale": p.get("normal_scale", 1.0)})
+                ti = len(self.textures) - 1
             self.draws.append((off, m, ti))
             for j in range(n_parts):
                 fs = np.nonzero(labels == j)[0]

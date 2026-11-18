@@ -141,18 +141,23 @@ def load(data: bytes) -> list[dict]:
             pbr = mat.get("pbrMetallicRoughness", {})
             sg = (mat.get("extensions") or {}).get("KHR_materials_pbrSpecularGlossiness", {})
             color = pbr.get("baseColorFactor") or sg.get("diffuseFactor") or [1, 1, 1, 1]
-            tinfo = pbr.get("baseColorTexture") or sg.get("diffuseTexture")
-            tex = None
-            if tinfo is not None and "index" in tinfo:
-                ti = tinfo["index"]
+            def tex_of(info):
+                if not isinstance(info, dict) or "index" not in info:
+                    return None
+                ti = info["index"]
                 if ti not in tex_cache:
                     tex_cache[ti] = _image(js, binary, ti)
-                tex = tex_cache[ti]
+                return tex_cache[ti]
+            tex = tex_of(pbr.get("baseColorTexture") or sg.get("diffuseTexture"))
+            maps = {k: v for k, v in (("mr", tex_of(pbr.get("metallicRoughnessTexture"))), ("normal", tex_of(mat.get("normalTexture"))),
+                                      ("emissive", tex_of(mat.get("emissiveTexture"))), ("occlusion", tex_of(mat.get("occlusionTexture"))))
+                    if v is not None}
             out.append({"V": V.astype(np.float32), "N": None if N is None else N.astype(np.float32), "UV": UV, "C": C, "F": F,
                         "color": [float(c) for c in color], "metal": float(pbr.get("metallicFactor", 0.0 if sg else 1.0)),
                         "rough": float(pbr.get("roughnessFactor", 1.0 - float(sg.get("glossinessFactor", 0.0)) if sg else 1.0)),
                         "emissive": [float(c) for c in mat.get("emissiveFactor", [0, 0, 0])],
-                        "alpha": mat.get("alphaMode", "OPAQUE"), "texture": tex,
+                        "alpha": mat.get("alphaMode", "OPAQUE"), "texture": tex, "maps": maps,
+                        "normal_scale": float((mat.get("normalTexture") or {}).get("scale", 1.0)),
                         "name": mesh.get("name") or mat.get("name") or f"parça {len(out) + 1}"})
 
     def walk(ni, parent):
