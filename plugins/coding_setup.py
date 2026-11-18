@@ -16,8 +16,8 @@ PLUGIN = {
     "description": (
         "JARVIS'in kodlama ajanını hazırla ve durumunu söyle: 'kodlama kurulumunu kontrol et', "
         "'Claude Code'u kur', 'Claude'a giriş yap', 'kodlamada Opus/Sonnet kullan'. "
-        "action: status | install | login | model | deepseek | openrouter | ollama. deepseek için name: DeepSeek API anahtarı; model için name: opus | sonnet | tam model adı; "
-        "openrouter için name: OpenRouter anahtarı (ücretsiz modeller için); ollama için name: yerel model adı."
+        "action: status | install | login | model | deepseek. deepseek için name: DeepSeek API anahtarı "
+        "(kodlamayı DeepSeek yapar); model için name: opus | sonnet | tam model adı."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -51,8 +51,10 @@ def status() -> str:
     try:
         from core import jarvis_agent
         names = [b.name for b in jarvis_agent.brains()]
-        lines.append("JARVIS'in kendi ücretsiz kod ajanı hazır; beyinleri sırayla: " + ", ".join(names[:5]) + "."
-                     if names else "JARVIS'in kendi kod ajanı için beyin yok (Gemini anahtarı gerekli).")
+        lines.append("JARVIS'in kendi kod ajanı hazır; beyinleri sırayla: " + ", ".join(names[:5]) + "."
+                     if names else "JARVIS'in kendi kod ajanı için beyin yok.")
+        if not jarvis_agent.deepseek_ready():
+            lines.append("Kodlamayı DeepSeek yapsın diye 'DeepSeek anahtarımı ekle' de.")
     except Exception:
         pass
     resting = coding_router.status_line()
@@ -121,17 +123,16 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             return "Claude Code'u kuruyorum; bitince haber vereceğim."
         if action == "login":
             return _login()
-        if action in ("openrouter", "ollama", "deepseek"):
+        if action == "deepseek":
             val = str(p.get("name") or "").strip()
             if not val:
-                return "Değeri söylemen lazım." if action == "ollama" else "OpenRouter anahtarı lazım (openrouter.ai/keys, ücretsiz)."
+                return "DeepSeek API anahtarı lazım (platform.deepseek.com → API Keys)."
             from memory.config_manager import get_plugin_config, save_plugin_config
-            cfg = dict(get_plugin_config("coding") or {})
-            cfg[{"openrouter": "openrouter_key", "deepseek": "deepseek_key"}.get(action, "ollama_model")] = val
+            cfg = {k: v for k, v in dict(get_plugin_config("coding") or {}).items()
+                   if k not in ("openrouter_key", "openrouter_models", "ollama_model", "ollama_url")}
+            cfg["deepseek_key"] = val
             save_plugin_config("coding", cfg)
-            return {"openrouter": "OpenRouter eklendi: Gemini sınıra gelince ücretsiz modelleriyle devam ederim.",
-                    "deepseek": "DeepSeek eklendi: kodlamada önce onu kullanırım; bakiyesi biterse Gemini'ye geçerim."
-                    }.get(action, f"Ollama modeli {val} ayarlandı.")
+            return "DeepSeek eklendi: bundan sonra kodlamayı DeepSeek yapar; bakiyesi biterse Gemini devralır."
         if action == "model":
             name = str(p.get("name") or "").strip().lower()
             if not name:

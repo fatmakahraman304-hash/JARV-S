@@ -124,7 +124,7 @@ class BrainChoiceTest(unittest.TestCase):
         reply = {"choices": [{"message": {"content": "", "tool_calls": [
             {"id": "t1", "type": "function", "function": {"name": "list_files", "arguments": "{\"path\": \".\"}"}}]}}]}
         with mock.patch.object(ja, "_http_json", return_value=reply) as h:
-            b = ja.OpenAIBrain("https://openrouter.ai/api/v1", "k", "openrouter/free", "OpenRouter")
+            b = ja.OpenAIBrain("https://api.deepseek.com/v1", "k", "deepseek-chat", "DeepSeek")
             _, calls, _ = b.turn([{"role": "user", "text": "x"}])
         self.assertEqual(calls, [{"id": "t1", "name": "list_files", "args": {"path": "."}}])
         self.assertEqual(h.call_args[0][1]["tools"][0]["type"], "function")
@@ -132,10 +132,15 @@ class BrainChoiceTest(unittest.TestCase):
     def test_deepseek_first_when_added(self):
         with mock.patch.object(ja, "_settings", return_value={"deepseek_key": "sk-x"}), \
              mock.patch.object(ja, "_gemini_key", return_value="g"), \
-             mock.patch.object(ja, "gemini_models", return_value=["gemini-3.6-flash"]), \
-             mock.patch.object(ja, "_ollama_model", return_value=""):
+             mock.patch.object(ja, "gemini_models", return_value=["gemini-3.6-flash"]):
             names = [b.name for b in ja.brains()]
         self.assertEqual(names, ["DeepSeek (deepseek-chat)", "Gemini (gemini-3.6-flash)"])
+
+    def test_deepseek_leads_the_coding_ladder(self):
+        from core import coding_router
+        with mock.patch.object(ja, "deepseek_ready", return_value=True), \
+             mock.patch.object(coding_router, "resting", return_value=0.0):
+            self.assertEqual(coding_router.ladder("", lambda p: True)[0], ja.PROVIDER_ID)
 
     def test_in_the_coding_ladder(self):
         from core import coding_router
