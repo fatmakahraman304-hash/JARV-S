@@ -141,6 +141,8 @@ def node_for_tool(name: str, args: dict | None = None) -> str:
 def status_of(result) -> str:
     """'fail', 'warn' or 'ok' from a tool's result, using core.outcome's lines."""
     text = str(result or "").lstrip()
+    if text.startswith("status=started "):
+        return "info"
     if text.startswith("status=failed"):
         return "fail"
     if text.startswith(("status=unverified", "status=ask")):

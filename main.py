@@ -1787,11 +1787,7 @@ class JarvisLive:
 
         try:
             if name == "recall_memory":
-                # Local file search: no network, no second model. Kept out of
-                # the executor deliberately — it is a dictionary scan over a few
-                # hundred short strings, and a thread hop would cost more than
-                # the work itself.
-                result = search_memory(args.get("query", ""), limit=8)
+                result = await asyncio.to_thread(search_memory, args.get("query", ""), limit=8)
 
             elif name == "undo":
                 if str(args.get("action", "")).lower().strip() == "list":
