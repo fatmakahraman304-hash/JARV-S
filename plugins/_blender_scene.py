@@ -341,9 +341,19 @@ def studio(job, request):
     for o in [o for o in bpy.data.objects if o not in before and o.parent is None and o is not root]:
         o.parent = root
     root.scale = (k, k, k)
-    root.location = (-(lo.x + hi.x) / 2 * k, -(lo.y + hi.y) / 2 * k, -lo.z * k)
     bpy.context.view_layer.update()
-    size = (hi - lo) * k
+
+    def world_box():
+        pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+        return (Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts))),
+                Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts))))
+    for _ in range(2):                         # measure what is really there, then stand it centred on the floor
+        lo, hi = world_box()
+        root.location -= Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))
+        bpy.context.view_layer.update()
+    lo, hi = world_box()
+    print(f"JARVIS studio box: {tuple(round(v, 4) for v in lo)} .. {tuple(round(v, 4) for v in hi)}")
+    size = hi - lo
     radius = max(size.length / 2, 0.01)
     for o in meshes:
         for p in o.data.polygons:
@@ -382,9 +392,21 @@ def studio(job, request):
     pitch = math.radians(float(request.get("pitch", 14)))
     aim = Vector((0, 0, size.z * 0.48))
     aspect = float(request.get("width", 1920)) / float(request.get("height", 1080))
-    half = min(math.atan(math.tan(cam_data.angle / 2) / max(aspect, 1.0)), cam_data.angle / 2)   # the narrower (vertical) half-angle
-    dist = radius / math.sin(half) * 1.12
-    cam.location = aim + Vector((math.sin(yaw) * math.cos(pitch), -math.cos(yaw) * math.cos(pitch), math.sin(pitch))) * dist
+    cam_data.sensor_fit = "HORIZONTAL"
+    tx = math.tan(cam_data.angle_x / 2) if aspect >= 1 else math.tan(cam_data.angle_x / 2)
+    ty = tx / aspect
+    v = Vector((math.sin(yaw) * math.cos(pitch), -math.cos(yaw) * math.cos(pitch), math.sin(pitch)))   # aim -> camera
+    fwd = -v
+    right = fwd.cross(Vector((0, 0, 1))).normalized()
+    up = right.cross(fwd)
+    corners = [Vector((x, y, z)) for x in (lo.x, hi.x) for y in (lo.y, hi.y) for z in (lo.z, hi.z)]
+    dist = 0.0
+    for c in corners:                       # every corner of the box inside the frame, with a small margin
+        rel = c - aim
+        x, y, z = rel.dot(right), rel.dot(up), rel.dot(v)
+        dist = max(dist, z + abs(x) / (tx * 0.86), z + abs(y) / (ty * 0.80))
+    dist = max(dist, radius * 1.2)
+    cam.location = aim + v * dist
     cam.rotation_euler = (aim - cam.location).to_track_quat("-Z", "Y").to_euler()
     cam_data.clip_start, cam_data.clip_end = dist * 0.01, dist * 50
     # render
