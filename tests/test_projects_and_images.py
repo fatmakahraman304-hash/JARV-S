@@ -105,12 +105,59 @@ class ImageStudioTest(unittest.TestCase):
     def test_refusal_is_not_retried(self):
         from core import image_studio
         calls = []
-        with mock.patch.object(image_studio, "_key", return_value="k"), \
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(image_studio, "_STATE", Path(d) / "state.json"), \
+             mock.patch.object(image_studio, "_key", return_value="k"), \
              mock.patch.object(image_studio, "_call", side_effect=lambda *a: calls.append(1) or (None, "", "blocked: SAFETY")):
             path, msg = image_studio.make("x")
         self.assertIsNone(path)
         self.assertEqual(len(calls), 1)
         self.assertIn("güvenlik", msg)
+
+    def test_no_gemini_quota_uses_free_painter_and_rests_gemini(self):
+        from core import image_studio
+        gem, free = [], []
+        no_quota = "429 You exceeded your current quota ... free_tier_requests, limit: 0"
+
+        def fake_free(en, aspect, seed):
+            free.append((en, aspect, seed))
+            return b"\xff\xd8 fake jpeg" * 200, "image/jpeg", ""
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(image_studio, "out_dir", return_value=Path(d)), \
+             mock.patch.object(image_studio, "_STATE", Path(d) / "state.json"), \
+             mock.patch.object(image_studio, "_key", return_value="k"), \
+             mock.patch.object(image_studio, "describe", side_effect=lambda p, base="": f"EN[{base}|{p}]"), \
+             mock.patch.object(image_studio, "_call", side_effect=lambda *a: gem.append(a[0]) or (None, "", no_quota)), \
+             mock.patch.object(image_studio, "_free_call", side_effect=fake_free):
+            path, _ = image_studio.make("kırmızı bir tilki", aspect="16:9")
+            self.assertTrue(path.is_file())
+            self.assertEqual(gem, list(image_studio.MODELS))
+            self.assertTrue(image_studio.gemini_resting())
+            self.assertEqual(free[0][:2], ("EN[|kırmızı bir tilki]", "16:9"))
+            # resting: Gemini is not asked again; the edit keeps the seed and builds on the old description
+            gem.clear()
+            path2, _ = image_studio.make("mavi yap", edit_from=path)
+            self.assertEqual(gem, [])
+            self.assertEqual(free[1][0], "EN[EN[|kırmızı bir tilki]|mavi yap]")
+            self.assertEqual(free[1][2], free[0][2])
+            self.assertNotEqual(path, path2)
+
+    def test_free_painter_failure_is_explained(self):
+        from core import image_studio
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(image_studio, "_STATE", Path(d) / "state.json"), \
+             mock.patch.object(image_studio, "_key", return_value=""), \
+             mock.patch.object(image_studio, "_free_call", return_value=(None, "", "503 busy")):
+            path, msg = image_studio.make("a cat")
+        self.assertIsNone(path)
+        self.assertIn("503", msg)
+
+    def test_size_follows_aspect(self):
+        from core import image_studio
+        self.assertEqual(image_studio._size("1:1"), (1024, 1024))
+        self.assertEqual(image_studio._size("16:9"), (1024, 576))
+        self.assertEqual(image_studio._size("9:16"), (576, 1024))
+        self.assertEqual(image_studio._size("nonsense"), (1024, 1024))
 
     def test_plugin_edit_without_picture(self):
         from plugins import generate_image
