@@ -1355,6 +1355,21 @@
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
+  // Shared from another app (Android "Paylaş → JARVIS", manifest share_target):
+  // JARVIS asks what to do with it — open on the TV, send to the computer …
+  (function sharedIn() {
+    const q = new URLSearchParams(location.search);
+    const parts = ['share_title', 'share_text', 'share_url'].map(k => (q.get(k) || '').trim()).filter(Boolean);
+    if (!parts.length) return;
+    history.replaceState(null, '', location.pathname);
+    const shared = [...new Set(parts)].join(' — ').slice(0, 1500);
+    closeTurns(); transcript.push({ role: 'user', text: '📎 ' + shared, open: false }); renderLog();
+    claimHere();
+    connect().then(() => { setState('thinking');
+      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu JARVIS'e paylaştı: ${shared}\n` +
+        'Ne olduğunu tek cümleyle söyle ve ne yapmak istediğini sor: bir cihazda açmak (TV, bilgisayar…), özetlemek, kaydetmek, yapılacaklara eklemek gibi.' } }); })
+      .catch(() => toast('Paylaşılan alındı; bağlanınca soracağım.'));
+  })();
   $('t-rem').onclick = () => {
     const open = pendingRem(); if (!open.length) return;
     askUser('Hatırlatıcılar', open.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}`).join('\n') + '\n\nHepsi iptal edilsin mi?',
