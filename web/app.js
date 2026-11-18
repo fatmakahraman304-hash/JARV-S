@@ -746,6 +746,10 @@
       parameters: { type: 'OBJECT', properties: { city: { type: 'STRING' }, days: { type: 'NUMBER', description: '1-7, varsayılan 3' } } } },
     { name: 'currency', description: 'Döviz kuru ve çevirme (Avrupa Merkez Bankası günlük kurları): "dolar kaç TL", "250 euro kaç lira". base, targets (virgülle), amount.',
       parameters: { type: 'OBJECT', properties: { base: { type: 'STRING' }, targets: { type: 'STRING' }, amount: { type: 'NUMBER' } }, required: ['base'] } },
+    { name: 'chess', description: 'Bu cihazda kullanıcıyla satranç oyna (ekrandaki tahta). action: open | new (color white/black, level kolay/orta/zor) | move (move: SAN "Nf3", koordinat "e2e4" ya da Türkçe "at f3") | undo | resign | status | hint (en iyi hamleyi göster) | teach (on: true/false — öğretme modu: her hamleyi değerlendir, daha iyisini ve nedenini öğret). Hamleleri Türkçe söyle (at, fil, kale, vezir, şah).',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
+    { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
+      parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -816,6 +820,12 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'chess': return chessTool(a);
+      case 'coffee_fortune': {
+        openSheet('s-fal');
+        if (falImages.length) { const t = await readFortune(String(a.question || '')); return t.length > 40 ? 'Fal hazır ve ekranda; bunu sıcak bir falcı gibi sesli oku: ' + t : t; }
+        return 'Fal ekranı açıldı: kullanıcı "Fotoğraf çek" ile fincanın içini (ve tabağı) çeksin, sonra "Falıma bak"a bassın. Bunu ona söyle.';
+      }
       case 'weather': return await weatherTool(a);
       case 'currency': return await currencyTool(a);
       case 'notifications': {
@@ -1200,6 +1210,160 @@
     } catch (e) { return 'Kur alınamadı: ' + (e.message || e); }
   }
 
+  // ── chess on every device (engine: web/chess.js, same as the desktop's) ──
+  const CH = window.JarvisChess;
+  const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  const chess = (() => { const g = J(localStorage.getItem('jarvis_chess'), null);
+    return { sans: g?.sans || [], userWhite: g?.userWhite ?? true, level: g?.level || 'orta', teach: !!g?.teach, sel: null, hint: null, coach: '' }; })();
+  function chessBoard() { const b = new CH.Board(); for (const san of chess.sans) { const m = b.parse(san); if (!m) break; b.push(m); } return b; }
+  const saveChess = () => localStorage.setItem('jarvis_chess', JSON.stringify({ sans: chess.sans, userWhite: chess.userWhite, level: chess.level, teach: chess.teach }));
+  function chessState(b = chessBoard()) {
+    const out = b.outcome(), pgn = chess.sans.map((m, i) => (i % 2 ? '' : (i / 2 + 1) + '. ') + m).join(' ');
+    const userTurn = b.white === chess.userWhite;
+    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'JARVIS düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
+    return { fen: b.fen(), moves: pgn || 'yok', status, user_color: chess.userWhite ? 'beyaz' : 'siyah', level: chess.level, teach: chess.teach };
+  }
+  function renderChess() {
+    const b = chessBoard(), last = chess.sans.length ? (() => { const x = new CH.Board(); const L = chess.sans.slice(0, -1); for (const s of L) x.push(x.parse(s)); return x.parse(chess.sans[chess.sans.length - 1]); })() : null;
+    const targets = chess.sel !== null ? b.legalMoves().filter(m => m[0] === chess.sel).map(m => m[1]) : [];
+    let html = '';
+    for (let r = 7; r >= 0; r--) for (let f = 0; f < 8; f++) {
+      const rr = chess.userWhite ? r : 7 - r, ff = chess.userWhite ? f : 7 - f, s = rr * 8 + ff, p = b.sq[s];
+      const cls = [((rr + ff) % 2) ? 'l' : 'd', p !== '.' ? (p === p.toUpperCase() ? 'w' : 'b') : '', chess.sel === s ? 'sel' : '',
+        last && (last[0] === s || last[1] === s) ? 'last' : '', targets.includes(s) ? 'tgt' : '', chess.hint && (chess.hint[0] === s || chess.hint[1] === s) ? 'hint' : ''].join(' ');
+      html += `<div class="${cls}" data-s="${s}">${p !== '.' ? GLYPH[p] : ''}</div>`;
+    }
+    $('ch-board').innerHTML = html;
+    $('ch-status').textContent = chessState(b).status;
+    $('ch-coach').hidden = !chess.coach; $('ch-coach').textContent = chess.coach;
+    $('ch-teach').textContent = '🎓 Öğret: ' + (chess.teach ? 'açık' : 'kapalı');
+    $('ch-level').value = chess.level; $('ch-color').value = chess.userWhite ? 'white' : 'black';
+    $('ch-board').querySelectorAll('[data-s]').forEach(d => d.onclick = () => chessTap(+d.dataset.s));
+  }
+  // The coach: how good was the user's move compared with the best one?
+  function coachMove(before, move) {
+    const scores = CH.rootScores(before, 2), [bestScore, best] = scores[0];
+    const mine = (scores.find(([, m]) => same3(m, move)) || [bestScore])[0];
+    const loss = bestScore - mine;
+    const verdict = same3(move, best) || loss < 35 ? 'çok iyi hamle' : loss < 90 ? 'fena değil' : loss < 250 ? 'hata' : 'büyük hata';
+    return { yours: before.san(move), best: before.san(best), loss: Math.round(loss), verdict };
+  }
+  const same3 = (a, b) => a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  function playUser(move, viaVoice = false) {
+    const b = chessBoard();
+    if (b.outcome()) return { ok: false, msg: 'Oyun bitti; yeni oyun başlat.' };
+    if (b.white !== chess.userWhite) return { ok: false, msg: 'Sıra sende değil.' };
+    const before = b.copy();
+    const san = b.san(move); b.push(move); chess.sans.push(san); chess.sel = null; chess.hint = null; chess.coach = '';
+    saveChess(); renderChess();                       // the user's piece moves at once
+    const finish = () => {
+      const coach = chess.teach ? coachMove(before, move) : null;
+      chess.coach = coach ? (coach.verdict === 'çok iyi hamle' ? `✓ ${coach.yours}: çok iyi hamle.` : `${coach.yours}: ${coach.verdict}. Daha iyisi ${coach.best} idi.`) : '';
+      let reply = '';
+      if (!b.outcome()) { const [m] = CH.search(b, chess.level); if (m) { reply = b.san(m); b.push(m); chess.sans.push(reply); } }
+      saveChess(); renderChess();
+      const st = chessState(b);
+      if (!viaVoice && amOwner() && ws && ready) {
+        const teachNote = coach ? ` Öğretme modu açık: kullanıcının hamlesi "${coach.verdict}"${coach.best && coach.verdict !== 'çok iyi hamle' ? `, daha iyisi ${CH.spoken(coach.best)} idi (yaklaşık ${coach.loss} puan kayıp); nedenini bir iki cümleyle öğretici şekilde anlat` : ''}.` : '';
+        tellBrain(`Satranç: kullanıcı ${CH.spoken(san)} oynadı, sen ${CH.spoken(reply) || '-'} oynadın. ${st.status}.${teachNote} Kısa konuş.`);
+      }
+      return { ok: true, san, reply, coach, st };
+    };
+    if (viaVoice) return finish();
+    setTimeout(finish, 40);                          // let the screen draw before the engine thinks
+    return { ok: true, san };
+  }
+  function chessTap(s) {
+    const b = chessBoard();
+    if (b.white !== chess.userWhite || b.outcome()) return;
+    const mine = b.sq[s] !== '.' && (b.sq[s] === b.sq[s].toUpperCase()) === chess.userWhite;
+    if (chess.sel === null || mine) { chess.sel = mine ? s : null; renderChess(); return; }
+    const moves = b.legalMoves().filter(m => m[0] === chess.sel && m[1] === s);
+    if (!moves.length) { chess.sel = null; renderChess(); return; }
+    const m = moves.find(x => !x[2] || x[2] === 'q');
+    playUser(m);
+  }
+  function chessHint() {
+    const b = chessBoard();
+    if (b.white !== chess.userWhite || b.outcome()) return 'Şu an ipucu yok.';
+    const [m] = CH.search(b, 'zor'); if (!m) return 'Hamle yok.';
+    chess.hint = m; renderChess();
+    return `İpucu: ${CH.spoken(b.san(m))} (${b.san(m)}).`;
+  }
+  function chessNew(color, level) {
+    chess.sans = []; chess.sel = null; chess.hint = null; chess.coach = '';
+    if (color) chess.userWhite = !/^(b|s|black|siyah)/i.test(color);
+    if (level && ['kolay', 'orta', 'zor'].includes(level)) chess.level = level;
+    saveChess();
+    let reply = '';
+    if (!chess.userWhite) { const b = chessBoard(); const [m] = CH.search(b, chess.level); reply = b.san(m); chess.sans.push(reply); saveChess(); }
+    renderChess(); return reply;
+  }
+  function chessTool(a) {
+    const act = String(a.action || 'open').toLowerCase();
+    if (act === 'open') { renderChess(); openSheet('s-chess'); return JSON.stringify(chessState()); }
+    if (act === 'new') { const r = chessNew(a.color, a.level); openSheet('s-chess'); return JSON.stringify({ started: true, your_first_move: CH.spoken(r) || '-', ...chessState() }); }
+    if (act === 'teach') { chess.teach = a.on !== false; saveChess(); renderChess(); openSheet('s-chess');
+      return chess.teach ? 'Öğretme modu açık: her hamlesinden sonra iyi mi kötü mü olduğunu, daha iyisini ve nedenini anlat; açılış ilkelerini, taktikleri (çatal, şiş, açmaz) yeri geldikçe öğret.' : 'Öğretme modu kapandı.'; }
+    if (act === 'hint') return chessHint();
+    if (act === 'undo') { const b = chessBoard(); const n = b.white === chess.userWhite ? 2 : 1; chess.sans.splice(-n); chess.coach = ''; saveChess(); renderChess(); return 'Geri alındı. ' + JSON.stringify(chessState()); }
+    if (act === 'resign') { chess.sans = []; saveChess(); renderChess(); return 'Kullanıcı pes etti; oyun sıfırlandı.'; }
+    if (act === 'move') {
+      const b = chessBoard(), m = b.parse(String(a.move || ''));
+      if (!m) return JSON.stringify({ error: 'Bu hamle geçersiz ya da anlaşılmadı.', legal: b.legalMoves().slice(0, 40).map(x => b.san(x)).join(' '), ...chessState(b) });
+      openSheet('s-chess');
+      const r = playUser(m, true);
+      if (!r.ok) return r.msg;
+      return JSON.stringify({ user_move: CH.spoken(r.san), your_move: CH.spoken(r.reply) || '-', coach: r.coach || undefined, ...r.st });
+    }
+    return JSON.stringify(chessState());
+  }
+  $('t-chess').onclick = () => { renderChess(); openSheet('s-chess'); };
+  $('ch-new').onclick = () => { chessNew($('ch-color').value, $('ch-level').value); };
+  $('ch-level').onchange = () => { chess.level = $('ch-level').value; saveChess(); };
+  $('ch-undo').onclick = () => toast(chessTool({ action: 'undo' }).split('.')[0] + '.');
+  $('ch-hint').onclick = () => toast(chessHint());
+  $('ch-teach').onclick = () => { chess.teach = !chess.teach; saveChess(); renderChess(); toast(chess.teach ? '🎓 Öğretme modu açık' : 'Öğretme modu kapandı'); };
+
+  // ── coffee-cup reading (for fun): photos of the cup → Gemini looks ───────
+  let falImages = [];
+  $('fal-in').addEventListener('change', async (e) => {
+    const files = [...(e.target.files || [])].slice(0, 3);
+    falImages = [];
+    for (const f of files) {
+      const img = await createImageBitmap(f).catch(() => null); if (!img) continue;
+      const c = document.createElement('canvas'), sc = Math.min(1, 1024 / Math.max(img.width, img.height));
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      falImages.push(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    }
+    $('fal-thumbs').innerHTML = falImages.map(d => `<img src="data:image/jpeg;base64,${d}" alt="">`).join('');
+    $('fal-go').disabled = !falImages.length;
+  });
+  async function readFortune(question = '') {
+    if (!falImages.length) return 'Önce fincanın fotoğrafını çekmen lazım: Fal ekranında "Fotoğraf çek".';
+    if (!S.key) return 'Gemini anahtarı yok.';
+    $('fal-out').textContent = '☕ Fincana bakıyorum…';
+    const prompt = 'Sen sıcakkanlı, esprili ve deneyimli bir Türk kahve falcısısın. Fotoğraflardaki fincanın (ve varsa tabağın) telve şekillerine gerçekten bak: ' +
+      'gördüğün şekilleri (kuş, yol, balık, kalp, dağ, harf, insan figürü …) ve fincanın neresinde olduklarını söyle ve geleneksel anlamlarıyla yorumla: aşk, kısmet, para, iş, yol, haber, sağlık değil ruh hâli. ' +
+      'Akıcı, samimi bir dille 8-12 cümle yaz; sonunda bir dilek tut kısmı olsun. Korkutucu ya da kesin kehanet yok; olumsuz şeyleri yumuşak söyle. Son satıra "(Eğlence içindir.)" yaz.' +
+      (question ? ` Kullanıcının sorusu: ${question}` : '') + ' Fotoğrafta fincan yoksa nazikçe söyle.';
+    const parts = [...falImages.map(d => ({ inlineData: { mimeType: 'image/jpeg', data: d } })), { text: prompt }];
+    for (const model of TEXT_MODELS) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.key }, body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.9 } }) });
+        if (!r.ok) continue;
+        const js = await r.json();
+        const txt = (js.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+        if (txt) { $('fal-out').textContent = txt; return txt; }
+      } catch {}
+    }
+    $('fal-out').textContent = 'Fala bakılamadı; biraz sonra tekrar dene.'; return 'Fala bakılamadı.';
+  }
+  $('t-fal').onclick = () => openSheet('s-fal');
+  $('fal-go').onclick = async () => { claimHere(); const txt = await readFortune();
+    if (txt.length > 40 && amOwner()) { try { await connect(); } catch { return; } tellBrain(`Kullanıcının kahve falı hazır ve ekranda. Bunu sıcak, akıcı bir falcı gibi sesli oku (aynen ama doğal): ${txt}`); } };
+
   // ── shared to-do list: kept in shared memory (notes/"yapılacak: …"), so the
   // computer and every device see the same list ─────────────────────────────
   const TODO = 'yapılacak: ';
@@ -1379,7 +1543,7 @@
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
-      `Hava durumu için weather, döviz için currency kullan (gerçek veri). Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol kullan. `+
+      `Hava durumu için weather, döviz için currency kullan (gerçek veri). Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol, satranç için chess (öğret denirse teach), kahve falı için coffee_fortune kullan. `+
       `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak; geçmiş bir konuşma sorulursa search_history ile arşive bak. ` +
       `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +

@@ -34,7 +34,7 @@ jobs:
           touch _site/.nojekyll
           echo "{\"version\": \"${GITHUB_SHA::12}\"}" > _site/version.json
           # every device loads this build's scripts, never a stale cached one
-          sed -i "s#src=\"reactor.js\"#src=\"reactor.js?v=${GITHUB_SHA::12}\"#; s#src=\"app.js\"#src=\"app.js?v=${GITHUB_SHA::12}\"#" _site/index.html
+          sed -i "s#src=\"reactor.js\"#src=\"reactor.js?v=${GITHUB_SHA::12}\"#; s#src=\"app.js\"#src=\"app.js?v=${GITHUB_SHA::12}\"#; s#src=\"chess.js\"#src=\"chess.js?v=${GITHUB_SHA::12}\"#" _site/index.html
           grep -q "app.js?v=" _site/index.html
       - uses: actions/configure-pages@v5
         with:
