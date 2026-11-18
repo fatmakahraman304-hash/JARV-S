@@ -228,6 +228,56 @@ class SharedRemindersTest(unittest.TestCase):
         self.assertIn("function mergeReminders", js)
 
 
+class SendToDeviceTest(unittest.TestCase):
+    def _devs(self):
+        now = sync_hub._now()
+        return [{"id": "w-phone", "name": "Telefonum", "kind": "phone", "seen": now},
+                {"id": "w-tv", "name": "Salon", "kind": "tv", "seen": now},
+                {"id": "w-old-tv", "name": "Yatak odası", "kind": "tv", "seen": "2020-01-01T00:00:00Z"}]
+
+    def setUp(self):
+        self._p = [mock.patch.dict(sync_hub._state, {"devices": self._devs(), "out_cmds": []}),
+                   mock.patch.object(sync_hub, "settings", return_value={"github_token": "t", "gist_id": "g"})]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def test_find_by_kind_prefers_online_and_by_name(self):
+        self.assertEqual(sync_hub.find_device("televizyon")["id"], "w-tv")
+        self.assertEqual(sync_hub.find_device("yatak odası")["id"], "w-old-tv")
+        self.assertEqual(sync_hub.find_device("telefonuma")["id"], "w-phone")
+        self.assertIsNone(sync_hub.find_device("buzdolabı"))
+
+    def test_queued_then_written_to_that_devices_inbox(self):
+        ok, msg = sync_hub.send_to_device("tv", {"kind": "open", "url": "https://youtu.be/x"})
+        self.assertTrue(ok, msg)
+        writes = {}
+        sync_hub._deliver_out({"inbox-w-tv.json": json.dumps([{"id": "old", "kind": "say", "text": "x"}])}, writes)
+        box = json.loads(writes["inbox-w-tv.json"])
+        self.assertEqual([b["kind"] for b in box], ["say", "open"])
+        self.assertEqual(box[-1]["url"], "https://youtu.be/x")
+        self.assertFalse(sync_hub._state["out_cmds"])
+
+    def test_plugin_sends_free_picture_as_link(self):
+        from plugins import send_to_device
+        sent = []
+        with mock.patch("core.image_studio.last_image", return_value=Path(__file__)), \
+             mock.patch("core.image_studio.history_entry", return_value={"url": "https://image.pollinations.ai/p/x", "prompt": "tilki"}), \
+             mock.patch.object(sync_hub, "send_to_device", side_effect=lambda d, c: sent.append((d, c)) or (True, "ok")):
+            self.assertEqual(send_to_device.run({"device": "tv", "what": "image"}), "ok")
+        self.assertEqual(sent[0][1]["url"], "https://image.pollinations.ai/p/x")
+        self.assertNotIn("data", sent[0][1])
+        self.assertIn("adres", send_to_device.run({"device": "tv", "what": "open", "url": "dosya"}))
+
+    def test_web_reads_its_inbox(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function runInbox", js)
+        self.assertIn("inbox-${S.id}.json", js)
+
+
 class WebPageWiringTest(unittest.TestCase):
     def test_ids_exist(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")

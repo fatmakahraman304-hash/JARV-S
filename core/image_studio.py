@@ -232,12 +232,24 @@ def describe(prompt: str, base: str = "") -> str:
     return f"{base}. Change: {prompt}" if base else prompt
 
 
-def _free_call(prompt_en: str, aspect: str, seed: int) -> tuple[bytes | None, str, str]:
-    """(image bytes, mime, error) from the free, keyless painter."""
+def free_url(prompt_en: str, aspect: str, seed: int) -> str:
+    """The free painter's address for this picture. The same prompt, size and
+    seed give the same picture, so other devices can open it from this link."""
     w, h = _size(aspect)
     q = urllib.parse.urlencode({"width": w, "height": h, "seed": seed, "model": "flux",
                                 "nologo": "true", "enhance": "false", "referrer": "jarvis"})
-    url = FREE_API.format(prompt=urllib.parse.quote(prompt_en[:1500], safe="")) + "?" + q
+    return FREE_API.format(prompt=urllib.parse.quote(prompt_en[:1500], safe="")) + "?" + q
+
+
+def history_entry(path: str | Path) -> dict:
+    """What is remembered about a saved picture (prompt, and for the free
+    painter its link and seed)."""
+    return dict(_entry_for(path))
+
+
+def _free_call(prompt_en: str, aspect: str, seed: int) -> tuple[bytes | None, str, str]:
+    """(image bytes, mime, error) from the free, keyless painter."""
+    url = free_url(prompt_en, aspect, seed)
     req = urllib.request.Request(url, headers={"User-Agent": "JARVIS/1.0", "Accept": "image/*"})
     ctx = None
     try:
@@ -327,7 +339,7 @@ def make(prompt: str, *, edit_from: str | Path | None = None, aspect: str = "",
     if not path:
         return None, "Resim kaydedilemedi."
     full_prompt = (_entry_for(src).get("prompt", "") + " → " + prompt) if src else prompt
-    _remember(path, full_prompt, en=prompt_en, seed=seed, engine="free")
+    _remember(path, full_prompt, en=prompt_en, seed=seed, engine="free", url=free_url(prompt_en, aspect, seed))
     return path, note
 
 
