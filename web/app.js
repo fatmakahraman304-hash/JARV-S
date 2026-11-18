@@ -171,6 +171,13 @@
   let devices = [];
   let recentQueue = [];
   let pcProjects = J(localStorage.getItem('jarvis_projects'), []);
+  // shared gallery (images.json; core/sync_hub.merge_gallery is the same rule)
+  let gallery = [], galleryNew = [];
+  function mergeGallery(a, b) {
+    const by = new Map();
+    for (const g of [...(a || []), ...(b || [])]) if (g && g.id && /^https:\/\//.test(g.url || '')) by.set(g.id, { ...(by.get(g.id) || {}), ...g });
+    return [...by.values()].sort((x, y) => String(x.ts).localeCompare(String(y.ts))).slice(-40);
+  }
   function projectsText() {
     const L = [];
     for (const pc of pcProjects) for (const p of (pc.projects || [])) {
@@ -196,6 +203,9 @@
       try { localStorage.setItem('jarvis_projects', JSON.stringify(pcProjects)); } catch {}
       const myInbox = J(f[`inbox-${S.id}.json`], []);
       if (myInbox.length) { runInbox(myInbox); writes[`inbox-${S.id}.json`] = '[]'; }
+      const cloudG = J(f['images.json'], []);
+      gallery = mergeGallery(cloudG, galleryNew);
+      if (galleryNew.length) { writes['images.json'] = JSON.stringify(gallery); galleryNew = []; }
       const cloudRem = J(f['reminders.json'], []);
       reminders = mergeReminders(reminders, cloudRem);
       const remSig = L => L.map(r => [r.id, +r.due, r.text, r.cancelled || ''].join('|')).join('\n');
@@ -400,6 +410,8 @@
         } else if (c.kind === 'code' || c.kind === 'text') {
           lastCode = { filename: String(c.filename || title || (c.kind === 'code' ? 'kod.txt' : 'not.txt')), code: String(c.text || ''), note: `${from} gönderdi` };
           showCode(); $('t-code').hidden = false;
+        } else if (c.kind === 'ring') {
+          ringHere(from);
         } else if (c.kind === 'guard') {
           if (c.on) startGuard().then(m => sys(`${from}: ${m}`)); else sys(`${from}: ${stopGuard()}`);
         } else if (c.kind === 'say' && c.text) {
@@ -411,6 +423,19 @@
     if (did) localStorage.setItem('jarvis_inbox_done', JSON.stringify(inboxDone.slice(-200)));
     return did;
   }
+  // ── "telefonumu bul": this device rings loudly until touched (or 30 s) ──
+  let ringing = null;
+  function ringHere(from) {
+    if (ringing) return;
+    ensureOut();
+    const stop = () => { clearInterval(ringing); ringing = null; document.removeEventListener('pointerdown', stop, true); toast('Buldun 👍'); };
+    let n = 0;
+    ringing = setInterval(() => { beep(); if (navigator.vibrate) navigator.vibrate([400, 100, 400]); if (++n > 20) stop(); }, 1500);
+    document.addEventListener('pointerdown', stop, true);
+    toast(`📳 ${from || 'JARVIS'} bu cihazı arıyor — durdurmak için dokun`);
+    sys(`📳 ${from || 'JARVIS'} bu cihazı arıyor.`);
+  }
+
   // ── guard mode: this device's camera watches; on movement a photo goes to
   // every other device and the one with the voice says it ──────────────────
   let guard = null;
@@ -555,6 +580,12 @@
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'guard', description: 'Güvenlik modu: bu cihazın (ya da device verilirse o cihazın) kamerası odayı izler; hareket olursa fotoğraf çekip bütün cihazlara gönderir ve sesli haber verir. "odayı izle", "güvenlik modunu aç/kapat", "tableti kamera yap".',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, device: { type: 'STRING', description: 'boşsa bu cihaz' } }, required: ['on'] } },
+    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (Jarvis sayfası açıksa). device: cihazın adı ya da türü.',
+      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' } }, required: ['device'] } },
+    { name: 'gallery', description: 'Bütün cihazlarda çizilen resimlerin ortak galerisi: "galerimde ne var", "dünkü resmi göster", "laptopta çizdiğin logoyu aç", "ikinci resmi TV\'ye gönder". action: list | show | send. number: 1 = en yeni, ya da query: resimde ne vardı. send için device.',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, number: { type: 'NUMBER' }, query: { type: 'STRING' }, device: { type: 'STRING' } }, required: ['action'] } },
+    { name: 'place', description: 'Konum hafızası: "arabamı buraya park ettim", "bu yeri otel diye kaydet" (save: bu cihazın şu anki konumu), "arabam nerede", "otele yol tarifi" (find: haritada açar; device verilirse o cihazda açar), "kayıtlı yerlerim" (list), forget.',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'save | find | list | forget' }, name: { type: 'STRING', description: 'araba, otel, ev …' }, device: { type: 'STRING' } }, required: ['action'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -625,6 +656,27 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'place': return await placeTool(a);
+      case 'gallery': {
+        await syncNow();
+        const newest = [...gallery].reverse();
+        if (!newest.length) return 'Galeri boş. Bir resim çizeyim mi?';
+        const act = String(a.action || 'list').toLowerCase();
+        if (act === 'list') return 'Galeri (en yeni önce):\n' + newest.slice(0, 10).map((g, i) => `${i + 1}. ${g.prompt.slice(0, 70)} — ${g.from}, ${String(g.ts).slice(0, 16).replace('T', ' ')}`).join('\n');
+        const q = String(a.query || '').toLocaleLowerCase('tr').trim();
+        const g = q ? newest.find(x => x.prompt.toLocaleLowerCase('tr').includes(q)) : newest[Math.max(1, +a.number || 1) - 1];
+        if (!g) return 'Galeride öyle bir resim bulamadım.';
+        if (act === 'send') return await sendToDevice(a.device, { kind: 'image', url: g.url, mime: 'image/jpeg', prompt: g.prompt, en: g.en || '', seed: g.seed || 0, title: g.prompt.slice(0, 80) });
+        keepImage({ data: '', mime: 'image/jpeg', url: g.url, prompt: g.prompt, en: g.en || '', seed: g.seed || 0 });
+        showImage(`${g.from} çizmişti`);
+        return `Ekranda: ${g.prompt.slice(0, 80)}.`;
+      }
+      case 'find_device': {
+        const d = findDevice(a.device);
+        if (!d) return `"${a.device}" adında bir cihaz bulamadım.`;
+        if (d.kind === 'pc') return await sendToPc(d.name, 'quick:volume_up');
+        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, Jarvis sayfası açık değilse çalamaz.');
+      }
       case 'guard': {
         if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'guard', on: !!a.on });
         return a.on ? await startGuard() : stopGuard();
@@ -774,6 +826,8 @@
       const f = await freeImage(en, aspect, seed);
       if (f.err) return 'Resim üretilemedi (' + [...errors.slice(-1), 'ücretsiz ressam: ' + f.err].join('; ').slice(0, 200) + '). Biraz sonra tekrar deneyeyim mi?';
       keepImage({ data: f.data, mime: f.mime, url: f.url, en, seed, prompt: edit ? `${lastImage.prompt} → ${prompt}` : prompt });
+      galleryNew.push({ id: S.id + '-' + Date.now().toString(36), prompt: lastImage.prompt.slice(0, 200), url: f.url, en, seed, from: devName(), ts: nowIso() });
+      syncSoon();
       showImage('');
       return edit ? 'Resim değiştirildi ve ekranda.' : 'Resim çizildi ve ekranda.';
     } finally { imgBusy = false; }
@@ -883,6 +937,42 @@
     toast(`⚡ ${key.toLocaleUpperCase('tr')} PROTOKOLÜ`);
     return `${key.toLocaleUpperCase('tr')} PROTOKOLÜ BAŞLADI. Şimdi bu adımları sırayla, kendi araçlarınla yap (bilgisayarın yapacağı işler için computer_command, başka cihaz için send_to_device); yapamadığını atla ve sonunda ne yaptığını kısaca söyle:\n` +
       steps.map((x, i) => `${i + 1}. ${x}`).join('\n');
+  }
+
+  // ── places: "arabamı buraya park ettim" → shared memory notes / "konum: …" ──
+  const PLACE = 'konum: ';
+  function here() {
+    return new Promise((res, rej) => {
+      if (!navigator.geolocation) return rej(new Error('Bu cihaz konum vermiyor.'));
+      navigator.geolocation.getCurrentPosition(p => res(p.coords), e => rej(new Error(e.code === 1 ? 'Konum izni verilmedi.' : 'Konum alınamadı.')),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+    });
+  }
+  async function placeTool(a) {
+    const act = String(a.action || 'find').toLowerCase();
+    const name = String(a.name || 'araba').toLocaleLowerCase('tr').replace(/^(benim |bu )/, '').trim();
+    memory.notes = memory.notes || {};
+    const places = Object.entries(memory.notes).filter(([k]) => k.startsWith(PLACE));
+    if (act === 'list') return places.length ? places.map(([k, v]) => `${k.slice(PLACE.length)} — ${entry(v).value.split('|')[1]?.trim() || ''}`).join('\n') : 'Kayıtlı yer yok.';
+    if (act === 'save') {
+      let c; try { c = await here(); } catch (e) { return e.message; }
+      const when = new Date().toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      memory.notes[PLACE + name] = { value: `${c.latitude.toFixed(6)},${c.longitude.toFixed(6)} | ${when} | ±${Math.round(c.accuracy)} m`, updated: nowIso() };
+      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow();
+      return `"${name}" konumu kaydedildi (±${Math.round(c.accuracy)} m). Bütün cihazlar biliyor.`;
+    }
+    const hit = places.find(([k]) => k.slice(PLACE.length) === name) || places.find(([k]) => k.includes(name));
+    if (!hit) return `"${name}" diye kayıtlı bir yer yok.`;
+    if (act === 'forget') {
+      delete memory.notes[hit[0]]; memory._deleted = memory._deleted || {}; memory._deleted['notes/' + hit[0]] = nowIso();
+      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
+      return `"${hit[0].slice(PLACE.length)}" silindi.`;
+    }
+    const [coords, when] = entry(hit[1]).value.split('|').map(x => x.trim());
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coords)}&travelmode=walking`;
+    if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'open', url, title: hit[0].slice(PLACE.length) });
+    const w = window.open(url, '_blank'); if (!w) askUser('Harita', `${hit[0].slice(PLACE.length)} haritada açılsın mı?`, () => window.open(url, '_blank'));
+    return `"${hit[0].slice(PLACE.length)}" (${when} kaydedilmişti) haritada açılıyor, yol tarifiyle.`;
   }
 
   // ── shared to-do list: kept in shared memory (notes/"yapılacak: …"), so the
@@ -1035,7 +1125,15 @@
 
   // ── network: say so when it drops, pick up again when it is back ────────
   window.addEventListener('offline', () => { setState('offline'); toast('İnternet bağlantısı koptu'); });
-  window.addEventListener('online', () => { toast('İnternet geri geldi'); if (wantLive || micOn) connect().catch(() => {}); else setState('idle'); });
+  // typed while offline: sent, in order, as soon as the brain is reachable
+  const offlineQueue = [];
+  async function flushOffline() {
+    if (!offlineQueue.length) return;
+    try { await connect(); } catch { return; }
+    const t = offlineQueue.splice(0).join('\n');
+    setState('thinking'); send({ realtimeInput: { text: t } });
+  }
+  window.addEventListener('online', () => { toast('İnternet geri geldi'); if (wantLive || micOn || offlineQueue.length) connect().then(flushOffline).catch(() => {}); else setState('idle'); });
 
   // ── the brain: Gemini Live ───────────────────────────────────────────────
   let ws = null, ready = false, wantLive = false, variant = +(localStorage.getItem('jarvis_variant') || 0), connecting = null;
@@ -1237,7 +1335,8 @@
     const t = $('inp').value.trim(); if (!t) return;
     $('inp').value = ''; ensureOut(); claimHere();
     closeTurns(); transcript.push({ role: 'user', text: t, open: false }); queueRecent('user', t); renderLog();
-    try { await connect(); } catch { return; }
+    if (!navigator.onLine) { offlineQueue.push(t); toast('İnternet yok; bağlantı gelince göndereceğim.'); return; }
+    try { await connect(); } catch { offlineQueue.push(t); return; }
     setState('thinking');
     send({ realtimeInput: { text: t } });
   });

@@ -340,6 +340,11 @@ def make(prompt: str, *, edit_from: str | Path | None = None, aspect: str = "",
         return None, "Resim kaydedilemedi."
     full_prompt = (_entry_for(src).get("prompt", "") + " → " + prompt) if src else prompt
     _remember(path, full_prompt, en=prompt_en, seed=seed, engine="free", url=free_url(prompt_en, aspect, seed))
+    try:
+        from core import sync_hub           # into the gallery every device sees
+        sync_hub.add_image(full_prompt, free_url(prompt_en, aspect, seed), en=prompt_en, seed=seed)
+    except Exception:
+        pass
     return path, note
 
 

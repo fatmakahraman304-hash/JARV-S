@@ -17,14 +17,14 @@ PLUGIN = {
         "Bilgisayardan telefona, tablete, TV'ye, projeksiyona ya da saate bir şey gönder veya orada aç: "
         "'resmi televizyonda göster', 'bu videoyu TV'de aç', 'kodu telefonuma gönder', 'tablete yaz', "
         "'telefona söyle'. what: open (bağlantı/video/harita, url gerekli) | image (son çizilen ya da "
-        "verilen resim) | code | text | say (o cihaz sesli söylesin) | guard_on / guard_off (o cihazın "
+        "verilen resim) | code | text | say (o cihaz sesli söylesin) | ring (\'telefonumu bul\': o cihaz yüksek sesle çalar) | guard_on / guard_off (o cihazın "
         "kamerası güvenlik modunda odayı izlesin; hareket olunca fotoğraf gelir). device: cihazın adı ya da türü."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "device": {"type": "STRING", "description": "telefon, tablet, tv, projeksiyon, saat ya da cihazın adı"},
-            "what": {"type": "STRING", "description": "open | image | code | text | say | guard_on | guard_off"},
+            "what": {"type": "STRING", "description": "open | image | code | text | say | ring | guard_on | guard_off"},
             "url": {"type": "STRING", "description": "open için adres"},
             "text": {"type": "STRING", "description": "code / text / say için içerik"},
             "title": {"type": "STRING", "description": "kısa başlık ya da dosya adı"},
@@ -74,6 +74,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             if not url.lower().startswith(("http://", "https://")):
                 return "Açmak için geçerli bir adres lazım."
             cmd = {"kind": "open", "url": url, "title": title}
+        elif what in ("ring", "find", "bul"):
+            cmd = {"kind": "ring"}
         elif what in ("guard_on", "guard_off", "guard"):
             cmd = {"kind": "guard", "on": what != "guard_off"}
         elif what in ("code", "text", "say"):
