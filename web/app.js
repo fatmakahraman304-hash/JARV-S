@@ -105,9 +105,11 @@
   // ── conversation log ────────────────────────────────────────────────────
   const transcript = [];               // {role, text}
   function addTurn(role, text) {
-    text = String(text || '').trim(); if (!text) return;
+    // Transcription arrives in pieces that carry their own spaces ("Merhaba", " efendim"):
+    // keep them, or the words run together.
+    text = String(text || ''); if (!text.trim()) return;
     const last = transcript[transcript.length - 1];
-    if (last && last.role === role && last.open) { last.text += text; } else transcript.push({ role, text, open: true });
+    if (last && last.role === role && last.open) { last.text += text; } else transcript.push({ role, text: text.trimStart(), open: true });
     renderLog();
   }
   function closeTurns() { transcript.forEach(t => { if (t.open) { t.open = false; queueRecent(t.role, t.text); } }); }
@@ -513,7 +515,9 @@
       `Kısa, doğal ve sıcak konuş; kullanıcının dilinde yanıt ver (çoğunlukla Türkçe). ` +
       `Güncel bilgi için Google aramasını kullan. Kod istenince kodu show_code ile ekranda göster, sesli okuma. ` +
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
-      `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. Resim çizmek ya da resmi değiştirmek için make_image, bu cihazda uygulama açmak için open_app kullan. ` +
+      `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
+      `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
+      `Bu cihazda uygulama açmak için open_app kullan. Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
       `Önceki konuşmalar ve yarım işler aşağıda; "kaldığımız yerden devam" denirse oradan sür, bilgisayardaki yarım projeler için computer_command ile "yarım kalan işe devam et" gönder.\n\n` +
       `Bugün: ${new Date().toLocaleString('tr-TR', { dateStyle: 'full', timeStyle: 'short' })}.\nBilgisayarlar: ${pcs}.\n\n` +
       `ORTAK HAFIZA:\n${memoryText()}\n\nSON KONUŞMALAR (tüm cihazlar):\n${r || '(yok)'}`;
@@ -569,7 +573,7 @@
   }
   function send(obj) { if (ws && ready && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
-  let outOpen = false;
+  let outOpen = false, hadAudio = false, pendingText = '';
   async function onServer(m) {
     if (m.serverContent) {
       const sc = m.serverContent;
@@ -577,10 +581,17 @@
       if (sc.inputTranscription?.text) { lastInteract = Date.now(); addTurn('user', sc.inputTranscription.text); setState('thinking'); }
       if (sc.outputTranscription?.text) { if (!outOpen) { closeTurnsOf('user'); outOpen = true; } addTurn('jarvis', sc.outputTranscription.text); }
       for (const p of sc.modelTurn?.parts || []) {
+        if (p.thought) continue;          // the model's own reasoning: never shown, never spoken
         if (p.inlineData?.data && /audio/.test(p.inlineData.mimeType || 'audio')) playPcm(p.inlineData.data);
-        else if (p.text && !sc.outputTranscription) { addTurn('jarvis', p.text); }
+        // With voice answers the words come from outputTranscription; model text parts
+        // there are only notes to itself, so they are shown only in a text-only answer.
+        else if (p.text && !sc.outputTranscription && !hadAudio) { pendingText += p.text; }
       }
-      if (sc.turnComplete) { outOpen = false; closeTurns(); syncSoon(); if (!playing()) setState(micOn ? 'listening' : 'idle'); }
+      if (sc.modelTurn?.parts?.some(p => p.inlineData?.data && !p.thought)) hadAudio = true;
+      if (sc.turnComplete) {
+        if (pendingText && !hadAudio && !transcript.some(t => t.open && t.role === 'jarvis')) addTurn('jarvis', pendingText);
+        pendingText = ''; hadAudio = false;
+        outOpen = false; closeTurns(); syncSoon(); if (!playing()) setState(micOn ? 'listening' : 'idle'); }
     }
     if (m.toolCall?.functionCalls) {
       setState('thinking');
