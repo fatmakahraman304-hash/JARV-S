@@ -33,7 +33,10 @@ def weather_action(
 
 
 def _log(message: str, player=None) -> None:
-    print(f"[Weather] {message}")
+    try:
+        print(f"[Weather] {message}")
+    except Exception:                      # a Windows console that cannot print Turkish letters
+        print(f"[Weather] {message}".encode("ascii", "replace").decode())
     if player:
         try:
             player.write_log(f"JARVIS: {message}")
