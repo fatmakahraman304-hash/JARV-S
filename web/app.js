@@ -18,17 +18,33 @@
   const save = () => localStorage.setItem('jarvis_web', JSON.stringify(S));
   if (!S.id) { S.id = 'w' + Math.random().toString(36).slice(2, 12); save(); }
   if (!S.voice) S.voice = 'Charon';
-  (function importSetupLink() {
-    const m = location.hash.match(/[#&]s=([A-Za-z0-9_-]+)/);
-    if (!m) return;
+  // A setup link (…#s=<code>) carries the keys from one device to another —
+  // and from Safari to the home-screen JARVIS on an iPhone, which Apple keeps
+  // in separate storage.
+  function importSetup(text) {
+    const m = String(text || '').match(/(?:[#&?]s=|^)([A-Za-z0-9_-]{20,})\s*$/);
+    if (!m) return false;
     try {
       const b = m[1].replace(/-/g, '+').replace(/_/g, '/');
       const j = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4)))));
+      if (!j.g && !j.t) return false;
       if (j.g) S.key = j.g; if (j.t) S.tok = j.t; if (j.i) S.gist = j.i; if (j.n) S.name = j.n;
-      save(); setTimeout(() => toast('Kurulum tamam — JARVIS bu cihazda hazır'), 600);
-    } catch { setTimeout(() => toast('Kurulum bağlantısı okunamadı'), 600); }
+      if (j.d && !S.devName) S.devName = j.d;
+      save(); return true;
+    } catch { return false; }
+  }
+  function setupLink() {
+    const j = JSON.stringify({ g: S.key || '', t: S.tok || '', i: S.gist || '', n: S.name || '' });
+    const b = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return location.origin + location.pathname + '#s=' + b;
+  }
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (/[#&]s=/.test(location.hash)) {
+    const ok = importSetup(location.hash);
+    setTimeout(() => toast(ok ? 'Kurulum tamam — JARVIS bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
     history.replaceState(null, '', location.pathname);
-  })();
+  }
 
   function detectKind() {
     if (S.kind && S.kind !== 'auto') return S.kind;
@@ -1529,6 +1545,9 @@
 
   // ── settings ─────────────────────────────────────────────────────────────
   function openSetup() {
+    // iPhone home-screen JARVIS starting empty: say why and offer the paste
+    $('f-ios').hidden = !(isIOS && standalone && !S.key);
+    $('f-move').hidden = !(isIOS && !standalone && S.key);
     $('f-key').value = S.key || ''; $('f-tok').value = S.tok || ''; $('f-gist').value = S.gist || '';
     $('f-dev').value = S.devName || ''; $('f-kind').value = S.kind || 'auto'; $('f-voice').value = S.voice || 'Charon';
     $('f-status').textContent = ''; openSheet('s-setup');
@@ -1536,6 +1555,20 @@
   $('b-set').onclick = openSetup; $('b-menu').onclick = () => { renderDevices(); openSheet('s-devs'); syncNow(); };
   $('b-chat').onclick = () => openSheet('s-chat');
   $('f-close').onclick = closeSheets;
+  async function pasteSetup() {
+    let text = '';
+    try { text = await navigator.clipboard.readText(); } catch {}
+    if (!importSetup(text)) text = prompt('Kurulum bağlantısını buraya yapıştır:') || '';
+    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir JARVIS kurulum bağlantısı değil.'; return; }
+    $('f-status').textContent = 'Kurulum geldi, hafıza yükleniyor…';
+    openSetup(); lastBeat = 0; await syncNow(); setState(S.key ? 'idle' : 'setup');
+    $('f-status').textContent = 'Tamam — hafızan ve ayarların bu uygulamada.'; setTimeout(closeSheets, 1200);
+  }
+  $('f-paste').onclick = pasteSetup; $('f-paste2').onclick = pasteSetup;
+  $('f-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki JARVIS\'i açınca "Yapıştır"a bas.'; }
+    catch { prompt('Bu bağlantıyı kopyala:', setupLink()); }
+  };
   $('f-save').onclick = async () => {
     S.key = $('f-key').value.trim(); S.tok = $('f-tok').value.trim(); S.gist = $('f-gist').value.trim();
     S.devName = $('f-dev').value.trim(); S.kind = $('f-kind').value; S.voice = $('f-voice').value; save(); applyKind();
@@ -1548,9 +1581,7 @@
     setState(S.key ? 'idle' : 'setup'); setTimeout(closeSheets, 600);
   };
   $('f-link').onclick = async () => {
-    const j = JSON.stringify({ g: S.key || '', t: S.tok || '', i: S.gist || '', n: S.name || '' });
-    const b = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const link = location.origin + location.pathname + '#s=' + b;
+    const link = setupLink();
     try { if (navigator.share) await navigator.share({ title: 'JARVIS kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
     catch { try { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı'); } catch { prompt('Bağlantı:', link); } }
   };
