@@ -479,6 +479,17 @@
   }
   // Big screens (TV, projector): an Iron Man style board beside the core —
   // what is coming up, the to-do list, projects, and any device that needs care.
+  let hudWeather = '';
+  async function refreshHudWeather() {
+    if (!document.body.classList.contains('big')) return;
+    try {
+      const city = S.city || '';
+      const { js, place } = await weatherData(city);
+      const c = js.current || {}, d = js.daily || {};
+      hudWeather = `${WICON(c.weather_code)} ${Math.round(c.temperature_2m)}°C ${WMO[c.weather_code] || ''} · ${Math.round(d.temperature_2m_min?.[0])}–${Math.round(d.temperature_2m_max?.[0])}°C${city ? ' · ' + place.split(',')[0] : ''}`;
+      renderHud();
+    } catch { /* no location permission on a TV: set a city in settings */ }
+  }
   function renderHud() {
     if (!document.body.classList.contains('big')) return;
     try { renderHudNow(); } catch { /* called before the reminder code has loaded: next sync draws it */ }
@@ -492,7 +503,7 @@
     const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).slice(0, 5).map(k => '☐ ' + k.slice(11));
     const proj = [];
     for (const pc of pcProjects) for (const p of (pc.projects || [])) if (!/bitti|iptal|başarısız/.test(p.status)) proj.push(`⚙ ${p.title} — ${p.stages ? p.stage + '/' + p.stages : p.status}`);
-    $('hud').innerHTML = block('UYARI', warn, 'warn') + block('SIRADAKİLER', rem) + block('YAPILACAKLAR', todos) + block('PROJELER', proj.slice(0, 3));
+    $('hud').innerHTML = (hudWeather ? `<div><h4>HAVA</h4><div class="it">${esc(hudWeather)}</div></div>` : '') + block('UYARI', warn, 'warn') + block('SIRADAKİLER', rem) + block('YAPILACAKLAR', todos) + block('PROJELER', proj.slice(0, 3));
   }
   $('t-devs').onclick = () => { renderDevices(); openSheet('s-devs'); syncNow(); };
 
@@ -731,6 +742,10 @@
       parameters: { type: 'OBJECT', properties: { task: { type: 'STRING', description: 'yapılacak işin tam tarifi, Türkçe' }, kind: { type: 'STRING', description: 'research | code | other' } }, required: ['task'] } },
     { name: 'notifications', description: 'Sayfa kapalıyken de bildirim almak: kullanıcıya Ayarlar\'daki "🔔 Bildirimleri aç" tuşuna basmasını söyler (tarayıcı izni bir dokunuş ister).',
       parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'weather', description: 'Hava durumu (gerçek veri): şu an, bugün, yarın ve önümüzdeki günler; sıcaklık, gökyüzü, yağış ihtimali. city boşsa bu cihazın konumu. "hava nasıl", "yarın yağmur yağacak mı", "Lefkoşa\'da hafta sonu hava".',
+      parameters: { type: 'OBJECT', properties: { city: { type: 'STRING' }, days: { type: 'NUMBER', description: '1-7, varsayılan 3' } } } },
+    { name: 'currency', description: 'Döviz kuru ve çevirme (Avrupa Merkez Bankası günlük kurları): "dolar kaç TL", "250 euro kaç lira". base, targets (virgülle), amount.',
+      parameters: { type: 'OBJECT', properties: { base: { type: 'STRING' }, targets: { type: 'STRING' }, amount: { type: 'NUMBER' } }, required: ['base'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -801,6 +816,8 @@
       }
       case 'reminder': return reminderTool(a);
       case 'todo': return todoTool(a);
+      case 'weather': return await weatherTool(a);
+      case 'currency': return await currencyTool(a);
       case 'notifications': {
         if ('Notification' in window && Notification.permission === 'granted' && J(localStorage.getItem('jarvis_push_key'), '')) return 'Bildirimler bu cihazda zaten açık.';
         openSetup(); return 'Ayarlar açıldı: kullanıcı "🔔 Bildirimleri aç" tuşuna bassın (izin bir dokunuş ister). Bunu ona söyle.';
@@ -1141,6 +1158,48 @@
     return `"${hit[0].slice(PLACE.length)}" (${when} kaydedilmişti) haritada açılıyor, yol tarifiyle.`;
   }
 
+  // ── live facts from free, keyless services (desktop: core/open_data.py) ──
+  const WMO = { 0: 'açık', 1: 'çoğunlukla açık', 2: 'parçalı bulutlu', 3: 'kapalı', 45: 'sisli', 48: 'kırağılı sis', 51: 'hafif çisenti', 53: 'çisenti',
+    55: 'yoğun çisenti', 61: 'hafif yağmurlu', 63: 'yağmurlu', 65: 'şiddetli yağmurlu', 71: 'hafif karlı', 73: 'karlı', 75: 'yoğun karlı',
+    80: 'hafif sağanak', 81: 'sağanak', 82: 'şiddetli sağanak', 95: 'gök gürültülü fırtına', 96: 'dolulu fırtına', 99: 'şiddetli dolulu fırtına' };
+  const WICON = c => c === 0 ? '☀️' : c <= 2 ? '⛅' : c === 3 ? '☁️' : c <= 48 ? '🌫️' : c <= 67 || (c >= 80 && c <= 82) ? '🌧️' : c <= 86 ? '❄️' : '⛈️';
+  async function weatherData(city) {
+    let lat, lon, place = city;
+    if (city) {
+      const g = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=tr&name=' + encodeURIComponent(city))).json();
+      const r = g.results?.[0]; if (!r) throw new Error(`'${city}' bulunamadı`);
+      lat = r.latitude; lon = r.longitude; place = [r.name, r.country].filter(Boolean).join(', ');
+    } else {
+      const c = await here(); lat = c.latitude; lon = c.longitude; place = 'Bulunduğun yer';
+    }
+    const q = new URLSearchParams({ latitude: lat, longitude: lon, timezone: 'auto', forecast_days: 7,
+      current: 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m',
+      daily: 'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max' });
+    const js = await (await fetch('https://api.open-meteo.com/v1/forecast?' + q)).json();
+    return { js, place };
+  }
+  async function weatherTool(a) {
+    try {
+      const { js, place } = await weatherData(String(a.city || '').trim());
+      const c = js.current || {}, d = js.daily || {}, n = Math.max(1, Math.min(7, +a.days || 3));
+      const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+      const L = [`${place}: şu an ${Math.round(c.temperature_2m)}°C, ${WMO[c.weather_code] || ''}, hissedilen ${Math.round(c.apparent_temperature)}°C, rüzgâr ${Math.round(c.wind_speed_10m)} km/s.`];
+      for (let i = 0; i < n && i < (d.time || []).length; i++) L.push(`${i === 0 ? 'Bugün' : i === 1 ? 'Yarın' : days[new Date(d.time[i]).getDay()]}: ${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°C, ${WMO[d.weather_code[i]] || ''}, yağış ihtimali %${d.precipitation_probability_max?.[i] ?? '?'}`);
+      return L.join('\n');
+    } catch (e) { return 'Hava durumu alınamadı: ' + (e.message || e); }
+  }
+  const CUR = { dolar: 'USD', usd: 'USD', euro: 'EUR', avro: 'EUR', eur: 'EUR', sterlin: 'GBP', pound: 'GBP', gbp: 'GBP', tl: 'TRY', lira: 'TRY', try: 'TRY', frank: 'CHF', yen: 'JPY', yuan: 'CNY' };
+  const curCode = w => CUR[String(w || '').toLocaleLowerCase('tr').trim()] || String(w || '').toUpperCase().slice(0, 3);
+  async function currencyTool(a) {
+    try {
+      const b = curCode(a.base || 'USD'), amt = +a.amount || 1;
+      const tg = String(a.targets || 'TRY').split(/[,\s]+/).map(curCode).filter(t => t && t !== b);
+      const js = await (await fetch(`https://api.frankfurter.dev/v1/latest?base=${b}&symbols=${(tg.length ? tg : ['TRY']).join(',')}&amount=${amt}`)).json();
+      if (!js.rates) return 'Kur bulunamadı.';
+      return Object.entries(js.rates).map(([k, v]) => `${amt} ${b} = ${v.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ${k}`).join('; ') + ` (Avrupa Merkez Bankası, ${js.date}).`;
+    } catch (e) { return 'Kur alınamadı: ' + (e.message || e); }
+  }
+
   // ── shared to-do list: kept in shared memory (notes/"yapılacak: …"), so the
   // computer and every device see the same list ─────────────────────────────
   const TODO = 'yapılacak: ';
@@ -1320,7 +1379,7 @@
       `Yalnızca bir bilgisayarın yapabileceği işleri (uygulama/dosya açmak, projede çalışmak, bilgisayar ekranını görmek) computer_command ile bilgisayara gönder. ` +
       `Kullanıcı hakkında kalıcı bir şey öğrenince remember ile kaydet. ` +
       `RESİM ÇİZEBİLİRSİN: çizim, resim, görsel, logo istenince hemen make_image aracını çağır (resmi değiştirmek için mode='edit'); "resim yapamam" asla deme. ` +
-      `Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol kullan. `+
+      `Hava durumu için weather, döviz için currency kullan (gerçek veri). Bu cihazda uygulama açmak için open_app, hatırlatıcı ve zamanlayıcı için reminder, yapılacaklar listesi için todo, başka bir cihazda açmak/göstermek için send_to_device, "… protokolü / … modu" denince protocol kullan. `+
       `Kullanıcı bir şeyi sorduğunda önce search_memory ile ortak hafızaya bak; geçmiş bir konuşma sorulursa search_history ile arşive bak. ` +
       `"(Sistem notu" ile başlayan mesajlar kullanıcıdan değil, arka planda biten işlerden gelir. ` +
       `Düşüncelerini sesli söyleme; sadece kullanıcıya cevabı söyle. ` +
@@ -1549,7 +1608,7 @@
     $('f-ios').hidden = !(isIOS && standalone && !S.key);
     $('f-move').hidden = !(isIOS && !standalone && S.key);
     $('f-key').value = S.key || ''; $('f-tok').value = S.tok || ''; $('f-gist').value = S.gist || '';
-    $('f-dev').value = S.devName || ''; $('f-kind').value = S.kind || 'auto'; $('f-voice').value = S.voice || 'Charon';
+    $('f-dev').value = S.devName || ''; $('f-city').value = S.city || ''; $('f-kind').value = S.kind || 'auto'; $('f-voice').value = S.voice || 'Charon';
     $('f-status').textContent = ''; openSheet('s-setup');
   }
   $('b-set').onclick = openSetup; $('b-menu').onclick = () => { renderDevices(); openSheet('s-devs'); syncNow(); };
@@ -1571,7 +1630,7 @@
   };
   $('f-save').onclick = async () => {
     S.key = $('f-key').value.trim(); S.tok = $('f-tok').value.trim(); S.gist = $('f-gist').value.trim();
-    S.devName = $('f-dev').value.trim(); S.kind = $('f-kind').value; S.voice = $('f-voice').value; save(); applyKind();
+    S.devName = $('f-dev').value.trim(); S.city = $('f-city').value.trim(); S.kind = $('f-kind').value; S.voice = $('f-voice').value; save(); applyKind();
     if (S.tok && !S.gist) {
       $('f-status').textContent = 'Ortak hafıza açılıyor…';
       try { S.gist = await Cloud.create(); save(); $('f-gist').value = S.gist; } catch (e) { $('f-status').textContent = 'GitHub: ' + e.message + ' (anahtarın gist izni var mı?)'; return; }
@@ -1635,6 +1694,26 @@
   $('upd-all').onclick = updateAll;
   setInterval(checkVersion, 5 * 60000);
   renderRem(); keepAwake();
+  refreshHudWeather(); setInterval(refreshHudWeather, 30 * 60000);
+  // ── agenda: reminders, to-dos and saved places in one place, every device ──
+  function renderAgenda() {
+    const row = (txt, sub, btn, act) => `<div class="row2"><span>${esc(txt)}${sub ? `<br><small>${esc(sub)}</small>` : ''}</span>${btn ? `<button class="x" type="button" data-act="${esc(act)}">${btn}</button>` : ''}</div>`;
+    const rem = pendingRem().map((r, i) => row(r.text, remTime(r.due) + (r.repeat ? ' · her gün' : '') + (r.from ? ' · ' + r.from : ''), 'İptal', 'rem:' + (i + 1)));
+    const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).map(k => row(k.slice(11), '', '✓', 'todo:' + k.slice(11)));
+    const places = Object.entries(memory.notes || {}).filter(([k]) => k.startsWith('konum: ')).map(([k, v]) => row(k.slice(7), entry(v).value.split('|')[1]?.trim() || '', 'Harita', 'place:' + k.slice(7)));
+    $('agenda-body').innerHTML = `<div class="ag"><h4>HATIRLATICILAR</h4>${rem.join('') || '<div class="row2"><small>Yok — "yarın 9\'da hatırlat" de.</small></div>'}` +
+      `<h4>YAPILACAKLAR</h4>${todos.join('') || '<div class="row2"><small>Liste boş.</small></div>'}` + (places.length ? `<h4>KAYITLI YERLER</h4>${places.join('')}` : '') + '</div>';
+    $('agenda-body').querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+      const [kind, ...rest] = b.dataset.act.split(':'), val = rest.join(':');
+      if (kind === 'rem') toast(reminderTool({ action: 'cancel', id: val }));
+      else if (kind === 'todo') toast(todoTool({ action: 'done', item: val }));
+      else if (kind === 'place') toast(await placeTool({ action: 'find', name: val }));
+      renderAgenda();
+    });
+  }
+  $('t-agenda').onclick = async () => { renderAgenda(); openSheet('s-agenda'); await syncNow(); renderAgenda(); };
+  $('agenda-add').addEventListener('submit', e => { e.preventDefault(); const t = $('agenda-inp').value.trim(); if (!t) return;
+    $('agenda-inp').value = ''; toast(todoTool({ action: 'add', item: t })); renderAgenda(); });
   // ── notifications while this page is closed: the computer sends them
   // (core/webpush.py) with the keys in push.json; this device subscribes ──
   const b64uBytes = t => { const b = atob(String(t).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(t).length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };

@@ -16,29 +16,19 @@ def weather_action(
         return msg
 
     city = city.strip()
-    when = (when or "today").strip()
-
-    search_query  = f"weather in {city} {when}"
-    url           = f"https://www.google.com/search?q={quote_plus(search_query)}"
-
-    try:
-        opened = webbrowser.open(url)
-        if not opened:
-            raise RuntimeError("webbrowser.open returned False")
-    except Exception as e:
-        msg = f"Sir, I couldn't open the browser for the weather report: {e}"
-        _log(msg, player)
-        return msg
-
-    msg = f"Showing the weather for {city}, {when}, sir."
-    _log(msg, player)
-
-    if session_memory:
+    when = (when or "today").strip().lower()
+    days = 7 if any(w in when for w in ("hafta", "week", "7")) else 3
+    # Real numbers to say aloud (Open-Meteo, free, no key); the browser only
+    # when the service cannot be reached.
+    from core import open_data
+    msg = open_data.weather(city=city, days=days)
+    if msg.startswith("Hava durumu alınamadı"):
         try:
-            session_memory.set_last_search(query=search_query, response=msg)
+            webbrowser.open(f"https://www.google.com/search?q={quote_plus(f'weather in {city} {when}')}")
+            msg += " Tarayıcıda açtım."
         except Exception:
             pass
-
+    _log(msg.splitlines()[0], player)
     return msg
 
 
@@ -54,14 +44,16 @@ def _log(message: str, player=None) -> None:
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "weather_report",
-    "description": "Gives the weather report to user",
+    "description": "Hava durumu: şu anki sıcaklık ve gökyüzü, önümüzdeki günlerin en düşük/en yüksek "
+                   "sıcaklığı ve yağış ihtimali (gerçek veri). time: today | tomorrow | week.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "city": {
                 "type": "STRING",
                 "description": "City name"
-            }
+            },
+            "time": {"type": "STRING", "description": "today | tomorrow | week"}
         },
         "required": [
             "city"
