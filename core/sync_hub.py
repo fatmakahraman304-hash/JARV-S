@@ -353,6 +353,18 @@ def add_reminder(text: str, due_ts: float, rid: str = "") -> str:
     return rid
 
 
+def cancel_reminder(rid: str) -> bool:
+    """Cancel a shared reminder on every device (a cancellation always wins
+    the merge). False when it is not known here."""
+    with _state["lock"]:
+        r = next((x for x in _state.get("reminders") or [] if x.get("id") == rid), None)
+        r = r or next((x for x in _state["rem_new"] if x.get("id") == rid), None)
+        if r is None:
+            return False
+        _state["rem_new"].append({**r, "cancelled": _now()})
+    return True
+
+
 def on_reminder(fn) -> None:
     """fn(event, reminder) — event "new" for one set on another device,
     "cancelled" for one cancelled anywhere."""
