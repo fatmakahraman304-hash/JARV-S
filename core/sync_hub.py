@@ -315,6 +315,16 @@ def merge_reminders(a, b, now_ms: float | None = None) -> list[dict]:
         merged = {**(old or {}), **r, "due": due}
         merged["cancelled"] = (old or {}).get("cancelled") or r.get("cancelled") or ""
         by[r["id"]] = merged
+    # a daily one that came due brings its next day; the id says which day,
+    # so every device adds the very same entry and the merge keeps one
+    day = 86_400_000
+    for r in list(by.values()):
+        if r.get("repeat") != "daily" or r.get("cancelled") or r["due"] > now_ms:
+            continue
+        nxt = r["due"] + day * max(1, int((now_ms - r["due"]) // day) + 1)
+        nid = f"{str(r['id']).split('@')[0]}@{int(nxt)}"
+        if nid not in by:
+            by[nid] = {**r, "id": nid, "due": float(nxt), "cancelled": ""}
     out = [r for r in by.values() if r["due"] > now_ms - REM_KEEP_MS]
     return sorted(out, key=lambda r: r["due"])
 

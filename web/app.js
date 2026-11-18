@@ -541,7 +541,9 @@
     { name: 'reminder', description: 'Bu cihazda hatırlatıcı / zamanlayıcı: "10 dakika sonra hatırlat", "saat 18:30\'da ilacı söyle", "zamanlayıcı kur". action: set | list | cancel. Zamanı gelince cihaz çalar, bildirim gösterir ve sen söylersin.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', description: 'set | list | cancel' }, text: { type: 'STRING', description: 'ne hatırlatılacak' },
         minutes: { type: 'NUMBER', description: 'kaç dakika sonra (saniye için 0.5 gibi)' }, at: { type: 'STRING', description: 'saat "HH:MM" ya da "YYYY-MM-DD HH:MM"' },
-        id: { type: 'STRING', description: 'iptal için hatırlatıcı numarası ya da metni' } }, required: ['action'] } },
+        id: { type: 'STRING', description: 'iptal için hatırlatıcı numarası ya da metni' },
+        repeat: { type: 'STRING', description: '"daily" = her gün aynı saatte; boşsa bir kez' },
+        protocol: { type: 'STRING', description: 'zamanı gelince söylemek yerine çalıştırılacak protokolün adı ("her sabah 8\'de günaydın protokolü")' } }, required: ['action'] } },
     { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
@@ -941,6 +943,15 @@
       const old = by.get(r.id);
       by.set(r.id, old ? { ...old, ...r, cancelled: old.cancelled || r.cancelled || '' } : { ...r, cancelled: r.cancelled || '' });
     }
+    // daily: the next day is added with an id that names the day, so every
+    // device adds the same entry (core/sync_hub.merge_reminders does the same)
+    const DAY = 86400000;
+    for (const r of [...by.values()]) {
+      if (r.repeat !== 'daily' || r.cancelled || +r.due > now) continue;
+      const nxt = +r.due + DAY * Math.max(1, Math.floor((now - r.due) / DAY) + 1);
+      const nid = `${String(r.id).split('@')[0]}@${nxt}`;
+      if (!by.has(nid)) by.set(nid, { ...r, id: nid, due: nxt, cancelled: '' });
+    }
     return [...by.values()].filter(r => +r.due > now - REM_KEEP).sort((x, y) => x.due - y.due);
   }
   const pendingRem = () => reminders.filter(r => !r.cancelled && !remFired.includes(r.id) && r.due > Date.now() - 60000);
@@ -958,22 +969,25 @@
   function reminderTool(a) {
     const act = String(a.action || 'set').toLowerCase();
     const open = pendingRem();
-    if (act === 'list') return open.length ? open.map((r, i) => `${i + 1}. ${remTime(r.due)} — ${r.text}${r.from ? ` (${r.from})` : ''}`).join('\n') : 'Kurulu hatırlatıcı yok.';
+    if (act === 'list') return open.length ? open.map((r, i) => `${i + 1}. ${remTime(r.due)}${r.repeat ? ' (her gün)' : ''} — ${r.text}${r.from ? ` (${r.from})` : ''}`).join('\n') : 'Kurulu hatırlatıcı yok.';
     if (act === 'cancel') {
       const k = String(a.id || a.text || '').toLocaleLowerCase('tr').trim();
       const all = !k || k === 'hepsi' || k === 'all';
       const hit = open.filter((r, i) => all || String(i + 1) === k || r.text.toLocaleLowerCase('tr').includes(k));
-      hit.forEach(r => { r.cancelled = nowIso(); });
+      const bases = new Set(hit.map(r => String(r.id).split('@')[0]));     // a daily one: the whole series
+      reminders.forEach(r => { if (bases.has(String(r.id).split('@')[0]) && !r.cancelled) r.cancelled = nowIso(); });
       saveRem(); renderRem(); if (hit.length) syncNow();
       return hit.length ? `${hit.length} hatırlatıcı iptal edildi (bütün cihazlarda).` : 'Böyle bir hatırlatıcı bulamadım.';
     }
     const due = parseWhen(a);
     if (!due) return 'Ne zaman? Dakika ya da saat söylemen lazım.';
-    const text = String(a.text || 'Zamanlayıcı').slice(0, 200);
-    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '' });
+    const protocol = String(a.protocol || '').trim(), repeat = /daily|her ?gün|günlük/i.test(String(a.repeat || '')) ? 'daily' : '';
+    const text = String(a.text || (protocol ? `${protocol} protokolü` : 'Zamanlayıcı')).slice(0, 200);
+    reminders.push({ id: S.id + '-' + Date.now().toString(36), text, due, from: devName(), cancelled: '', ...(repeat ? { repeat } : {}), ...(protocol ? { protocol } : {}) });
     reminders.sort((x, y) => x.due - y.due); saveRem(); renderRem(); syncNow();
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {}
-    return `Tamam: ${remTime(due)} — ${text}.` + (Cloud.ok() ? ' Bütün cihazlar biliyor; o an hangisi açıksa o söyler.' : ' (Bu sayfa açık kaldıkça bu cihaz çalar.)');
+    if (repeat) { syncNow(); }
+    return `Tamam: ${remTime(due)}${repeat ? ' ve her gün bu saatte' : ''} — ${protocol ? '"' + protocol + '" protokolü çalışacak' : text}.` + (Cloud.ok() ? ' Bütün cihazlar biliyor; o an hangisi açıksa o söyler.' : ' (Bu sayfa açık kaldıkça bu cihaz çalar.)');
   }
   function beep() {
     try { ensureOut(); const t0 = outCtx.currentTime;
@@ -1000,8 +1014,9 @@
       try { if ('Notification' in window && Notification.permission === 'granted') new Notification('JARVIS hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
       sys('⏰ Hatırlatma: ' + r.text + late);
       if (amOwner()) {
-        if (ws && ready) tellBrain(`Hatırlatma zamanı: ${r.text}.`);
-        else connect().then(() => tellBrain(`Hatırlatma zamanı: ${r.text}.`)).catch(() => {});
+        const note = r.protocol ? `Zamanlanmış protokol zamanı: "${r.protocol}". Şimdi protocol aracıyla çalıştır.` : `Hatırlatma zamanı: ${r.text}.`;
+        if (ws && ready) tellBrain(note);
+        else connect().then(() => tellBrain(note)).catch(() => {});
       }
     }
   }, 5000);

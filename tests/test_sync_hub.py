@@ -169,6 +169,31 @@ class SharedRemindersTest(unittest.TestCase):
         m = sync_hub.merge_reminders(a, b, now)
         self.assertEqual([(r["id"], bool(r["cancelled"])) for r in m], [("x", True), ("y", False)])
 
+    def test_daily_brings_the_same_next_day_everywhere(self):
+        now = 1_800_000_000_000
+        daily = [{"id": "w-a", "text": "ilaç", "due": now - 1000, "repeat": "daily", "cancelled": ""}]
+        m1 = sync_hub.merge_reminders(daily, [], now)
+        self.assertEqual([r["id"] for r in m1], ["w-a", f"w-a@{now - 1000 + 86_400_000}"])
+        self.assertEqual(len(sync_hub.merge_reminders(m1, m1, now)), 2)      # two devices: still one next day
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("split('@')[0]}@${nxt}", js)                           # same id rule on the web
+
+    def test_scheduled_protocol_is_carried_out_on_desktop(self):
+        from actions import reminder
+        added = []
+
+        class Eng:
+            def list(self):
+                return []
+
+            def add(self, **kw):
+                added.append(kw)
+        r = {"id": "w-b", "text": "sabah protokolü", "protocol": "sabah", "due": (time.time() + 600) * 1000}
+        with mock.patch("core.routines.desktop.engine", return_value=Eng()):
+            reminder.on_shared_reminder("new", r)
+        self.assertEqual(added[0]["kind"], "prompt")
+        self.assertIn("sabah", added[0]["text"])
+
     def test_phone_reminder_reaches_desktop_once_and_cancel_follows(self):
         events = []
         sync_hub.on_reminder(lambda ev, r: events.append((ev, r["id"])))
