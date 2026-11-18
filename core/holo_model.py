@@ -861,6 +861,7 @@ def gesture_step(st: dict, hands: list, t: float) -> dict:
 
 
 _CMDS = (
+    ("blender", r"blender"),
     ("scan", r"^(tara|modelle|dijitalleştir)\b|(bunu|şunu|kameradakini|elimdekini) (dijital olarak )?(modelle|tara|dijitalleştir)"),
     ("explode", r"parçala|parçalara ayır|patlat|içini göster"),
     ("assemble", r"birleştir|topla|parçaları kapat"),

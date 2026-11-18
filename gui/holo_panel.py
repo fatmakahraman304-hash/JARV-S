@@ -269,7 +269,7 @@ class HoloPanel(QWidget):
                                 ("look", "◐  HOLOGRAM", "choice"), ("explode", "💥  PARÇALA", "off"), ("cut", "✂  KESİT", "off"),
                                 ("measure", "📏  ÖLÇ", "off"), ("reset", "⟲", "dim"), ("save", "💾", "dim"),
                                 ("shot", "📸 4K", "dim"), ("video", "🎬", "dim"), ("stl", "⬇ DIŞA AKTAR", "dim"), ("lib", "📂", "dim"),
-                                ("key", "🔑", "dim"), ("close", "✕", "dim")):
+                                ("blender", "🟧 BLENDER", "dim"), ("key", "🔑", "dim"), ("close", "✕", "dim")):
             b = QPushButton(text)
             b.setFixedHeight(34)
             b.setMinimumWidth(40)
@@ -361,7 +361,38 @@ class HoloPanel(QWidget):
             self.flash(f"Model açılamadı: {exc}", 6)
             return
         self.build_t = time.monotonic() if animate else 0.0
+        self._share_model()
         self.update()
+
+    def _share_model(self):
+        """The model on the table as memory/holo_current.glb — Blender (and the voice) pick it up there."""
+        try:
+            path = ROOT / "memory" / "holo_current.glb"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_bytes(holo_model.export_glb(self.mesh, self.model))
+            tmp.replace(path)
+        except Exception:
+            pass
+
+    def _blender(self):
+        """The model as a studio photograph from Blender's Cycles renderer."""
+        if not self.mesh:
+            self.flash("Blender'a gönderilecek model yok")
+            return
+        self._share_model()
+        height_m = float(self.mesh.size[1]) / 100.0
+
+        def work():
+            from plugins import blender_studio as bs
+            binary = bs.executable()
+            out = bs.hologram_render(binary, "", w=2560, h=1440, samples=160, height_m=height_m)
+            img = QImage(str(out))
+            if img.isNull():
+                return None, "Blender render'ı okunamadı."
+            self._photo, self._photo_path = img, str(out)
+            return None, f"🟧 Blender Cycles render'ı hazır: {out}"
+        self._job("BLENDER CYCLES İLE ÇEKİLİYOR (birkaç dakika sürebilir)", work)
 
     # ── commands (buttons, typed, spoken) ─────────────────────────────────────
     def command(self, cmd: dict) -> None:
@@ -444,6 +475,8 @@ class HoloPanel(QWidget):
             self._shot()
         elif a in ("video", "turntable"):
             self._turntable()
+        elif a == "blender":
+            self._blender()
         elif a == "key":
             if self._ask_key() and self._retry:
                 jpeg, prompt, source = self._retry
@@ -982,6 +1015,17 @@ class HoloPanel(QWidget):
         else:
             self._empty(p, W, H, t)
         self._hud(p, W, H)
+        photo = getattr(self, "_photo", None)
+        if photo is not None:                              # the Blender render, over everything
+            p.fillRect(QRectF(0, 0, W, H), QColor(0, 0, 0, 235))
+            k = min((W - 40) / photo.width(), (H - 110) / photo.height())
+            r = QRectF((W - photo.width() * k) / 2, 54, photo.width() * k, photo.height() * k)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            p.drawImage(r, photo)
+            p.setPen(qcol(C.TEXT_MED))
+            p.setFont(px_font(12))
+            p.drawText(QRectF(0, r.bottom() + 8, W, 24), Qt.AlignmentFlag.AlignHCenter,
+                       "BLENDER CYCLES  ·  tıkla ya da Esc: kapat  ·  " + Path(getattr(self, "_photo_path", "")).name)
         p.end()
 
     def _empty(self, p, W, H, t):
@@ -1120,6 +1164,10 @@ class HoloPanel(QWidget):
 
     # ── mouse ─────────────────────────────────────────────────────────────────
     def mousePressEvent(self, e):
+        if getattr(self, "_photo", None) is not None:
+            self._photo = None
+            self.update()
+            return
         self._drag = (e.position(), e.button(), time.monotonic())
         self.last_input = time.monotonic()
 
@@ -1172,7 +1220,10 @@ class HoloPanel(QWidget):
     def keyPressEvent(self, e):
         k = e.key()
         if k == Qt.Key.Key_Escape:
-            if getattr(self, "gallery", None) is not None and self.gallery.isVisible():
+            if getattr(self, "_photo", None) is not None:
+                self._photo = None
+                self.update()
+            elif getattr(self, "gallery", None) is not None and self.gallery.isVisible():
                 self._toggle_gallery()
             elif self.busy:
                 self.cancel()
