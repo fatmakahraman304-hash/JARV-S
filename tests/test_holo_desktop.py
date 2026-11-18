@@ -30,10 +30,10 @@ class ShapeTests(unittest.TestCase):
 
     def test_every_shape_fills_its_box_with_outward_faces(self):
         for shape in hm.SHAPES:
-            p = hm.clean_part({"shape": shape, "size": [10, 8, 6], "pos": [1, 2, 3], "rot": [20, 30, 40], **self.EXTRA.get(shape, {})})
+            p = hm.clean_part({"shape": shape, "size": [1 if shape == "tube" else 10, 8, 6], "pos": [1, 2, 3], "rot": [20, 30, 40], **self.EXTRA.get(shape, {})})
             V, N, F = hm.part_mesh(p)
             self.assertGreater(len(F), 0, shape)
-            self.assertGreaterEqual(consistent(V, N, F), 0.95 if shape == "tube" else 1.0, shape)
+            self.assertGreaterEqual(consistent(V, N, F), 0.99 if shape == "tube" else 1.0, shape)
             self.assertTrue(np.allclose(np.linalg.norm(N, axis=1), 1, atol=1e-3), shape)
             if shape != "tube":
                 q = hm.clean_part({**p, "rot": [0, 0, 0], "pos": [0, 0, 0]})

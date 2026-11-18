@@ -20,6 +20,7 @@ import struct
 
 import numpy as np
 
+EXPLODE = 0.85                    # how far apart "parçala" pushes the parts (× their distance from the centre)
 SHAPES = ("box", "rounded_box", "cylinder", "cone", "sphere", "hemisphere", "capsule", "torus",
           "wedge", "lathe", "extrude", "tube")
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -107,6 +108,25 @@ def clean(m) -> dict:
 
 # ── surfaces: (V, N | None, F) in part space, real centimetres ─────────────
 
+def catmull(points, per: int = 6, closed: bool = False) -> np.ndarray:
+    """Smooth a polyline through its points (Catmull-Rom), `per` samples a span."""
+    P = np.asarray(points, np.float64)
+    if len(P) < 3:
+        return P
+    ext = np.vstack([P[-1:], P, P[:2]]) if closed else np.vstack([2 * P[0] - P[1], P, 2 * P[-1] - P[-2]])
+    out = []
+    spans = len(P) if closed else len(P) - 1
+    for i in range(spans):
+        p0, p1, p2, p3 = ext[i], ext[i + 1], ext[i + 2], ext[i + 3]
+        for k in range(per):
+            t = k / per
+            t2, t3 = t * t, t * t * t
+            out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3))
+    if not closed:
+        out.append(P[-1])
+    return np.asarray(out)
+
+
 def _grid_faces(rows: int, cols: int, wrap: bool) -> np.ndarray:
     """Triangles of a rows×cols vertex grid (cols wraps around when wrap)."""
     f = []
@@ -124,7 +144,7 @@ def _fan(n: int, offset: int, reverse: bool) -> list:
     return [(a, c, b) for a, b, c in tri] if reverse else tri
 
 
-def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 48, corner_deg: float = 42.0):
+def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 48, corner_deg: float = 42.0, smooth: bool = True):
     """profile: [[r 0..1, y 0..1]] bottom → top. Smooth runs between sharp
     corners, flat caps where the profile ends away from the axis."""
     pr = [(float(r), float(y)) for r, y in profile]
@@ -147,6 +167,8 @@ def _lathe(profile, rx: float, rz: float, y0: float, h: float, seg: int = 48, co
     for run in runs:
         if len(run) < 2:
             continue
+        if len(run) >= 3 and smooth:
+            run = [(max(0.0, r), y) for r, y in catmull(run, 4)]
         rows = len(run)
         V = np.zeros((rows * seg, 3), np.float32)
         for k, (r, y) in enumerate(run):
@@ -346,8 +368,8 @@ def _extrude(outline, sx, sy, sz, smooth_deg: float = 32.0):
     return out
 
 
-def _tube(path, radius, seg: int = 18):
-    P = np.asarray(path, np.float64)
+def _tube(path, radius, seg: int = 20):
+    P = catmull(path, 8) if len(path) >= 3 else np.asarray(path, np.float64)
     if len(P) < 2:
         return []
     T = np.gradient(P, axis=0)
@@ -387,14 +409,14 @@ def surfaces(p: dict) -> list:
     if s == "cone":
         return _lathe([[1, 0], [0, 1]], sx / 2, sz / 2, -sy / 2, sy)
     if s == "sphere":
-        return _lathe(_sphere_profile(-math.pi / 2, math.pi / 2, 24), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80)
+        return _lathe(_sphere_profile(-math.pi / 2, math.pi / 2, 24), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
     if s == "hemisphere":
-        return _lathe(_sphere_profile(0, math.pi / 2, 14), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80)
+        return _lathe(_sphere_profile(0, math.pi / 2, 14), sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
     if s == "capsule":
         cap = min(0.5, (sx / 2) / max(sy, 1e-6))
         prof = [[r, y * cap] for r, y in _sphere_profile(-math.pi / 2, 0, 10)] + \
                [[r, 1 - cap + y * cap] for r, y in _sphere_profile(0, math.pi / 2, 10)]
-        return _lathe(prof, sx / 2, sz / 2, -sy / 2, sy, corner_deg=80)
+        return _lathe(prof, sx / 2, sz / 2, -sy / 2, sy, corner_deg=80, smooth=False)
     if s == "torus":
         return _torus(sx, sy, sz)
     if s == "wedge":
@@ -518,7 +540,7 @@ class Mesh:
         k = 0
         for i, V, N, F in self.parts:
             m = len(F) * 3
-            out[k:k + m] += (self.part_center[i] - self.center) * explode * 1.15
+            out[k:k + m] += (self.part_center[i] - self.center) * explode * EXPLODE
             k += m
         return out
 

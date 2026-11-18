@@ -34,6 +34,10 @@ GL_FLOAT = 0x1406
 GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT = 0x4000, 0x0100, 0x0400
 GL_POLYGON_OFFSET_FILL = 0x8037
 STRIDE = 14                       # pos3 nrm3 col3 mat4 pid1
+SHADOW = 2048
+_KEY = np.array([-0.45, 0.72, 0.52]); _KEY /= np.linalg.norm(_KEY)
+_LU = np.cross([0.0, 1.0, 0.0], _KEY); _LU /= np.linalg.norm(_LU)
+_LV = np.cross(_KEY, _LU)
 
 VERT = """
 #version 120
@@ -46,6 +50,12 @@ uniform mat4 u_mvp;
 uniform vec3 u_off;           // model → world: subtract the centre (x, z) and the floor (y)
 uniform float u_pass;         // 0 model, 1 floor, 2 shadow
 uniform vec3 u_ldir;          // shadow: direction the light travels
+uniform vec3 u_lu;            // key light basis and the shadow map's half extent
+uniform vec3 u_lv;
+uniform vec3 u_ll;
+uniform float u_ext;
+uniform vec3 u_lc;
+varying vec3 v_lp;
 varying vec3 v_wp;
 varying vec3 v_n;
 varying vec3 v_col;
@@ -58,7 +68,37 @@ void main() {
         wp = vec3(wp.x + u_ldir.x * t, 0.002, wp.z + u_ldir.z * t);
     }
     v_wp = wp; v_n = a_nrm; v_col = a_col; v_mat = a_mat; v_pid = a_pid;
+    vec3 q = wp - u_lc;
+    v_lp = vec3(dot(q, u_lu), dot(q, u_lv), -dot(q, u_ll)) / u_ext;
     gl_Position = u_mvp * vec4(wp, 1.0);
+}
+"""
+
+VERT_SHADOW = """
+#version 120
+attribute vec3 a_pos;
+uniform vec3 u_off;
+uniform vec3 u_lu;
+uniform vec3 u_lv;
+uniform vec3 u_ll;
+uniform float u_ext;
+uniform vec3 u_lc;
+varying float v_d;
+void main() {
+    vec3 q = a_pos - u_off - u_lc;
+    vec3 lp = vec3(dot(q, u_lu), dot(q, u_lv), -dot(q, u_ll)) / u_ext;
+    gl_Position = vec4(lp, 1.0);
+    v_d = lp.z * 0.5 + 0.5;
+}
+"""
+
+FRAG_SHADOW = """
+#version 120
+varying float v_d;
+void main() {
+    vec2 e = fract(vec2(1.0, 255.0) * clamp(v_d, 0.0, 0.999));
+    e.x -= e.y / 255.0;
+    gl_FragColor = vec4(e, 0.0, 1.0);
 }
 """
 
@@ -79,6 +119,9 @@ uniform float u_radius;
 uniform float u_height;
 uniform float u_alpha_pass;    // 0 opaque parts only, 1 see-through parts only
 uniform float u_shadow_a;
+uniform sampler2D u_shadow;
+uniform float u_has_shadow;
+varying vec3 v_lp;
 
 const vec3 KEY = vec3(-0.45, 0.72, 0.52);
 const vec3 FILL = vec3(0.70, 0.25, 0.66);
@@ -97,6 +140,19 @@ vec3 env(vec3 r, float rough) {
 
 float ggx(float nh, float a) { float a2 = a * a; float d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (PI * d * d); }
 float vis(float nl, float nv, float a) { float k = a * 0.5; return 1.0 / ((nl * (1.0 - k) + k) * (nv * (1.0 - k) + k)); }
+float lit(float soft) {
+    // soft shadow from the key light: 16-tap percentage-closer filtering
+    if (u_has_shadow < 0.5) return 1.0;
+    vec2 uv = v_lp.xy * 0.5 + 0.5;
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 1.0;
+    float d = v_lp.z * 0.5 + 0.5, s = 0.0;
+    for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) {
+        vec2 o = (vec2(float(i), float(j)) - 1.5) * soft;
+        vec2 e = texture2D(u_shadow, uv + o).rg;
+        s += (d - 0.0035 <= e.x + e.y / 255.0) ? 1.0 : 0.0;
+    }
+    return s / 16.0;
+}
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
 void main() {
@@ -114,11 +170,13 @@ void main() {
             float a = (rings + spokes + sweep * 0.35 + disc) * (1.0 - smoothstep(0.95, 1.1, r));
             gl_FragColor = vec4(u_accent * a * 1.4, a);
         } else {
-            float a = (1.0 - smoothstep(0.15, 1.0, r)) * 0.85;
-            vec3 c = vec3(0.045, 0.040, 0.036) + u_accent * 0.035 * (1.0 - r);
-            // a dark gloss: the softbox and the key light catch the floor
-            float spec = pow(max(dot(reflect(-V, vec3(0, 1, 0)), normalize(KEY)), 0.0), 40.0);
-            c += vec3(0.10) * spec;
+            float a = 1.0 - smoothstep(0.25, 1.0, r);
+            float sh = lit(0.0022);
+            vec3 c = mix(vec3(0.075, 0.068, 0.062), vec3(0.20, 0.188, 0.175), 1.0 - smoothstep(0.0, 0.85, r));
+            c += u_accent * 0.02 * (1.0 - r);
+            c *= mix(0.32, 1.0, sh);
+            float spec = pow(max(dot(reflect(-V, vec3(0, 1, 0)), normalize(KEY)), 0.0), 60.0);
+            c += vec3(0.08) * spec * sh;
             gl_FragColor = vec4(c, a);
         }
         return;
@@ -135,7 +193,7 @@ void main() {
     if (u_holo > 0.5) {
         float fres = pow(1.0 - nv, 2.2);
         float scan = 0.55 + 0.45 * sin(v_wp.y / max(u_height, 1.0) * 140.0 - u_time * 6.0);
-        float band = exp(-pow((v_wp.y / max(u_height, 1.0) - fract(u_time * 0.35)) * 9.0, 2.0));
+        float band = 0.5 * exp(-pow((v_wp.y / max(u_height, 1.0) - fract(u_time * 0.35)) * 12.0, 2.0));
         float flick = 0.94 + 0.06 * sin(u_time * 53.0 + v_wp.y);
         vec3 tint = mix(u_accent, vec3(1.0, 0.86, 0.62), 0.25 + 0.35 * dot(v_col, vec3(0.33)));
         vec3 c = tint * (0.10 + 1.7 * fres + 0.08 * scan + 0.9 * band) * flick;
@@ -150,20 +208,21 @@ void main() {
     vec3 col = vec3(0.0);
     vec3 Ls[3]; Ls[0] = normalize(KEY); Ls[1] = normalize(FILL); Ls[2] = normalize(RIM);
     vec3 Cs[3]; Cs[0] = vec3(3.1, 2.95, 2.75); Cs[1] = vec3(0.65, 0.78, 1.05); Cs[2] = u_accent * 1.6 + vec3(0.6);
+    float sh = lit(0.0012);
     for (int i = 0; i < 3; i++) {
         vec3 L = Ls[i]; vec3 H = normalize(L + V);
         float nl = max(dot(N, L), 0.0), nh = max(dot(N, H), 0.0), vh = max(dot(V, H), 0.0);
         vec3 F = F0 + (1.0 - F0) * pow(1.0 - vh, 5.0);
         vec3 spec = F * ggx(nh, a) * vis(nl, nv, a) * 0.25;
         vec3 kd = (1.0 - F) * (1.0 - metal);
-        col += (kd * alb / PI + spec) * Cs[i] * nl * PI;
+        col += (kd * alb / PI + spec) * Cs[i] * nl * PI * (i == 0 ? sh : 1.0);
     }
     vec3 R = reflect(-V, N);
     vec3 Fe = F0 + (max(vec3(1.0 - rough), F0) - F0) * pow(1.0 - nv, 5.0);
     float sky = 0.5 + 0.5 * N.y;
     vec3 amb = mix(vec3(0.05, 0.045, 0.04) + u_accent * 0.02, vec3(0.16, 0.17, 0.19), sky);
     col += amb * alb * (1.0 - metal);
-    col += env(R, rough) * Fe * (0.35 + 0.65 * (1.0 - rough * 0.5));
+    col += env(R, rough) * Fe * (0.45 + 0.75 * (1.0 - rough * 0.5)) * mix(0.55, 1.0, sh);
     float ao = mix(0.45, 1.0, smoothstep(0.0, u_radius * 0.18, v_wp.y));       // contact darkening near the floor
     col *= ao;
     col += pow(v_col, vec3(2.2)) * v_mat.z * 3.0;                                // screens, LEDs
@@ -206,15 +265,19 @@ class Camera:
 
     def matrices(self, mesh, w: int, h: int):
         r = mesh.radius
-        target = np.array([0.0, mesh.size[1] * 0.45, 0.0])
-        dist = r * 2.9 / max(0.2, self.zoom)
+        target = np.array([0.0, mesh.size[1] * 0.5, 0.0])
+        aspect = w / max(1, h)
+        half_v = math.radians(34.0) / 2
+        half_h = math.atan(math.tan(half_v) * aspect)
+        fit = r / math.sin(min(half_v, half_h))           # the bounding sphere fits the view
+        dist = fit * 1.12 / max(0.2, self.zoom)
         y, p = math.radians(self.yaw), math.radians(max(-85, min(85, self.pitch)))
         eye = target + dist * np.array([math.cos(p) * math.sin(y), math.sin(p), math.cos(p) * math.cos(y)])
         view = look_at(eye, target)
         right, up = view[0, :3], view[1, :3]
         shift = (right * self.pan[0] - up * self.pan[1]) * r * 2.0
         view = look_at(eye + shift, target + shift)
-        proj = perspective(34.0, w / max(1, h), max(0.01, dist - r * 3), dist + r * 4)
+        proj = perspective(34.0, aspect, max(0.01, dist - r * 3), dist + r * 4)
         return proj @ view, eye + shift
 
     @staticmethod
@@ -243,6 +306,7 @@ class HoloGL:
         self.error = ""
         self.renderer_name = ""
         self._ctx = self._surf = self._gl = self._prog = self._vbo = self._floor = self._fbo = None
+        self._sprog = self._sfbo = None
         self._fbo_size = None
         self._mesh = None
         self._explode = -1.0
@@ -280,6 +344,14 @@ class HoloGL:
                 prog.bindAttributeLocation(name, i)
             if not prog.link():
                 raise RuntimeError("gölgelendirici bağlanamadı: " + prog.log())
+            sp = QOpenGLShaderProgram()
+            if not (sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERT_SHADOW)
+                    and sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAG_SHADOW)):
+                raise RuntimeError("gölge gölgelendiricisi: " + sp.log())
+            sp.bindAttributeLocation("a_pos", 0)
+            if not sp.link():
+                raise RuntimeError("gölge gölgelendiricisi bağlanamadı: " + sp.log())
+            self._sprog = sp
             vbo = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer); vbo.create()
             floor = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer); floor.create()
             try:
@@ -307,6 +379,44 @@ class HoloGL:
         if not fbo.isValid():
             raise RuntimeError("çerçeve arabelleği oluşturulamadı")
         self._fbo, self._fbo_size = fbo, (w, h)
+
+    def _light(self, prog, mesh):
+        for name, v in (("u_lu", _LU), ("u_lv", _LV), ("u_ll", _KEY), ("u_lc", (0.0, float(mesh.size[1]) * 0.5, 0.0))):
+            prog.setUniformValue(name, QVector3D(*[float(x) for x in v]))
+        ext = float(mesh.radius) * 1.7
+        if hasattr(prog, "setUniformValue1f"):
+            prog.setUniformValue1f("u_ext", ext)
+        else:
+            prog.setUniformValue("u_ext", ext)
+
+    def _shadow_pass(self, mesh):
+        """Depth of the model seen from the key light: soft self-shadows and
+        the shadow on the floor."""
+        from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+        gl, sp = self._gl, self._sprog
+        if self._sfbo is None:
+            fmt = QOpenGLFramebufferObjectFormat()
+            fmt.setAttachment(QOpenGLFramebufferObject.Attachment.Depth)
+            self._sfbo = QOpenGLFramebufferObject(QSize(SHADOW, SHADOW), fmt)
+            if not self._sfbo.isValid():
+                raise RuntimeError("gölge arabelleği oluşturulamadı")
+        self._sfbo.bind()
+        gl.glViewport(0, 0, SHADOW, SHADOW)
+        gl.glClearColor(1.0, 1.0, 1.0, 1.0)
+        gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True)
+        gl.glDisable(GL_BLEND); gl.glDisable(GL_CULL_FACE)
+        sp.bind()
+        sp.setUniformValue("u_off", QVector3D(*[float(x) for x in Camera.offset(mesh)]))
+        self._light(sp, mesh)
+        self._vbo.bind()
+        sp.enableAttributeArray(0)
+        sp.setAttributeBuffer(0, GL_FLOAT, 0, 3, STRIDE * 4)
+        gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
+        sp.disableAttributeArray(0)
+        self._vbo.release()
+        sp.release()
+        self._sfbo.release()
 
     def _upload(self, mesh, explode: float):
         if mesh is self._mesh and abs(explode - self._explode) < 1e-4:
@@ -365,6 +475,8 @@ class HoloGL:
             self._ensure_fbo(w, h)
             self._upload(mesh, explode)
             mvp, eye = cam.matrices(mesh, w, h)
+            if not holo:
+                self._shadow_pass(mesh)
             self._fbo.bind()
             gl.glViewport(0, 0, w, h)
             gl.glClearColor(0, 0, 0, 0)
@@ -376,6 +488,16 @@ class HoloGL:
             self._u("u_holo", 1.0 if holo else 0.0); self._u("u_sel", float(sel))
             self._u("u_radius", mesh.radius); self._u("u_height", float(mesh.size[1]))
             self._u("u_ldir", (0, -1, 0)); self._u("u_shadow_a", 0.0); self._u("u_alpha_pass", 0.0)
+            self._light(prog, mesh)
+            self._u("u_has_shadow", 0.0 if holo else 1.0)
+            if not holo:
+                gl.glActiveTexture(0x84C0)                                 # GL_TEXTURE0
+                gl.glBindTexture(0x0DE1, self._sfbo.texture())
+                for pname in (0x2801, 0x2800):                             # nearest
+                    gl.glTexParameteri(0x0DE1, pname, 0x2600)
+                for pname in (0x2802, 0x2803):                             # clamp to edge
+                    gl.glTexParameteri(0x0DE1, pname, 0x812F)
+                prog.setUniformValue("u_shadow", 0)
             gl.glDisable(GL_CULL_FACE)
             # floor
             self._u("u_off", (0, 0, 0)); self._u("u_pass", 1.0)
@@ -385,17 +507,7 @@ class HoloGL:
             off = Camera.offset(mesh)
             self._u("u_off", off)
             if not holo:
-                # soft contact shadow: jittered planar shadows, each pixel darkened once per light
-                self._u("u_pass", 2.0)
-                gl.glEnable(GL_STENCIL_TEST)
                 self._attrs(self._vbo, True)
-                lights = [(-0.35 + dx, -1.0, -0.30 + dz) for dx, dz in ((0, 0), (0.12, 0.05), (-0.1, 0.1), (0.05, -0.12), (-0.08, -0.06), (0.16, -0.02))]
-                for i, ld in enumerate(lights):
-                    gl.glClear(GL_STENCIL_BUFFER_BIT)
-                    gl.glStencilFunc(GL_EQUAL, 0, 0xFF); gl.glStencilOp(GL_KEEP, GL_KEEP, GL_INCR)
-                    self._u("u_ldir", ld); self._u("u_shadow_a", 0.13 if i == 0 else 0.075)
-                    gl.glDrawArrays(GL_TRIANGLES, 0, mesh.n_vert)
-                gl.glDisable(GL_STENCIL_TEST)
                 # the model: opaque parts, then glass
                 self._u("u_pass", 0.0)
                 gl.glEnable(GL_DEPTH_TEST); gl.glDepthFunc(GL_LEQUAL); gl.glDepthMask(True)

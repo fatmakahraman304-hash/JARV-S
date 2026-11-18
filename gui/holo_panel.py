@@ -490,7 +490,7 @@ class HoloPanel(QWidget):
         if self.mesh is None or self.cursor is None:
             return -1
         ids = list(self.mesh.part_center)
-        pts = np.array([self.mesh.part_center[i] + (self.mesh.part_center[i] - self.mesh.center) * self.explode * 1.15 for i in ids])
+        pts = np.array([self.mesh.part_center[i] + (self.mesh.part_center[i] - self.mesh.center) * self.explode * holo_model.EXPLODE for i in ids])
         S = self.cam.project(self.mesh, pts, w, h)
         cx, cy = self.cursor[0] * w, self.cursor[1] * h
         d = np.hypot(S[:, 0] - cx, S[:, 1] - cy)
@@ -554,7 +554,7 @@ class HoloPanel(QWidget):
         if sel < 0 or sel not in self.mesh.part_center:
             return
         part = self.model["parts"][sel]
-        c = self.mesh.part_center[sel] + (self.mesh.part_center[sel] - self.mesh.center) * self.explode * 1.15
+        c = self.mesh.part_center[sel] + (self.mesh.part_center[sel] - self.mesh.center) * self.explode * holo_model.EXPLODE
         x, y, z = self.cam.project(self.mesh, [c], w, h)[0]
         if z <= 0:
             return
