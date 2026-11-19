@@ -297,3 +297,31 @@ def update(root=ROOT, progress=lambda message: None):
         return True, f'Güncellendi · {sha[:8]}. JARVIS otomatik yeniden başlatılıyor.{note}'
     finally:
         lock.unlink(missing_ok=True)
+
+
+def check(root=ROOT) -> dict:
+    """Read-only: is there a newer JARVIS on GitHub, and what changed?
+    {"newer": bool, "sha": str, "current": str, "changes": [first lines of the new commits]}"""
+    root = Path(root)
+    if (root / '.git').exists():
+        branch = _git(root, 'symbolic-ref', '--short', 'HEAD')
+        current = _git(root, 'rev-parse', 'HEAD')
+        _git(root, 'fetch', '--no-tags', f'https://github.com/{REPOSITORY}.git', f'refs/heads/{branch}')
+        sha = _git(root, 'rev-parse', 'FETCH_HEAD^{commit}')
+        changes = []
+        if sha != current:
+            try:
+                log = _git(root, 'log', '--format=%s', f'{current}..{sha}')
+                changes = [line.strip() for line in log.splitlines() if line.strip()][:15]
+            except RuntimeError:
+                pass
+        return {"newer": sha != current, "sha": sha, "current": current, "changes": changes, "branch": branch}
+    state_file = root / '.jarvis-update.json'
+    state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
+    channel = json.loads((root / 'update_channel.json').read_text('utf-8'))
+    branch = state.get('branch', channel['branch'])
+    commit = json.loads(_get(f'https://api.github.com/repos/{REPOSITORY}/commits/{quote(branch, safe="")}'))
+    sha = commit['sha']
+    return {"newer": sha != state.get('sha'), "sha": sha, "current": state.get('sha') or "",
+            "changes": [str(commit.get('commit', {}).get('message', '')).splitlines()[0]] if sha != state.get('sha') else [],
+            "branch": branch}
