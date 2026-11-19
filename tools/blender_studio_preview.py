@@ -74,6 +74,22 @@ studio(samples=48)
         print("rendered table")
     except Exception as exc:
         print("table failed:", exc)
+    # buildings from the architecture engine (camera view, studio quality)
+    from tests.test_blender_arch import APARTMENT, HOUSE
+    for plan in (APARTMENT, HOUSE):
+        try:
+            folder = tmp / plan["name"].replace(" ", "_")
+            folder.mkdir()
+            studio.building_project(binary, folder, plan["name"], plan)
+            out_dir = tmp / (folder.name + "_r")
+            out_dir.mkdir()
+            rep = studio.invoke(binary, folder / "scene.blend", out_dir, "views", w=960, h=540, samples=32)
+            print(plan["name"], "issues:", rep.get("issues"))
+            for _n, path in rep["views"][:2]:
+                shots.append(Image.open(path).convert("RGB"))
+        except Exception as exc:
+            import traceback
+            print("building failed:", plan["name"], exc, traceback.format_exc()[-1500:])
     for f, height in jobs:
         try:
             out = studio.hologram_render(binary, str(f), w=960, h=540, samples=48, height_m=height)

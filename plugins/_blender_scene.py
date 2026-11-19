@@ -294,9 +294,10 @@ def run_script(job, request):
     out = job / "out"
     out.mkdir(exist_ok=True)
     env = {"__name__": "jarvis_kit", "OUT": out, "bpy": bpy}
-    kit = Path(__file__).with_name("_blender_kit.py")
-    if kit.is_file():                                   # box(), wood(), place_on(), studio() … for the script
-        exec(compile(kit.read_text(encoding="utf8"), str(kit), "exec"), env)
+    for name in ("_blender_kit.py", "_blender_arch.py"):   # box(), wood(), place_on(), studio(), building() …
+        kit = Path(__file__).with_name(name)
+        if kit.is_file():
+            exec(compile(kit.read_text(encoding="utf8"), str(kit), "exec"), env)
     env["__name__"] = "__main__"
     try:
         exec(compile(code, "jarvis_script.py", "exec"), env)
