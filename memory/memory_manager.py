@@ -1,4 +1,6 @@
 import json
+import time
+import shutil
 import os
 from datetime import datetime
 from threading import RLock
@@ -28,6 +30,8 @@ def get_base_dir() -> Path:
 BASE_DIR         = get_base_dir()
 from memory.continuity import data_dir, memory_words, recall_terms
 MEMORY_PATH      = data_dir() / "long_term.json"
+BACKUP_PATH      = MEMORY_PATH.with_suffix(".json.bak")        # the last good file, kept before every write
+ARCHIVE_PATH     = MEMORY_PATH.with_name("long_term_archive.json")   # what a full memory let go of — still searchable
 _LEGACY_MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
 _lock            = RLock()
 MAX_VALUE_LENGTH = 380
@@ -84,16 +88,43 @@ def load_memory() -> dict:
     with _lock:
         try:
             data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                base = _empty_memory()
-                for key in base:
-                    if key not in data:
-                        data[key] = {}
-                return data
-            return _empty_memory()
+            if not isinstance(data, dict):
+                raise ValueError("memory file is not an object")
         except Exception as e:
-            _log(f"[Memory] ⚠️ Load error: {e}")
-            return _empty_memory()
+            data = _recover(e)
+        base = _empty_memory()
+        for key in base:
+            if key not in data:
+                data[key] = {}
+        return data
+
+
+def _recover(error) -> dict:
+    """The memory file cannot be read (power cut mid-write, disk error, a bad edit).
+    Never answer with an empty memory that the next save would write over the real
+    one: keep the broken file aside and come back from the last good copy."""
+    _log(f"[Memory] ⚠️ Load error: {error}")
+    try:
+        if MEMORY_PATH.exists():
+            aside = MEMORY_PATH.with_name(f"long_term.corrupt-{int(time.time())}.json")
+            os.replace(MEMORY_PATH, aside)
+            _log(f"[Memory] Broken file kept as {aside.name}")
+    except OSError as exc:
+        _log(f"[Memory] Could not keep the broken file: {exc}")
+    try:
+        data = json.loads(BACKUP_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            _write_memory(data)
+            _log("[Memory] ✅ Restored from the last good copy")
+            if _trim_notifier:
+                try:
+                    _trim_notifier("SYS: Hafıza dosyası bozulmuştu — son sağlam kopyadan geri yüklendi.")
+                except Exception:
+                    pass
+            return data
+    except Exception as exc:
+        _log(f"[Memory] No usable backup: {exc}")
+    return _empty_memory()
 
 def _all_entries(memory: dict) -> list[tuple]:
     entries = []
@@ -122,18 +153,21 @@ def _trim_to_limit(memory: dict) -> dict:
         return memory
     entries = _all_entries(memory)
     entries.sort(key=lambda t: t[2].get("updated", "0000-00-00"))
-    dropped = []
-    for cat, key, _ in entries:
+    dropped, archived = [], {}
+    for cat, key, entry in entries:
         if len(json.dumps(memory, ensure_ascii=False)) <= MEMORY_MAX_CHARS:
             break
+        archived.setdefault(cat, {})[key] = entry
         del memory[cat][key]
         dropped.append(f"{cat}/{key}")
-        _log(f"[Memory] 🗑️  Trimmed {cat}/{key}")
+        _log(f"[Memory] 📦 Archived {cat}/{key}")
+    if archived:
+        _archive(archived)
     if dropped and _trim_notifier:
         try:
             _trim_notifier(
-                f"SYS: Memory full — forgot {len(dropped)} oldest entries "
-                f"({', '.join(dropped[:3])}{'…' if len(dropped) > 3 else ''})"
+                f"SYS: Memory full — moved {len(dropped)} oldest entries to the archive "
+                f"({', '.join(dropped[:3])}{'…' if len(dropped) > 3 else ''}); they can still be recalled"
             )
         except Exception:
             pass
@@ -155,9 +189,36 @@ def _write_memory(memory: dict) -> None:
         temporary.write_text(
             json.dumps(memory, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        if MEMORY_PATH.exists():                      # the current good file becomes the backup
+            try:
+                json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+                shutil.copyfile(MEMORY_PATH, BACKUP_PATH)
+            except (OSError, ValueError):
+                pass                                   # never back up a broken file over a good backup
         os.replace(temporary, MEMORY_PATH)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _archive(entries: dict) -> None:
+    """Older facts a full memory had to let go of: kept in a second file, searched by recall."""
+    try:
+        old = json.loads(ARCHIVE_PATH.read_text(encoding="utf-8")) if ARCHIVE_PATH.exists() else {}
+    except (OSError, ValueError):
+        old = {}
+    for cat, items in entries.items():
+        old.setdefault(cat, {}).update(items)
+    tmp = ARCHIVE_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(old, indent=1, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, ARCHIVE_PATH)
+
+
+def _load_archive() -> dict:
+    try:
+        data = json.loads(ARCHIVE_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
 
 
 def _truncate_value(val: str) -> str:
@@ -391,6 +452,16 @@ def search_memory(query: str, limit: int = 8) -> str:
     words = recall_terms(query or "")
 
     rows: list[tuple[int, int, str, str, str]] = []
+    if (query or "").strip():                       # archived facts count too, ranked a little lower
+        for cat, items in _load_archive().items():
+            if not isinstance(items, dict):
+                continue
+            for key, entry in items.items():
+                val = _entry_value(entry)
+                if val and not (isinstance(memory.get(cat), dict) and key in memory[cat]):
+                    coverage, weight = _score(words, cat, key, val)
+                    if coverage:
+                        rows.append((coverage, weight - 1, cat, key, val + " (arşivden)"))
     for cat, items in memory.items():
         if not isinstance(items, dict):
             continue                     # skip 'sessions', which is a list
