@@ -1410,12 +1410,11 @@ class JarvisLive:
             self._outbox.append(text)
             self.ui.write_log("SYS: Bağlantı yeniden kuruluyor — mesajını aldım, bağlanınca ileteceğim.")
             return
-        # Respect wake-word sleep: a typed command must not be answered while
-        # asleep either (the sleep gate is not just for the mic). Wake first with
-        # "Hey Jarvis" or the WAKE NOW button.
+        # Typing to JARVIS is as deliberate as saying its name: it wakes it. (The
+        # sleep gate exists so overheard speech is never taken as a command — a
+        # typed line cannot be overheard.)
         if not self._awake:
-            self.ui.write_log("SYS: I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first.")
-            return
+            self.wake(reason="yazılı komut")
         self._last_user_text, self._last_user_at = text, time.monotonic()
         from core.blender_commands import scene_command
         scene = scene_command(text)
