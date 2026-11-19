@@ -609,7 +609,10 @@ class JarvisLive:
         self._outbox: list        = []      # what arrived while there was no session (sent on reconnect)
         self._away_since: float | None = None   # when the user was last seen leaving (core/away.py)
         self._away_asleep         = False   # JARVIS was asleep then: their wake command comes first
-        self._quiet_was_on        = False   # quiet mode was on: tell what it held back once it ends
+        self._quiet_was_on        = False
+        from collections import deque as _deque
+        self._say_queue           = _deque()  # (queued at, text): volunteered sentences waiting for calm
+        self._last_said_at        = float("-inf")   # quiet mode was on: tell what it held back once it ends
         self._update_checked      = None    # when GitHub was last asked for a newer JARVIS
         self._update_offered      = ""      # the version already offered (asked once, not every half hour)
         self._speaking_lock       = threading.Lock()
@@ -1136,20 +1139,45 @@ class JarvisLive:
         if not loop or not self.session:
             self._outbox.append(instruction)          # said as soon as the session is back
             return
+        # Never cut into a sentence: a user turn injected while JARVIS is talking (or while
+        # the user is) interrupts the reply. Queue it; _drain_say sends it at the next calm
+        # moment, one at a time, a few seconds apart.
+        self._say_queue.append((time.monotonic(), instruction))
 
-        async def _say():
+    _SAY_GAP = 6.0          # seconds between two volunteered sentences
+    _SAY_CALM = 2.5         # the user's own words must have ended this long ago
+    _SAY_MAX_WAIT = 120.0   # past this it is said anyway — late beats never
+
+    def _calm_for_say(self, now: float) -> bool:
+        lock = getattr(self, "_speaking_lock", None)
+        speaking = self._is_speaking
+        if lock is not None:
+            with lock:
+                speaking = self._is_speaking
+        if speaking or (self.audio_in_queue is not None and not self.audio_in_queue.empty()):
+            return False
+        if now - (self._last_user_speech or 0.0) < self._SAY_CALM:
+            return False
+        return now - self._last_said_at >= self._SAY_GAP
+
+    async def _drain_say(self) -> None:
+        """Send queued plugin/background sentences one by one, each at a calm moment."""
+        while True:
+            await asyncio.sleep(0.4)
+            if not self._say_queue or not self.session:
+                continue
+            now = time.monotonic()
+            queued_at, text = self._say_queue[0]
+            if not self._calm_for_say(now) and now - queued_at < self._SAY_MAX_WAIT:
+                continue
+            self._say_queue.popleft()
+            self._last_said_at = now
             try:
                 await self.session.send_client_content(
-                    turns={"role": "user", "parts": [{"text": instruction}]},
-                    turn_complete=True,
-                )
+                    turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True)
             except Exception as e:
                 print(f"[PluginSay] {e}")
-
-        try:
-            asyncio.run_coroutine_threadsafe(_say(), loop)
-        except Exception as e:
-            print(f"[PluginSay] {e}")
+                self._outbox.append(text)
 
     # ── stall watchdog ───────────────────────────────────────────────────────
 
@@ -3621,6 +3649,7 @@ class JarvisLive:
                     tg.create_task(self._guarded(self._watch_updates))
                     tg.create_task(self._guarded(self._watch_habits))
                     tg.create_task(self._guarded(self._watch_away))
+                    tg.create_task(self._guarded(self._drain_say))
                     tg.create_task(self._guarded(self._watch_vigil))
                     tg.create_task(self._guarded(self._watch_sentinel))
                     tg.create_task(self._send_realtime())
