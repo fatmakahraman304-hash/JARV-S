@@ -22,11 +22,13 @@ PLUGIN = {
                     "Kullanıcının AÇIK Blender penceresinde çalışmak için edit/script yeterli: canlı bağlantı varsa değişiklik "
                     "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir; undo = geri al, redo = yinele. "
                     "Kullanıcı tasarımcıdır: isteğini request alanına kendi sözleriyle, eksiksiz yaz. "
+                    "'Blender'ın her şeyini öğren' = learn_all (kurulu Blender'ın tüm API'si + resmi kılavuz); ne bildiğini sormak "
+                    "= knowledge; 'Blender'da X nasıl yapılır' = guide (kılavuzdan adım adım anlatır). "
                     "Sahne veya render istendiğinde open_app kullanma. new/edit için gösterim isteğini result ile belirt. "
                     "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
                     "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | script | undo | redo | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
+        "action": {"type": "STRING", "description": "new | edit | script | undo | redo | learn_all | knowledge | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
         "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
@@ -679,6 +681,19 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         return "Tamam, Blender'da bunu öğrendim; bundan sonraki işlerde kullanacağım."
     binary = binary or executable()
     ensure_live(binary)
+    from plugins import _blender_knowledge as know
+    know.ensure(binary, invoke)                          # this Blender's whole API (once) + the manual (background)
+    if action == "learn_all":
+        api = know.build_api(binary, invoke)
+        try:
+            man = know.build_manual(api["version"])
+            msg = f"resmi kılavuzdan {man['sections']} bölüm"
+        except Exception as exc:
+            msg = f"kılavuz indirilemedi ({exc})"
+        return (f"Blender {api['version']}'in tamamını öğrendim: {api['operators']} komut, {api['types']} veri türü, "
+                f"{api['nodes']} düğüm; {msg}. Artık ne dersen onu yaparım.")
+    if action == "knowledge":
+        return know.status()
     if action == "study":
         return study(binary, topic, request)
     if action == "hologram":
@@ -687,6 +702,9 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         return f"Blender stüdyo render'ı hazır. {out}"
     if action == "guide":
         from core import gemini
+        manual_answer = know.answer(request)              # the official manual + this Blender's API
+        if manual_answer:
+            return manual_answer
         with tempfile.TemporaryDirectory() as temp:
             report = invoke(binary, None, Path(temp), "reference", query=topic)
         prompt = (f"Blender {report['version']} için kullanıcının sorusunu Türkçe, somut adımlarla "
@@ -773,7 +791,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if action == "status":
         return _status
     if action not in ("new", "edit", "script", "inspect", "open", "render", "animation", "glb", "guide", "teach", "study",
-                      "lessons", "hologram", "install", "undo", "redo"):
+                      "lessons", "hologram", "install", "undo", "redo", "learn_all", "knowledge"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
     if action in ("new", "edit", "guide", "script", "teach") and not request:

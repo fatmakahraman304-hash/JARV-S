@@ -41,8 +41,11 @@ jobs:
       - name: Blender tests
         env:
           BLENDER_RENDER_DIR: ${{ runner.temp }}/renders
+          JARVIS_BLENDER_NO_MANUAL: "1"
+          BLENDER_MANUAL_TEST: ${{ matrix.series == '5.0' && '1' || '' }}
+          BLENDER_MANUAL_VERSION: ${{ matrix.series }}
         run: |
-          python -m unittest -v tests.test_blender_live tests.test_blender_arch tests.test_blender_brain tests.test_blender_studio tests.test_blender_world tests.test_blender_discovery
+          python -m unittest -v tests.test_blender_knowledge tests.test_blender_live tests.test_blender_arch tests.test_blender_brain tests.test_blender_studio tests.test_blender_world tests.test_blender_discovery
       - name: Studio render preview (contact sheet in the log)
         if: always()
         run: python tools/blender_studio_preview.py

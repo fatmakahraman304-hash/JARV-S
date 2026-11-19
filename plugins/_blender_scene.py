@@ -535,6 +535,82 @@ def views(job, request):
     return out
 
 
+def build_index(job):
+    """Everything this Blender knows about itself: every operator with its options, every data type with its
+    properties and functions, every shader / geometry node with its sockets — exact for this version."""
+    def props(rna, limit):
+        out = []
+        for p in rna.properties:
+            if p.identifier == "rna_type":
+                continue
+            d = {"n": p.identifier, "t": p.type}
+            if p.type == "ENUM":
+                try:
+                    d["e"] = [i.identifier for i in p.enum_items][:40]
+                except Exception:
+                    pass
+            elif p.type in ("POINTER", "COLLECTION") and getattr(p, "fixed_type", None) is not None:
+                d["r"] = p.fixed_type.identifier
+            if p.description:
+                d["d"] = p.description[:90]
+            out.append(d)
+            if len(out) >= limit:
+                break
+        return out
+    index = {"version": bpy.app.version_string, "operators": [], "types": [], "nodes": []}
+    for modname in dir(bpy.ops):
+        if modname.startswith("_"):
+            continue
+        mod = getattr(bpy.ops, modname)
+        for opname in dir(mod):
+            if opname.startswith("_"):
+                continue
+            try:
+                rna = getattr(mod, opname).get_rna_type()
+            except Exception:
+                continue
+            index["operators"].append({"id": f"bpy.ops.{modname}.{opname}", "name": rna.name,
+                                       "d": (rna.description or "")[:220], "p": props(rna, 40)})
+    for name in dir(bpy.types):
+        cls = getattr(bpy.types, name, None)
+        rna = getattr(cls, "bl_rna", None)
+        if rna is None:
+            continue
+        try:
+            index["types"].append({"id": name, "base": rna.base.identifier if rna.base else None,
+                                   "d": (rna.description or "")[:220], "p": props(rna, 90),
+                                   "f": [f.identifier for f in rna.functions][:40]})
+        except Exception:
+            continue
+    mat = bpy.data.materials.new("_jarvis_index")
+    mat.use_nodes = True
+    trees = {"ShaderNode": mat.node_tree, "GeometryNode": bpy.data.node_groups.new("_jarvis_gn", "GeometryNodeTree"),
+             "FunctionNode": None}
+    trees["FunctionNode"] = trees["GeometryNode"]
+    try:
+        trees["CompositorNode"] = bpy.data.node_groups.new("_jarvis_comp", "CompositorNodeTree")
+    except Exception:
+        pass
+    for name in dir(bpy.types):
+        prefix = next((k for k in trees if name.startswith(k) and name != k), None)
+        if not prefix or trees.get(prefix) is None:
+            continue
+        tree = trees[prefix]
+        try:
+            node = tree.nodes.new(name)
+        except Exception:
+            continue
+        try:
+            index["nodes"].append({"id": name, "label": node.bl_label, "tree": tree.bl_idname,
+                                   "in": [f"{s.name}:{s.type}" for s in node.inputs][:40],
+                                   "out": [f"{s.name}:{s.type}" for s in node.outputs][:20],
+                                   "p": [p["n"] for p in props(node.bl_rna, 30)
+                                         if p["n"] not in ("name", "label", "location", "width", "height", "color")]})
+        finally:
+            tree.nodes.remove(node)
+    (job / "index.json").write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
+
+
 def main():
     job = Path(sys.argv[sys.argv.index("--") + 1])
     request = json.loads((job / "request.json").read_text(encoding="utf8"))
@@ -547,6 +623,10 @@ def main():
                   "camera": scene.camera.name if scene.camera else None,
                   "files": [str(p) for p in sorted((job / "out").glob("*"))]}
         (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")
+        return
+    if request["mode"] == "index":
+        build_index(job)
+        (job / "report.json").write_text(json.dumps({"version": bpy.app.version_string}), encoding="utf8")
         return
     if request["mode"] == "views":
         shots = views(job, request)
