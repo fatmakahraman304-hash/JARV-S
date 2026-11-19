@@ -385,6 +385,56 @@ class SettingsPage(QDialog):
             webbrowser.open('https://dashboard.composio.dev')
         get_btn.clicked.connect(open_composio)
         apps_row.addWidget(get_btn)
+        # Home Assistant: lights, AC, blinds, locks, sensors (plugins/smart_home.py)
+        ha_row = card(extras, 'Akıllı ev (Home Assistant)',
+                      'Işıklar, klima, perde, kilit ve sensörler. Home Assistant’ta Profil → Güvenlik → '
+                      'Uzun ömürlü erişim jetonu oluştur ve buraya yapıştır. Adresi boş bırakırsan '
+                      'homeassistant.local aranır.')
+        from plugins import smart_home as _sh
+        _ha = _sh._cfg()
+        ha_url = QLineEdit(str(_ha.get('url') or ''))
+        ha_url.setPlaceholderText('http://homeassistant.local:8123')
+        ha_url.setAccessibleName('Home Assistant adresi')
+        ha_url.setMinimumWidth(170)
+        ha_row.addWidget(ha_url)
+        ha_token = QLineEdit(str(_ha.get('token') or ''))
+        ha_token.setEchoMode(QLineEdit.EchoMode.Password)
+        ha_token.setPlaceholderText('Erişim jetonu')
+        ha_token.setAccessibleName('Home Assistant erişim jetonu')
+        ha_token.setMinimumWidth(150)
+        ha_row.addWidget(ha_token)
+        ha_state = QLabel('Bağlı' if _ha.get('token') else '')
+        ha_state.setFont(px_font(10))
+        ha_state.setWordWrap(True)
+        ha_state.setMaximumWidth(220)
+        ha_state.setStyleSheet(f'color: {C.PRI};')
+        ha_row.addWidget(ha_state)
+        ha_result = {}
+        def ha_show():
+            if 'msg' not in ha_result:
+                QTimer.singleShot(300, ha_show)
+                return
+            ok, msg = ha_result.pop('ok'), ha_result.pop('msg')
+            ha_state.setText(('✓ ' if ok else '✕ ') + msg[:120])
+            ha_state.setToolTip(msg)
+            ha_state.setStyleSheet(f'color: {C.GREEN if ok else C.RED};')
+            if ok:
+                ha_url.setText(str(_sh._cfg().get('url') or ha_url.text()))
+        def ha_connect():
+            # network on a worker thread; a Qt timer reads the answer (no widget touched off-thread)
+            ha_state.setText('Bağlanılıyor…')
+            ha_state.setStyleSheet(f'color: {C.TEXT_DIM};')
+            url, token = ha_url.text().strip(), ha_token.text().strip()
+            import threading
+            def work():
+                ok, msg = _sh.connect(url, token)
+                ha_result['ok'], ha_result['msg'] = ok, msg
+            threading.Thread(target=work, daemon=True, name='ha-connect').start()
+            QTimer.singleShot(300, ha_show)
+        ha_btn = QPushButton('Bağlan')
+        ha_btn.setAccessibleName('Home Assistant’a bağlan')
+        ha_btn.clicked.connect(ha_connect)
+        ha_row.addWidget(ha_btn)
         action(extras, "Dünya Haritası", "Yer ara, haritayı gez veya rota görüntüle.",
                lambda: owner._show_world_map(True))
         action(extras, 'Eklentiler', 'Kullanılabilir yetenekleri yönet.', owner._open_plugin_manager)
