@@ -224,9 +224,18 @@ def executable():
 
 _stop = threading.Event()          # "iptal et": every Blender run of the current job stops
 _procs: set = set()
+_queue: list = []                  # commands given while a job runs, in the order they were said
+_queue_lock = threading.Lock()
+
+
+def queued() -> list[str]:
+    with _queue_lock:
+        return [str(p.get("request") or p.get("action")) for p, _player in _queue]
 
 
 def stop_all():
+    with _queue_lock:
+        _queue.clear()                 # "dur" stops what runs and what waits
     _stop.set()
     for proc in list(_procs):
         try:
@@ -870,7 +879,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         except Exception as exc:
             return f"Blender hafızasına ulaşamadım: {exc}"
     if not _lock.acquire(blocking=False):
-        return "Bir Blender işlemi sürüyor. Durumunu sorabilirsin."
+        if action in ("status",):
+            return _status
+        with _queue_lock:                                   # the user gives commands one after another:
+            _queue.append((dict(p), player))                # do them in the order they were said
+            n = len(_queue)
+        if player is not None:
+            player.write_log(f"🟧 Sıraya aldım ({n}. sırada): {request or action}")
+        return f"Şu an başka bir Blender işi sürüyor; bunu sıraya aldım ({n}. sırada), o bitince yapacağım."
 
     try:
         binary = None if action in ("install", "undo", "redo") else executable()
@@ -895,11 +911,20 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             _stop.clear()                        # a stop belongs to the job it was given to
             message = _status
             _lock.release()
+        with _queue_lock:
+            nxt = _queue.pop(0) if _queue else None
+            left = len(_queue)
         if player is not None:
             player.write_log(message)
-            if hasattr(player, "request_say"):
+            if hasattr(player, "request_say") and nxt is None:     # speak once the whole line is done
                 player.request_say("Blender aracının doğrulanmış sonucunu kullanıcıya kısaca bildir. "
                                    "Yeni bir işlem başlatma. Sonuç: " + message)
+        if nxt is not None:
+            params, who = nxt
+            if who is not None:
+                who.write_log(f"🟧 Sıradaki iş başlıyor{f' ({left} iş daha bekliyor)' if left else ''}: "
+                              f"{params.get('request') or params.get('action')}")
+            run(params, who)
 
     _status = "Blender işlemi sürüyor."
     if player is not None and request and action in ("new", "edit", "script"):

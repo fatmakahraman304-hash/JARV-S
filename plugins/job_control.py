@@ -38,10 +38,19 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         action = str(p.get("action") or "list").lower().strip()
         which = str(p.get("which") or "").strip()
         eng, tasks = _tasks()
+        try:
+            from plugins import blender_studio
+            waiting = [f"- Sırada (Blender): {q}" for q in blender_studio.queued()]
+        except Exception:
+            waiting = []
         if action == "list":
-            lines = jobs.describe() + [f"- Arka plan görevi '{t.get('title')}': {t.get('status')}" for t in tasks]
+            lines = jobs.describe() + waiting + [f"- Arka plan görevi '{t.get('title')}': {t.get('status')}" for t in tasks]
             return "Şu an süren işler:\n" + "\n".join(lines) if lines else "Şu an süren bir iş yok."
         stopped = jobs.cancel(which)
+        if waiting and (not which or "blender" in which.lower() or "sıra" in which.lower()):
+            from plugins import blender_studio
+            blender_studio.stop_all() if not stopped else None      # nothing running: just clear the line
+            stopped.append(f"sıradaki {len(waiting)} Blender işi")
         w = which.lower()
         for t in tasks:
             if not w or w in str(t.get("title", "")).lower() or w in ("görev", "araştırma", "task", "research", "arka plan"):
