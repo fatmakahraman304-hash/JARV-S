@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 PLUGIN = {
@@ -116,6 +117,77 @@ def windows_candidates():
             yield from sorted(paths, key=lambda p: tuple(map(int, re.findall(r"\d+", p.parent.name))),
                               reverse=True)
         yield base / "Steam/steamapps/common/Blender/blender.exe"
+    yield from _uninstall_entries()
+    yield from _registry_path()
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        yield Path(local) / "Microsoft" / "WindowsApps" / "blender.exe"      # Microsoft Store / winget alias
+
+
+def _uninstall_entries():
+    """Where Windows' own "installed apps" list says Blender is (MSI and winget installs register here)."""
+    import winreg
+    keys = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall")]
+    found = []
+    for hive, path in keys:
+        try:
+            root = winreg.OpenKey(hive, path)
+        except OSError:
+            continue
+        with root:
+            for i in range(winreg.QueryInfoKey(root)[0]):
+                try:
+                    with winreg.OpenKey(root, winreg.EnumKey(root, i)) as sub:
+                        name = str(winreg.QueryValueEx(sub, "DisplayName")[0])
+                        if "blender" not in name.lower():
+                            continue
+                        for value in ("InstallLocation", "DisplayIcon"):
+                            try:
+                                v = str(winreg.QueryValueEx(sub, value)[0]).strip('"').split(",")[0]
+                            except OSError:
+                                continue
+                            if v:
+                                p = Path(os.path.expandvars(v))
+                                found.append(p if p.suffix.lower() == ".exe" else p / "blender.exe")
+                except OSError:
+                    continue
+    for p in found:
+        yield p.with_name("blender.exe") if p.name.lower() != "blender.exe" else p
+
+
+def _registry_path():
+    """blender.exe on the PATH as it is *now* (an installer updates the registry, not this running process)."""
+    import winreg
+    parts = []
+    for hive, path in ((winreg.HKEY_CURRENT_USER, "Environment"),
+                       (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment")):
+        try:
+            with winreg.OpenKey(hive, path) as key:
+                parts += os.path.expandvars(str(winreg.QueryValueEx(key, "Path")[0])).split(";")
+        except OSError:
+            pass
+    for d in parts:
+        if d.strip():
+            yield Path(d.strip().strip('"')) / "blender.exe"
+
+
+def deep_search():
+    """Last resort: blender.exe anywhere a few levels under Program Files / AppData."""
+    seen = 0
+    for variable in ("ProgramW6432", "ProgramFiles", "LOCALAPPDATA", "ProgramFiles(x86)"):
+        root = os.environ.get(variable)
+        if not root:
+            continue
+        for pattern in ("*/blender.exe", "*/*/blender.exe", "*/*/*/blender.exe"):
+            for path in Path(root).glob(pattern):
+                seen += 1
+                if path.is_file():
+                    return path
+            if seen > 50000:
+                break
+    return None
 
 
 def executable():
@@ -133,6 +205,10 @@ def executable():
     found = shutil.which("blender")
     if found:
         return found
+    if os.name == "nt":
+        deep = deep_search()
+        if deep:
+            return str(deep)
     mac = Path("/Applications/Blender.app/Contents/MacOS/Blender")
     if mac.is_file():
         return str(mac)
@@ -317,21 +393,49 @@ def hologram_render(binary, model, player=None, w=1920, h=1080, samples=128, hei
     return out
 
 
+def _windows() -> bool:
+    return os.name == "nt"
+
+
 def install():
     """Blender from winget (Windows). Returns a sentence about what happened."""
-    if os.name != "nt":
+    if not _windows():
         return "Bu bilgisayarda Blender'ı paket yöneticisiyle kur (Linux: 'sudo snap install blender --classic', Mac: blender.org)."
     winget = shutil.which("winget")
     if not winget:
         return "winget bulunamadı. Blender'ı blender.org/download adresinden kur, sonra bana söyle."
+    try:
+        return f"Blender zaten kurulu: {executable()}"
+    except ValueError:
+        pass
     r = subprocess.run([winget, "install", "-e", "--id", "BlenderFoundation.Blender", "--accept-package-agreements",
                         "--accept-source-agreements", "--silent"], capture_output=True, timeout=1800,
                        encoding="utf8", errors="replace")
-    tail = (r.stdout + r.stderr).strip().splitlines()[-1:] or [""]
-    try:
-        return f"Blender kuruldu: {executable()}"
-    except ValueError:
-        return f"Blender kurulumu bitmedi (winget çıkış kodu {r.returncode}): {tail[0][:200]}"
+    text = (r.stdout + r.stderr).strip()
+    print("[Blender] winget:", text[-1500:])
+    tail = (text.splitlines()[-1:] or [""])[0]
+    ok = r.returncode == 0 or "successfully installed" in text.lower() or "already installed" in text.lower()
+    path = None
+    for _ in range(12):                      # the installer may still be finishing / registering
+        try:
+            path = executable()
+            break
+        except ValueError:
+            time.sleep(5)
+    if path is None:
+        found = deep_search()
+        path = str(found) if found else None
+    if path:
+        try:
+            from memory.config_manager import save_plugin_config
+            save_plugin_config("blender_studio", {"executable": path})      # found once, known for good
+        except Exception:
+            pass
+        return f"Blender kuruldu ve hazır: {path}"
+    if ok:
+        return ("Blender kuruldu ama blender.exe'yi bulamadım. Eklenti ayarlarında Blender bölümüne blender.exe'nin "
+                "tam yolunu yaz (genelde C:\\Program Files\\Blender Foundation\\Blender 5.x\\blender.exe).")
+    return f"Blender kurulamadı (winget çıkış kodu {r.returncode}): {tail[:200]}"
 
 
 def process(action, request, project, topic="", *, binary=None, result="save", player=None, model=""):
