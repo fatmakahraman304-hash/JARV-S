@@ -599,6 +599,7 @@ def main():
              "modifiers": [m.type for m in o.modifiers],
              "bones": list(o.data.bones.keys())[:80] if o.type == "ARMATURE" else []}
             for o in list(scene.objects)[:100]]
+        report["names"] = [o.name for o in scene.objects]
     if request["mode"] == "reference":
         report["operators"] = reference(request["query"])
     (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")

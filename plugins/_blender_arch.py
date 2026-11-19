@@ -583,6 +583,14 @@ def building(plan):
             _stairs(f"Merdiven {level}", stairs["rect"], level * fh + ts, fh, mats["stairs"])
     _roof(f"{name} çatısı", W, D, floors * fh + ts, (p.get("roof") or {}).get("type", "gable"),
           float((p.get("roof") or {}).get("pitch", 30)), float((p.get("roof") or {}).get("overhang", 0.5)), mats, t)
+    for ex in p.get("extras") or []:                       # the user's own additions: pool, garden, fence …
+        code = str(ex.get("code") or "")
+        if not code.strip():
+            continue
+        try:
+            exec(compile(code, f"ek: {ex.get('name', 'ek')}", "exec"), globals())
+        except Exception as exc:
+            raise RuntimeError(f"JARVIS_EXTRA_FAILED::{ex.get('name', 'ek')}::{type(exc).__name__}: {exc}") from exc
     bpy.context.view_layer.update()
     root = bpy.data.objects.new(name, None)
     bpy.context.scene.collection.objects.link(root)

@@ -74,6 +74,33 @@ class PlanChecks(unittest.TestCase):
         self.assertIn("merdiven yok", model.call_args.args[0])
 
 
+POOL = """import bpy
+pool = box("Havuz", (4.0, 2.5, 0.3), (0, -7.5, 0.15), bevel=0.02)
+assign(pool, stone("Havuz kenarı", (0.85, 0.85, 0.82)))
+water = box("Havuz suyu", (3.6, 2.1, 0.02), (0, -7.5, 0.29), bevel=0)
+assign(water, glass("Su", (0.6, 0.85, 0.95), 0.02))
+"""
+
+
+class UserDirected(unittest.TestCase):
+    def test_edit_keeps_rules_and_changes_only_what_was_said(self):
+        from core import gemini
+        start = dict(HOUSE, user_rules=["Balkon olmasın"])
+        edited = json.loads(json.dumps(HOUSE))
+        edited["rooms"] = [r for r in edited["rooms"] if r["name"] != "Salon"]
+        with patch.object(gemini, "as_json", return_value=edited) as model:
+            out = brain.edit_plan(start, "Salonu sil")
+        self.assertNotIn("Salon", [r["name"] for r in out["rooms"]])
+        self.assertEqual(out["user_rules"], ["Balkon olmasın"])                   # the user's decision survives
+        prompt = model.call_args.args[0]
+        self.assertIn("Salonu sil", prompt)
+        self.assertIn("keep EVERYTHING else identical", prompt)
+
+    def test_prompts_forbid_unrequested_features(self):
+        self.assertIn("Never add balconies", brain.PLAN_DOC)
+        self.assertIn("never suggest features", brain.LOOK)
+
+
 @unittest.skipUnless(shutil.which("blender"), "Blender binary required")
 class Buildings(unittest.TestCase):
     def setUp(self):
@@ -114,6 +141,34 @@ class Buildings(unittest.TestCase):
         report = self.build(HOUSE, "ev")
         self.assertEqual(report["issues"], [])
         self.assertTrue(any("çatısı" in o[0] for o in report["objects"]))
+
+    def test_user_merges_rooms_and_adds_a_pool(self):
+        from core import gemini
+        with patch.object(brain, "make_plan", return_value=HOUSE), patch.object(brain, "look", return_value={"score": 9.0, "problems": []}), \
+             patch.object(gemini, "as_json", return_value={"ok": True}):
+            studio.process("new", "iki katlı tuğla ev", None)
+        before = self.names()
+        edited = json.loads(json.dumps(HOUSE))
+        edited["rooms"] = [{"name": "Büyük salon", "rect": [-4.75, -3.75, 4.75, 1.0]},     # salon + mutfak merged
+                           {"name": "Hol", "rect": [-4.75, 1.0, 4.75, 3.75]}]
+        edited["extras"] = [{"name": "Havuz", "code": POOL.replace("glass(", "glas(")}]  # broken
+        edited["user_rules"] = ["Balkon olmasın"]
+        with patch.object(brain, "edit_plan", return_value=edited), patch.object(gemini, "text", return_value=POOL), \
+             patch.object(brain, "look", return_value={"score": 9.0, "problems": []}):
+            studio.process("edit", "Salonla mutfağı birleştir, evin önüne havuz yap", None)
+        after = self.names()
+        self.assertIn("Havuz", after)                                   # the broken pool script was repaired and built
+        self.assertIn("Havuz suyu", after)
+        self.assertLess(sum(n.startswith("İç duvar") for n in after), sum(n.startswith("İç duvar") for n in before))
+        self.assertEqual(sum(n.startswith("Pencere") and n.endswith("cam") for n in after),
+                         sum(n.startswith("Pencere") and n.endswith("cam") for n in before))   # facade untouched
+        plan = json.loads((studio.project_path(None).parent / "plan.json").read_text(encoding="utf8"))
+        self.assertEqual(plan["user_rules"], ["Balkon olmasın"])
+
+    def names(self):
+        folder = Path(tempfile.mkdtemp(dir=self.tmp.name))
+        rep = studio.invoke(studio.executable(), studio.project_path(None), folder, "inspect")
+        return rep["names"]
 
     def test_new_building_pipeline_revises_the_plan(self):
         from core import gemini

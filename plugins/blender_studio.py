@@ -381,11 +381,41 @@ def building_project(binary, folder, request, plan=None, player=None):
     if player is not None:
         player.write_log(f"🟧 Bina planı: {plan.get('floors')} kat, {plan.get('width')}×{plan.get('depth')} m, "
                          f"{len(plan.get('rooms') or [])} oda/kat, çatı: {(plan.get('roof') or {}).get('type', 'beşik')}")
-    code = ("import bpy\nclear()\nplan = " + json.dumps(plan, ensure_ascii=False) +
-            "\nbuilding(plan)\noutdoor()\n")
-    run_script(binary, None, folder, code)
+    for _ in range(3):
+        code = ("import bpy\nclear()\nplan = " + json.dumps(plan, ensure_ascii=False) +
+                "\nbuilding(plan)\noutdoor()\n")
+        try:
+            run_script(binary, None, folder, code)
+            break
+        except ValueError as exc:
+            hits = re.findall(r"RuntimeError: JARVIS_EXTRA_FAILED::(.+?)::(.*)", str(exc))
+            if not hits:
+                raise
+            name, why = hits[-1]
+            print(f"[Blender] Ek '{name}' hata verdi, düzeltiyorum: {why[:200]}")
+            plan = brain.fix_extra(plan, name, str(exc))
+    else:
+        raise ValueError("Eklerden biri Blender'da çalışmadı.")
     (folder / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf8")
     return plan
+
+
+def _rules_of(blend):
+    try:
+        return json.loads((Path(blend).parent / "plan.json").read_text(encoding="utf8")).get("user_rules") or []
+    except Exception:
+        return []
+
+
+def edit_building(binary, folder, source, instruction, player=None):
+    """The user's change to the current building — that change only; the rest stays exactly as it was."""
+    from plugins import _blender_brain as brain
+    plan = json.loads((Path(source).parent / "plan.json").read_text(encoding="utf8"))
+    new = brain.edit_plan(plan, instruction)
+    if player is not None:
+        player.write_log(f"🟧 Binada değişiklik: {instruction}")
+    building_project(binary, folder, instruction, new, player=None)
+    return new
 
 
 def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
@@ -403,7 +433,7 @@ def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
             print(f"[Blender] Önizleme alınamadı: {exc}")
             break
         try:
-            verdict = brain.look(png, request, issues) if png else {}
+            verdict = brain.look(png, request, issues, _rules_of(current)) if png else {}
         except Exception as exc:
             print(f"[Blender] Görsel değerlendirme olmadı: {exc}")
             verdict = {}
@@ -431,7 +461,7 @@ def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
         try:
             if plan_file.is_file():                      # a building: revise the plan, rebuild exactly
                 old = json.loads(plan_file.read_text(encoding="utf8"))
-                building_project(binary, nxt, request, brain.make_plan(request, old, last_problems), player)
+                building_project(binary, nxt, request, brain.make_plan(request, old, last_problems), None)
             else:
                 script_project(binary, current, nxt, fix, log=lambda m: None)
             current = nxt / "scene.blend"
@@ -648,16 +678,26 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
                 print(f"[Blender] Betik olmadı, adım planına geçiyorum: {exc}")
                 build_project(binary, source, folder, request)
             output = folder / "scene.blend"
+        elif action == "edit" and source and (Path(source).parent / "plan.json").is_file():
+            edit_building(binary, folder, source, request, player)          # buildings: change the plan, rebuild exactly
+            output = folder / "scene.blend"
         else:
-            build_project(binary, source, folder, request)
+            try:                                                             # anything else: a script that changes
+                script_project(binary, source, folder,                       # only what the user said
+                               f"{request}\n(Change ONLY this in the current scene; keep every other object exactly as it is.)")
+            except ValueError as exc:
+                print(f"[Blender] Betikle düzenleme olmadı, adım planına geçiyorum: {exc}")
+                build_project(binary, source, folder, request)
             output = folder / "scene.blend"
         if not output.is_file() or not output.stat().st_size:
             raise ValueError("Blender çıktı dosyasını oluşturamadı.")
         if action in ("new", "edit", "script"):
-            output = make_it_match(binary, source, folder, output, request)
             from plugins import _blender_brain as brain
+            if action != "edit":                       # "salonu sil" is a change, not a subject to look for
+                output = make_it_match(binary, source, folder, output, request)
             big = brain.is_big(request)
-            output, score = refine(binary, folder, output, request, player=player, rounds=6 if big else MAX_ROUNDS)
+            rounds = 2 if action == "edit" else 6 if big else MAX_ROUNDS
+            output, score = refine(binary, folder, output, request, player=player, rounds=rounds)
             if player is not None and score >= 0:
                 player.write_log(f"🟧 Blender sonucu: {max(score, 0):.0f}/10")
         if action in ("new", "edit", "script"):
