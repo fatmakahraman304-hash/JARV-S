@@ -79,6 +79,49 @@ class WorkStatus(unittest.TestCase):
         self.assertTrue(intent.is_read_only("work_status", {}))
 
 
+class JobControl(unittest.TestCase):
+    def test_stop_words_are_commands(self):
+        for t in ("iptal et", "dur", "Blender'daki işi durdur", "vazgeçtim"):
+            self.assertTrue(intent.should_act(t), t)
+
+    def test_cancel_reaches_a_running_job_and_the_job_stops(self):
+        import threading
+        from core import jobs
+        from plugins import job_control, work_status
+        started, stopped = threading.Event(), threading.Event()
+        flag = threading.Event()
+
+        def job():
+            try:
+                with jobs.running("Blender: new apartman", cancel=flag.set):
+                    started.set()
+                    while not flag.is_set():
+                        flag.wait(0.05)
+                    raise jobs.Cancelled()
+            except jobs.Cancelled:
+                stopped.set()
+        threading.Thread(target=job, daemon=True).start()
+        started.wait(2)
+        self.assertIn("ŞU AN SÜRÜYOR: Blender: new apartman", work_status.run({}))
+        self.assertIn("Blender: new apartman", job_control.run({"action": "list"}))
+        self.assertEqual(job_control.run({"action": "cancel", "which": "hologram-yok"}),
+                         "Durduracak süren bir iş bulamadım. ('hologram-yok' ile eşleşen yok.)")
+        self.assertIn("Durdurdum: Blender: new apartman", job_control.run({"action": "cancel", "which": "blender"}))
+        self.assertTrue(stopped.wait(2))
+        self.assertEqual(jobs.current(), [])
+
+    def test_cancelled_is_not_swallowed_by_retry_loops(self):
+        from core import jobs
+        def retrying():
+            for _ in range(3):
+                try:
+                    raise jobs.Cancelled()
+                except Exception:
+                    continue
+        with self.assertRaises(jobs.Cancelled):
+            retrying()
+
+
 class HologramGuard(unittest.TestCase):
     def test_question_does_not_model(self):
         from plugins import hologram

@@ -222,14 +222,42 @@ def executable():
     raise ValueError("Blender bulunamadı. Eklenti ayarlarında Blender bölümüne blender.exe dosyasının tam yolunu yaz.")
 
 
+_stop = threading.Event()          # "iptal et": every Blender run of the current job stops
+_procs: set = set()
+
+
+def stop_all():
+    _stop.set()
+    for proc in list(_procs):
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 def invoke(binary, source, folder, mode, steps=(), query="", **extra):
+    from core.jobs import Cancelled
+    if _stop.is_set():
+        raise Cancelled()
     request = {"mode": mode, "steps": steps, "query": query, "empty": source is None, **extra}
     (folder / "request.json").write_text(json.dumps(request), encoding="utf8")
     cmd = [binary, "--background", "--factory-startup", "--disable-autoexec"]
     if source:
         cmd.append(str(source))
     cmd += ["--python-exit-code", "2", "--python", str(WORKER), "--", str(folder)]
-    result = subprocess.run(cmd, capture_output=True, timeout=1800, encoding="utf8", errors="replace")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf8", errors="replace")
+    _procs.add(proc)
+    try:
+        out, err = proc.communicate(timeout=1800)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        out, err = proc.communicate()
+        raise ValueError("Blender 30 dakikada bitiremedi.")
+    finally:
+        _procs.discard(proc)
+    if _stop.is_set():
+        raise Cancelled()
+    result = subprocess.CompletedProcess(cmd, proc.returncode, out, err)
     if result.returncode:
         lines = (result.stdout + "\n" + result.stderr).splitlines()
         detail = next((s for s in reversed(lines) if "Error:" in s), "Blender işlemi tamamlanamadı")
@@ -853,9 +881,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
     def work():
         global _status
+        from core import jobs
+        _stop.clear()
         try:
-            _status = process(action, request, p.get("project"), p.get("topic") or "",
-                              binary=binary, result=p.get("result") or "save", player=player, model=p.get("model") or "")
+            with jobs.running(f"Blender: {action} {request[:60]}".strip(), cancel=stop_all):
+                _status = process(action, request, p.get("project"), p.get("topic") or "",
+                                  binary=binary, result=p.get("result") or "save", player=player, model=p.get("model") or "")
+        except jobs.Cancelled:
+            _status = "Blender işini senin isteğinle durdurdum; yarım kalan sahne kaydedilmedi."
         except Exception as exc:
             _status = f"Blender işlemi tamamlanamadı. {exc}"
         finally:
