@@ -44,3 +44,16 @@ class RoutingTest(unittest.TestCase):
         with mock.patch.object(away, "push_enabled", lambda: True):
             away._last_push["at"] = float("-inf")
             self.assertTrue(away.should_push("heads_up", 3600, now=10))
+
+
+class LocalTest(unittest.TestCase):
+    def test_routines_and_merge(self):
+        routines = [{"id": "x1", "kind": "say", "text": "Toplantı", "enabled": True, "next_ts": NOW + 840,
+                     "trigger": {"type": "time", "rule": {"type": "once", "at_ts": NOW + 840}}},
+                    {"id": "x2", "kind": "builtin", "enabled": True, "trigger": {"type": "startup"}}]
+        local = hu.from_routines(routines)
+        self.assertEqual([r["id"] for r in local], ["rt:x1"])
+        shared = [{"id": "s1", "text": "toplantı", "due": (NOW + 840) * 1000}]
+        merged = hu.merge(shared, local)
+        self.assertEqual([r["id"] for r in merged], ["s1"])          # the same appointment once
+        self.assertEqual([r["id"] for r in hu.due_soon(hu.merge([], local), set(), now=NOW)], ["rt:x1"])

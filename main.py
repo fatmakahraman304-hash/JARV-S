@@ -2068,7 +2068,9 @@ class JarvisLive:
             told = getattr(self, "_heads_up_told", None)
             if told is None:
                 told = self._heads_up_told = set()
-            for r in heads_up.due_soon(list(sync_hub._state.get("reminders") or []), told):
+            local = heads_up.from_routines(self._routines.list()) if self._routines else []
+            pool = heads_up.merge(list(sync_hub._state.get("reminders") or []), local)
+            for r in heads_up.due_soon(pool, told):
                 told.add(r.get("id"))
                 self.ui.write_log(f"SYS: Yaklaşan — {r.get('text', '')}")
                 self.plugin_say(heads_up.instruction(r))
