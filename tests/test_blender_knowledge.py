@@ -55,7 +55,7 @@ class Offline(unittest.TestCase):
 
     def test_turkish_request_finds_the_right_api_and_manual(self):
         from core import gemini
-        with patch.object(gemini, "as_json", return_value={"keywords": ["bevel", "modifier", "edges", "segments"]}):
+        with patch.object(know, "keywords", return_value=["bevel", "modifier", "edges", "segments"]):
             block = know.prompt("kenarları pahla, 3 segment olsun")
         self.assertIn("bpy.ops.mesh.bevel(offset:FLOAT, segments:INT, affect:ENUM[VERTICES|EDGES])", block)
         self.assertIn("bpy.types.BevelModifier", block)
@@ -65,10 +65,20 @@ class Offline(unittest.TestCase):
     def test_knowledge_reaches_the_script_prompt(self):
         from core import gemini
         from plugins import _blender_brain as brain
-        with patch.object(gemini, "as_json", return_value={"keywords": ["bevel"]}), \
+        with patch.object(know, "keywords", return_value=["bevel"]), \
              patch.object(gemini, "text", return_value="import bpy\n") as model:
             brain.write_script("kenarları pahla", {}, "5.0")
         self.assertIn("Exact API of the user's Blender 5.0.0", model.call_args.args[0])
+
+    def test_rst_source_becomes_sections(self):
+        rst = (b"*************\nBevel Modifier\n*************\n\n.. figure:: /images/bevel.png\n   :width: 300px\n\n"
+               b"The Bevel modifier bevels the edges of the mesh. See :ref:`Limit Method <bpy.types.BevelModifier>`.\n\n"
+               b"Segments\n   The number of edge loops added along the bevel's face. " + b"More words about bevels. " * 20)
+        chunks = know._rst_chunks("blender-manual/manual/modeling/modifiers/generate/bevel.rst", rst)
+        self.assertEqual(chunks[0]["title"], "Bevel Modifier")
+        self.assertEqual(chunks[0]["page"], "modeling/modifiers/generate/bevel.html")
+        self.assertIn("See Limit Method.", chunks[0]["text"])
+        self.assertNotIn("figure", chunks[0]["text"])
 
     def test_status(self):
         self.assertIn("2 komut", know.status())
@@ -107,7 +117,7 @@ class RealBlender(unittest.TestCase):
         bevel = next(t for t in api["types"] if t["id"] == "BevelModifier")
         self.assertIn("segments", [p["n"] for p in bevel["p"]])
         from core import gemini
-        with patch.object(gemini, "as_json", return_value={"keywords": ["bevel", "modifier", "segments"]}):
+        with patch.object(know, "keywords", return_value=["bevel", "modifier", "segments"]):
             self.assertIn("BevelModifier", know.prompt("kenarları pahla"))
 
     @unittest.skipUnless(os.environ.get("BLENDER_MANUAL_TEST"), "downloads the 250 MB manual")
@@ -116,7 +126,7 @@ class RealBlender(unittest.TestCase):
         print("Manual:", got)
         self.assertGreater(got["sections"], 1000)
         from core import gemini
-        with patch.object(gemini, "as_json", return_value={"keywords": ["bevel", "modifier"]}):
+        with patch.object(know, "keywords", return_value=["bevel", "modifier"]):
             found = know.search("pah modifier", 0, 3)["manual"]
         self.assertTrue(any("Bevel" in c["title"] for c in found), [c["title"] for c in found])
 

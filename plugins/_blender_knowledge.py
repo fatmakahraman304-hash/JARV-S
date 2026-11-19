@@ -30,6 +30,9 @@ API = STORE / "api.json.gz"
 MANUAL = STORE / "manual.json.gz"
 MANUAL_URLS = ("https://docs.blender.org/manual/en/{ver}/blender_manual_html.zip",
                "https://docs.blender.org/manual/en/latest/blender_manual_html.zip")
+MANUAL_SOURCES = ("https://projects.blender.org/blender/blender-manual/archive/main.tar.gz",       # the manual's own text
+                  "https://codeload.github.com/blender/blender-manual/tar.gz/refs/heads/main")
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 _cache: dict = {}
 _lock = threading.Lock()
 _manual_job = None
@@ -113,29 +116,94 @@ def _chunks(path: str, raw: bytes, size: int = 1400) -> list[dict]:
     return out
 
 
+def _rst_chunks(path: str, raw: bytes, size: int = 1400) -> list[dict]:
+    """reStructuredText of one manual page → readable sections."""
+    text = raw.decode("utf8", errors="replace")
+    lines, title = [], ""
+    src = text.splitlines()
+    for i, line in enumerate(src):
+        nxt = src[i + 1] if i + 1 < len(src) else ""
+        if re.fullmatch(r"[=\-~^*#+\"']{3,}", line.strip()):
+            continue                                              # heading underline / overline
+        if nxt.strip() and re.fullmatch(r"[=\-~^*#+\"']{3,}", nxt.strip()) and len(nxt.strip()) >= 0.6 * len(line.strip()) > 0:
+            title = title or line.strip()
+            lines.append("## " + line.strip())
+            continue
+        if re.match(r"\s*\.\. (figure|image|youtube|_|\|)", line) or re.match(r"\s*:(width|align|alt|class|figwidth|scale):", line):
+            continue
+        line = re.sub(r":[a-z]+:`([^`<]*?)\s*(<[^`]*>)?`", r"\1", line)        # :ref:`Text <target>` → Text
+        line = re.sub(r"\.\. (admonition|note|tip|warning|important|seealso|hint)::", r"\1:", line)
+        line = re.sub(r"\.\. [a-z\-]+::.*", "", line)
+        line = line.replace("``", "").replace("**", "")
+        lines.append(line)
+    body = re.sub(r"\n\s*\n+", "\n", "\n".join(lines)).strip()
+    if len(body) < 200:
+        return []
+    out, buf = [], ""
+    page = path.split("/manual/", 1)[-1].replace(".rst", ".html")
+    for para in body.split("\n"):
+        if len(buf) + len(para) > size and buf:
+            out.append({"page": page, "title": title, "text": buf.strip()})
+            buf = ""
+        buf += para + "\n"
+    if buf.strip():
+        out.append({"page": page, "title": title, "text": buf.strip()})
+    return out
+
+
+def _download(url: str, log) -> Path:
+    import urllib.request
+    tmp = Path(tempfile.mkstemp(suffix=Path(url).suffix or ".bin")[1])
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
+        while True:
+            block = r.read(1 << 20)
+            if not block:
+                break
+            f.write(block)
+    log(f"[Blender] İndirildi: {url} ({tmp.stat().st_size // (1 << 20)} MB)")
+    return tmp
+
+
+def _from_source(url: str, log) -> list[dict]:
+    """The manual's reStructuredText sources (a git archive) — only the .rst text is read."""
+    import tarfile
+    tmp = _download(url, log)
+    chunks = []
+    try:
+        with tarfile.open(tmp, "r:gz") as t:
+            for m in t:
+                if m.isfile() and m.name.endswith(".rst") and "/manual/" in m.name and "/images/" not in m.name:
+                    f = t.extractfile(m)
+                    if f is not None:
+                        chunks += _rst_chunks(m.name, f.read())
+    finally:
+        tmp.unlink(missing_ok=True)
+    return chunks
+
+
 def build_manual(version: str = "", log=print) -> dict:
     """Download the official manual (zipped HTML, once) and keep only its text, in sections."""
-    import urllib.request
     ver = ".".join(version.split(".")[:2]) if version else "latest"
     last = None
-    for url in [u.format(ver=ver) for u in MANUAL_URLS]:
-        for attempt in range(3):
+    sources = [("zip", u.format(ver=ver)) for u in MANUAL_URLS] + [("rst", u) for u in MANUAL_SOURCES]
+    for kind, url in sources:
+        for attempt in range(2):
             try:
                 log(f"[Blender] Kılavuz indiriliyor: {url}")
-                tmp = Path(tempfile.mkstemp(suffix=".zip")[1])
-                with urllib.request.urlopen(url, timeout=120) as r, open(tmp, "wb") as f:
-                    while True:
-                        block = r.read(1 << 20)
-                        if not block:
-                            break
-                        f.write(block)
-                chunks = []
-                with zipfile.ZipFile(tmp) as z:
-                    for name in z.namelist():
-                        if not name.endswith(".html") or "/_static/" in name or name.endswith(("genindex.html", "search.html")):
-                            continue
-                        chunks += _chunks(name.split("/", 1)[-1], z.read(name))
-                tmp.unlink(missing_ok=True)
+                if kind == "rst":
+                    chunks = _from_source(url, log)
+                else:
+                    tmp = _download(url, log)
+                    chunks = []
+                    try:
+                        with zipfile.ZipFile(tmp) as z:
+                            for name in z.namelist():
+                                if not name.endswith(".html") or "/_static/" in name or name.endswith(("genindex.html", "search.html")):
+                                    continue
+                                chunks += _chunks(name.split("/", 1)[-1], z.read(name))
+                    finally:
+                        tmp.unlink(missing_ok=True)
                 if len(chunks) < 200:
                     raise ValueError(f"kılavuz eksik görünüyor ({len(chunks)} bölüm)")
                 STORE.mkdir(parents=True, exist_ok=True)
@@ -146,6 +214,8 @@ def build_manual(version: str = "", log=print) -> dict:
             except Exception as exc:
                 last = exc
                 log(f"[Blender] Kılavuz indirilemedi ({attempt + 1}. deneme): {exc}")
+                if "403" in str(exc) or "404" in str(exc):
+                    break                                       # refused / missing: try the next source
                 time.sleep(3)
     raise ValueError(f"Blender kılavuzu indirilemedi: {last}")
 
@@ -269,9 +339,10 @@ def keywords(request: str) -> list[str]:
     words = _tokens(request)
     try:
         from core import gemini
-        got = gemini.as_json("List 8-16 English Blender keywords (feature names, operator / modifier / node / property "
-                             f"words, editor names) needed to do this in Blender. Request: {request}\n"
-                             'Return JSON {"keywords": [...]}', tier=gemini.FAST)
+        resp = gemini.call("List 8-16 English Blender keywords (feature names, operator / modifier / node / property "
+                           f"words, editor names) needed to do this in Blender. Request: {request}\n"
+                           'Return JSON {"keywords": [...]}', tier=gemini.FAST)
+        got = gemini.parse_json((getattr(resp, "text", None) or "") if resp is not None else "", default=None)
         if isinstance(got, dict):
             words = _tokens(" ".join(map(str, got.get("keywords") or []))) + words
     except Exception:
