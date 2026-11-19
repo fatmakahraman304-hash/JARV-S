@@ -1789,6 +1789,8 @@ class JarvisLive:
 
     _last_user_text = ""
     _last_user_at = 0.0
+    _CONTINUE = ("If the user's request had more steps after this one (e.g. 'then render it', 'then send it to my "
+                 "phone'), go on with the next step now, after reporting this one; otherwise just report.")
     _goaway_pending = False
 
     def _is_idle(self) -> bool:
@@ -1877,7 +1879,7 @@ class JarvisLive:
             pass
         self.ui.write_log(f"SYS: {name} tamamlandı: {text[:160]}")
         self.plugin_say(f"[TOOL_LATE_RESULT] The '{name}' tool you started earlier has just finished. Tell the user "
-                        f"its outcome briefly, in their language. Do not call it again. Result: {text}")
+                        f"its outcome briefly, in their language. Do not call it again. {self._CONTINUE} Result: {text}")
 
     def _intent_guard(self, name: str, args: dict) -> str:
         """'' to run the tool, else why not: the user's words were a question, not an order."""

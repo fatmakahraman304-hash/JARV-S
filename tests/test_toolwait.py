@@ -61,3 +61,16 @@ class ToolWait(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MultiStep(unittest.TestCase):
+    def test_background_results_continue_the_users_plan(self):
+        root = __import__("pathlib").Path(__file__).resolve().parent.parent
+        prompt = (root / "core" / "prompt.txt").read_text(encoding="utf-8")
+        self.assertIn("[MULTI-STEP REQUESTS]", prompt)
+        self.assertIn("go straight to the next step", prompt)
+        main = (root / "main.py").read_text(encoding="utf-8")
+        self.assertIn("{self._CONTINUE} Result: {text}", main)
+        blender = (root / "plugins" / "blender_studio.py").read_text(encoding="utf-8")
+        self.assertNotIn("Yeni bir işlem başlatma", blender)
+        self.assertIn("şimdi sıradakine geç", blender)

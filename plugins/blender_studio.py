@@ -918,7 +918,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             player.write_log(message)
             if hasattr(player, "request_say") and nxt is None:     # speak once the whole line is done
                 player.request_say("Blender aracının doğrulanmış sonucunu kullanıcıya kısaca bildir. "
-                                   "Yeni bir işlem başlatma. Sonuç: " + message)
+                                   "Bu işi tekrarlama. Kullanıcının isteğinde bundan sonra gelen adımlar varsa (ör. 'sonra render al', "
+                                   "'telefonuma gönder') şimdi sıradakine geç; yoksa sadece bildir. Sonuç: " + message)
         if nxt is not None:
             params, who = nxt
             if who is not None:
