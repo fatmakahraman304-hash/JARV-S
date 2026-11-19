@@ -601,6 +601,7 @@ class JarvisLive:
         self.out_queue            = None
         self._loop                     = None
         self._is_speaking         = False
+        self._outbox: list        = []      # what arrived while there was no session (sent on reconnect)
         self._speaking_lock       = threading.Lock()
         self._phone_active        = False   # True while phone mic is streaming; pauses PC mic
         # True while another device (the phone first) is the one that answers
@@ -1119,6 +1120,7 @@ class JarvisLive:
         """
         loop = getattr(self, "_loop", None)
         if not loop or not self.session:
+            self._outbox.append(instruction)          # said as soon as the session is back
             return
 
         async def _say():
@@ -1356,6 +1358,9 @@ class JarvisLive:
             self.ui.write_log(f"SYS: {result}")
             return
         if not self._loop or not self.session:
+            # Reconnecting or offline: keep it and send it the moment the session is back.
+            self._outbox.append(text)
+            self.ui.write_log("SYS: Bağlantı yeniden kuruluyor — mesajını aldım, bağlanınca ileteceğim.")
             return
         # Respect wake-word sleep: a typed command must not be answered while
         # asleep either (the sleep gate is not just for the mic). Wake first with
@@ -1759,6 +1764,19 @@ class JarvisLive:
     _last_user_text = ""
     _last_user_at = 0.0
     _goaway_pending = False
+
+    async def _flush_outbox(self) -> None:
+        """Send what waited while the connection was down, in the order it came."""
+        await asyncio.sleep(1.5)                    # let the session settle (greeting, wake state)
+        pending, self._outbox = list(self._outbox), []
+        for text in pending:
+            try:
+                await self.session.send_client_content(
+                    turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True)
+                await asyncio.sleep(0.5)
+            except Exception as exc:
+                print(f"[Outbox] {exc}")
+                self._outbox.append(text)
 
     async def _run_blocking(self, name: str, fn):
         """A tool on a worker thread, but never longer than its wait: past that it finishes in the
@@ -3170,6 +3188,8 @@ class JarvisLive:
                     self._reconnect_event.clear()  # ignore requests from before this session
                     tg.create_task(self._watch_reconnect())
                     tg.create_task(self._watch_stall())
+                    if self._outbox:
+                        tg.create_task(self._flush_outbox())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())

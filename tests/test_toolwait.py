@@ -54,6 +54,9 @@ class ToolWait(unittest.TestCase):
         self.assertIn("self._plugin_registry.run(name, args, player=self.ui, session_memory=None))", src)
         self.assertIn('getattr(response, "go_away", None)', src)
         self.assertIn('self.request_reconnect(keep_context=True, reason="go_away")', src)
+        self.assertIn("self._outbox.append(text)", src)              # typed while offline: kept
+        self.assertIn("self._outbox.append(instruction)", src)       # a late tool report while offline: kept
+        self.assertIn("tg.create_task(self._flush_outbox())", src)
 
 
 if __name__ == "__main__":
