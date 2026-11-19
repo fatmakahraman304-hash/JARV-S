@@ -610,6 +610,8 @@ class JarvisLive:
         self._away_since: float | None = None   # when the user was last seen leaving (core/away.py)
         self._away_asleep         = False   # JARVIS was asleep then: their wake command comes first
         self._quiet_was_on        = False
+        self._voice_gain          = 1.0     # JARVIS's own voice level (core/voice_level.py)
+        self._gain_checked        = float("-inf")
         from collections import deque as _deque
         self._say_queue           = _deque()  # (queued at, text): volunteered sentences waiting for calm
         self._last_said_at        = float("-inf")   # quiet mode was on: tell what it held back once it ends
@@ -2899,8 +2901,19 @@ class JarvisLive:
 
                 if self._yield_voice:
                     continue        # another device is the one speaking
+                out_bytes = bytes(batch)
                 try:
-                    await asyncio.to_thread(stream.write, bytes(batch))
+                    if time.monotonic() - self._gain_checked > 3:       # a new level, or the hour turned night
+                        from core import voice_level
+                        self._voice_gain = voice_level.gain()
+                        self._gain_checked = time.monotonic()
+                    if abs(self._voice_gain - 1.0) >= 0.01:
+                        from core import voice_level
+                        out_bytes = voice_level.apply(out_bytes, self._voice_gain)
+                except Exception:
+                    pass
+                try:
+                    await asyncio.to_thread(stream.write, out_bytes)
                 except (RuntimeError, asyncio.CancelledError):
                     break   # executor shutting down — exit cleanly
                 except Exception as e:
