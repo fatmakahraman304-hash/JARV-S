@@ -92,6 +92,32 @@ class Lessons(unittest.TestCase):
         self.assertEqual(brain.load()[-1]["kind"], "tip")
 
 
+class Install(unittest.TestCase):
+    def test_success_text_and_late_found_path_is_saved(self):
+        import subprocess
+        from types import SimpleNamespace
+        done = SimpleNamespace(returncode=0, stdout="Found Blender\nSuccessfully installed", stderr="")
+        exe = r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"
+        with patch.object(studio, "_windows", return_value=True), patch.object(studio.shutil, "which", return_value="winget"), \
+             patch.object(studio, "executable", side_effect=[ValueError("yok"), ValueError("yok"), ValueError("yok"), exe]), \
+             patch.object(subprocess, "run", return_value=done), patch.object(studio.time, "sleep"), \
+             patch("memory.config_manager.save_plugin_config") as save:
+            out = studio.install()
+        self.assertIn("kuruldu ve hazır", out)
+        save.assert_called_once_with("blender_studio", {"executable": exe})
+
+    def test_installed_but_not_found_says_so(self):
+        import subprocess
+        from types import SimpleNamespace
+        done = SimpleNamespace(returncode=0, stdout="Successfully installed", stderr="")
+        with patch.object(studio, "_windows", return_value=True), patch.object(studio.shutil, "which", return_value="winget"), \
+             patch.object(studio, "executable", side_effect=ValueError("yok")), patch.object(studio, "deep_search", return_value=None), \
+             patch.object(subprocess, "run", return_value=done), patch.object(studio.time, "sleep"):
+            out = studio.install()
+        self.assertIn("kuruldu ama", out)
+        self.assertNotIn("bitmedi", out)
+
+
 @unittest.skipUnless(shutil.which("blender"), "Blender binary required")
 class RealBlender(unittest.TestCase):
     def setUp(self):
@@ -161,3 +187,11 @@ class RealBlender(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(os.name == "nt", "Windows only")
+class WindowsSearch(unittest.TestCase):
+    def test_candidates_and_deep_search_run(self):
+        paths = list(studio.windows_candidates())
+        self.assertTrue(all(isinstance(p, Path) for p in paths))
+        studio.deep_search()
