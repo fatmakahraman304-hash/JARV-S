@@ -15,6 +15,38 @@ PLUGIN = {
 }
 
 
+def _own_state() -> str:
+    """JARVIS's own side of the report: what it is doing, whether it is keeping quiet, what waits to be told."""
+    lines = []
+    try:
+        from core import jobs
+        running = jobs.describe()
+        lines.append("- çalışan işler: " + (", ".join(running) if running else "yok"))
+    except Exception:
+        pass
+    try:
+        from core import quiet
+        if quiet.is_on():
+            lines.append("- " + quiet.describe())
+    except Exception:
+        pass
+    try:
+        from core import away
+        n = len(away.pending())
+        if n:
+            lines.append(f"- söylenmeyi bekleyen {n} gelişme var (while_away ile anlatılabilir)")
+    except Exception:
+        pass
+    try:
+        from core import sentinel
+        last = sentinel.recent(limit=3)
+        if last:
+            lines.append("- son fark edilenler: " + "; ".join(i["text"] for i in last))
+    except Exception:
+        pass
+    return "JARVIS:\n" + ("\n".join(lines) or "- her şey sakin")
+
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         from core import sync_hub
@@ -32,6 +64,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 for p in unfinished) or "- yarım proje yok"))
         except Exception:
             pass
+        parts.append(_own_state())
         parts.append("(Kullanıcıya Iron Man'deki JARVIS gibi kısa, akıcı bir rapor olarak özetle; "
                      "düşük pil ya da dolu disk varsa uyar.)")
         return "\n\n".join(parts)

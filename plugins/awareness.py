@@ -10,10 +10,12 @@ PLUGIN = {
         "Which changes around the computer JARVIS mentions by itself: a USB drive plugged in/out (usb), the "
         "charger plugged/unplugged (power), the internet back after an outage (network), a download finished "
         "(downloads). Turn a kind off ('USB takınca söyleme', 'indirmeleri bildirme'), on, or ask what is on. "
-        "action: on | off | status. kind: usb | power | network | downloads | all."
+        "action: on | off | status. kind: usb | power | network | downloads | all. "
+        "action=recent: what just happened, with full paths — use it to resolve 'az önce indirdiğim dosya', "
+        "'son indirilen', 'taktığım USB' before opening, sending or listing it (kind: download | usb, optional)."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "on | off | status"},
+        "action": {"type": "STRING", "description": "on | off | status | recent"},
         "kind": {"type": "STRING", "description": "usb | power | network | downloads | all"},
     }, "required": ["action"]},
 }
@@ -28,6 +30,16 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         from memory.config_manager import save_plugin_config
         action = str(parameters.get("action") or "status").strip().lower()
         kind = str(parameters.get("kind") or "all").strip().lower()
+        if action == "recent":
+            want = {"downloads": "download", "download": "download", "usb": "usb"}.get(kind, "")
+            items = sentinel.recent(want)
+            if not items:
+                return "Nothing noticed recently" + (f" of that kind ({kind})." if want else ".")
+            import time as _t
+            now = _t.time()
+            return "Most recent first:\n" + "\n".join(
+                f"- {int((now - float(i['at'])) // 60)} min ago, {i['kind']}: {i['text']}"
+                + (f" — {i['path']}" if i.get("path") else "") for i in items)
         if action in ("on", "off"):
             kinds = sentinel.KINDS if kind in ("all", "") else (kind,)
             if any(k not in sentinel.KINDS for k in kinds):

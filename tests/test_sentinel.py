@@ -6,6 +6,29 @@ from core import sentinel
 
 
 class SentinelTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        self.tmp = tempfile.TemporaryDirectory()
+        self.p = mock.patch.object(sentinel, "RECENT_PATH", Path(self.tmp.name) / "recent.json")
+        self.p.start()
+
+    def tearDown(self):
+        self.p.stop()
+        self.tmp.cleanup()
+
+    def test_recent_keeps_paths_for_later(self):
+        from pathlib import Path
+        w = sentinel.DownloadWatch({}, Path("/home/u/Downloads"))
+        w.feed({"a.zip": 2 << 20}); w.feed({"a.zip": 2 << 20})
+        sentinel.diff_drives({}, {"E:\\": {"label": "KINGSTON", "total": 1}})
+        self.assertEqual(sentinel.recent()[0]["kind"], "usb")
+        self.assertEqual(sentinel.recent("download")[0]["path"], str(Path("/home/u/Downloads") / "a.zip"))
+        from plugins import awareness
+        out = awareness.run({"action": "recent", "kind": "downloads"})
+        self.assertIn("a.zip", out)
+        self.assertNotIn("KINGSTON", out)
+
     def test_drives(self):
         before = {"C:\\": {"label": "OS", "total": 1}}
         after = {**before, "E:\\": {"label": "KINGSTON", "total": 64 * 1024 ** 3}}
@@ -77,3 +100,17 @@ class SentinelTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StatusReportTest(unittest.TestCase):
+    def test_own_state(self):
+        from plugins import status_report
+        with mock.patch("core.jobs.describe", return_value=["blender_studio (2 dk)"]), \
+             mock.patch("core.quiet.is_on", return_value=True), \
+             mock.patch("core.quiet.describe", return_value="Quiet mode is on for 30 more min."), \
+             mock.patch("core.away.pending", return_value=[{}, {}]), \
+             mock.patch("core.sentinel.recent", return_value=[]):
+            out = status_report._own_state()
+        self.assertIn("blender_studio", out)
+        self.assertIn("Quiet mode", out)
+        self.assertIn("2 gelişme", out)
