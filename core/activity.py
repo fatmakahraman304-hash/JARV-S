@@ -208,6 +208,11 @@ def record_tool(name: str, args: dict | None, result=None, error: BaseException 
         detail = str((args or {}).get("app_name") or (args or {}).get("app") or "").strip()
     if detail:
         base = f"{base}: {detail}"
+    try:
+        from core import journal                       # the record that outlives this run
+        journal.record(name, "fail" if error is not None else status_of(result), base)
+    except Exception:
+        pass
     if error is not None:
         record(node, f"Yapılamadı: {base}", "fail")
         return
