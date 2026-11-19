@@ -2029,6 +2029,39 @@ class JarvisLive:
             except Exception:
                 pass
 
+    async def _watch_home_once(self) -> None:
+        """Home Assistant sensors (core/home_watch.py): doors/windows said as they change; smoke, gas,
+        leaks are alarms — said even in quiet mode, ahead of anything else, and sent to the phone."""
+        from core import home_watch
+        try:
+            from plugins import smart_home
+            if not (smart_home._cfg().get("url") and smart_home._cfg().get("token")):
+                return
+            states = await asyncio.to_thread(smart_home._states)
+        except Exception:
+            return                                  # not connected or unreachable: nothing to watch now
+        if getattr(self, "_home_watch", None) is None:
+            self._home_watch = home_watch.HomeWatch()
+        notes = self._home_watch.tick(states)
+        if not notes:
+            return
+        text = home_watch.instruction(notes)
+        self.ui.write_log("SYS: Ev — " + " ".join(t for _, t in notes))
+        if any(sev == "alarm" for sev, _ in notes):
+            try:
+                from core import away
+                away.push_to_phones("JARVIS — EV ALARMI", " ".join(t for sev, t in notes if sev == "alarm"))
+            except Exception:
+                pass
+            if not self._awake:
+                self.wake(reason="ev alarmı")       # asleep, its voice would be thrown away
+            if self.session:
+                self._say_queue.appendleft((time.monotonic() - self._SAY_MAX_WAIT, text))   # now, not later
+            else:
+                self._outbox.insert(0, text)
+            return
+        self.plugin_say(text)
+
     async def _watch_sentinel(self) -> None:
         """Ambient awareness (core/sentinel.py): a USB drive, the charger, the internet back, a download
         finished — one sentence each, as it happens."""
@@ -2040,6 +2073,7 @@ class JarvisLive:
         while True:
             try:
                 self._sentinel_notes += await asyncio.to_thread(self._sentinel.tick)
+                await self._watch_home_once()
                 talking = time.monotonic() - (self._last_user_speech or 0.0) < 5 or self._is_speaking
                 if self._sentinel_notes and not talking:
                     notes, self._sentinel_notes = self._sentinel_notes[-4:], []
