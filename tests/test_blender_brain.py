@@ -210,6 +210,27 @@ for i, (x, y) in enumerate([(-0.54, -0.29), (0.54, -0.29), (-0.54, 0.29), (0.54,
             with self.assertRaisesRegex(ValueError, "kaydetmedim"):
                 studio.process("study", "yanlış konu", None, topic="material")
 
+    def test_user_can_stop_a_running_job(self):
+        import time
+        from core import gemini, jobs
+        from plugins import job_control
+        slow = "import bpy, time\ntime.sleep(120)\n"
+        with patch.object(gemini, "text", return_value=slow):
+            studio.run({"action": "script", "request": "çok uzun süren bir sahne yap"})
+            for _ in range(100):
+                if jobs.current() and studio._procs:
+                    break
+                time.sleep(0.2)
+            t0 = time.time()
+            self.assertIn("Durdurdum", job_control.run({"action": "cancel", "which": "blender"}))
+            for _ in range(100):
+                if not studio._lock.locked():
+                    break
+                time.sleep(0.2)
+        self.assertLess(time.time() - t0, 15)                        # stopped, not waited out
+        self.assertIn("durdurdum", studio._status)
+        self.assertEqual(jobs.current(), [])
+
     def test_hologram_studio_render(self):
         from core import holo_model as hm
         model = hm.clean({"name": "Kupa", "parts": [

@@ -44,7 +44,7 @@ _FEEDBACK = re.compile(r"\b(begenmedim|begendim|olmamis|olmus|guzel olmus|kotu o
 _CHAT = re.compile(r"^(selam|merhaba|naber|nasilsin|gunaydin|iyi aksamlar|iyi geceler|tesekkur(ler)?|sagol|"
                    r"eyvallah|tamam|peki|anladim|harika|super|evet|hayir|hi|hello|thanks|thank you|ok|okay)\b")
 _COMMAND_END = re.compile(r"\b(yap|kur|ac|kapat|sil|ekle|cikar|degistir|getir|goster|gonder|kaydet|indir|yukle|baslat|"
-                          r"durdur|olustur|ciz|render al|tasi|buyut|kucult|boya|cevir|uygula|ogren|ogret|"
+                          r"durdur|dur|iptal et|iptal|vazgec|olustur|ciz|render al|tasi|buyut|kucult|boya|cevir|uygula|ogren|ogret|"
                           r"yapin|kurun|acin|silin|ekleyin|gelistir|duzelt|hazirla|bul|ara|yaz|oku|cal|"
                           r"make|build|create|install|open|close|delete|remove|add|change|show|send|save|render|start|stop|"
                           r"fix|move|paint|draw)\b[^?]*[.!]?$")

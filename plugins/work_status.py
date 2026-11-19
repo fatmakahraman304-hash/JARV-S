@@ -48,6 +48,11 @@ def _activity(about: str) -> list[str]:
 def _background() -> list[str]:
     out = []
     try:
+        from core import jobs
+        out += [line.replace("- ", "- ŞU AN SÜRÜYOR: ", 1) for line in jobs.describe()]
+    except Exception:
+        pass
+    try:
         from plugins import blender_studio
         lock = getattr(blender_studio, "_lock", None)
         running = lock is not None and lock.locked()
