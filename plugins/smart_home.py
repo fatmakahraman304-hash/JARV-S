@@ -134,7 +134,7 @@ def wanted_domains(target: str) -> set[str]:
     return {d for d in (_is_type_word(w) for w in norm(target).split()) if d}
 
 
-_FILLER = {"the", "ve", "and", "bir", "de", "da", "mi", "mu", "acik", "kapali"}
+_FILLER = {"the", "ve", "and", "bir", "de", "da", "mi", "mu", "acik", "kapali", "kalan", "olan"}
 
 
 def match(target: str, entities: list[dict], domains: tuple[str, ...] = CONTROLLABLE) -> list[dict]:
@@ -143,9 +143,12 @@ def match(target: str, entities: list[dict], domains: tuple[str, ...] = CONTROLL
     if not words:
         return []
     every = any(w in ALL_WORDS for w in words)
+    only_on = "acik" in words and ("kalan" in words or "olan" in words) or "left on" in norm(target)
+    every = every or only_on                     # 'açık kalan ışıklar' = every light that is on
     doms = wanted_domains(target) & set(domains)
     content = [w for w in words if w not in ALL_WORDS and w not in _FILLER and not _is_type_word(w)]
-    pool = [e for e in entities if domain_of(e) in domains and (not doms or domain_of(e) in doms)]
+    pool = [e for e in entities if domain_of(e) in domains and (not doms or domain_of(e) in doms)
+            and (not only_on or e.get("state") == "on")]
     t = norm(target)
     for e in pool:
         if t == norm(name_of(e)):

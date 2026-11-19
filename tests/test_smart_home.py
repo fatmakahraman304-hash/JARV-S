@@ -115,3 +115,14 @@ class SetupTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LeftOnTest(unittest.TestCase):
+    def test_lights_left_on(self):
+        ids = [e["entity_id"] for e in sh.match("açık kalan ışıkları", STATES)]
+        self.assertEqual(sorted(ids), ["light.mutfak", "light.salon"])
+
+    def test_phone_relays_smart_home(self):
+        from pathlib import Path
+        js = (Path(__file__).resolve().parent.parent / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("açık kalan ışıkları kapat", js)
