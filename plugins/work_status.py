@@ -57,6 +57,7 @@ def _background() -> list[str]:
         lock = getattr(blender_studio, "_lock", None)
         running = lock is not None and lock.locked()
         out.append(f"- Blender: {'ŞU AN ÇALIŞIYOR — ' if running else ''}{blender_studio._status}")
+        out += [f"- Sırada (Blender): {q}" for q in blender_studio.queued()]
     except Exception:
         pass
     try:
