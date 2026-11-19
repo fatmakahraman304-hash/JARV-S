@@ -338,6 +338,78 @@ def _run_phases(binary, source, folder, request, brief, prompt, first, phases, t
     brain.remember("recipe", request, done[0] if len(done) == 1 else {"phases": phases, "steps": done})
 
 
+TARGET_SCORE = 8.0
+MAX_ROUNDS = 3
+
+
+def views_sheet(binary, blend, folder):
+    """Previews from several sides, in one picture, plus the measured geometry problems."""
+    from PIL import Image
+    import io
+    report = invoke(binary, blend, folder, "views", w=480, h=360, samples=12)
+    tiles = [Image.open(p).convert("RGB") for _n, p in report.get("views", []) if Path(p).is_file()]
+    if not tiles:
+        return b"", report.get("issues", [])
+    sheet = Image.new("RGB", (960, 360 * ((len(tiles) + 1) // 2)), (20, 20, 20))
+    for i, t in enumerate(tiles):
+        sheet.paste(t.resize((480, 360)), ((i % 2) * 480, (i // 2) * 360))
+    buf = io.BytesIO()
+    sheet.save(buf, "PNG")
+    (folder / "views.png").write_bytes(buf.getvalue())
+    return buf.getvalue(), report.get("issues", [])
+
+
+def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
+    """JARVIS looks at its own work and improves it: render from several sides, have the model
+    score it and list concrete problems (plus the measured floating parts), fix them with a script,
+    and keep the best version. What fixed what is learned."""
+    from plugins import _blender_brain as brain
+    best, best_score, history, last_problems = output, -1.0, [], []
+    current = output
+    for n in range(rounds + 1):
+        work = Path(tempfile.mkdtemp(prefix=f"bak-{n}-", dir=folder))
+        try:
+            png, issues = views_sheet(binary, current, work)
+        except Exception as exc:
+            print(f"[Blender] Önizleme alınamadı: {exc}")
+            break
+        try:
+            verdict = brain.look(png, request, issues) if png else {}
+        except Exception as exc:
+            print(f"[Blender] Görsel değerlendirme olmadı: {exc}")
+            verdict = {}
+        if not verdict:                                     # no eye available: only the measured problems count
+            if not issues or n == rounds:
+                break
+            verdict = {"score": 5.0, "subject_ok": True, "problems": issues}
+        score = verdict["score"] - (1.5 if issues else 0.0) - (5 if verdict.get("subject_ok") is False else 0)
+        history.append(score)
+        if player is not None:
+            player.write_log(f"🟧 Blender kendi işine baktı: {verdict['score']:.0f}/10"
+                             + (f" — {verdict['problems'][0]}" if verdict.get("problems") else ""))
+        if score > best_score:
+            if best_score >= 0 and history:
+                brain.remember("fix", request, "Görsel eleştiriyle düzeltildi: " + "; ".join(last_problems)[:1500],
+                               "; ".join(last_problems)[:500])
+            best, best_score = current, score
+        if score >= TARGET_SCORE or n == rounds:
+            break
+        last_problems = (issues + verdict.get("problems", []))[:10]
+        fix = (f"{request}\n\nThe current scene is your previous attempt. Improve it — fix exactly these problems "
+               f"(keep what is right):\n- " + "\n- ".join(last_problems))
+        nxt = Path(tempfile.mkdtemp(prefix=f"tur-{n + 1}-", dir=folder))
+        try:
+            script_project(binary, current, nxt, fix, log=lambda m: None)
+            current = nxt / "scene.blend"
+        except Exception as exc:
+            print(f"[Blender] Düzeltme turu olmadı: {exc}")
+            break
+    final = folder / "scene.blend"
+    if best != final:
+        shutil.copyfile(best, final)
+    return final, best_score
+
+
 def check_match(binary, output, request):
     """Does the finished scene really contain what was asked? (ok, what is wrong)"""
     from core import gemini
@@ -530,6 +602,13 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         elif action == "script":
             script_project(binary, source, folder, request)
             output = folder / "scene.blend"
+        elif action == "new":
+            try:
+                script_project(binary, None, folder, request)     # toolkit scripts: bevels, real materials, placement
+            except ValueError as exc:
+                print(f"[Blender] Betik olmadı, adım planına geçiyorum: {exc}")
+                build_project(binary, source, folder, request)
+            output = folder / "scene.blend"
         else:
             build_project(binary, source, folder, request)
             output = folder / "scene.blend"
@@ -537,6 +616,9 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
             raise ValueError("Blender çıktı dosyasını oluşturamadı.")
         if action in ("new", "edit", "script"):
             output = make_it_match(binary, source, folder, output, request)
+            output, score = refine(binary, folder, output, request, player=player)
+            if player is not None and score >= 0:
+                player.write_log(f"🟧 Blender sonucu: {max(score, 0):.0f}/10")
         if action in ("new", "edit", "script"):
             pointer = folder / "latest.tmp"
             pointer.write_text(folder.name, encoding="utf8")

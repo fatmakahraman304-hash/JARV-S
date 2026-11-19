@@ -293,7 +293,11 @@ def run_script(job, request):
     code = (job / "script.py").read_text(encoding="utf8")
     out = job / "out"
     out.mkdir(exist_ok=True)
-    env = {"__name__": "__main__", "OUT": out, "bpy": bpy}
+    env = {"__name__": "jarvis_kit", "OUT": out, "bpy": bpy}
+    kit = Path(__file__).with_name("_blender_kit.py")
+    if kit.is_file():                                   # box(), wood(), place_on(), studio() … for the script
+        exec(compile(kit.read_text(encoding="utf8"), str(kit), "exec"), env)
+    env["__name__"] = "__main__"
     try:
         exec(compile(code, "jarvis_script.py", "exec"), env)
         bpy.context.view_layer.update()
@@ -451,6 +455,85 @@ def studio(job, request):
     bpy.ops.render.render(write_still=True)
 
 
+def geometry_issues(limit=40):
+    """Measured problems a picture can hide: parts floating in the air, parts touching nothing."""
+    from mathutils import Vector
+    bpy.context.view_layer.update()
+    boxes = []
+    for o in bpy.context.scene.objects:
+        if o.type not in ("MESH", "CURVE", "FONT") or o.get("jarvis_floor") or o.hide_render:
+            continue
+        pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        boxes.append((o.name, lo, hi))
+    if not boxes:
+        return ["Sahnede görünen hiçbir nesne yok."]
+    ground = min(b[1].z for b in boxes)
+    span = max(max(b[2][i] for b in boxes) - min(b[1][i] for b in boxes) for i in range(3))
+    tol = max(span * 0.004, 0.002)
+
+    def near(a, b):
+        return all(a[1][i] - tol <= b[2][i] and b[1][i] - tol <= a[2][i] for i in range(3))
+    issues = []
+    for i, a in enumerate(boxes):
+        touching = [b for j, b in enumerate(boxes) if j != i and near(a, b)]
+        if len(boxes) > 1 and not touching:
+            issues.append(f"'{a[0]}' hiçbir parçaya değmiyor (havada / kopuk).")
+        elif a[1].z > ground + tol and not any(b[2].z >= a[1].z - tol and b[1].z < a[1].z for b in touching):
+            issues.append(f"'{a[0]}' altında onu taşıyan bir şey yok (alt yüzü z={a[1].z:.3f} m).")
+        if len(issues) >= limit:
+            break
+    return issues
+
+
+def views(job, request):
+    """Quick Cycles previews from several sides — what JARVIS looks at to judge its own work."""
+    import math
+    from mathutils import Vector
+    scene = bpy.context.scene
+    objs = [o for o in scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("jarvis_floor") and not o.hide_render]
+    r = scene.render
+    r.engine = "CYCLES"
+    scene.cycles.samples = int(request.get("samples", 12))
+    scene.cycles.use_denoising = True
+    try:
+        scene.cycles.device = "CPU"
+    except Exception:
+        pass
+    r.resolution_x, r.resolution_y, r.resolution_percentage = int(request.get("w", 480)), int(request.get("h", 360)), 100
+    r.image_settings.file_format = "PNG"
+    if not any(o.type == "LIGHT" for o in scene.objects):          # unlit scenes still need to be seen
+        world = scene.world or bpy.data.worlds.new("World")
+        scene.world = world
+        world.use_nodes = True
+        bg = world.node_tree.nodes.get("Background")
+        if bg:
+            bg.inputs["Strength"].default_value = 2.5
+    env = {"__name__": "jarvis_kit", "bpy": bpy}
+    exec(compile(Path(__file__).with_name("_blender_kit.py").read_text(encoding="utf8"), "kit", "exec"), env)
+    original = scene.camera
+    shots = []
+    if original is not None:
+        shots.append(("kamera", None))
+    shots += [("ön", (0.0, 6.0)), ("çapraz", (-40.0, 28.0)), ("yan", (90.0, 6.0)), ("üst", (-20.0, 72.0))]
+    out = []
+    temp = bpy.data.objects.new("_jarvis_view", bpy.data.cameras.new("_jarvis_view"))
+    scene.collection.objects.link(temp)
+    for name, angle in shots[:4]:
+        if angle is None:
+            scene.camera = original
+        else:
+            scene.camera = temp
+            env["frame_camera"](objs, yaw=angle[0], pitch=angle[1], lens=50.0, margin=1.12)
+        r.filepath = str(job / f"view_{len(out)}.png")
+        bpy.ops.render.render(write_still=True)
+        out.append([name, r.filepath])
+    scene.camera = original
+    bpy.data.objects.remove(temp, do_unlink=True)
+    return out
+
+
 def main():
     job = Path(sys.argv[sys.argv.index("--") + 1])
     request = json.loads((job / "request.json").read_text(encoding="utf8"))
@@ -462,6 +545,12 @@ def main():
                   "objects": [[o.name, o.type] for o in list(scene.objects)[:250]],
                   "camera": scene.camera.name if scene.camera else None,
                   "files": [str(p) for p in sorted((job / "out").glob("*"))]}
+        (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")
+        return
+    if request["mode"] == "views":
+        shots = views(job, request)
+        report = {"version": bpy.app.version_string, "views": shots, "issues": geometry_issues(),
+                  "objects": [[o.name, o.type, [round(v, 3) for v in o.dimensions]] for o in list(scene.objects)[:150]]}
         (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")
         return
     if request["mode"] == "studio":

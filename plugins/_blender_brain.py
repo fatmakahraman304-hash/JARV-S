@@ -57,14 +57,42 @@ KNOWLEDGE = """Blender 4.x Python (bpy) facts — follow them exactly:
 - Text: bpy.data.curves.new(n, 'FONT'); curve.body = "..."; bpy.data.objects.new(n, curve).
 """
 
+KIT_DOC = """JARVIS toolkit — these functions ALREADY EXIST in the script (no import needed); metres everywhere:
+clear()  — empty the scene (only for a brand-new scene)
+box(name, size=(x,y,z), loc=(x,y,z), bevel=0.004, rot=(deg,deg,deg))  — size is the FULL extent, loc is the centre
+cylinder(name, radius, depth, loc, bevel=0.002, rot=(deg,deg,deg), verts=64)  — axis along z before rot
+sphere(name, radius, loc, segments=64)
+tube(name, points=[(x,y,z),...], radius)  — round bar / pipe / handle / frame through points
+lathe(name, profile=[(radius, z), ...], loc)  — turned shapes: cups, vases, bottles, lamp shades, chair feet
+extrude(name, outline=[(x,y),...], depth, loc, bevel)  — flat outline made thick along z (signs, plates, shaped tops)
+Materials (return a material): wood(name, color, grain) metal(name, color, rough) plastic(name, color, rough)
+  paint(name, color, rough, coat) glass(name, tint, rough) fabric(name, color) rubber(name) stone(name, color)
+  emission(name, color, strength);  assign(obj, material)
+Placement (USE THEM — parts must touch, nothing floats): bottom(obj) top(obj) size(obj) on_floor(obj)
+  place_on(obj, base, x=None, y=None) — obj rests exactly on base's top;  touch(obj, other, axis) — slide until touching
+smooth(obj, angle)  join(objs, name)  group(name, objs)
+studio(target=None, floor=True)  — floor, softbox lights, world, Cycles, framed camera (call it LAST for a new scene)
+frame_camera(objs=None, yaw=-35, pitch=18, lens=60)
+"""
+
+REALISM = """Realism checklist (the result is judged from pictures, parts are measured):
+- Real-world sizes (table 75 cm high, top 3–4 cm thick; chair seat 45 cm; mug 9.5 cm; car 4.5 m).
+- Every part is attached: legs touch the underside of the top, inset 4–8 cm from the edges; nothing floats, no gaps,
+  no part sinks through another. Compute positions from the other parts' sizes (use top()/bottom()/place_on()).
+- Enough parts for the real thing (a table: top, 4 legs, aprons/rails between the legs, maybe a lower shelf;
+  a chair: seat, legs, back posts, back slats, stretchers). Bevel every hard edge; smooth round parts.
+- Proper materials from the toolkit (wood grain, brushed metal, fabric…), not flat grey.
+- Build the object at the world origin standing on z = 0 (on_floor), then call studio() at the end."""
+
 SCRIPT_RULES = """Write ONE complete Python script for Blender {version} run in background mode (no UI).
 Rules:
 - `import bpy` (and math, bmesh, mathutils, random as needed). No other imports, no file reads, no network,
   no subprocess, no os.system, no exec/eval, no input().
 - The variable OUT (a pathlib.Path folder) already exists — save extra files only inside it.
 - The scene file is saved for you afterwards; do not call save_as_mainfile or quit Blender.
-- For a new scene add a camera aimed at the subject and good lighting (unless asked otherwise), set
-  scene.camera, and use metres (real sizes).
+- For a new scene finish with studio() (camera, lights, floor) unless the user asked otherwise.
+- When the current scene already has objects and the request is a correction, CHANGE those objects (move, resize,
+  replace, add missing parts); do not call clear() and do not add a second studio() if lights/camera exist.
 - Name objects in Turkish, uniquely (Masa, Masa ayağı, Kamera, Işık).
 - Build exactly the subject the user asked for — never a different object.
 - Prefer data API (bpy.data, bmesh) over bpy.ops when an operator would need a 3D viewport.
@@ -187,13 +215,43 @@ def check_code(code: str) -> str:
 def write_script(request: str, scene: dict, version: str, previous: str = "", error: str = "") -> str:
     from core import gemini
     lessons = lessons_prompt(request, ("script", "fix", "tip"), 4)
-    prompt = (f"{KNOWLEDGE}\n{SCRIPT_RULES.format(version=version)}\n\n{lessons}\n\n"
+    prompt = (f"{KNOWLEDGE}\n{KIT_DOC}\n{REALISM}\n{SCRIPT_RULES.format(version=version)}\n\n{lessons}\n\n"
               f"Current scene: {json.dumps(scene, ensure_ascii=False)[:6000]}\n"
               f"User request (any language): {request}")
     if previous:
         prompt += (f"\n\nYour previous script failed.\nScript:\n{previous[:12000]}\n\nBlender error:\n{error[-3000:]}\n"
                    "Fix the cause (check the facts above) and return the whole corrected script.")
     return clean_code(gemini.text(prompt, tier=gemini.SMART) or "")
+
+
+LOOK = """You are JARVIS's eye, checking its own Blender work. The image shows the scene from up to four sides
+(scene camera / front / three-quarter / side / top). The user asked for: {request}
+Measured geometry problems: {issues}
+Judge like a demanding 3D artist. Return JSON:
+{{"subject_ok": true|false (is it clearly the requested thing?),
+  "score": 0-10 (10 = indistinguishable from a real, well-made product; 6 = clearly right but plain; <5 = wrong/broken),
+  "problems": ["concrete fixes in Turkish, with parts and directions — e.g. 'Ayaklar tablanın altına değmiyor: 4 ayağı
+   tablanın köşelerinden 6 cm içeriye ve tabla altına taşı', 'Ayaklar arasına kuşak (apron) yok', 'Malzeme düz gri'"]}}
+At most 8 problems, most important first."""
+
+
+def look(sheet_png: bytes, request: str, issues: list[str]) -> dict:
+    """Show the picture of the scene to the model; get a score and what to fix."""
+    from core import gemini
+    try:
+        from google.genai import types
+        part = types.Part.from_bytes(data=sheet_png, mime_type="image/png")
+    except Exception:
+        return {}
+    verdict = gemini.as_json([LOOK.format(request=request, issues="; ".join(issues) or "yok"), part], tier=gemini.SMART)
+    if not isinstance(verdict, dict) or "score" not in verdict:
+        return {}
+    try:
+        verdict["score"] = float(verdict["score"])
+    except (TypeError, ValueError):
+        return {}
+    verdict["problems"] = [str(p) for p in (verdict.get("problems") or [])][:8]
+    return verdict
 
 
 def run_with_fixes(request: str, scene: dict, version: str, execute, log=print) -> tuple[str, int]:
