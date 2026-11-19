@@ -1758,6 +1758,24 @@ class JarvisLive:
 
     _last_user_text = ""
     _last_user_at = 0.0
+    _goaway_pending = False
+
+    async def _run_blocking(self, name: str, fn):
+        """A tool on a worker thread, but never longer than its wait: past that it finishes in the
+        background and its result is told when it arrives (core/toolwait.py)."""
+        from core import toolwait
+        return await toolwait.run(name, fn, on_late=self._late_result)
+
+    def _late_result(self, name: str, text: str) -> None:
+        """A tool that outlived its wait finished: tell the user what came of it."""
+        try:
+            from core import activity
+            activity.record_tool(name, {}, result=text)
+        except Exception:
+            pass
+        self.ui.write_log(f"SYS: {name} tamamlandı: {text[:160]}")
+        self.plugin_say(f"[TOOL_LATE_RESULT] The '{name}' tool you started earlier has just finished. Tell the user "
+                        f"its outcome briefly, in their language. Do not call it again. Result: {text}")
 
     def _intent_guard(self, name: str, args: dict) -> str:
         """'' to run the tool, else why not: the user's words were a question, not an order."""
@@ -1895,7 +1913,7 @@ class JarvisLive:
                     args["mode"] = "improve"
                 _ctx = {"player": self.ui, "speak": self.speak,
                         "response": None, "session_memory": None}
-                r = await loop.run_in_executor(None, lambda: self._action_registry.run(name, args, _ctx))
+                r = await self._run_blocking(name, lambda: self._action_registry.run(name, args, _ctx))
                 result = r or "Done."
                 # web_search: mirror results to the on-screen content panel
                 if (name == "web_search" and r
@@ -1911,10 +1929,8 @@ class JarvisLive:
 
             else:
                 if self._plugin_registry.has(name):
-                    r = await loop.run_in_executor(
-                        None,
-                        lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=None)
-                    )
+                    r = await self._run_blocking(
+                        name, lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=None))
                     result = r or "Done."
                 else:
                     result = f"Unknown tool: {name}"
@@ -2170,6 +2186,18 @@ class JarvisLive:
                                 print("[JARVIS] 🔗 Session resumption armed")
                             self._resume_handle = _sru.new_handle
 
+                    # ── The server is about to close this connection ──────────
+                    # It says so in advance (go_away). Reconnect on our terms —
+                    # at the next quiet moment, with the resumption handle — rather
+                    # than being cut off in the middle of a sentence.
+                    _ga = getattr(response, "go_away", None)
+                    if _ga is not None and not self._goaway_pending:
+                        self._goaway_pending = True
+                        print(f"[JARVIS] 🔁 Server will close the connection (time left: "
+                              f"{getattr(_ga, 'time_left', '?')}) — reconnecting at the next pause")
+                        if not self._is_speaking and self.audio_in_queue.empty():
+                            self.request_reconnect(keep_context=True, reason="go_away")
+
                     sc = response.server_content
                     if sc and getattr(sc, "interrupted", False):
                         if not self._interrupted and (self._is_speaking or not self.audio_in_queue.empty()):
@@ -2232,6 +2260,8 @@ class JarvisLive:
                                 continue
                             if self._turn_done_event:
                                 self._turn_done_event.set()
+                            if self._goaway_pending:          # the turn is over: now is the quiet moment
+                                self.request_reconnect(keep_context=True, reason="go_away")
 
                             # If this turn_complete ends an interrupted response, clear the
                             # flag and skip all further processing for that turn.
@@ -3065,6 +3095,7 @@ class JarvisLive:
                     self._vision_busy          = False
                     self._vision_last_time     = 0.0
                     self._interrupted          = False
+                    self._goaway_pending       = False
 
                     print("[JARVIS] Connected.")
                     if _resumed_with:
