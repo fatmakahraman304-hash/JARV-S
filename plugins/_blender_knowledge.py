@@ -63,35 +63,67 @@ def build_api(binary, invoke) -> dict:
 
 
 class _Text(HTMLParser):
-    """The readable text of one manual page (headings kept, navigation dropped)."""
-    SKIP = {"script", "style", "nav", "footer", "header"}
+    """The readable text of one manual page: the main article if the page has one, without navigation."""
+    SKIP = {"script", "style", "nav", "footer", "header", "aside", "form", "button", "svg", "noscript"}
+    VOID = {"br", "img", "meta", "link", "input", "hr", "area", "base", "col", "embed", "source", "track", "wbr"}
 
     def __init__(self):
         super().__init__()
-        self.parts, self.title, self._skip, self._in_title, self._main = [], "", 0, False, False
+        self.all, self.main, self.title = [], [], ""
+        self.stack = []            # (tag, skip, main)
+        self._in_title = False
+
+    def _flags(self):
+        skip = any(f[1] for f in self.stack)
+        main = any(f[2] for f in self.stack)
+        return skip, main
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        if tag in self.SKIP or "sidebar" in (a.get("class") or "") or a.get("role") == "navigation":
-            self._skip += 1
+        cls = (a.get("class") or "").lower()
         if tag == "title":
             self._in_title = True
+        if tag in self.VOID:
+            if tag == "br":
+                self._emit("\n")
+            return
+        skip = tag in self.SKIP or a.get("role") in ("navigation", "search") or any(
+            k in cls for k in ("sidebar", "toc-drawer", "related", "headerlink", "mobile-header", "nav", "footer"))
+        main = tag in ("article", "main") or a.get("role") == "main" or a.get("itemprop") == "articleBody" or \
+            cls.split()[:1] == ["body"]
+        self.stack.append((tag, skip, main))
         if tag in ("h1", "h2", "h3", "h4"):
-            self.parts.append("\n## ")
-        if tag in ("p", "li", "dt", "dd", "tr", "br", "div"):
-            self.parts.append("\n")
+            self._emit("\n## ")
+        elif tag in ("p", "li", "dt", "dd", "tr", "div", "section", "pre"):
+            self._emit("\n")
 
     def handle_endtag(self, tag):
-        if (tag in self.SKIP) and self._skip:
-            self._skip -= 1
         if tag == "title":
             self._in_title = False
+        if tag in self.VOID:
+            return
+        for i in range(len(self.stack) - 1, -1, -1):          # close up to the matching tag (forgiving HTML)
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                break
+
+    def _emit(self, text):
+        skip, main = self._flags()
+        if skip:
+            return
+        self.all.append(text)
+        if main:
+            self.main.append(text)
 
     def handle_data(self, data):
         if self._in_title:
             self.title += data
-        elif not self._skip:
-            self.parts.append(data)
+        else:
+            self._emit(data)
+
+    @property
+    def parts(self):
+        return self.main if len("".join(self.main).strip()) > 150 else self.all
 
 
 def _chunks(path: str, raw: bytes, size: int = 1400) -> list[dict]:
@@ -198,6 +230,8 @@ def build_manual(version: str = "", log=print) -> dict:
                     chunks = []
                     try:
                         with zipfile.ZipFile(tmp) as z:
+                            pages = [n for n in z.namelist() if n.endswith(".html")]
+                            log(f"[Blender] Arşivde {len(pages)} sayfa var")
                             for name in z.namelist():
                                 if not name.endswith(".html") or "/_static/" in name or name.endswith(("genindex.html", "search.html")):
                                     continue
@@ -205,7 +239,8 @@ def build_manual(version: str = "", log=print) -> dict:
                     finally:
                         tmp.unlink(missing_ok=True)
                 if len(chunks) < 200:
-                    raise ValueError(f"kılavuz eksik görünüyor ({len(chunks)} bölüm)")
+                    log(f"[Blender] {url}: sadece {len(chunks)} bölüm okunabildi, sıradaki kaynağa geçiyorum")
+                    break
                 STORE.mkdir(parents=True, exist_ok=True)
                 with gzip.open(MANUAL, "wt", encoding="utf8") as f:
                     json.dump({"source": url, "chunks": chunks}, f, ensure_ascii=False, separators=(",", ":"))
