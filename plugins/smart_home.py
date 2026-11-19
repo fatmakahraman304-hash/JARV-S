@@ -83,6 +83,28 @@ def _request(method: str, path: str, body: dict | None = None, cfg: dict | None 
     return json.loads(raw) if raw.strip() else None
 
 
+CANDIDATES = ("http://homeassistant.local:8123", "http://homeassistant:8123")
+
+
+def discover(timeout: float = 2.5) -> str | None:
+    """Home Assistant's address on this network, if it answers at a usual one (no token needed:
+    its /manifest.json is public)."""
+    for base in CANDIDATES:
+        try:
+            with urllib.request.urlopen(base + "/manifest.json", timeout=timeout) as resp:
+                if resp.status == 200 and b"Home Assistant" in resp.read(4096):
+                    return base
+        except Exception:
+            continue
+    return None
+
+
+def connect(url: str, token: str) -> tuple[bool, str]:
+    """For the settings page: try, save on success. (ok, message)."""
+    out = run({"action": "setup", "url": url, "token": token})
+    return out.startswith("Connected"), out
+
+
 def _states(cfg: dict | None = None) -> list[dict]:
     out = _request("GET", "/api/states", cfg=cfg)
     return out if isinstance(out, list) else []
@@ -240,8 +262,13 @@ def _run(p: dict) -> str:
     if action == "setup":
         url = str(p.get("url") or "").strip().rstrip("/")
         token = str(p.get("token") or "").strip()
-        if not url or not token:
+        if not token:
             raise LookupError
+        if not url:
+            url = discover() or ""
+            if not url:
+                return ("I could not find Home Assistant on this network by itself "
+                        "(tried homeassistant.local:8123). Give me its address, e.g. http://192.168.1.20:8123.")
         if not re.match(r"^https?://", url):
             url = "http://" + url
         cfg = {"url": url, "token": token}

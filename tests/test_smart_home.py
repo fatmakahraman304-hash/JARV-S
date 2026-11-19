@@ -126,3 +126,27 @@ class LeftOnTest(unittest.TestCase):
         from pathlib import Path
         js = (Path(__file__).resolve().parent.parent / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("açık kalan ışıkları kapat", js)
+
+
+class DiscoverTest(unittest.TestCase):
+    def test_setup_without_url_discovers(self):
+        saved = {}
+        with mock.patch.object(sh, "discover", lambda: "http://homeassistant.local:8123"), \
+             mock.patch.object(sh, "_request", lambda m, path, body=None, cfg=None:
+                               {"message": "API running."} if path == "/api/" else []), \
+             mock.patch("memory.config_manager.save_plugin_config", lambda ns, v: saved.update(v)):
+            ok, msg = sh.connect("", "tok")
+        self.assertTrue(ok, msg)
+        self.assertEqual(saved["url"], "http://homeassistant.local:8123")
+
+    def test_setup_without_url_not_found(self):
+        with mock.patch.object(sh, "discover", lambda: None):
+            ok, msg = sh.connect("", "tok")
+        self.assertFalse(ok)
+        self.assertIn("could not find", msg)
+
+    def test_settings_page_has_the_card(self):
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "gui" / "settings_page.py").read_text(encoding="utf-8")
+        self.assertIn("Akıllı ev (Home Assistant)", src)
+        self.assertIn("_sh.connect(url, token)", src)
