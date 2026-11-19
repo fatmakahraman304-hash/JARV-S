@@ -9,11 +9,8 @@ from unittest import mock
 
 
 def _main():
-    try:
-        import main
-        return main
-    except BaseException as exc:          # heavy deps missing here
-        raise unittest.SkipTest(str(exc))
+    from tests._main_import import load_main
+    return load_main()
 
 
 class SayQueueTest(unittest.TestCase):

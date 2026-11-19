@@ -69,10 +69,8 @@ if __name__ == "__main__":
 class GuardTest(unittest.TestCase):
     def test_a_failing_watcher_does_not_cancel_the_group(self):
         import asyncio
-        try:
-            import main
-        except BaseException as exc:
-            self.skipTest(str(exc))
+        from tests._main_import import load_main
+        main = load_main()
         done = []
 
         async def bad():

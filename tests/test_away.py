@@ -85,10 +85,8 @@ if __name__ == "__main__":
 class HoldTest(unittest.TestCase):
     def test_late_result_held_when_asleep(self):
         import types
-        try:
-            import main
-        except BaseException as exc:      # heavy deps missing in this environment
-            self.skipTest(str(exc))
+        from tests._main_import import load_main
+        main = load_main()
         added = []
         fake = types.SimpleNamespace(_awake=False, _last_user_speech=time.monotonic(),
                                      ui=mock.Mock(), _AWAY_KINDS=main.JarvisLive._AWAY_KINDS)
