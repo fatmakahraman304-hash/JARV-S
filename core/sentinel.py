@@ -143,11 +143,47 @@ def download_listing(folder: Path | None) -> dict[str, int]:
 
 # ── diffing ───────────────────────────────────────────────────────────────────
 
+# ── what just happened, for "az önce indirdiğim dosyayı aç" ───────────────────
+
+RECENT_PATH = Path(__file__).resolve().parent.parent / "memory" / "recent_events.json"
+RECENT_MAX = 25
+
+
+def remember(kind: str, text: str, path: str = "") -> None:
+    """Keep a happening with its path, so a later 'that file' / 'the USB' can be resolved."""
+    import json
+    try:
+        items = json.loads(RECENT_PATH.read_text(encoding="utf-8"))
+        if not isinstance(items, list):
+            items = []
+    except Exception:
+        items = []
+    items.append({"at": time.time(), "kind": kind, "text": text, "path": path})
+    try:
+        RECENT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        RECENT_PATH.write_text(json.dumps(items[-RECENT_MAX:], ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def recent(kind: str = "", limit: int = 8) -> list[dict]:
+    import json
+    try:
+        items = json.loads(RECENT_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(items, list):
+        return []
+    items = [i for i in items if isinstance(i, dict) and (not kind or i.get("kind") == kind)]
+    return items[-limit:][::-1]
+
+
 def diff_drives(before: dict, after: dict) -> list[str]:
     notes = []
     for m in after.keys() - before.keys():
         d = after[m]
         notes.append(f"A removable drive was plugged in: {d['label']} ({_size(d['total'])}, at {m}).")
+        remember("usb", f"{d['label']} plugged in", m)
     for m in before.keys() - after.keys():
         notes.append(f"The removable drive {before[m]['label']} was taken out.")
     return notes
@@ -198,7 +234,8 @@ class NetWatch:
 class DownloadWatch:
     """A new file that stopped growing: a finished download."""
 
-    def __init__(self, listing: dict[str, int]):
+    def __init__(self, listing: dict[str, int], folder: Path | None = None):
+        self.folder = folder
         self.known = set(listing)
         self.growing: dict[str, int] = {}
 
@@ -213,7 +250,9 @@ class DownloadWatch:
                 self.known.add(name)
                 self.growing.pop(name, None)
                 if size >= MIN_DOWNLOAD:
-                    notes.append(f"A download finished: {name} ({_size(size)}) in Downloads.")
+                    full = str(self.folder / name) if self.folder else name
+                    notes.append(f"A download finished: {name} ({_size(size)}) at {full}.")
+                    remember("download", f"{name} ({_size(size)})", full)
             else:
                 self.growing[name] = size
         for name in list(self.growing):
@@ -230,7 +269,7 @@ class Sentinel:
         self.power = power()
         self.net = NetWatch()
         self.folder = downloads_dir()
-        self.downloads = DownloadWatch(download_listing(self.folder))
+        self.downloads = DownloadWatch(download_listing(self.folder), self.folder)
 
     def tick(self, now: float | None = None, cfg: dict | None = None) -> list[str]:
         now = time.monotonic() if now is None else now
