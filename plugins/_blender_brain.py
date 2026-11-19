@@ -218,7 +218,12 @@ def write_script(request: str, scene: dict, version: str, previous: str = "", er
     lessons = lessons_prompt(request, ("script", "fix", "tip"), 4)
     arch = ("\nFor buildings call building(plan) (plan = the JSON below) and finish with outdoor() instead of studio():\n"
             + PLAN_DOC) if is_big(request) else ""
-    prompt = (f"{KNOWLEDGE}\n{KIT_DOC}{arch}\n{REALISM}\n{SCRIPT_RULES.format(version=version)}\n\n{lessons}\n\n"
+    try:
+        from plugins import _blender_knowledge as know
+        reference = know.prompt(request)
+    except Exception:
+        reference = ""
+    prompt = (f"{KNOWLEDGE}\n{reference}\n{KIT_DOC}{arch}\n{REALISM}\n{SCRIPT_RULES.format(version=version)}\n\n{lessons}\n\n"
               f"Current scene: {json.dumps(scene, ensure_ascii=False)[:6000]}\n"
               f"User request (any language): {request}")
     if previous:
