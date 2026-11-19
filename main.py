@@ -2045,8 +2045,36 @@ class JarvisLive:
         notes = self._home_watch.tick(states)
         if not notes:
             return
+        leaving = [t.replace(" left home.", "") for sev, t in notes if sev == "leave"]
+        if leaving:
+            msg = home_watch.leaving_note(leaving, home_watch.lights_left_on(states))
+            if msg:
+                try:
+                    from core import away
+                    away.push_to_phones(*msg)
+                    self.ui.write_log("SYS: " + msg[1])
+                except Exception:
+                    pass
+            notes = [n for n in notes if n[0] != "leave"]
+            if not notes:
+                return
         text = home_watch.instruction(notes)
         self.ui.write_log("SYS: Ev — " + " ".join(t for _, t in notes))
+        if text.startswith("[WELCOME_HOME]") and not self._quiet():
+            # They just walked in: the desk being idle says nothing about the room. Greet now,
+            # with whatever waited for them folded in, instead of holding the greeting.
+            try:
+                from core import away
+                items = away.take()
+                if items:
+                    text += "\nAlso, briefly, what came up while they were out:\n" + away.describe(items)
+                self._away_since, self._away_asleep = None, False
+            except Exception:
+                pass
+            if not self._awake:
+                self.wake(reason="eve geliş")
+            self._say_queue.append((time.monotonic(), text))
+            return
         if any(sev == "alarm" for sev, _ in notes):
             try:
                 from core import away

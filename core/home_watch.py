@@ -21,7 +21,7 @@ ALARM_NAMES = {"smoke": "smoke", "gas": "gas", "moisture": "a water leak", "carb
 
 
 def settings() -> dict:
-    out = {"doors": True, "alarms": True}
+    out = {"doors": True, "alarms": True, "presence": True}
     try:
         from memory.config_manager import get_plugin_config
         cfg = get_plugin_config("home_alerts") or {}
@@ -32,10 +32,14 @@ def settings() -> dict:
 
 
 def watched(states: list[dict]) -> dict[str, dict]:
-    """{entity_id: {"name", "class", "state"}} for the binary sensors worth watching."""
+    """{entity_id: {"name", "class", "state"}} for the binary sensors worth watching, and people."""
     out = {}
     for e in states or []:
         eid = str(e.get("entity_id", ""))
+        if eid.startswith("person."):
+            a = e.get("attributes") or {}
+            out[eid] = {"name": str(a.get("friendly_name") or eid), "class": "person", "state": e.get("state")}
+            continue
         if not eid.startswith("binary_sensor."):
             continue
         a = e.get("attributes") or {}
@@ -56,6 +60,14 @@ def diff(before: dict, after: dict, cfg: dict | None = None) -> list[tuple[str, 
         if was["state"] in ("unavailable", "unknown"):
             continue                       # coming back online is not an event
         cls, name, on = now["class"], now["name"], now["state"] == "on"
+        if cls == "person":
+            if not cfg.get("presence", True):
+                continue
+            if now["state"] == "home":
+                notes.append(("arrive", f"{name} arrived home."))
+            elif was["state"] == "home":
+                notes.append(("leave", f"{name} left home."))
+            continue
         if cls in ALARMS and cfg.get("alarms", True):
             if on:
                 notes.append(("alarm", f"ALARM: {name} detects {ALARM_NAMES.get(cls, cls)}."))
@@ -80,9 +92,29 @@ class HomeWatch:
         return notes
 
 
+def lights_left_on(states: list[dict]) -> list[str]:
+    """Names of lights and plugs still on — what someone leaving may have forgotten."""
+    return [str((e.get("attributes") or {}).get("friendly_name") or e.get("entity_id"))
+            for e in states or [] if str(e.get("entity_id", "")).split(".")[0] in ("light",)
+            and e.get("state") == "on"]
+
+
+def leaving_note(names: list[str], left_on: list[str]) -> tuple[str, str] | None:
+    """(title, body) for the phone when the user leaves with lights on; None when all is off."""
+    if not left_on:
+        return None
+    who = ", ".join(names)
+    shown = ", ".join(left_on[:5]) + (f" (+{len(left_on) - 5})" if len(left_on) > 5 else "")
+    return ("JARVIS — evden çıktınız", f"{who}: açık kalan ışıklar — {shown}. Kapatmamı isterseniz söyleyin.")
+
+
 def instruction(notes: list[tuple[str, str]]) -> str:
     alarm = any(sev == "alarm" for sev, _ in notes)
     text = " ".join(t for _, t in notes)
+    if any(sev == "arrive" for sev, _ in notes) and not alarm:
+        return ("[WELCOME_HOME] " + text + " Greet them the way J.A.R.V.I.S. greets Tony coming home — one "
+                "short, warm sentence ('Eve hoş geldiniz, efendim.'); add one useful thing at most (something "
+                "waiting, or the house's state). Do not call any tool.")
     if alarm:
         return ("[HOME_ALARM] " + text + " Tell the user at once, calmly and clearly, in one or two sentences "
                 "(e.g. 'Efendim, mutfakta su kaçağı algılandı.'), and offer the obvious step (turning a valve "
