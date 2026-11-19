@@ -218,3 +218,64 @@ def greeting_instruction(away_for: float, hour: int) -> str:
             "away. Greet them the way J.A.R.V.I.S. greets Tony coming home — one short, warm sentence "
             "('Tekrar hoş geldiniz, efendim.' / 'İyi akşamlar, efendim; her şey yolunda.'), adding at most "
             "that all is in order. Do not ask a question, do not list anything, do not call any tool.")
+
+
+# ── word to the phone ─────────────────────────────────────────────────────────
+# J.A.R.V.I.S. reaches Tony wherever he is. When the user has left the desk (not
+# merely JARVIS asleep with them sitting there) and a job they started finishes,
+# or the computer raises an alarm, their phone gets a notification too — the
+# same Web Push the phone app already uses for reminders. Reminders are not
+# repeated here: they push on their own.
+
+PUSH_GAP = 10 * 60
+_last_push = {"at": float("-inf")}
+
+
+def push_enabled() -> bool:
+    try:
+        from memory.config_manager import get_plugin_config
+        return bool((get_plugin_config("away") or {}).get("push", True))
+    except Exception:
+        return True
+
+
+def phone_note(instruction: str, kind: str) -> tuple[str, str] | None:
+    """(title, body) for the phone, or None when this is not worth a notification."""
+    import re
+    text = (instruction or "").strip()
+    if kind == "result":
+        m = re.search(r"The '([^']+)' tool", text)
+        tool = (m.group(1) if m else "").replace("_", " ")
+        r = re.search(r"Result:\s*(.*)", text, re.S)
+        body = (r.group(1) if r else text).strip()
+        return (f"JARVIS — {tool} tamamlandı" if tool else "JARVIS — iş tamamlandı"), body[:300]
+    if kind == "system":
+        body = re.sub(r"^\[[A-Z_]+\]\s*", "", text)
+        return "JARVIS — sistem uyarısı", body[:300]
+    return None
+
+
+def should_push(kind: str, input_idle: float | None, now: float | None = None) -> bool:
+    """Truly away from the desk (input idle), a kind worth it, not too soon after the last one."""
+    now = time.monotonic() if now is None else now
+    if kind not in ("result", "system") or not push_enabled():
+        return False
+    if input_idle is None or input_idle < AWAY_AFTER:
+        return False
+    return now - _last_push["at"] >= PUSH_GAP
+
+
+def push_to_phones(title: str, body: str) -> int:
+    """Send to every phone/tablet that turned notifications on (not this computer); how many."""
+    sent = 0
+    try:
+        from core import sync_hub
+        me = sync_hub.device_id()
+        for dev in list((sync_hub._state.get("push_subs") or {})):
+            if dev != me and sync_hub.push_to(dev, title, body, tag="away"):
+                sent += 1
+    except Exception as exc:
+        print(f"[Away] push: {exc}")
+    if sent:
+        _last_push["at"] = time.monotonic()
+    return sent

@@ -125,3 +125,37 @@ class WelcomeTest(unittest.TestCase):
             self.assertFalse(away.welcome_enabled())
             while_away.run({"action": "welcome_on"})
             self.assertTrue(away.welcome_enabled())
+
+
+class PushTest(unittest.TestCase):
+    def setUp(self):
+        away._last_push["at"] = float("-inf")
+
+    def test_phone_note(self):
+        t, b = away.phone_note("[TOOL_LATE_RESULT] The 'blender_studio' tool you started earlier has just "
+                               "finished. Tell the user... Result: Render saved to Desktop.", "result")
+        self.assertEqual(t, "JARVIS — blender studio tamamlandı")
+        self.assertEqual(b, "Render saved to Desktop.")
+        self.assertEqual(away.phone_note("[SYSTEM_ALERT] CPU 95%", "system")[1], "CPU 95%")
+        self.assertIsNone(away.phone_note("x", "update"))
+
+    def test_should_push(self):
+        with mock.patch.object(away, "push_enabled", lambda: True):
+            self.assertTrue(away.should_push("result", 3600, now=100))
+            self.assertFalse(away.should_push("result", 30, now=100))     # at the desk, JARVIS just asleep
+            self.assertFalse(away.should_push("result", None, now=100))
+            self.assertFalse(away.should_push("reminder", 3600, now=100)) # reminders push on their own
+            away._last_push["at"] = 100
+            self.assertFalse(away.should_push("system", 3600, now=200))   # not twice in ten minutes
+            self.assertTrue(away.should_push("system", 3600, now=100 + away.PUSH_GAP))
+        with mock.patch.object(away, "push_enabled", lambda: False):
+            self.assertFalse(away.should_push("result", 3600, now=10 ** 6))
+
+    def test_push_to_phones_skips_this_computer(self):
+        from core import sync_hub
+        sent = []
+        with mock.patch.dict(sync_hub._state, {"push_subs": {"pc": {}, "phone": {}}}), \
+             mock.patch.object(sync_hub, "device_id", lambda: "pc"), \
+             mock.patch.object(sync_hub, "push_to", lambda d, t, b, tag: sent.append(d) or True):
+            self.assertEqual(away.push_to_phones("t", "b"), 1)
+        self.assertEqual(sent, ["phone"])
