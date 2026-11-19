@@ -2057,7 +2057,15 @@ class JarvisLive:
             return
         leaving = [t.replace(" left home.", "") for sev, t in notes if sev == "leave"]
         if leaving:
-            msg = home_watch.leaving_note(leaving, home_watch.lights_left_on(states))
+            rain = None
+            try:
+                from core import open_data
+                conf = await asyncio.to_thread(smart_home._request, "GET", "/api/config")
+                if conf and conf.get("latitude") is not None:
+                    rain = await asyncio.to_thread(open_data.rain_soon, conf["latitude"], conf["longitude"])
+            except Exception:
+                rain = None
+            msg = home_watch.leaving_note(leaving, home_watch.lights_left_on(states), rain)
             if msg:
                 try:
                     from core import away

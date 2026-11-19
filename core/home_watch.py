@@ -99,13 +99,17 @@ def lights_left_on(states: list[dict]) -> list[str]:
             and e.get("state") == "on"]
 
 
-def leaving_note(names: list[str], left_on: list[str]) -> tuple[str, str] | None:
-    """(title, body) for the phone when the user leaves with lights on; None when all is off."""
-    if not left_on:
+def leaving_note(names: list[str], left_on: list[str], rain: dict | None = None) -> tuple[str, str] | None:
+    """(title, body) for the phone when the user leaves with lights on or rain coming; None when nothing."""
+    parts = []
+    if left_on:
+        shown = ", ".join(left_on[:5]) + (f" (+{len(left_on) - 5})" if len(left_on) > 5 else "")
+        parts.append(f"açık kalan ışıklar — {shown}. Kapatmamı isterseniz söyleyin.")
+    if rain:
+        parts.append(f"Saat {rain['at']} civarı yağmur ihtimali %{rain['prob']}; şemsiye almak isteyebilirsiniz.")
+    if not parts:
         return None
-    who = ", ".join(names)
-    shown = ", ".join(left_on[:5]) + (f" (+{len(left_on) - 5})" if len(left_on) > 5 else "")
-    return ("JARVIS — evden çıktınız", f"{who}: açık kalan ışıklar — {shown}. Kapatmamı isterseniz söyleyin.")
+    return ("JARVIS — evden çıktınız", f"{', '.join(names)}: " + " ".join(parts))
 
 
 def instruction(notes: list[tuple[str, str]]) -> str:

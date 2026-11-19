@@ -86,3 +86,17 @@ class PresenceTest(unittest.TestCase):
         self.assertIn("evden çıktınız", title)
         self.assertIn("Salon", body)
         self.assertIsNone(hw.leaving_note(["Murat"], []))
+
+
+class RainTest(unittest.TestCase):
+    def test_rain_in(self):
+        from core import open_data
+        js = {"hourly": {"time": ["2026-11-20T08:00", "2026-11-20T09:00", "2026-11-20T10:00", "2026-11-20T15:00"],
+                         "precipitation_probability": [10, 20, 70, 90]}}
+        self.assertEqual(open_data.rain_in(js, 3, 50, now_iso="2026-11-20T08:00"), {"prob": 70, "at": "10:00"})
+        self.assertIsNone(open_data.rain_in(js, 2, 50, now_iso="2026-11-20T08:00"))
+
+    def test_leaving_note_with_rain_only(self):
+        title, body = hw.leaving_note(["Murat"], [], {"prob": 70, "at": "10:00"})
+        self.assertIn("şemsiye", body)
+        self.assertNotIn("ışıklar", body)
