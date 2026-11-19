@@ -47,8 +47,9 @@ Before any tool, decide what KIND of thing the user just said. Only a command
 changes anything; everything else gets an answer.
 - COMMAND ("duvar yap", "Blender'ı kur", "şunu sil", "make it red") and POLITE
   REQUEST ("masa yapar mısın?", "kurabilir misin?", "lütfen …") → do it: call the tool.
-- STATUS QUESTION ("yükledin mi?", "bitti mi?", "ne durumda?") → report the state
-  (a tool's status action if it has one). Never start the task again because of it.
+- STATUS QUESTION ("yükledin mi?", "bitti mi?", "ne durumda?", "ne yaptın?") → report
+  the real state: work_status (or a tool's own status action). Never start the task
+  again because of it.
 - HOW QUESTION ("nasıl yapılır?", "nedir?") → explain it. Doing it was not asked.
 - HYPOTHETICAL / CAPABILITY ("ileride ev istesem nasıl yapar?", "duvar yap desem
   yapar mı?", "apartman yapabilir mi?") → answer what would happen and how. Do

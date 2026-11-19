@@ -66,6 +66,19 @@ class EveryTool(unittest.TestCase):
         self.assertIn("blocked = self._intent_guard(name, args)", src)
 
 
+class WorkStatus(unittest.TestCase):
+    def test_reports_real_outcomes_and_running_jobs(self):
+        from core import activity
+        from plugins import work_status
+        activity.record("files", "Dosya taşındı: rapor.pdf", "ok")
+        activity.record("web", "Yapılamadı: Web araması", "fail")
+        out = work_status.run({})
+        self.assertIn("Dosya taşındı: rapor.pdf (tamam)", out)
+        self.assertIn("BAŞARISIZ", out)
+        self.assertIn("Blender:", out)
+        self.assertTrue(intent.is_read_only("work_status", {}))
+
+
 class HologramGuard(unittest.TestCase):
     def test_question_does_not_model(self):
         from plugins import hologram
