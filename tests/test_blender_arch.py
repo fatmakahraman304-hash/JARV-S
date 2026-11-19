@@ -142,19 +142,20 @@ class Buildings(unittest.TestCase):
         self.assertEqual(report["issues"], [])
         self.assertTrue(any("çatısı" in o[0] for o in report["objects"]))
 
-    def test_user_deletes_a_room_and_adds_a_pool(self):
+    def test_user_merges_rooms_and_adds_a_pool(self):
         from core import gemini
         with patch.object(brain, "make_plan", return_value=HOUSE), patch.object(brain, "look", return_value={"score": 9.0, "problems": []}), \
              patch.object(gemini, "as_json", return_value={"ok": True}):
             studio.process("new", "iki katlı tuğla ev", None)
         before = self.names()
         edited = json.loads(json.dumps(HOUSE))
-        edited["rooms"] = [r for r in edited["rooms"] if r["name"] != "Salon"]
+        edited["rooms"] = [{"name": "Büyük salon", "rect": [-4.75, -3.75, 4.75, 1.0]},     # salon + mutfak merged
+                           {"name": "Hol", "rect": [-4.75, 1.0, 4.75, 3.75]}]
         edited["extras"] = [{"name": "Havuz", "code": POOL.replace("glass(", "glas(")}]  # broken
         edited["user_rules"] = ["Balkon olmasın"]
         with patch.object(brain, "edit_plan", return_value=edited), patch.object(gemini, "text", return_value=POOL), \
              patch.object(brain, "look", return_value={"score": 9.0, "problems": []}):
-            studio.process("edit", "Salonu sil, evin önüne havuz yap", None)
+            studio.process("edit", "Salonla mutfağı birleştir, evin önüne havuz yap", None)
         after = self.names()
         self.assertIn("Havuz", after)                                   # the broken pool script was repaired and built
         self.assertIn("Havuz suyu", after)
