@@ -1,5 +1,6 @@
 import functools
 import json
+import shutil
 import os
 import sys
 import threading
@@ -46,10 +47,29 @@ def _locked(fn):
     return wrapper
 
 
+def _backup_file() -> Path:
+    return CONFIG_FILE.with_name(CONFIG_FILE.name + ".bak")
+
+
+def _from_backup() -> dict | None:
+    """The last good settings (kept before every write) — keys and all."""
+    try:
+        data = json.loads(_backup_file().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
 def _write_config(data: dict) -> None:
     ensure_config_dir()
     tmp = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    try:                                             # the current good file becomes the backup
+        if CONFIG_FILE.exists():
+            json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            shutil.copyfile(CONFIG_FILE, _backup_file())
+    except (OSError, ValueError):
+        pass                                         # never back up a broken file over a good backup
     for attempt in range(20):
         try:
             os.replace(tmp, CONFIG_FILE)
@@ -84,6 +104,10 @@ def _read_for_write() -> dict:
         print(f"[Config] api_keys.json could not be read ({last}) - kept as {backup.name}")
     except Exception:
         pass
+    good = _from_backup()
+    if good is not None:
+        print("[Config] Settings restored from the last good copy")
+        return good
     return {}
 
 @_locked
@@ -109,6 +133,10 @@ def load_api_keys() -> dict:
                 # Plain text: an emoji here raised UnicodeEncodeError on a
                 # Windows console, turning a failed read into a crash.
                 print(f"[Config] Failed to load api_keys.json: {e}")
+                good = _from_backup()            # the key and settings from the last good copy
+                if good is not None:
+                    print("[Config] Using the last good copy of the settings")
+                    return good
                 return {}
             time.sleep(0.05)
     return {}
