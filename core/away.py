@@ -279,3 +279,45 @@ def push_to_phones(title: str, body: str) -> int:
     if sent:
         _last_push["at"] = time.monotonic()
     return sent
+
+
+# ── good morning ──────────────────────────────────────────────────────────────
+# The opening briefing runs when JARVIS starts. A computer left on overnight
+# never starts again, so the user would never get one: the first return of a new
+# morning stands in for the start — "Günaydın, efendim" and the briefing, with
+# whatever came up overnight folded in.
+
+BRIEFED_PATH = BASE_DIR / "memory" / "last_briefing.json"
+MORNING_FROM, MORNING_TO = 5, 13
+MORNING_AWAY = 3 * 3600
+
+
+def mark_briefed(today: str) -> None:
+    try:
+        BRIEFED_PATH.parent.mkdir(parents=True, exist_ok=True)
+        BRIEFED_PATH.write_text(json.dumps({"date": today}), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def last_briefed() -> str:
+    try:
+        return str(json.loads(BRIEFED_PATH.read_text(encoding="utf-8")).get("date") or "")
+    except Exception:
+        return ""
+
+
+def morning_due(today: str, hour: int, away_for: float, woke_by_command: bool,
+                briefing_enabled: bool, last: str | None = None) -> bool:
+    """The first return of a morning after a long night away, no briefing yet today."""
+    last = last_briefed() if last is None else last
+    return (briefing_enabled and not woke_by_command and MORNING_FROM <= hour < MORNING_TO
+            and away_for >= MORNING_AWAY and last != today)
+
+
+def overnight_extra(items: list[dict]) -> str:
+    """What the briefing should fold in from the night."""
+    if not items:
+        return ""
+    return ("Also tell them, briefly and most important first, what came up while they were away "
+            "(merge related items, outcomes not steps):\n" + describe(items))
