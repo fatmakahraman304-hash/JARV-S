@@ -91,6 +91,7 @@ class HoldTest(unittest.TestCase):
         fake = types.SimpleNamespace(_awake=False, _last_user_speech=time.monotonic(),
                                      ui=mock.Mock(), _AWAY_KINDS=main.JarvisLive._AWAY_KINDS)
         fake._user_away = lambda: main.JarvisLive._user_away(fake)
+        fake._push_if_gone = lambda text, kind: None
         with mock.patch.object(away, "add", lambda t, kind, key: added.append((kind, key))):
             self.assertTrue(main.JarvisLive._hold_for_later(fake, "[TOOL_LATE_RESULT] x"))
             fake._awake = True
