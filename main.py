@@ -607,6 +607,8 @@ class JarvisLive:
         self._loop                     = None
         self._is_speaking         = False
         self._outbox: list        = []      # what arrived while there was no session (sent on reconnect)
+        self._away_since: float | None = None   # when the user was last seen leaving (core/away.py)
+        self._away_asleep         = False   # JARVIS was asleep then: their wake command comes first
         self._update_checked      = None    # when GitHub was last asked for a newer JARVIS
         self._update_offered      = ""      # the version already offered (asked once, not every half hour)
         self._speaking_lock       = threading.Lock()
@@ -1855,7 +1857,6 @@ class JarvisLive:
     async def _watch_away(self) -> None:
         """When the user is back, tell them in one welcome what came up while they were away."""
         from core import away
-        away_since = None
         await asyncio.sleep(5)
         while True:
             await asyncio.sleep(3)
@@ -1864,10 +1865,12 @@ class JarvisLive:
                 quiet = now - (self._last_user_speech or 0.0)
                 idle = away.input_idle_seconds()
                 if away.is_away(self._awake, quiet, idle):
-                    away_since = away_since or now
+                    # kept on self: a reconnect while the user is out must not forget they left
+                    if self._away_since is None:
+                        self._away_since = now
+                    self._away_asleep = self._away_asleep or not self._awake
                     continue
-                if not self.session or not away.pending():
-                    away_since = None
+                if self._away_since is None or not self.session:
                     continue
                 with self._speaking_lock:
                     speaking = self._is_speaking or (self.audio_in_queue is not None
@@ -1878,16 +1881,26 @@ class JarvisLive:
                 except Exception:
                     busy = False
                 if not away.ready_to_tell(self._awake, speaking, busy, quiet, idle):
+                    if quiet < 6 and not away.pending():
+                        # they started talking at once: their words come first, no bare greeting after
+                        self._away_since = None
+                        self._away_asleep = False
                     continue
+                gone = now - self._away_since
+                woke_by_command = self._away_asleep
+                self._away_since, self._away_asleep = None, False
                 items = away.take()
-                if not items:
+                if items:
+                    self.ui.write_log(f"SYS: Siz yokken {len(items)} gelişme oldu — özetliyorum.")
+                    text = away.welcome_instruction(items, gone)
+                elif away.should_welcome(gone, woke_by_command):
+                    from datetime import datetime
+                    self.ui.write_log("SYS: Tekrar hoş geldiniz.")
+                    text = away.greeting_instruction(gone, datetime.now().hour)
+                else:
                     continue
-                gone = (now - away_since) if away_since else 0.0
-                away_since = None
-                self.ui.write_log(f"SYS: Siz yokken {len(items)} gelişme oldu — özetliyorum.")
                 await self.session.send_client_content(
-                    turns={"role": "user", "parts": [{"text": away.welcome_instruction(items, gone)}]},
-                    turn_complete=True)
+                    turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True)
             except Exception as exc:
                 print(f"[Away] {exc}")
 
