@@ -154,16 +154,50 @@ class RealBlender(unittest.TestCase):
 
     def test_wrong_subject_is_rebuilt(self):
         from core import gemini
-        bird = {"steps": [{"op": "create", "kind": "sphere", "name": "OiseauVolant"}]}
-        verdicts = [bird, {"ok": False, "wrong": "Masa yerine kuş yapılmış"}, {"ok": True}]
-        with patch.object(gemini, "as_json", side_effect=verdicts), patch.object(gemini, "text", return_value=GOOD) as model:
+        bird = 'import bpy\nclear()\nsphere("OiseauVolant", 0.1, (0, 0, 0.1))\n'
+        with patch.object(gemini, "as_json", side_effect=[{"ok": False, "wrong": "Masa yerine kuş yapılmış"}, {"ok": True}]), \
+             patch.object(gemini, "text", side_effect=[bird, GOOD]) as model, patch.object(brain, "look", return_value={}):
             studio.process("new", "ahşap bir masa", None)
         self.assertIn("kuş yapılmış", model.call_args.args[0])                    # told what went wrong
         report = studio.invoke(studio.executable(), studio.project_path(None), Path(self.tmp.name), "inspect")
         names = {o["name"] for o in report["details"]}
         self.assertIn("Küre", names)
         self.assertNotIn("OiseauVolant", names)
-        self.assertEqual(brain.load()[-1]["kind"], "fix")
+        self.assertTrue(any(i["kind"] == "fix" for i in brain.load()))
+
+    def test_looks_at_its_work_and_fixes_floating_legs(self):
+        from core import gemini
+        bad = """import bpy
+clear()
+top_ = box("Tabla", (1.2, 0.7, 0.04), (0, 0, 0.9))
+for i, (x, y) in enumerate([(-1.8, -0.8), (1.8, -0.8), (-1.8, 0.8), (1.8, 0.8)], 1):
+    cylinder(f"Masa ayağı {i}", 0.025, 0.7, (x, y, 0.35))
+assign(top_, wood("Ceviz"))
+studio(samples=8)
+"""
+        good = """import bpy
+top_ = bpy.data.objects["Tabla"]
+top_.location.z = 0.73
+for i, (x, y) in enumerate([(-0.54, -0.29), (0.54, -0.29), (-0.54, 0.29), (0.54, 0.29)], 1):
+    leg = bpy.data.objects[f"Masa ayağı {i}"]
+    leg.location = (x, y, 0.0)
+    on_floor(leg)
+    touch(top_, leg)
+"""
+        looks = [{"score": 3.0, "subject_ok": True, "problems": ["Ayaklar tablanın altında değil, uzakta duruyor"]},
+                 {"score": 9.0, "subject_ok": True, "problems": []}]
+        logs = []
+        player = type("P", (), {"write_log": lambda self, m: logs.append(m)})()
+        with patch.object(gemini, "text", side_effect=[bad, good]) as model, \
+             patch.object(gemini, "as_json", return_value={"ok": True}), \
+             patch.object(brain, "look", side_effect=looks) as eye:
+            studio.process("new", "ahşap bir masa", None, player=player)
+        self.assertEqual(eye.call_count, 2)
+        self.assertTrue(eye.call_args_list[0].args[0].startswith(b"\x89PNG"))          # it really looked at a picture
+        self.assertIn("hiçbir parçaya değmiyor", " ".join(eye.call_args_list[0].args[2]))   # and measured the gaps
+        self.assertIn("Ayaklar tablanın altında değil", model.call_args.args[0])          # the critique went into the fix
+        self.assertEqual(eye.call_args_list[1].args[2], [])                               # fixed: nothing floats any more
+        self.assertTrue(any("9/10" in m for m in logs), logs)
 
     def test_study_keeps_only_verified_knowledge(self):
         from core import gemini
