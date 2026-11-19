@@ -82,6 +82,30 @@ def weather(city: str = "", lat: float | None = None, lon: float | None = None, 
         return f"Hava durumu alınamadı: {exc}"
 
 
+def rain_soon(lat: float, lon: float, hours: int = 6, threshold: int = 50) -> dict | None:
+    """The highest rain chance in the next `hours` if it reaches `threshold`: {"prob", "at"} — for
+    'take an umbrella' when the user heads out. None when dry or unknown."""
+    try:
+        q = urllib.parse.urlencode({"latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 2,
+                                    "hourly": "precipitation_probability"})
+        js = _get(f"https://api.open-meteo.com/v1/forecast?{q}", timeout=8)
+        return rain_in(js, hours, threshold)
+    except Exception:
+        return None
+
+
+def rain_in(js: dict, hours: int, threshold: int, now_iso: str | None = None) -> dict | None:
+    from datetime import datetime
+    h = js.get("hourly") or {}
+    times, probs = h.get("time") or [], h.get("precipitation_probability") or []
+    now = now_iso or datetime.now().strftime("%Y-%m-%dT%H:00")
+    ahead = [(t, p) for t, p in zip(times, probs) if t >= now and p is not None][:hours]
+    if not ahead:
+        return None
+    t, p = max(ahead, key=lambda x: x[1])
+    return {"prob": int(p), "at": t[11:16]} if p >= threshold else None
+
+
 CURRENCY_WORDS = {"dolar": "USD", "usd": "USD", "euro": "EUR", "avro": "EUR", "eur": "EUR", "sterlin": "GBP",
                   "pound": "GBP", "gbp": "GBP", "tl": "TRY", "lira": "TRY", "türk lirası": "TRY", "try": "TRY",
                   "frank": "CHF", "chf": "CHF", "yen": "JPY", "ruble": "RUB", "yuan": "CNY"}
