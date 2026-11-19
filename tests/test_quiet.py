@@ -112,3 +112,27 @@ class MeetingTest(unittest.TestCase):
         quiet_mode.run({"action": "on", "minutes": 120, "reason": "film"}, player=player)
         player.request_sleep.assert_not_called()
         self.assertFalse(quiet.last_listen_off())
+
+
+class ChipTest(unittest.TestCase):
+    def test_chip_note(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(quiet, "STATE_PATH", Path(d) / "q.json"):
+            self.assertEqual(quiet.chip_note(), "")
+            quiet.start(30)
+            self.assertEqual(quiet.chip_note(), "SESSİZ MOD")
+            quiet.start(30, listen=False)
+            self.assertEqual(quiet.chip_note(), "TOPLANTI")
+
+    def test_state_chip_shows_note(self):
+        try:
+            import os
+            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+            from PyQt6.QtWidgets import QApplication
+        except Exception as exc:
+            self.skipTest(str(exc))
+        app = QApplication.instance() or QApplication([])
+        from gui.widgets import StateChip
+        chip = StateChip()
+        chip.set_note("sessiz mod")
+        self.assertEqual(chip._note, "SESSİZ MOD")
+        chip.grab()                              # paints without error

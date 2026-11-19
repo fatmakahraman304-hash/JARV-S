@@ -1949,6 +1949,15 @@ class JarvisLive:
             await asyncio.sleep(3)
             heartbeat.beat("away")
             try:
+                from core import quiet as _quiet_mod
+                note = _quiet_mod.chip_note()
+                if note != getattr(self, "_chip_note", ""):
+                    self._chip_note = note
+                    if hasattr(self.ui, "set_mode_note"):
+                        self.ui.set_mode_note(note)
+            except Exception:
+                pass
+            try:
                 now = time.monotonic()
                 quiet = now - (self._last_user_speech or 0.0)
                 idle = away.input_idle_seconds()

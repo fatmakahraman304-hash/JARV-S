@@ -1159,7 +1159,16 @@ class StateChip(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._state = "INITIALISING"
+        self._note = ""
         self.setFixedSize(220, 36)
+
+    def set_note(self, note: str) -> None:
+        """A standing mode shown after the state ('SESSİZ MOD'); '' to clear."""
+        note = str(note or "").replace("i", "İ").replace("ı", "I").upper()   # Turkish capitals
+        if note != self._note:
+            self._note = note
+            self.setToolTip(note.capitalize() if note else "")
+            self.update()
 
     def set_state(self, state: str) -> None:
         state = str(state or "").upper()
@@ -1187,7 +1196,9 @@ class StateChip(QWidget):
         p.setBrush(QBrush(qcol(C.WHITE)))
         p.drawEllipse(QPointF(22, H / 2), 3.2, 3.2)
         text = self._TR.get(self._state, self._state)
-        p.setFont(px_font(12, QFont.Weight.DemiBold, spacing=3.0))
+        if self._note:
+            text = f"{text} · {self._note}"
+        p.setFont(px_font(12 if not self._note else 10, QFont.Weight.DemiBold, spacing=3.0 if not self._note else 1.5))
         p.setPen(QPen(col))
         p.drawText(QRectF(40, 0, W - 52, H), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter,
                    p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(W - 52)))
