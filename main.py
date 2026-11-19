@@ -1551,6 +1551,11 @@ class JarvisLive:
             mem_str += prompt_context()
         except Exception as exc:
             self.ui.write_log(f"SYS: Kalıcı hafıza okunamadı: {exc}")
+        try:                                           # what worked after its own mistakes
+            from core import tool_lessons
+            mem_str += tool_lessons.prompt_block()
+        except Exception as exc:
+            print(f"[Lessons] {exc}")
         try:                                           # the user's named routines: saying one runs it
             from core.routines import desktop as _rd
             _eng = _rd.engine()
@@ -1776,6 +1781,18 @@ class JarvisLive:
         except Exception:
             result = ""
         activity.record_tool(fc.name, args, result=result)
+        try:                                   # learning from its own mistakes, with every tool
+            from core import tool_lessons
+            ok_now = activity.status_of(result) == "ok" and not str(result).startswith(("NOT EXECUTED", "STILL RUNNING"))
+            learned = tool_lessons.record(fc.name, args, ok_now, str(result))
+            if learned:
+                print(f"[Lessons] learned: {learned['tool']} {learned['bad']} → {learned['good']}")
+            elif not ok_now and not str(result).startswith(("NOT EXECUTED", "STILL RUNNING")):
+                cure = tool_lessons.hint(fc.name, args)
+                if cure:
+                    resp.response["result"] = f"{result}\n{cure}"
+        except Exception as exc:
+            print(f"[Lessons] {exc}")
         try:                                   # a tool failed for a missing library JARVIS may install itself
             from core import installer
             pkg = installer.missing_package(result)
