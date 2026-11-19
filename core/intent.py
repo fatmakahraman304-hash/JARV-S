@@ -104,7 +104,8 @@ _LOOK_NAME = re.compile(r"(search|recall|weather|time|clock|date|status|screen|r
                         r"translat|calc|describe|inspect|query|web|memory|vision|camera|explain|define|knowledge|"
                         r"lookup|fetch|price|stock|currency|wiki|summar|scan_research)", re.I)
 _LOOK_ACTIONS = {"status", "list", "inspect", "info", "get", "read", "search", "guide", "lessons", "knowledge",
-                 "preview", "show", "help", "query", "find", "check", "describe", "explain", "history", "state"}
+                 "preview", "show", "help", "query", "find", "check", "describe", "explain", "history", "state",
+                 "errors", "logs", "report"}
 
 
 def is_read_only(name: str, args: dict | None = None) -> bool:
