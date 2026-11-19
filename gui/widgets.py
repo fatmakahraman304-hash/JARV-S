@@ -1164,7 +1164,7 @@ class StateChip(QWidget):
 
     def set_note(self, note: str) -> None:
         """A standing mode shown after the state ('SESSİZ MOD'); '' to clear."""
-        note = str(note or "").upper()
+        note = str(note or "").replace("i", "İ").replace("ı", "I").upper()   # Turkish capitals
         if note != self._note:
             self._note = note
             self.setToolTip(note.capitalize() if note else "")
