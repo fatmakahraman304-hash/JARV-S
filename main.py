@@ -1891,6 +1891,39 @@ class JarvisLive:
             except Exception as exc:
                 print(f"[Away] {exc}")
 
+    async def _watch_vigil(self) -> None:
+        """J.A.R.V.I.S. keeping watch: once, dryly, after hours without a break or deep into the night
+        (core/vigil.py). Grounded in measured activity; off when the user says so."""
+        from datetime import datetime
+        from core import away, vigil
+        watch = getattr(self, "_vigil", None) or vigil.Vigil()   # survives reconnects: the stretch goes on
+        self._vigil = watch
+        await asyncio.sleep(60)
+        while True:
+            try:
+                now = time.monotonic()
+                note = await asyncio.to_thread(
+                    watch.due, now, datetime.now(), away.input_idle_seconds(),
+                    now - (self._last_user_speech or 0.0))
+                if note and self.session and self._is_idle_for_note():
+                    watch.mark(note, now, datetime.now())
+                    self.ui.write_log(f"SYS: Bakım notu — {note['minutes']} dakikadır aralıksız çalışıyorsunuz.")
+                    self.plugin_say(vigil.instruction(note))
+            except Exception as exc:
+                print(f"[Vigil] {exc}")
+            await asyncio.sleep(60)
+
+    def _is_idle_for_note(self) -> bool:
+        """Like _is_idle, but the user may be typing: only speech and JARVIS's own work must be quiet."""
+        try:
+            from core import jobs
+            busy = bool(jobs.current())
+        except Exception:
+            busy = False
+        quiet = time.monotonic() - (getattr(self, "_last_user_speech", 0.0) or 0.0) > 60
+        return (self._awake and not self._is_speaking and quiet and not busy
+                and (self.audio_in_queue is None or self.audio_in_queue.empty()))
+
     def _is_idle(self) -> bool:
         """Nobody is talking, nothing of JARVIS's is running: a moment that interrupts no one."""
         try:
@@ -3453,6 +3486,7 @@ class JarvisLive:
                     tg.create_task(self._watch_updates())
                     tg.create_task(self._watch_habits())
                     tg.create_task(self._watch_away())
+                    tg.create_task(self._watch_vigil())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
