@@ -56,3 +56,36 @@ class MemorySafety(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StandingInstructions(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        d = Path(self.tmp.name)
+        self.p = [patch.object(mm, "MEMORY_PATH", d / "long_term.json"),
+                  patch.object(mm, "BACKUP_PATH", d / "long_term.json.bak"),
+                  patch.object(mm, "ARCHIVE_PATH", d / "long_term_archive.json"),
+                  patch.object(mm, "_LEGACY_MEMORY_PATH", d / "none.json")]
+        for p in self.p:
+            p.start()
+
+    def tearDown(self):
+        for p in self.p:
+            p.stop()
+        self.tmp.cleanup()
+
+    def test_always_in_the_prompt_first_and_never_trimmed(self):
+        mm.update_memory({"instructions": {"no_sir": {"value": "Do not call the user 'sir' (efendim)", "updated": "2020-01-01"}}})
+        with patch.object(mm, "MEMORY_MAX_CHARS", 600):
+            for i in range(30):
+                mm.update_memory({"preferences": {f"like{i}": {"value": f"likes thing number {i} a lot", "updated": f"2026-01-{i % 28 + 1:02d}"}}})
+        memory = mm.load_memory()
+        self.assertIn("no_sir", memory["instructions"])                     # the oldest entry, still there
+        block = mm.format_memory_for_prompt(memory)
+        self.assertTrue(block.startswith("[STANDING INSTRUCTIONS FROM THE USER"))
+        self.assertIn("Do not call the user 'sir' (efendim)", block)
+
+    def test_taken_back(self):
+        mm.update_memory({"instructions": {"short": {"value": "Answer in at most two sentences"}}})
+        self.assertIn("Forgotten", mm.forget("short", "instructions"))
+        self.assertNotIn("STANDING INSTRUCTIONS", mm.format_memory_for_prompt(mm.load_memory()))
