@@ -1871,7 +1871,11 @@ class JarvisLive:
 
     _AWAY_KINDS = (("[TOOL_LATE_RESULT]", "result", ""), ("[UPDATE_AVAILABLE]", "update", "update"),
                    ("[REMINDER", "reminder", ""), ("[HEADS_UP]", "heads_up", ""),
-                   ("[HABIT_SUGGESTION]", "habit", "habit"))
+                   ("[HABIT_SUGGESTION]", "habit", "habit"), ("[CARE_NOTE]", "care", ""))
+
+    # Kinds that are only true in the moment: when they cannot be said now they are dropped,
+    # not kept — "three hours without a break" told after the break is just wrong.
+    _AWAY_DROP = ("care",)
 
     def _sleep_after_reply(self, reason: str = "sessiz mod") -> None:
         """Go to sleep once the confirmation now being spoken has been heard (asleep, audio is dropped)."""
@@ -1911,6 +1915,8 @@ class JarvisLive:
             hushed = False
         if not hushed and not self._user_away():
             return False
+        if kind in self._AWAY_DROP:
+            return True
         try:
             from core import away
             away.add(instruction, kind=kind, key=key)

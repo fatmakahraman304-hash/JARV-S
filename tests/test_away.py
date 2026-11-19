@@ -89,7 +89,8 @@ class HoldTest(unittest.TestCase):
         main = load_main()
         added = []
         fake = types.SimpleNamespace(_awake=False, _last_user_speech=time.monotonic(),
-                                     ui=mock.Mock(), _AWAY_KINDS=main.JarvisLive._AWAY_KINDS)
+                                     ui=mock.Mock(), _AWAY_KINDS=main.JarvisLive._AWAY_KINDS,
+                                     _AWAY_DROP=main.JarvisLive._AWAY_DROP)
         fake._user_away = lambda: main.JarvisLive._user_away(fake)
         fake._push_if_gone = lambda text, kind: None
         with mock.patch.object(away, "add", lambda t, kind, key: added.append((kind, key))):
@@ -97,6 +98,19 @@ class HoldTest(unittest.TestCase):
             fake._awake = True
             self.assertFalse(main.JarvisLive._hold_for_later(fake, "[TOOL_LATE_RESULT] y"))
         self.assertEqual(added, [("result", "")])
+
+    def test_care_note_dropped_not_kept(self):
+        import types
+        from tests._main_import import load_main
+        main = load_main()
+        added = []
+        fake = types.SimpleNamespace(_awake=False, _last_user_speech=time.monotonic(), ui=mock.Mock(),
+                                     _AWAY_KINDS=main.JarvisLive._AWAY_KINDS, _AWAY_DROP=main.JarvisLive._AWAY_DROP)
+        fake._user_away = lambda: True
+        fake._push_if_gone = lambda text, kind: None
+        with mock.patch.object(away, "add", lambda t, kind, key: added.append(kind)):
+            self.assertTrue(main.JarvisLive._hold_for_later(fake, "[CARE_NOTE] 3 h"))
+        self.assertEqual(added, [])
 
 
 class WelcomeTest(unittest.TestCase):
