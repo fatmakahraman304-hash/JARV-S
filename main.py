@@ -1125,6 +1125,8 @@ class JarvisLive:
         exactly like a proactive check-in; Gemini phrases it naturally in the
         user's language. Silently a no-op when no session is connected.
         """
+        if self._hold_for_later(instruction):
+            return                                    # nobody would hear it: told when they are back
         loop = getattr(self, "_loop", None)
         if not loop or not self.session:
             self._outbox.append(instruction)          # said as soon as the session is back
@@ -1819,6 +1821,76 @@ class JarvisLive:
                  "phone'), go on with the next step now, after reporting this one; otherwise just report.")
     _goaway_pending = False
 
+    def _user_away(self) -> bool:
+        """Nobody would hear JARVIS now: asleep, or no voice and no hand on the computer for a while."""
+        try:
+            from core import away
+            return away.is_away(bool(getattr(self, "_awake", True)),
+                                time.monotonic() - (getattr(self, "_last_user_speech", 0.0) or 0.0),
+                                away.input_idle_seconds())
+        except Exception:
+            return False
+
+    _AWAY_KINDS = (("[TOOL_LATE_RESULT]", "result", ""), ("[UPDATE_AVAILABLE]", "update", "update"),
+                   ("[REMINDER", "reminder", ""), ("[HABIT_SUGGESTION]", "habit", "habit"))
+
+    def _hold_for_later(self, instruction: str) -> bool:
+        """When the user is away, keep what JARVIS meant to say for the welcome back (core/away.py)."""
+        if not self._user_away():
+            return False
+        kind, key = "note", ""
+        for tag, k, kk in self._AWAY_KINDS:
+            if instruction.lstrip().startswith(tag):
+                kind, key = k, kk
+                break
+        try:
+            from core import away
+            away.add(instruction, kind=kind, key=key)
+        except Exception as exc:
+            print(f"[Away] {exc}")
+            return False
+        self.ui.write_log("SYS: Siz yokken gelen bir bilgi saklandı; döndüğünüzde söyleyeceğim.")
+        return True
+
+    async def _watch_away(self) -> None:
+        """When the user is back, tell them in one welcome what came up while they were away."""
+        from core import away
+        away_since = None
+        await asyncio.sleep(5)
+        while True:
+            await asyncio.sleep(3)
+            try:
+                now = time.monotonic()
+                quiet = now - (self._last_user_speech or 0.0)
+                idle = away.input_idle_seconds()
+                if away.is_away(self._awake, quiet, idle):
+                    away_since = away_since or now
+                    continue
+                if not self.session or not away.pending():
+                    away_since = None
+                    continue
+                with self._speaking_lock:
+                    speaking = self._is_speaking or (self.audio_in_queue is not None
+                                                     and not self.audio_in_queue.empty())
+                try:
+                    from core import jobs
+                    busy = bool(jobs.current())
+                except Exception:
+                    busy = False
+                if not away.ready_to_tell(self._awake, speaking, busy, quiet, idle):
+                    continue
+                items = away.take()
+                if not items:
+                    continue
+                gone = (now - away_since) if away_since else 0.0
+                away_since = None
+                self.ui.write_log(f"SYS: Siz yokken {len(items)} gelişme oldu — özetliyorum.")
+                await self.session.send_client_content(
+                    turns={"role": "user", "parts": [{"text": away.welcome_instruction(items, gone)}]},
+                    turn_complete=True)
+            except Exception as exc:
+                print(f"[Away] {exc}")
+
     def _is_idle(self) -> bool:
         """Nobody is talking, nothing of JARVIS's is running: a moment that interrupts no one."""
         try:
@@ -1828,7 +1900,8 @@ class JarvisLive:
             busy = False
         quiet = time.monotonic() - (getattr(self, "_last_user_speech", 0.0) or 0.0) > 120
         return (self._awake and not self._is_speaking and quiet and not busy
-                and (self.audio_in_queue is None or self.audio_in_queue.empty()))
+                and (self.audio_in_queue is None or self.audio_in_queue.empty())
+                and not self._user_away())      # an offer to an empty room is an offer lost
 
     async def _watch_updates(self) -> None:
         """Every half hour: a newer JARVIS on GitHub? Offer it once at a quiet moment (or install it, if the
@@ -2875,6 +2948,13 @@ class JarvisLive:
         while True:
             await asyncio.sleep(10)
             alert = await asyncio.to_thread(self._sys_monitor.check)
+            if alert and self._user_away():
+                try:
+                    from core import away
+                    away.add(alert, kind="system", key="system")   # only the latest one is still news
+                except Exception:
+                    pass
+                continue
             if not alert or not self.session or not self._awake:
                 continue
             # Don't interrupt an active conversation
@@ -3372,6 +3452,7 @@ class JarvisLive:
                         tg.create_task(self._flush_outbox())
                     tg.create_task(self._watch_updates())
                     tg.create_task(self._watch_habits())
+                    tg.create_task(self._watch_away())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
