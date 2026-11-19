@@ -294,9 +294,10 @@ def run_script(job, request):
     out = job / "out"
     out.mkdir(exist_ok=True)
     env = {"__name__": "jarvis_kit", "OUT": out, "bpy": bpy}
-    kit = Path(__file__).with_name("_blender_kit.py")
-    if kit.is_file():                                   # box(), wood(), place_on(), studio() … for the script
-        exec(compile(kit.read_text(encoding="utf8"), str(kit), "exec"), env)
+    for name in ("_blender_kit.py", "_blender_arch.py"):   # box(), wood(), place_on(), studio(), building() …
+        kit = Path(__file__).with_name(name)
+        if kit.is_file():
+            exec(compile(kit.read_text(encoding="utf8"), str(kit), "exec"), env)
     env["__name__"] = "__main__"
     try:
         exec(compile(code, "jarvis_script.py", "exec"), env)
@@ -550,7 +551,7 @@ def main():
     if request["mode"] == "views":
         shots = views(job, request)
         report = {"version": bpy.app.version_string, "views": shots, "issues": geometry_issues(),
-                  "objects": [[o.name, o.type, [round(v, 3) for v in o.dimensions]] for o in list(scene.objects)[:150]]}
+                  "objects": [[o.name, o.type, [round(v, 3) for v in o.dimensions]] for o in list(scene.objects)[:5000]]}
         (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")
         return
     if request["mode"] == "studio":

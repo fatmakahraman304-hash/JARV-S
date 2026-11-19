@@ -42,7 +42,7 @@ jobs:
         env:
           BLENDER_RENDER_DIR: ${{ runner.temp }}/renders
         run: |
-          python -m unittest -v tests.test_blender_brain tests.test_blender_studio tests.test_blender_world tests.test_blender_discovery
+          python -m unittest -v tests.test_blender_arch tests.test_blender_brain tests.test_blender_studio tests.test_blender_world tests.test_blender_discovery
       - name: Studio render preview (contact sheet in the log)
         if: always()
         run: python tools/blender_studio_preview.py

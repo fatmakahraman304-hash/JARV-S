@@ -339,6 +339,21 @@ def _run_phases(binary, source, folder, request, brief, prompt, first, phases, t
 
 
 TARGET_SCORE = 8.0
+
+
+def _try_building(binary, folder, request, player):
+    try:
+        building_project(binary, folder, request, player=player)
+        return True
+    except Exception as exc:
+        print(f"[Blender] Bina motoru olmadı, genel yola geçiyorum: {exc}")
+        return False
+
+
+def brain_is_building(request):
+    from plugins import _blender_brain as brain
+    return brain.is_building(request)
+
 MAX_ROUNDS = 3
 
 
@@ -357,6 +372,20 @@ def views_sheet(binary, blend, folder):
     sheet.save(buf, "PNG")
     (folder / "views.png").write_bytes(buf.getvalue())
     return buf.getvalue(), report.get("issues", [])
+
+
+def building_project(binary, folder, request, plan=None, player=None):
+    """A building from a checked plan, built by the architecture engine (exact geometry, no guessed coordinates)."""
+    from plugins import _blender_brain as brain
+    plan = plan or brain.make_plan(request)
+    if player is not None:
+        player.write_log(f"🟧 Bina planı: {plan.get('floors')} kat, {plan.get('width')}×{plan.get('depth')} m, "
+                         f"{len(plan.get('rooms') or [])} oda/kat, çatı: {(plan.get('roof') or {}).get('type', 'beşik')}")
+    code = ("import bpy\nclear()\nplan = " + json.dumps(plan, ensure_ascii=False) +
+            "\nbuilding(plan)\noutdoor()\n")
+    run_script(binary, None, folder, code)
+    (folder / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf8")
+    return plan
 
 
 def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
@@ -398,15 +427,23 @@ def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
         fix = (f"{request}\n\nThe current scene is your previous attempt. Improve it — fix exactly these problems "
                f"(keep what is right):\n- " + "\n- ".join(last_problems))
         nxt = Path(tempfile.mkdtemp(prefix=f"tur-{n + 1}-", dir=folder))
+        plan_file = Path(current).parent / "plan.json"
         try:
-            script_project(binary, current, nxt, fix, log=lambda m: None)
+            if plan_file.is_file():                      # a building: revise the plan, rebuild exactly
+                old = json.loads(plan_file.read_text(encoding="utf8"))
+                building_project(binary, nxt, request, brain.make_plan(request, old, last_problems), player)
+            else:
+                script_project(binary, current, nxt, fix, log=lambda m: None)
             current = nxt / "scene.blend"
         except Exception as exc:
             print(f"[Blender] Düzeltme turu olmadı: {exc}")
             break
     final = folder / "scene.blend"
-    if best != final:
+    if Path(best) != final:
         shutil.copyfile(best, final)
+        plan = Path(best).parent / "plan.json"
+        if plan.is_file():
+            shutil.copyfile(plan, folder / "plan.json")
     return final, best_score
 
 
@@ -602,6 +639,8 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         elif action == "script":
             script_project(binary, source, folder, request)
             output = folder / "scene.blend"
+        elif action == "new" and brain_is_building(request) and _try_building(binary, folder, request, player):
+            output = folder / "scene.blend"
         elif action == "new":
             try:
                 script_project(binary, None, folder, request)     # toolkit scripts: bevels, real materials, placement
@@ -616,7 +655,9 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
             raise ValueError("Blender çıktı dosyasını oluşturamadı.")
         if action in ("new", "edit", "script"):
             output = make_it_match(binary, source, folder, output, request)
-            output, score = refine(binary, folder, output, request, player=player)
+            from plugins import _blender_brain as brain
+            big = brain.is_big(request)
+            output, score = refine(binary, folder, output, request, player=player, rounds=6 if big else MAX_ROUNDS)
             if player is not None and score >= 0:
                 player.write_log(f"🟧 Blender sonucu: {max(score, 0):.0f}/10")
         if action in ("new", "edit", "script"):

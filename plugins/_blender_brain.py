@@ -215,13 +215,152 @@ def check_code(code: str) -> str:
 def write_script(request: str, scene: dict, version: str, previous: str = "", error: str = "") -> str:
     from core import gemini
     lessons = lessons_prompt(request, ("script", "fix", "tip"), 4)
-    prompt = (f"{KNOWLEDGE}\n{KIT_DOC}\n{REALISM}\n{SCRIPT_RULES.format(version=version)}\n\n{lessons}\n\n"
+    arch = ("\nFor buildings call building(plan) (plan = the JSON below) and finish with outdoor() instead of studio():\n"
+            + PLAN_DOC) if is_big(request) else ""
+    prompt = (f"{KNOWLEDGE}\n{KIT_DOC}{arch}\n{REALISM}\n{SCRIPT_RULES.format(version=version)}\n\n{lessons}\n\n"
               f"Current scene: {json.dumps(scene, ensure_ascii=False)[:6000]}\n"
               f"User request (any language): {request}")
     if previous:
         prompt += (f"\n\nYour previous script failed.\nScript:\n{previous[:12000]}\n\nBlender error:\n{error[-3000:]}\n"
                    "Fix the cause (check the facts above) and return the whole corrected script.")
     return clean_code(gemini.text(prompt, tier=gemini.SMART) or "")
+
+
+BIG_WORDS = re.compile(r"\b(bina|apartman|ev|evi|villa|köşk|konak|okul|hastane|otel|kule|gökdelen|ofis|plaza|site|"
+                       r"mahalle|şehir|kent|köprü|cami|kilise|saray|kale|müze|stadyum|fabrika|depo|dükkan|mağaza|"
+                       r"building|house|apartment|villa|tower|office|school|hotel|bridge|city)\w*", re.I)
+BUILDING_WORDS = re.compile(r"\b(bina|apartman|ev\b|evi|villa|köşk|konak|okul|hastane|otel|ofis|plaza|dükkan|mağaza|"
+                            r"building|house|apartment|villa|office|school|hotel)", re.I)
+
+
+def is_big(request: str) -> bool:
+    return bool(BIG_WORDS.search(request or ""))
+
+
+MANY_WORDS = re.compile(r"\b(binalar|evler|apartmanlar|mahalle|şehir|kent|sokak|cadde|park|çevresi|köy|kasaba|"
+                        r"iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|yirmi|birkaç|\d+)\s*(tane\s*)?(bina|ev|apartman|villa)?",
+                        re.I)
+
+
+def is_building(request: str) -> bool:
+    """One building (a house, an apartment block …) — not a street or a district of them."""
+    text = request or ""
+    if not BUILDING_WORDS.search(text):
+        return False
+    for m in MANY_WORDS.finditer(text):
+        word = m.group(1).lower()
+        if m.group(3) or word in ("binalar", "evler", "apartmanlar", "mahalle", "şehir", "kent", "sokak", "cadde", "park",
+                                  "çevresi", "köy", "kasaba"):
+            if word.isdigit() and m.group(3) and int(word) == 1:
+                continue
+            if re.fullmatch(r"\d+", word) and not m.group(3):
+                continue
+            return False
+    return True
+
+
+PLAN_DOC = """Describe the building as JSON for JARVIS's architecture engine (metres; footprint centred on the origin,
+x = width left→right, y = depth, FRONT facade faces -y; rects are [x0, y0, x1, y1] inside the outer walls):
+{"name": "...", "width": W, "depth": D, "floors": N, "floor_height": 2.9–3.2, "wall": 0.25, "inner_wall": 0.12, "slab": 0.2,
+ "rooms": [{"name": "Salon", "rect": [...]}, ...],          # the plan repeated on every floor
+ "floor_rooms": {"0": [...]},                                # optional: a different plan for a floor (key = floor index)
+ "windows": {"width": 1.2–1.6, "height": 1.4–1.6, "sill": 0.9, "spacing": 2.8–3.6, "sides": ["front","back","left","right"]},
+ "entrance": {"side": "front", "x": 0.0, "width": 1.2–2.0, "height": 2.3–2.6, "canopy": true},
+ "balconies": {"side": "front", "width": 3–4, "depth": 1.2–1.6, "from_floor": 1, "positions": [x, ...], "rail": "glass"|"metal"},
+ "stairs": {"rect": [...]},                                  # required when floors > 1; ≥ 1.2 m × 2.6 m
+ "roof": {"type": "gable"|"hip"|"flat", "pitch": 25–40, "overhang": 0.3–0.7},
+ "style": {"facade": "plaster"|"brick"|"stone", "facade_color": [r,g,b], "base_color": [r,g,b], "roof_color": [r,g,b],
+           "frame_color": [r,g,b], "door_color": [r,g,b]}}
+Rules: rooms tile the floor without overlapping (corridor + stairs included), real room sizes (bedroom ≥ 9 m², living ≥ 18 m²),
+an apartment floor usually holds 2 flats around a central stair core; balcony positions lie on the facade and away from
+the corners; colours in 0–1 linear. Return ONLY the JSON."""
+
+
+def check_plan(plan) -> list[str]:
+    """Measurable mistakes in a building plan (Turkish), before anything is built."""
+    if not isinstance(plan, dict):
+        return ["Plan JSON değil."]
+    out = []
+    try:
+        W, D = float(plan.get("width", 0)), float(plan.get("depth", 0))
+        floors, fh = int(plan.get("floors", 1)), float(plan.get("floor_height", 3.0))
+        t = float(plan.get("wall", 0.25))
+    except (TypeError, ValueError):
+        return ["Ölçüler sayı değil."]
+    if not (4 <= W <= 120 and 4 <= D <= 120):
+        out.append(f"Taban ölçüsü gerçekçi değil ({W}×{D} m).")
+    if not (1 <= floors <= 60):
+        out.append(f"Kat sayısı gerçekçi değil ({floors}).")
+    if not (2.5 <= fh <= 5.0):
+        out.append(f"Kat yüksekliği gerçekçi değil ({fh} m).")
+    lim_x, lim_y = W / 2 - t + 0.05, D / 2 - t + 0.05
+
+    def rect_ok(r, what):
+        try:
+            x0, y0, x1, y1 = (float(v) for v in r)
+        except Exception:
+            out.append(f"{what}: rect [x0,y0,x1,y1] olmalı.")
+            return None
+        x0, x1 = sorted((x0, x1)); y0, y1 = sorted((y0, y1))
+        if x0 < -lim_x or x1 > lim_x or y0 < -lim_y or y1 > lim_y:
+            out.append(f"{what} dış duvarların dışına taşıyor ({[round(v, 2) for v in (x0, y0, x1, y1)]}; iç sınır ±{W/2 - t:.2f}, ±{D/2 - t:.2f}).")
+        return x0, y0, x1, y1
+    plans = {"tüm katlar": plan.get("rooms") or []}
+    plans.update({f"{k}. kat": v for k, v in (plan.get("floor_rooms") or {}).items()})
+    for label, rooms in plans.items():
+        rects = []
+        for r in rooms:
+            got = rect_ok(r.get("rect"), f"'{r.get('name', '?')}' ({label})")
+            if got:
+                rects.append((r.get("name", "?"), got))
+        for i, (na, a) in enumerate(rects):
+            for nb, b in rects[i + 1:]:
+                ox = min(a[2], b[2]) - max(a[0], b[0])
+                oy = min(a[3], b[3]) - max(a[1], b[1])
+                if ox > 0.3 and oy > 0.3:
+                    out.append(f"'{na}' ile '{nb}' üst üste biniyor ({label}).")
+    st = (plan.get("stairs") or {}).get("rect")
+    if floors > 1 and not st:
+        out.append("Birden çok kat var ama merdiven yok.")
+    if st:
+        got = rect_ok(st, "Merdiven")
+        if got and (got[2] - got[0] < 1.1 or got[3] - got[1] < 2.4) and (got[3] - got[1] < 1.1 or got[2] - got[0] < 2.4):
+            out.append("Merdiven boşluğu çok küçük (en az 1.2 × 2.6 m).")
+    bal = plan.get("balconies") or {}
+    for x in bal.get("positions") or []:
+        try:
+            if abs(float(x)) > (W if bal.get("side", "front") in ("front", "back") else D) / 2 - float(bal.get("width", 3.4)) / 2 - 0.3:
+                out.append(f"Balkon konumu {x} cepheden taşıyor.")
+        except (TypeError, ValueError):
+            out.append("Balkon konumları sayı olmalı.")
+    win = plan.get("windows") or {}
+    try:
+        if float(win.get("width", 1.4)) > float(win.get("spacing", 3.2)) - 0.5:
+            out.append("Pencere aralığı pencere genişliğine göre çok dar.")
+    except (TypeError, ValueError):
+        pass
+    return out
+
+
+def make_plan(request: str, previous: dict | None = None, problems: list[str] | None = None) -> dict:
+    """A checked building plan: drafted by the model, measured, sent back until it is right."""
+    from core import gemini
+    lessons = lessons_prompt(request, ("tip", "fix", "recipe"), 3)
+    ask = f"{PLAN_DOC}\n{lessons}\nUser request: {request}"
+    if previous is not None:
+        ask += (f"\n\nCurrent plan:\n{json.dumps(previous, ensure_ascii=False)}\n"
+                "Revise it to fix these problems (keep what is right):\n- " + "\n- ".join(problems or []))
+    plan = gemini.as_json(ask, tier=gemini.SMART)
+    for _ in range(3):
+        bad = check_plan(plan)
+        if not bad:
+            return plan
+        plan = gemini.as_json(f"{PLAN_DOC}\nUser request: {request}\nThis plan has measurable mistakes:\n"
+                              f"{json.dumps(plan, ensure_ascii=False)}\nFix them:\n- " + "\n- ".join(bad), tier=gemini.SMART)
+    bad = check_plan(plan)
+    if bad:
+        raise ValueError("Bina planını doğru kuramadım: " + "; ".join(bad[:3]))
+    return plan
 
 
 LOOK = """You are JARVIS's eye, checking its own Blender work. The image shows the scene from up to four sides
