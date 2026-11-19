@@ -2076,6 +2076,17 @@ class JarvisLive:
             except Exception:
                 pass
 
+    async def _run_home_timers(self) -> None:
+        """Delayed smart-home commands whose time has come ('yarım saat sonra ışıkları kapat')."""
+        try:
+            from plugins import smart_home
+            done = await asyncio.to_thread(smart_home.run_due_timers)
+        except Exception as exc:
+            print(f"[SmartHome] timers: {exc}")
+            return
+        for line in done:
+            self.ui.write_log("SYS: Akıllı ev (zamanlı) — " + line)
+
     def _heads_up_once(self) -> None:
         """A quarter of an hour before an appointment-like reminder: one heads-up (core/heads_up.py)."""
         try:
@@ -2175,6 +2186,7 @@ class JarvisLive:
             try:
                 self._sentinel_notes += await asyncio.to_thread(self._sentinel.tick)
                 await self._watch_home_once()
+                await self._run_home_timers()
                 self._heads_up_once()
                 talking = time.monotonic() - (self._last_user_speech or 0.0) < 5 or self._is_speaking
                 if self._sentinel_notes and not talking:

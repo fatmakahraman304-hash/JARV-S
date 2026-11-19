@@ -90,3 +90,4 @@ memory/quiet.json
 memory/recent_events.json
 memory/last_briefing.json
 memory/journal/
+memory/home_timers.json
