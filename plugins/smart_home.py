@@ -29,14 +29,18 @@ PLUGIN = {
         "sahnesini başlat', 'kapı kilitli mi', 'evde hangi ışıklar açık', 'içerisi kaç derece'. "
         "action: on | off | toggle | set | scene | state | list | setup | status. target: the device/room/scene "
         "as the user said it ('salon ışığı', 'yatak odası', 'film'). brightness: 0–100. temperature: degrees. "
-        "position: 0–100 for covers. For setup: url (e.g. http://homeassistant.local:8123) and token."
+        "position: 0–100 for covers. after_minutes / at (HH:MM): do it later ('yarım saat sonra ışıkları kapat', "
+        "'saat 7'de perdeyi aç'); action=timers lists them, action=cancel_timers clears them. For setup: url (e.g. "
+        "http://homeassistant.local:8123) and token."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "on | off | toggle | set | scene | state | list | setup | status"},
+        "action": {"type": "STRING", "description": "on | off | toggle | set | scene | state | list | setup | status | timers | cancel_timers"},
         "target": {"type": "STRING", "description": "device, room or scene name as the user said it; 'all lights' allowed"},
         "brightness": {"type": "NUMBER", "description": "light brightness percent 0–100"},
         "temperature": {"type": "NUMBER", "description": "climate target temperature"},
         "position": {"type": "NUMBER", "description": "cover position percent (0 closed, 100 open)"},
+        "after_minutes": {"type": "NUMBER", "description": "do it later: in this many minutes ('10 dakika sonra kapat')"},
+        "at": {"type": "STRING", "description": "do it later: at this time today/tomorrow, HH:MM ('saat 23'te kapat')"},
         "url": {"type": "STRING", "description": "setup: Home Assistant address"},
         "token": {"type": "STRING", "description": "setup: long-lived access token"},
     }, "required": ["action"]},
@@ -238,6 +242,67 @@ def _service_for(action: str, dom: str, params: dict) -> tuple[str, str, dict]:
     return (dom if dom != "input_boolean" else "input_boolean"), service, {}
 
 
+# ── later: "yarım saat sonra ışıkları kapat" ─────────────────────────────────
+# Kept on disk and run by JARVIS's background loop (main._watch_sentinel → run_due_timers),
+# so a restart in between does not lose them.
+
+def _timers_path():
+    from pathlib import Path
+    return Path(__file__).resolve().parent.parent / "memory" / "home_timers.json"
+
+
+def _load_timers() -> list[dict]:
+    try:
+        data = json.loads(_timers_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_timers(items: list[dict]) -> None:
+    try:
+        _timers_path().parent.mkdir(parents=True, exist_ok=True)
+        _timers_path().write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def when_from(p: dict, now: float | None = None) -> float | None:
+    """The time a delayed command should run, or None to run it now."""
+    import time as _t
+    from datetime import datetime, timedelta
+    now = _t.time() if now is None else now
+    if p.get("after_minutes") not in (None, ""):
+        return now + max(0.0, float(p["after_minutes"])) * 60
+    at = str(p.get("at") or "").strip()
+    m = re.match(r"^(\d{1,2})(?:[:.](\d{2}))?$", at)
+    if not m:
+        return None
+    base = datetime.fromtimestamp(now)
+    target = base.replace(hour=int(m.group(1)) % 24, minute=int(m.group(2) or 0), second=0, microsecond=0)
+    if target.timestamp() <= now:
+        target += timedelta(days=1)
+    return target.timestamp()
+
+
+def run_due_timers(now: float | None = None) -> list[str]:
+    """Run every delayed command whose time has come; what each did."""
+    import time as _t
+    now = _t.time() if now is None else now
+    items = _load_timers()
+    due = [t for t in items if float(t.get("at", 0)) <= now]
+    if not due:
+        return []
+    _save_timers([t for t in items if float(t.get("at", 0)) > now])
+    out = []
+    for t in due:
+        params = dict(t.get("params") or {})
+        params.pop("after_minutes", None)
+        params.pop("at", None)
+        out.append(run(params))
+    return out
+
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         return _run(parameters or {})
@@ -258,6 +323,29 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 def _run(p: dict) -> str:
     action = str(p.get("action") or "status").strip().lower()
     target = str(p.get("target") or "").strip()
+
+    if action == "timers":
+        from datetime import datetime
+        items = _load_timers()
+        if not items:
+            return "No delayed smart-home commands."
+        return "\n".join(f"- {datetime.fromtimestamp(float(t['at'])):%H:%M}: {t['params'].get('action')} "
+                         f"{t['params'].get('target', '')}" for t in sorted(items, key=lambda t: t["at"]))
+    if action == "cancel_timers":
+        n = len(_load_timers())
+        _save_timers([])
+        return f"Cancelled {n} delayed smart-home command(s)."
+    if action in ("on", "off", "toggle", "set", "scene"):
+        later = when_from(p)
+        if later is not None:
+            _cfg_ok = _cfg()
+            if not (_cfg_ok.get("url") and _cfg_ok.get("token")):
+                raise LookupError
+            from datetime import datetime
+            items = _load_timers()
+            items.append({"at": later, "params": {k: v for k, v in p.items() if k not in ("token", "url")}})
+            _save_timers(items)
+            return f"Scheduled: {action} {target} at {datetime.fromtimestamp(later):%H:%M}."
 
     if action == "setup":
         url = str(p.get("url") or "").strip().rstrip("/")

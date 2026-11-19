@@ -150,3 +150,45 @@ class DiscoverTest(unittest.TestCase):
         src = (Path(__file__).resolve().parent.parent / "gui" / "settings_page.py").read_text(encoding="utf-8")
         self.assertIn("Akıllı ev (Home Assistant)", src)
         self.assertIn("_sh.connect(url, token)", src)
+
+
+class TimerTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        self.tmp = tempfile.TemporaryDirectory()
+        self.p = [mock.patch.object(sh, "_timers_path", lambda: Path(self.tmp.name) / "t.json"),
+                  mock.patch.object(sh, "_cfg", lambda: {"url": "u", "token": "t"})]
+        for p in self.p:
+            p.start()
+
+    def tearDown(self):
+        for p in self.p:
+            p.stop()
+        self.tmp.cleanup()
+
+    def test_when_from(self):
+        from datetime import datetime
+        now = datetime(2026, 11, 20, 22, 0).timestamp()
+        self.assertEqual(sh.when_from({"after_minutes": 30}, now), now + 1800)
+        self.assertEqual(datetime.fromtimestamp(sh.when_from({"at": "23:15"}, now)).strftime("%d %H:%M"), "20 23:15")
+        self.assertEqual(datetime.fromtimestamp(sh.when_from({"at": "7"}, now)).strftime("%d %H:%M"), "21 07:00")
+        self.assertIsNone(sh.when_from({}, now))
+
+    def test_schedule_and_run_later(self):
+        out = sh.run({"action": "off", "target": "bütün ışıklar", "after_minutes": 30})
+        self.assertIn("Scheduled", out)
+        self.assertIn("off", sh.run({"action": "timers"}))
+        import time
+        self.assertEqual(sh.run_due_timers(now=time.time() + 60), [])          # not yet
+        calls = []
+        with mock.patch.object(sh, "_states", lambda cfg=None: STATES), \
+             mock.patch.object(sh, "_call", lambda d, s, data, cfg=None: calls.append(s)):
+            done = sh.run_due_timers(now=time.time() + 1900)
+        self.assertEqual(len(done), 1)
+        self.assertEqual(calls, ["turn_off"] * 3)
+        self.assertIn("No delayed", sh.run({"action": "timers"}))
+
+    def test_cancel(self):
+        sh.run({"action": "on", "target": "salon ışığı", "at": "07:00"})
+        self.assertIn("Cancelled 1", sh.run({"action": "cancel_timers"}))
