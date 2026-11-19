@@ -609,6 +609,7 @@ class JarvisLive:
         self._outbox: list        = []      # what arrived while there was no session (sent on reconnect)
         self._away_since: float | None = None   # when the user was last seen leaving (core/away.py)
         self._away_asleep         = False   # JARVIS was asleep then: their wake command comes first
+        self._quiet_was_on        = False   # quiet mode was on: tell what it held back once it ends
         self._update_checked      = None    # when GitHub was last asked for a newer JARVIS
         self._update_offered      = ""      # the version already offered (asked once, not every half hour)
         self._speaking_lock       = threading.Lock()
@@ -1071,7 +1072,7 @@ class JarvisLive:
 
     async def _routine_checkin(self, options: dict) -> None:
         """The proactive check-in, when the routine says the moment has come."""
-        if not self.session:
+        if not self.session or self._quiet():
             return
         self._proactive.mark_triggered()
         try:
@@ -1094,6 +1095,8 @@ class JarvisLive:
 
     async def _routine_news_watch(self) -> None:
         """New headlines on the watched topics, said aloud — one routine run."""
+        if self._quiet():
+            return
         try:
             alerts = await asyncio.to_thread(monitor_check_all)
             if not alerts:
@@ -1836,15 +1839,29 @@ class JarvisLive:
     _AWAY_KINDS = (("[TOOL_LATE_RESULT]", "result", ""), ("[UPDATE_AVAILABLE]", "update", "update"),
                    ("[REMINDER", "reminder", ""), ("[HABIT_SUGGESTION]", "habit", "habit"))
 
-    def _hold_for_later(self, instruction: str) -> bool:
-        """When the user is away, keep what JARVIS meant to say for the welcome back (core/away.py)."""
-        if not self._user_away():
+    def _quiet(self) -> bool:
+        """Quiet mode (core/quiet.py): the user asked JARVIS to volunteer nothing for now."""
+        try:
+            from core import quiet
+            return quiet.is_on()
+        except Exception:
             return False
+
+    def _hold_for_later(self, instruction: str) -> bool:
+        """When the user is away, or asked for quiet, keep what JARVIS meant to say for later
+        (core/away.py, core/quiet.py)."""
         kind, key = "note", ""
         for tag, k, kk in self._AWAY_KINDS:
             if instruction.lstrip().startswith(tag):
                 kind, key = k, kk
                 break
+        try:
+            from core import quiet
+            hushed = quiet.holds(kind)
+        except Exception:
+            hushed = False
+        if not hushed and not self._user_away():
+            return False
         try:
             from core import away
             away.add(instruction, kind=kind, key=key)
@@ -1852,7 +1869,8 @@ class JarvisLive:
             print(f"[Away] {exc}")
             return False
         self._push_if_gone(instruction, kind)
-        self.ui.write_log("SYS: Siz yokken gelen bir bilgi saklandı; döndüğünüzde söyleyeceğim.")
+        self.ui.write_log("SYS: Sessiz mod — bir bilgi sonraya saklandı." if hushed else
+                          "SYS: Siz yokken gelen bir bilgi saklandı; döndüğünüzde söyleyeceğim.")
         return True
 
     def _push_if_gone(self, text: str, kind: str) -> None:
@@ -1877,6 +1895,15 @@ class JarvisLive:
                 now = time.monotonic()
                 quiet = now - (self._last_user_speech or 0.0)
                 idle = away.input_idle_seconds()
+                if self._quiet():
+                    self._quiet_was_on = True          # nothing is told until quiet ends
+                    continue
+                if self._quiet_was_on and not away.is_away(self._awake, quiet, idle):
+                    if not away.pending():
+                        self._quiet_was_on = False
+                    elif self.session and await self._tell_held_after_quiet(quiet, idle):
+                        self._quiet_was_on = False
+                    continue
                 if away.is_away(self._awake, quiet, idle):
                     # kept on self: a reconnect while the user is out must not forget they left
                     if self._away_since is None:
@@ -1916,6 +1943,41 @@ class JarvisLive:
                     turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True)
             except Exception as exc:
                 print(f"[Away] {exc}")
+
+    async def _tell_held_after_quiet(self, quiet: float, idle) -> bool:
+        """Quiet is over: what was held back, in one short report. True once it was sent."""
+        from core import away, quiet as quiet_mode
+        with self._speaking_lock:
+            speaking = self._is_speaking or (self.audio_in_queue is not None and not self.audio_in_queue.empty())
+        try:
+            from core import jobs
+            busy = bool(jobs.current())
+        except Exception:
+            busy = False
+        if not away.ready_to_tell(self._awake, speaking, busy, quiet, idle):
+            return False
+        items = away.take()
+        if items:
+            self.ui.write_log(f"SYS: Sessiz mod bitti — bu arada {len(items)} gelişme oldu.")
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": quiet_mode.ended_instruction(items, away.describe)}]},
+                turn_complete=True)
+        return True
+
+    async def _guarded(self, watcher) -> None:
+        """A side watcher that fails stops alone; it never takes the voice session down with it
+        (an exception in a TaskGroup task cancels every other task in the group)."""
+        try:
+            await watcher()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[Watcher] {getattr(watcher, '__name__', watcher)} stopped: {exc}")
+            try:
+                from core import logbook
+                logbook.write(f"watcher {getattr(watcher, '__name__', watcher)} stopped: {exc!r}")
+            except Exception:
+                pass
 
     async def _watch_sentinel(self) -> None:
         """Ambient awareness (core/sentinel.py): a USB drive, the charger, the internet back, a download
@@ -1967,7 +2029,7 @@ class JarvisLive:
         except Exception:
             busy = False
         quiet = time.monotonic() - (getattr(self, "_last_user_speech", 0.0) or 0.0) > 60
-        return (self._awake and not self._is_speaking and quiet and not busy
+        return (self._awake and not self._is_speaking and quiet and not busy and not self._quiet()
                 and (self.audio_in_queue is None or self.audio_in_queue.empty()))
 
     def _is_idle(self) -> bool:
@@ -1980,7 +2042,8 @@ class JarvisLive:
         quiet = time.monotonic() - (getattr(self, "_last_user_speech", 0.0) or 0.0) > 120
         return (self._awake and not self._is_speaking and quiet and not busy
                 and (self.audio_in_queue is None or self.audio_in_queue.empty())
-                and not self._user_away())      # an offer to an empty room is an offer lost
+                and not self._user_away()       # an offer to an empty room is an offer lost
+                and not self._quiet())
 
     async def _watch_updates(self) -> None:
         """Every half hour: a newer JARVIS on GitHub? Offer it once at a quiet moment (or install it, if the
@@ -3027,7 +3090,7 @@ class JarvisLive:
         while True:
             await asyncio.sleep(10)
             alert = await asyncio.to_thread(self._sys_monitor.check)
-            if alert and self._user_away():
+            if alert and (self._user_away() or self._quiet()):
                 try:
                     from core import away
                     away.add(alert, kind="system", key="system")   # only the latest one is still news
@@ -3056,7 +3119,7 @@ class JarvisLive:
         """Check user-configured topics once per day; speak alerts when new headlines appear."""
         await asyncio.sleep(300)          # wait 5 min after startup before first check
         while True:
-            if self.session and self._awake:
+            if self.session and self._awake and not self._quiet():
                 # Don't interrupt if user spoke recently or JARVIS is mid-sentence
                 with self._speaking_lock:
                     speaking = self._is_speaking
@@ -3094,7 +3157,7 @@ class JarvisLive:
         while True:
             await asyncio.sleep(60)   # evaluate once per minute
 
-            if not self.session or not self._awake:
+            if not self.session or not self._awake or self._quiet():
                 continue
 
             with self._speaking_lock:
@@ -3530,11 +3593,11 @@ class JarvisLive:
                     tg.create_task(self._watch_stall())
                     if self._outbox:
                         tg.create_task(self._flush_outbox())
-                    tg.create_task(self._watch_updates())
-                    tg.create_task(self._watch_habits())
-                    tg.create_task(self._watch_away())
-                    tg.create_task(self._watch_vigil())
-                    tg.create_task(self._watch_sentinel())
+                    tg.create_task(self._guarded(self._watch_updates))
+                    tg.create_task(self._guarded(self._watch_habits))
+                    tg.create_task(self._guarded(self._watch_away))
+                    tg.create_task(self._guarded(self._watch_vigil))
+                    tg.create_task(self._guarded(self._watch_sentinel))
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
