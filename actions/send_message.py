@@ -312,6 +312,44 @@ def _resolve_platform(platform_str: str):
     return lambda r, m: _desktop_send(platform_str.strip().title(), r, m)
 
 
+# A message cannot be taken back, and speech can be misheard: a recipient or a
+# sentence is read back to the user and sent only after they say yes. The yes
+# is only accepted for the exact message that was read back, within a few
+# minutes — the model cannot confirm on the user's behalf on the first call.
+CONFIRM_WINDOW = 300.0
+_pending: dict = {}
+_pending_lock = threading.Lock()
+
+
+def _key(platform: str, receiver: str, text: str) -> tuple:
+    norm = lambda t: " ".join(str(t or "").lower().split())
+    return (norm(platform) or "whatsapp", norm(receiver), norm(text))
+
+
+def _send_without_asking() -> bool:
+    try:
+        from memory.config_manager import get_plugin_config
+        return bool((get_plugin_config("send_message") or {}).get("send_without_asking"))
+    except Exception:
+        return False
+
+
+def needs_confirmation(platform: str, receiver: str, text: str, confirmed: bool) -> bool:
+    """True when the message must be read back first (and remembers that it was)."""
+    if _send_without_asking():
+        return False
+    k = _key(platform, receiver, text)
+    now = time.monotonic()
+    with _pending_lock:
+        for old in [x for x, t in _pending.items() if now - t > CONFIRM_WINDOW]:
+            _pending.pop(old, None)
+        if confirmed and k in _pending:
+            _pending.pop(k, None)
+            return False
+        _pending[k] = now
+    return True
+
+
 def send_message(
     parameters: dict,
     response=None,
@@ -323,11 +361,25 @@ def send_message(
     message_text = params.get("message_text", "").strip()
     platform     = params.get("platform", "whatsapp").strip()
 
+    if params.get("always_send_without_asking") is not None:     # the user's own choice
+        from memory.config_manager import save_plugin_config
+        on = bool(params.get("always_send_without_asking"))
+        save_plugin_config("send_message", {"send_without_asking": on})
+        if not receiver or not message_text:
+            return outcome.done("send_message", setting="send_without_asking", value=on)
     if not receiver:
         return outcome.failed("send_message", "no recipient was given")
     if not message_text:
         return outcome.failed("send_message", "no message text was given",
                               to=receiver)
+    if needs_confirmation(platform, receiver, message_text, bool(params.get("confirmed"))):
+        return outcome.ask(
+            "send_message",
+            f"read the message back to the user and ask whether to send it: to {receiver} on {platform}: "
+            f"«{message_text}». If they say yes, call send_message again with exactly the same receiver, "
+            "message_text and platform and confirmed=true; if they change something, call it with the new "
+            "text (it will be read back again)",
+            to=receiver, platform=platform)
     if not _PYAUTOGUI:
         return outcome.failed(
             "send_message",
@@ -420,7 +472,9 @@ TOOL = {
         "sent. The result follows separately. For WhatsApp, status=done carries the exact "
         "receipt: sent, delivered or read. Status=unverified means the send is pending "
         "or a receipt could not be checked. Status=failed means the send failed. "
-        "Never claim that a message was delivered unless the receipt confirms it."
+        "Never claim that a message was delivered unless the receipt confirms it. "
+        "The first call reads the message back (status=ask): say it to the user, and send with confirmed=true "
+        "only after they agree."
     ),
     "tier": "core",
     "parameters": {
@@ -437,12 +491,20 @@ TOOL = {
             "platform": {
                 "type": "STRING",
                 "description": "Platform: WhatsApp, Telegram, etc."
+            },
+            "confirmed": {
+                "type": "BOOLEAN",
+                "description": "true ONLY after you read this exact message back to the user and they said yes"
+            },
+            "always_send_without_asking": {
+                "type": "BOOLEAN",
+                "description": "Only when the user explicitly says to stop/start reading messages back before "
+                               "sending ('mesajları sormadan gönder' = true, 'göndermeden önce sor' = false)"
             }
         },
         "required": [
             "receiver",
-            "message_text",
-            "platform"
+            "message_text"
         ]
     },
     "handler": send_message,
