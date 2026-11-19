@@ -161,37 +161,44 @@ def _set(bsdf, key, value):
 
 
 def wood(name, color=(0.36, 0.2, 0.1), grain=1.0):
+    """Long-fibre grain along the object's x axis, darker growth lines, a light varnish."""
     mat, nt, bsdf = _principled(name)
     tc = nt.nodes.new("ShaderNodeTexCoord")
     mp = nt.nodes.new("ShaderNodeMapping")
-    mp.inputs["Scale"].default_value = (1.0, 8.0 * grain, 1.0)
-    wave = nt.nodes.new("ShaderNodeTexWave")
-    wave.inputs["Scale"].default_value = 3.0
-    wave.inputs["Distortion"].default_value = 7.0
-    wave.inputs["Detail"].default_value = 3.0
-    noise = nt.nodes.new("ShaderNodeTexNoise")
-    noise.inputs["Scale"].default_value = 40.0
+    mp.inputs["Scale"].default_value = (1.5 * grain, 40.0 * grain, 40.0 * grain)     # stretched: fibres run along x
+    fib = nt.nodes.new("ShaderNodeTexNoise")
+    fib.inputs["Scale"].default_value = 2.0
+    fib.inputs["Detail"].default_value = 8.0
+    fib.inputs["Roughness"].default_value = 0.65
+    rings = nt.nodes.new("ShaderNodeTexWave")
+    rings.wave_type = "BANDS"
+    rings.bands_direction = "Y"
+    rings.inputs["Scale"].default_value = 0.6
+    rings.inputs["Distortion"].default_value = 4.0
+    rings.inputs["Detail"].default_value = 2.0
+    mix = nt.nodes.new("ShaderNodeMath")
+    mix.operation = "MULTIPLY"
     ramp = nt.nodes.new("ShaderNodeValToRGB")
     c = Vector(color)
-    ramp.color_ramp.elements[0].color = (*(c * 0.55), 1)
-    ramp.color_ramp.elements[1].color = (*c, 1)
-    mix = nt.nodes.new("ShaderNodeMath")
-    mix.operation = "MULTIPLY_ADD"
-    mix.inputs[1].default_value = 0.85
-    mix.inputs[2].default_value = 0.1
+    ramp.color_ramp.elements[0].position = 0.25
+    ramp.color_ramp.elements[0].color = (*(c * 0.5), 1)
+    ramp.color_ramp.elements[1].position = 0.75
+    ramp.color_ramp.elements[1].color = (*(c * 1.15), 1)
     bump = nt.nodes.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.08
+    bump.inputs["Strength"].default_value = 0.05
     L = nt.links
     L.new(tc.outputs["Object"], mp.inputs["Vector"])
-    L.new(mp.outputs["Vector"], wave.inputs["Vector"])
-    L.new(mp.outputs["Vector"], noise.inputs["Vector"])
-    L.new(wave.outputs["Fac"], mix.inputs[0])
-    L.new(mix.outputs[0], ramp.inputs["Fac"])
+    L.new(mp.outputs["Vector"], fib.inputs["Vector"])
+    L.new(mp.outputs["Vector"], rings.inputs["Vector"])
+    L.new(fib.outputs["Fac"], mix.inputs[0])
+    L.new(rings.outputs["Fac"], mix.inputs[1])
+    L.new(fib.outputs["Fac"], ramp.inputs["Fac"])
     L.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
-    L.new(noise.outputs["Fac"], bump.inputs["Height"])
+    L.new(mix.outputs[0], bump.inputs["Height"])
     L.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
-    _set(bsdf, "Roughness", 0.45)
-    _set(bsdf, "Coat Weight", 0.25)
+    _set(bsdf, "Roughness", 0.42)
+    _set(bsdf, "Coat Weight", 0.3)
+    _set(bsdf, "Coat Roughness", 0.15)
     return mat
 
 
@@ -438,9 +445,9 @@ def studio(target=None, floor=True, samples=128):
         fl = _mesh_obj("Zemin", bm)
         fl["jarvis_floor"] = True
         fl.location.z = min(lo.z, 0.0)
-        fl.data.materials.append(plastic("Zemin", (0.42, 0.41, 0.4), 0.6))
-    for name, loc, power, sz in (("Ana ışık", (-1.6, -1.4, 1.9), 900, 1.4), ("Dolgu", (1.9, -1.0, 0.9), 300, 2.0),
-                                  ("Kontur", (0.5, 2.0, 1.7), 700, 1.0)):
+        fl.data.materials.append(plastic("Zemin", (0.16, 0.155, 0.15), 0.55))
+    for name, loc, power, sz in (("Ana ışık", (-1.6, -1.4, 1.9), 110, 1.4), ("Dolgu", (1.9, -1.0, 0.9), 30, 2.0),
+                                  ("Kontur", (0.5, 2.0, 1.7), 80, 1.0)):
         light = bpy.data.lights.new(name, "AREA")
         light.energy = power * s * s
         light.size = s * sz
@@ -453,12 +460,13 @@ def studio(target=None, floor=True, samples=128):
     bg = world.node_tree.nodes.get("Background")
     if bg:
         bg.inputs["Color"].default_value = (0.05, 0.05, 0.055, 1)
-        bg.inputs["Strength"].default_value = 1.0
+        bg.inputs["Strength"].default_value = 0.6
     scene.render.engine = "CYCLES"
     scene.cycles.samples = samples
     scene.cycles.use_denoising = True
     try:
         scene.view_settings.view_transform = "AgX"
+        scene.view_settings.look = "AgX - Medium High Contrast"
     except Exception:
         pass
     frame_camera(objs)
