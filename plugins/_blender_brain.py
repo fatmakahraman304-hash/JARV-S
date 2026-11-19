@@ -237,8 +237,26 @@ def is_big(request: str) -> bool:
     return bool(BIG_WORDS.search(request or ""))
 
 
+MANY_WORDS = re.compile(r"\b(binalar|evler|apartmanlar|mahalle|şehir|kent|sokak|cadde|park|çevresi|köy|kasaba|"
+                        r"iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|yirmi|birkaç|\d+)\s*(tane\s*)?(bina|ev|apartman|villa)?",
+                        re.I)
+
+
 def is_building(request: str) -> bool:
-    return bool(BUILDING_WORDS.search(request or ""))
+    """One building (a house, an apartment block …) — not a street or a district of them."""
+    text = request or ""
+    if not BUILDING_WORDS.search(text):
+        return False
+    for m in MANY_WORDS.finditer(text):
+        word = m.group(1).lower()
+        if m.group(3) or word in ("binalar", "evler", "apartmanlar", "mahalle", "şehir", "kent", "sokak", "cadde", "park",
+                                  "çevresi", "köy", "kasaba"):
+            if word.isdigit() and m.group(3) and int(word) == 1:
+                continue
+            if re.fullmatch(r"\d+", word) and not m.group(3):
+                continue
+            return False
+    return True
 
 
 PLAN_DOC = """Describe the building as JSON for JARVIS's architecture engine (metres; footprint centred on the origin,

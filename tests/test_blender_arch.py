@@ -59,6 +59,10 @@ class PlanChecks(unittest.TestCase):
         self.assertTrue(brain.is_building("4 katlı bir apartman yap"))
         self.assertTrue(brain.is_building("bahçeli müstakil ev"))
         self.assertFalse(brain.is_building("ahşap bir masa"))
+        self.assertFalse(brain.is_building("On bir bina, park ve çevresi"))
+        self.assertFalse(brain.is_building("3 katlı evler olan bir sokak"))
+        self.assertTrue(brain.is_building("3 katlı bir ev"))
+        self.assertTrue(brain.is_building("10 katlı apartman"))
         self.assertTrue(brain.is_big("bir köprü"))
 
     def test_bad_plan_is_sent_back_until_right(self):

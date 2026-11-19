@@ -341,6 +341,15 @@ def _run_phases(binary, source, folder, request, brief, prompt, first, phases, t
 TARGET_SCORE = 8.0
 
 
+def _try_building(binary, folder, request, player):
+    try:
+        building_project(binary, folder, request, player=player)
+        return True
+    except Exception as exc:
+        print(f"[Blender] Bina motoru olmadı, genel yola geçiyorum: {exc}")
+        return False
+
+
 def brain_is_building(request):
     from plugins import _blender_brain as brain
     return brain.is_building(request)
@@ -630,8 +639,7 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         elif action == "script":
             script_project(binary, source, folder, request)
             output = folder / "scene.blend"
-        elif action == "new" and brain_is_building(request):
-            building_project(binary, folder, request, player=player)
+        elif action == "new" and brain_is_building(request) and _try_building(binary, folder, request, player):
             output = folder / "scene.blend"
         elif action == "new":
             try:

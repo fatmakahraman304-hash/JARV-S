@@ -551,7 +551,7 @@ def main():
     if request["mode"] == "views":
         shots = views(job, request)
         report = {"version": bpy.app.version_string, "views": shots, "issues": geometry_issues(),
-                  "objects": [[o.name, o.type, [round(v, 3) for v in o.dimensions]] for o in list(scene.objects)[:150]]}
+                  "objects": [[o.name, o.type, [round(v, 3) for v in o.dimensions]] for o in list(scene.objects)[:5000]]}
         (job / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf8")
         return
     if request["mode"] == "studio":
