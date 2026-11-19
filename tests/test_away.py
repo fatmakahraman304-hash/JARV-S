@@ -159,3 +159,26 @@ class PushTest(unittest.TestCase):
              mock.patch.object(sync_hub, "push_to", lambda d, t, b, tag: sent.append(d) or True):
             self.assertEqual(away.push_to_phones("t", "b"), 1)
         self.assertEqual(sent, ["phone"])
+
+
+class MorningTest(unittest.TestCase):
+    def test_morning_due(self):
+        night = 8 * 3600
+        self.assertTrue(away.morning_due("2026-11-20", 7, night, False, True, last="2026-11-19"))
+        self.assertFalse(away.morning_due("2026-11-20", 7, night, False, True, last="2026-11-20"))  # once a day
+        self.assertFalse(away.morning_due("2026-11-20", 15, night, False, True, last=""))          # afternoon
+        self.assertFalse(away.morning_due("2026-11-20", 7, 1800, False, True, last=""))            # short break
+        self.assertFalse(away.morning_due("2026-11-20", 7, night, True, True, last=""))            # woke with a command
+        self.assertFalse(away.morning_due("2026-11-20", 7, night, False, False, last=""))          # briefing off
+
+    def test_marker_round_trip(self):
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(away, "BRIEFED_PATH", Path(d) / "b.json"):
+            self.assertEqual(away.last_briefed(), "")
+            away.mark_briefed("2026-11-20")
+            self.assertEqual(away.last_briefed(), "2026-11-20")
+
+    def test_overnight_extra(self):
+        self.assertEqual(away.overnight_extra([]), "")
+        text = away.overnight_extra([{"at": time.time(), "kind": "result", "text": "render done"}])
+        self.assertIn("render done", text)

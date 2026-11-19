@@ -1929,12 +1929,21 @@ class JarvisLive:
                 gone = now - self._away_since
                 woke_by_command = self._away_asleep
                 self._away_since, self._away_asleep = None, False
+                from datetime import datetime
+                wall = datetime.now()
+                brief = self._morning_briefing_options()
+                if brief is not None and away.morning_due(wall.date().isoformat(), wall.hour, gone,
+                                                          woke_by_command, True):
+                    items = away.take()
+                    extra = " ".join(x for x in (str(brief.get("extra") or ""), away.overnight_extra(items)) if x)
+                    self.ui.write_log("SYS: Günaydın — sabah brifingi.")
+                    self._keep_task(asyncio.create_task(self._send_startup_briefing({**brief, "extra": extra})))
+                    continue
                 items = away.take()
                 if items:
                     self.ui.write_log(f"SYS: Siz yokken {len(items)} gelişme oldu — özetliyorum.")
                     text = away.welcome_instruction(items, gone)
                 elif away.should_welcome(gone, woke_by_command):
-                    from datetime import datetime
                     self.ui.write_log("SYS: Tekrar hoş geldiniz.")
                     text = away.greeting_instruction(gone, datetime.now().hour)
                 else:
@@ -1943,6 +1952,17 @@ class JarvisLive:
                     turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True)
             except Exception as exc:
                 print(f"[Away] {exc}")
+
+    def _morning_briefing_options(self) -> dict | None:
+        """The opening briefing's options when it is switched on, else None."""
+        try:
+            r = self._routines.find_builtin("briefing") if self._routines else None
+            if r is not None:
+                return dict(r.get("options") or {}) if r.get("enabled") else None
+            from memory.config_manager import get_brief_enabled
+            return {} if get_brief_enabled() else None
+        except Exception:
+            return None
 
     async def _tell_held_after_quiet(self, quiet: float, idle) -> bool:
         """Quiet is over: what was held back, in one short report. True once it was sent."""
@@ -2902,6 +2922,11 @@ class JarvisLive:
                     shown on the UI content panel. Waits for turn_complete event
                     instead of a fixed sleep so there is no unnecessary gap.
         """
+        try:
+            from core import away as _away
+            _away.mark_briefed(datetime.now().date().isoformat())   # one morning briefing a day
+        except Exception:
+            pass
         memory   = load_memory()
         identity = memory.get("identity", {})
 
