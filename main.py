@@ -2722,7 +2722,8 @@ class JarvisLive:
         lang_clause = (f" Speak this greeting in {lang}, then follow the "
                        f"user's own language from their first reply onward."
                        if lang else "")
-        name_clause = f" Address the user as {name}." if name else ""
+        name_clause = (f" Their name is {name}; address them as [ADDRESS AND MANNER] says "
+                       f"('efendim' unless they set another form)." if name else "")
 
         # Inject last session context if available — pop removes it so it's never repeated
         last = await asyncio.to_thread(pop_last_session)
@@ -2738,7 +2739,8 @@ class JarvisLive:
             )
 
         p1 = (
-            f"Greet the user warmly, mention it is {time_str}"
+            f"Greet the user the way J.A.R.V.I.S. greets Tony Stark in the films — calm, polite, faintly dry "
+            f"(e.g. the feel of 'Günaydın, efendim'), mention it is {time_str}"
             f"{', and say you are fetching the news now' if want_news else ''}.{session_clause} "
             f"Keep it to 2 short sentences max. Do not call any tools.{lang_clause}{name_clause}"
         )
