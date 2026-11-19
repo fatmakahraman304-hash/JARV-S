@@ -81,6 +81,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             from memory.config_manager import save_hf_token
             save_hf_token(tok)
             return "Hugging Face anahtarını kaydettim; gerçek 3B modellerde günlük kota artık daha büyük."
+        if action in ("make", "edit") and request:
+            from core import intent                 # "araba yapabilir mi?" is a question, not an order
+            if not intent.should_act(request):
+                return intent.not_a_command(request)
         if player is None or not hasattr(player, "show_hologram"):
             return "Hologram masası JARVIS'in penceresinde açılır; pencere şu an yok."
         cmd = {"action": action, "request": request}

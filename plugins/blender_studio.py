@@ -817,6 +817,25 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return "Blender'da ne yapmamı istersin?"
     if action == "study" and not (request or p.get("topic")):
         return "Blender'da hangi konuyu öğreneyim?"
+    if request and action in ("new", "edit", "script", "install", "hologram", "render", "animation", "undo", "redo",
+                              "learn_all", "study"):
+        from core import intent                         # a question or a "what if" is answered, never executed
+        if not intent.should_act(request):
+            k = intent.kind(request)
+            if k == "how" and action in ("new", "edit", "script"):
+                try:
+                    from plugins import _blender_knowledge as know
+                    ans = know.answer(request)
+                    if ans:
+                        return intent.not_a_command(request) + "\nAnswer from the Blender manual:\n" + ans
+                except Exception:
+                    pass
+            try:
+                where = executable()
+                state = f"Blender kurulu ({where}). {_status}"
+            except Exception:
+                state = f"Blender bu bilgisayarda bulunamadı. {_status}"
+            return intent.not_a_command(request, state)
     if action in ("lessons", "teach"):
         try:
             return process(action, request, None)
