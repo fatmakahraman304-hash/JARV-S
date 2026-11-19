@@ -14,6 +14,8 @@ def _trigger(a: dict) -> dict | None:
     on = str(a.get("on") or "").strip().lower()
     if on == "startup":
         return {"type": "startup"}
+    if on in ("command", "manual", "voice", "name"):
+        return {"type": "command"}
     if on == "idle":
         return {"type": "idle", "minutes": int(a.get("idle_minutes") or 15),
                 "cooldown": int(a.get("cooldown_minutes") or 20)}
@@ -70,6 +72,11 @@ def routines(parameters: dict, player=None) -> str:
             return outcome.done("routines", quiet_hours=value or "off")
 
         rid = str(a.get("id") or "").strip()
+        if not rid and a.get("name") and action in ("run_now", "remove", "update"):
+            found = eng.find_by_name(str(a["name"]))
+            rid = found["id"] if found else ""
+            if not rid:
+                return outcome.failed("routines", f"no routine called '{a['name']}' — list shows them")
         if not rid and a.get("builtin"):
             found = eng.find_builtin(str(a["builtin"]).strip().lower())
             rid = found["id"] if found else ""
@@ -123,12 +130,14 @@ TOOL = {
         "task (text = the task, agent researcher|general, minutes). WHEN, one of: at 'YYYY-MM-DD "
         "HH:MM' (once) | time 'HH:MM' + optional days (numbers 1=Mon…7=Sun; weekdays = [1,2,3,4,5]) | "
         "monthly_day 1-31 + time | every_minutes + optional between 'HH:MM-HH:MM' | on 'startup' | "
-        "on 'idle' + idle_minutes. "
+        "on 'idle' + idle_minutes | on 'command' = a NAMED routine that runs only when the user says its name "
+        "('akşam modu: ışığı kıs, müzik aç, yarının takvimini oku' → add kind prompt, on command, name 'akşam modu'; "
+        "later 'akşam modu' / 'akşam modunu çalıştır' → run_now with name). "
         "The built-in routines are builtin 'briefing' (the opening briefing: news_topic, extra, "
         "news true/false), 'checkin' (unprompted check-ins: focuses = what they may be about) and "
         "'news_watch' (the watched topics' headlines). list = all routines with ids; update = change "
-        "one by id or builtin (enabled, when, text, and the options above); remove = delete by id; "
-        "run_now = do it now; quiet_hours = 'HH:MM-HH:MM' when unprompted routines stay silent "
+        "one by id, name or builtin (enabled, when, text, and the options above); remove = delete by id or name; "
+        "run_now = do it now (by id or name); quiet_hours = 'HH:MM-HH:MM' when unprompted routines stay silent "
         "(empty turns it off). For a one-off reminder at a date and time, the reminder tool also "
         "shows a system notification."),
     "brief": "Scheduled and automatic routines: add, list, update, remove, run_now, quiet_hours.",
@@ -149,7 +158,7 @@ TOOL = {
             "monthly_day": {"type": "INTEGER"},
             "every_minutes": {"type": "INTEGER"},
             "between": {"type": "STRING"},
-            "on": {"type": "STRING", "enum": ["startup", "idle"]},
+            "on": {"type": "STRING", "enum": ["startup", "idle", "command"]},
             "idle_minutes": {"type": "INTEGER"},
             "cooldown_minutes": {"type": "INTEGER"},
             "enabled": {"type": "BOOLEAN"},
