@@ -602,6 +602,8 @@ class JarvisLive:
         self._loop                     = None
         self._is_speaking         = False
         self._outbox: list        = []      # what arrived while there was no session (sent on reconnect)
+        self._update_checked      = None    # when GitHub was last asked for a newer JARVIS
+        self._update_offered      = ""      # the version already offered (asked once, not every half hour)
         self._speaking_lock       = threading.Lock()
         self._phone_active        = False   # True while phone mic is streaming; pauses PC mic
         # True while another device (the phone first) is the one that answers
@@ -1764,6 +1766,44 @@ class JarvisLive:
     _last_user_text = ""
     _last_user_at = 0.0
     _goaway_pending = False
+
+    def _is_idle(self) -> bool:
+        """Nobody is talking, nothing of JARVIS's is running: a moment that interrupts no one."""
+        try:
+            from core import jobs
+            busy = bool(jobs.current())
+        except Exception:
+            busy = False
+        quiet = time.monotonic() - (getattr(self, "_last_user_speech", 0.0) or 0.0) > 120
+        return (self._awake and not self._is_speaking and quiet and not busy
+                and (self.audio_in_queue is None or self.audio_in_queue.empty()))
+
+    async def _watch_updates(self) -> None:
+        """Every half hour: a newer JARVIS on GitHub? Offer it once at a quiet moment (or install it, if the
+        user turned automatic updates on)."""
+        from core import app_updater
+        from memory.config_manager import get_plugin_config
+        await asyncio.sleep(180)
+        while True:
+            if self._update_checked is None or time.monotonic() - self._update_checked >= 1800:
+                self._update_checked = time.monotonic()
+                try:
+                    info = await asyncio.to_thread(app_updater.check)
+                except Exception as exc:
+                    print(f"[Update] check failed: {exc}")
+                    info = None
+                if info and info.get("newer") and info.get("sha") != self._update_offered:
+                    while not self._is_idle():
+                        await asyncio.sleep(20)
+                    self._update_offered = info["sha"]
+                    if (get_plugin_config("self_update") or {}).get("auto"):
+                        self.ui.write_log(f"SYS: Yeni sürüm ({info['sha'][:8]}) kuruluyor — otomatik güncelleme açık.")
+                        self.ui.start_update()
+                    else:
+                        from plugins.self_update import summary
+                        self.ui.write_log(f"SYS: Yeni JARVIS sürümü var ({info['sha'][:8]}).")
+                        self.plugin_say("[UPDATE_AVAILABLE] " + summary(info))
+            await asyncio.sleep(60)
 
     async def _flush_outbox(self) -> None:
         """Send what waited while the connection was down, in the order it came."""
@@ -3190,6 +3230,7 @@ class JarvisLive:
                     tg.create_task(self._watch_stall())
                     if self._outbox:
                         tg.create_task(self._flush_outbox())
+                    tg.create_task(self._watch_updates())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
