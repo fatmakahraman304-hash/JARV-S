@@ -610,6 +610,7 @@ class JarvisLive:
         self._away_since: float | None = None   # when the user was last seen leaving (core/away.py)
         self._away_asleep         = False   # JARVIS was asleep then: their wake command comes first
         self._quiet_was_on        = False
+        self._quiet_slept         = False   # asleep for a meeting/call: wake when the quiet ends
         self._voice_gain          = 1.0     # JARVIS's own voice level (core/voice_level.py)
         self._gain_checked        = float("-inf")
         from collections import deque as _deque
@@ -735,6 +736,7 @@ class JarvisLive:
         self.ui.get_plugins = self._plugin_registry.list_for_ui
         self.ui.get_plugin_settings = self._plugin_registry.settings_schemas  # ⚙ settings tab
         self.ui.request_say = self.plugin_say   # plugins: mid-task speech channel
+        self.ui.request_sleep = self._sleep_after_reply   # quiet_mode(listen=false): stop listening
 
         # Tool access for plugins that ORCHESTRATE other tools rather than doing
         # a job themselves — screen_agent is the first, and the reason this
@@ -1871,6 +1873,21 @@ class JarvisLive:
     _AWAY_KINDS = (("[TOOL_LATE_RESULT]", "result", ""), ("[UPDATE_AVAILABLE]", "update", "update"),
                    ("[REMINDER", "reminder", ""), ("[HABIT_SUGGESTION]", "habit", "habit"))
 
+    def _sleep_after_reply(self, reason: str = "sessiz mod") -> None:
+        """Go to sleep once the confirmation now being spoken has been heard (asleep, audio is dropped)."""
+        def go():
+            time.sleep(1.5)
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                busy = self._is_speaking or (self.audio_in_queue is not None and not self.audio_in_queue.empty())
+                if not busy:
+                    break
+                time.sleep(0.3)
+            time.sleep(0.8)
+            self._quiet_slept = True
+            self.sleep(reason=reason)
+        threading.Thread(target=go, daemon=True, name="quiet-sleep").start()
+
     def _quiet(self) -> bool:
         """Quiet mode (core/quiet.py): the user asked JARVIS to volunteer nothing for now."""
         try:
@@ -1932,6 +1949,11 @@ class JarvisLive:
                 if self._quiet():
                     self._quiet_was_on = True          # nothing is told until quiet ends
                     continue
+                if getattr(self, "_quiet_slept", False):
+                    self._quiet_slept = False          # the meeting is over: listen again by itself
+                    if not self._awake:
+                        self.wake(reason="sessiz mod bitti")
+                        self._last_user_speech = time.monotonic() - 3   # let the held report go out
                 if self._quiet_was_on and not away.is_away(self._awake, quiet, idle):
                     if not away.pending():
                         self._quiet_was_on = False
