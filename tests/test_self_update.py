@@ -49,7 +49,7 @@ class Check(unittest.TestCase):
 
     def test_main_watches_for_updates(self):
         src = (Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
-        self.assertIn("tg.create_task(self._watch_updates())", src)
+        self.assertIn("tg.create_task(self._guarded(self._watch_updates))", src)
         self.assertIn('"[UPDATE_AVAILABLE] "', src)
 
 
