@@ -892,6 +892,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         except Exception as exc:
             _status = f"Blender işlemi tamamlanamadı. {exc}"
         finally:
+            _stop.clear()                        # a stop belongs to the job it was given to
             message = _status
             _lock.release()
         if player is not None:
