@@ -16,10 +16,11 @@ PLUGIN = {
         "updates that could not be told then. Use for 'ben yokken ne oldu?', 'kaçırdığım bir şey var mı?', "
         "'what did I miss?', and to hear the last welcome-back report again. Never starts or repeats a job. "
         "action=welcome_off when the user does not want to be greeted on coming back to the desk "
-        "('döndüğümde karşılama'), welcome_on to have it again."
+        "('döndüğümde karşılama'), welcome_on to have it again. action=push_off when they do not want phone "
+        "notifications about jobs finished / alarms while they are away from the desk, push_on to have them again."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "report (default) | welcome_on | welcome_off"},
+        "action": {"type": "STRING", "description": "report (default) | welcome_on | welcome_off | push_on | push_off"},
     }},
 }
 
@@ -34,6 +35,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             save_plugin_config("away", {"welcome": on})
             return ("The welcome back after a long absence is on." if on else
                     "No more welcome back after an absence; news that came up while away is still told.")
+        if action in ("push_on", "push_off"):
+            from memory.config_manager import save_plugin_config
+            on = action == "push_on"
+            save_plugin_config("away", {"push": on})
+            return ("Phone notifications while away from the desk are on." if on else
+                    "No phone notifications while away; everything is still told on return.")
         items = away.take()
         if items:
             return ("Not yet told — report these briefly, most important first, merging related items and "

@@ -1851,8 +1851,21 @@ class JarvisLive:
         except Exception as exc:
             print(f"[Away] {exc}")
             return False
+        self._push_if_gone(instruction, kind)
         self.ui.write_log("SYS: Siz yokken gelen bir bilgi saklandı; döndüğünüzde söyleyeceğim.")
         return True
+
+    def _push_if_gone(self, text: str, kind: str) -> None:
+        """Away from the desk and a job finished / an alarm went off: a word to their phone too."""
+        try:
+            from core import away
+            if not away.should_push(kind, away.input_idle_seconds()):
+                return
+            note = away.phone_note(text, kind)
+            if note and away.push_to_phones(*note):
+                self.ui.write_log(f"SYS: Telefonunuza bildirildi — {note[0]}")
+        except Exception as exc:
+            print(f"[Away] push: {exc}")
 
     async def _watch_away(self) -> None:
         """When the user is back, tell them in one welcome what came up while they were away."""
@@ -3000,6 +3013,7 @@ class JarvisLive:
                     away.add(alert, kind="system", key="system")   # only the latest one is still news
                 except Exception:
                     pass
+                self._push_if_gone(alert, "system")
                 continue
             if not alert or not self.session or not self._awake:
                 continue
