@@ -249,6 +249,9 @@ def phone_note(instruction: str, kind: str) -> tuple[str, str] | None:
         r = re.search(r"Result:\s*(.*)", text, re.S)
         body = (r.group(1) if r else text).strip()
         return (f"JARVIS — {tool} tamamlandı" if tool else "JARVIS — iş tamamlandı"), body[:300]
+    if kind == "heads_up":
+        m = re.search(r"In (\d+) minutes: (.*?)\. Give", text, re.S)
+        return ("JARVIS — yaklaşan", f"{m.group(2)} — {m.group(1)} dakika sonra." if m else text[:200])
     if kind == "system":
         body = re.sub(r"^\[[A-Z_]+\]\s*", "", text)
         return "JARVIS — sistem uyarısı", body[:300]
@@ -258,7 +261,7 @@ def phone_note(instruction: str, kind: str) -> tuple[str, str] | None:
 def should_push(kind: str, input_idle: float | None, now: float | None = None) -> bool:
     """Truly away from the desk (input idle), a kind worth it, not too soon after the last one."""
     now = time.monotonic() if now is None else now
-    if kind not in ("result", "system") or not push_enabled():
+    if kind not in ("result", "system", "heads_up") or not push_enabled():
         return False
     if input_idle is None or input_idle < AWAY_AFTER:
         return False
