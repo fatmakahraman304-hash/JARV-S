@@ -86,3 +86,29 @@ class GuardTest(unittest.TestCase):
                 tg.create_task(good())
         asyncio.run(go())
         self.assertEqual(done, [True])
+
+
+class MeetingTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.p = mock.patch.object(quiet, "STATE_PATH", Path(self.tmp.name) / "q.json")
+        self.p.start()
+
+    def tearDown(self):
+        self.p.stop()
+        self.tmp.cleanup()
+
+    def test_meeting_stops_listening(self):
+        from plugins import quiet_mode
+        player = mock.Mock()
+        out = quiet_mode.run({"action": "on", "minutes": 60, "reason": "toplantı", "listen": False}, player=player)
+        player.request_sleep.assert_called_once()
+        self.assertIn("not listening", out)
+        self.assertTrue(quiet.last_listen_off())
+
+    def test_film_keeps_listening(self):
+        from plugins import quiet_mode
+        player = mock.Mock()
+        quiet_mode.run({"action": "on", "minutes": 120, "reason": "film"}, player=player)
+        player.request_sleep.assert_not_called()
+        self.assertFalse(quiet.last_listen_off())

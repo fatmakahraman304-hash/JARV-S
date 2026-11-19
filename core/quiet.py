@@ -39,14 +39,23 @@ def _write(data: dict) -> None:
         print(f"[Quiet] {exc}")
 
 
-def start(minutes: float | None = None, reason: str = "", now: float | None = None) -> dict:
-    """Quiet for `minutes` (None: until the user says, at most MAX_HOURS)."""
+def start(minutes: float | None = None, reason: str = "", now: float | None = None, listen: bool = True) -> dict:
+    """Quiet for `minutes` (None: until the user says, at most MAX_HOURS). listen=False (a meeting, a
+    call): JARVIS also stops listening — asleep, so other people's words are not taken as commands —
+    and wakes by itself when the quiet ends."""
     now = time.time() if now is None else now
     mins = MAX_HOURS * 60 if not minutes or minutes <= 0 else min(float(minutes), MAX_HOURS * 60)
-    data = {"since": now, "until": now + mins * 60, "open": not minutes, "reason": (reason or "")[:80]}
+    data = {"since": now, "until": now + mins * 60, "open": not minutes, "reason": (reason or "")[:80],
+            "listen": bool(listen)}
     with _lock:
         _write(data)
     return data
+
+
+def last_listen_off(now: float | None = None) -> bool:
+    """The quiet on record (even if just expired) had listening off — for waking up when it ends."""
+    data = _read()
+    return bool(data.get("until")) and data.get("listen") is False
 
 
 def stop() -> dict:
@@ -82,6 +91,8 @@ def describe(now: float | None = None) -> str:
         return "Quiet mode is off."
     left = int((float(data["until"]) - now) // 60)
     why = f" ({data['reason']})" if data.get("reason") else ""
+    if data.get("listen") is False:
+        why += ", not listening (asleep; wake word or the WAKE button to talk)"
     if data.get("open"):
         return f"Quiet mode is on until the user ends it{why}; it ends by itself in {left} min at the latest."
     return f"Quiet mode is on for {left} more min{why}."
