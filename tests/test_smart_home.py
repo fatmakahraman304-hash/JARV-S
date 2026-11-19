@@ -192,3 +192,23 @@ class TimerTest(unittest.TestCase):
     def test_cancel(self):
         sh.run({"action": "on", "target": "salon ışığı", "at": "07:00"})
         self.assertIn("Cancelled 1", sh.run({"action": "cancel_timers"}))
+
+
+class SummaryAndGraceTest(unittest.TestCase):
+    def test_home_summary(self):
+        states = STATES + [{"entity_id": "binary_sensor.balkon", "state": "on",
+                            "attributes": {"device_class": "door", "friendly_name": "Balkon Kapısı"}}]
+        out = sh.home_summary(states)
+        self.assertIn("Salon Işığı", out)
+        self.assertIn("Balkon Kapısı", out)
+        self.assertIn("Salon Klima", out)
+        self.assertIn("locked", out)
+
+    def test_missed_timer_is_skipped(self):
+        import tempfile, time
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(sh, "_timers_path", lambda: Path(d) / "t.json"):
+            sh._save_timers([{"at": time.time() - 3 * 3600, "params": {"action": "off", "target": "salon ışığı"}}])
+            out = sh.run_due_timers()
+        self.assertIn("Skipped", out[0])
