@@ -65,6 +65,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         except Exception:
             pass
         parts.append(_own_state())
+        try:
+            from plugins import smart_home
+            if smart_home._cfg().get("token"):
+                parts.append("EV:\n" + smart_home.home_summary())
+        except Exception:
+            pass
         parts.append("(Kullanıcıya Iron Man'deki JARVIS gibi kısa, akıcı bir rapor olarak özetle; "
                      "düşük pil ya da dolu disk varsa uyar.)")
         return "\n\n".join(parts)

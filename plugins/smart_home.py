@@ -267,6 +267,27 @@ def _save_timers(items: list[dict]) -> None:
         pass
 
 
+TIMER_GRACE = 30 * 60
+
+
+def home_summary(states: list[dict] | None = None) -> str:
+    """The house in a few lines, for the status report: lights on, open doors/windows, climate."""
+    states = _states() if states is None else states
+    lights = [name_of(e) for e in states if domain_of(e) == "light" and e.get("state") == "on"]
+    opened = [name_of(e) for e in states if domain_of(e) == "binary_sensor"
+              and (e.get("attributes") or {}).get("device_class") in ("door", "window", "garage_door", "opening")
+              and e.get("state") == "on"]
+    climate = [describe(e) for e in states if domain_of(e) == "climate"]
+    locks = [describe(e) for e in states if domain_of(e) == "lock"]
+    lines = ["- açık ışıklar: " + (", ".join(lights) if lights else "yok"),
+             "- açık kapı/pencere: " + (", ".join(opened) if opened else "yok")]
+    if climate:
+        lines.append("- iklim: " + "; ".join(climate))
+    if locks:
+        lines.append("- kilitler: " + "; ".join(locks))
+    return "\n".join(lines)
+
+
 def when_from(p: dict, now: float | None = None) -> float | None:
     """The time a delayed command should run, or None to run it now."""
     import time as _t
@@ -296,6 +317,11 @@ def run_due_timers(now: float | None = None) -> list[str]:
     _save_timers([t for t in items if float(t.get("at", 0)) > now])
     out = []
     for t in due:
+        if now - float(t.get("at", 0)) > TIMER_GRACE:
+            # JARVIS was off at that time: switching lights at a random later hour helps nobody
+            out.append(f"Skipped (missed by {int((now - float(t['at'])) // 60)} min while JARVIS was off): "
+                       f"{t['params'].get('action')} {t['params'].get('target', '')}")
+            continue
         params = dict(t.get("params") or {})
         params.pop("after_minutes", None)
         params.pop("at", None)
