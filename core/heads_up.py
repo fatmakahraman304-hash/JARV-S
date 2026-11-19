@@ -49,3 +49,30 @@ def instruction(r: dict, now: float | None = None) -> str:
     return (f"[HEADS_UP] In {mins} minutes: {r.get('text', '')}. Give the user a heads-up the way J.A.R.V.I.S. "
             f"would — one sentence ('Efendim, toplantınıza {mins} dakika var.'), offering the obvious help at "
             "most once (opening the meeting link, the route). Do not call any tool unless they ask.")
+
+
+def from_routines(routines: list[dict]) -> list[dict]:
+    """Spoken one-shot reminders from the routine engine, in the shared-reminder shape."""
+    out = []
+    for r in routines or []:
+        if not r.get("enabled", True) or r.get("kind") != "say":
+            continue
+        trig = r.get("trigger") or {}
+        if trig.get("type") != "time" or (trig.get("rule") or {}).get("type") != "once":
+            continue
+        due = float(r.get("next_ts") or (trig.get("rule") or {}).get("at_ts") or 0)
+        if due:
+            out.append({"id": "rt:" + str(r.get("id")), "text": r.get("text") or r.get("name", ""), "due": due * 1000})
+    return out
+
+
+def merge(shared: list[dict], local: list[dict]) -> list[dict]:
+    """Both lists, the same appointment once (same text, same minute)."""
+    seen, out = set(), []
+    for r in list(shared or []) + list(local or []):
+        key = (_norm(r.get("text", "")).strip(), int(float(r.get("due") or 0) // 60000))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
