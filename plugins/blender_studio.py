@@ -388,11 +388,12 @@ def building_project(binary, folder, request, plan=None, player=None):
             run_script(binary, None, folder, code)
             break
         except ValueError as exc:
-            m = re.search(r"JARVIS_EXTRA_FAILED::(.+?)::(.*)", str(exc))
-            if not m:
+            hits = re.findall(r"RuntimeError: JARVIS_EXTRA_FAILED::(.+?)::(.*)", str(exc))
+            if not hits:
                 raise
-            print(f"[Blender] Ek '{m.group(1)}' hata verdi, düzeltiyorum: {m.group(2)[:200]}")
-            plan = brain.fix_extra(plan, m.group(1), str(exc))
+            name, why = hits[-1]
+            print(f"[Blender] Ek '{name}' hata verdi, düzeltiyorum: {why[:200]}")
+            plan = brain.fix_extra(plan, name, str(exc))
     else:
         raise ValueError("Eklerden biri Blender'da çalışmadı.")
     (folder / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf8")
