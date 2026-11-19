@@ -1917,6 +1917,26 @@ class JarvisLive:
             except Exception as exc:
                 print(f"[Away] {exc}")
 
+    async def _watch_sentinel(self) -> None:
+        """Ambient awareness (core/sentinel.py): a USB drive, the charger, the internet back, a download
+        finished — one sentence each, as it happens."""
+        from core import sentinel
+        if getattr(self, "_sentinel", None) is None:          # one view for the whole run, across reconnects
+            self._sentinel = await asyncio.to_thread(sentinel.Sentinel)
+            self._sentinel_notes = []
+        await asyncio.sleep(15)
+        while True:
+            try:
+                self._sentinel_notes += await asyncio.to_thread(self._sentinel.tick)
+                talking = time.monotonic() - (self._last_user_speech or 0.0) < 5 or self._is_speaking
+                if self._sentinel_notes and not talking:
+                    notes, self._sentinel_notes = self._sentinel_notes[-4:], []
+                    self.ui.write_log("SYS: " + " ".join(notes))
+                    self.plugin_say(sentinel.instruction(notes))
+            except Exception as exc:
+                print(f"[Sentinel] {exc}")
+            await asyncio.sleep(15)
+
     async def _watch_vigil(self) -> None:
         """J.A.R.V.I.S. keeping watch: once, dryly, after hours without a break or deep into the night
         (core/vigil.py). Grounded in measured activity; off when the user says so."""
@@ -3514,6 +3534,7 @@ class JarvisLive:
                     tg.create_task(self._watch_habits())
                     tg.create_task(self._watch_away())
                     tg.create_task(self._watch_vigil())
+                    tg.create_task(self._watch_sentinel())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
