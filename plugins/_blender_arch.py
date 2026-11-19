@@ -192,18 +192,34 @@ def door(name, wall, u, width, height, mats, outside_step=False):
 
 # ── materials for buildings ──────────────────────────────────────────────────
 
+def _wall_uv(nt):
+    """(x + y, z): runs along any axis-aligned wall, so bricks lie flat on every facade."""
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    add = nt.nodes.new("ShaderNodeMath")
+    add.operation = "ADD"
+    comb = nt.nodes.new("ShaderNodeCombineXYZ")
+    nt.links.new(tc.outputs["Object"], sep.inputs[0])
+    nt.links.new(sep.outputs[0], add.inputs[0])
+    nt.links.new(sep.outputs[1], add.inputs[1])
+    nt.links.new(add.outputs[0], comb.inputs[0])
+    nt.links.new(sep.outputs[2], comb.inputs[1])
+    return comb.outputs[0]
+
+
 def brick(name, color=(0.55, 0.22, 0.14), mortar=(0.75, 0.73, 0.7)):
     mat, nt, bsdf = _principled(name)
-    tc = nt.nodes.new("ShaderNodeTexCoord")
     br = nt.nodes.new("ShaderNodeTexBrick")
     br.inputs["Color1"].default_value = (*color, 1)
     br.inputs["Color2"].default_value = (*(Vector(color) * 0.8), 1)
     br.inputs["Mortar"].default_value = (*mortar, 1)
-    br.inputs["Scale"].default_value = 4.0
-    br.inputs["Mortar Size"].default_value = 0.015
+    br.inputs["Scale"].default_value = 1.0
+    br.inputs["Mortar Size"].default_value = 0.01
+    br.inputs["Brick Width"].default_value = 0.25          # a real brick: 25 × 6.5 cm
+    br.inputs["Row Height"].default_value = 0.075
     bump = nt.nodes.new("ShaderNodeBump")
     bump.inputs["Strength"].default_value = 0.3
-    nt.links.new(tc.outputs["Object"], br.inputs["Vector"])
+    nt.links.new(_wall_uv(nt), br.inputs["Vector"])
     nt.links.new(br.outputs["Color"], bsdf.inputs["Base Color"])
     nt.links.new(br.outputs["Fac"], bump.inputs["Height"])
     nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
