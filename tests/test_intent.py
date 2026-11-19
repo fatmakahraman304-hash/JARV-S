@@ -47,6 +47,38 @@ class BlenderGuard(unittest.TestCase):
         self.assertTrue(proc.called)
 
 
+class EveryTool(unittest.TestCase):
+    def test_changing_tools_are_guarded_for_questions(self):
+        for name, args in (("open_app", {"app": "spotify"}), ("todo_list", {"action": "add", "task": "süt"}),
+                           ("send_message", {"to": "anne"}), ("file_manager", {"action": "delete"})):
+            self.assertIn("NOT EXECUTED", intent.guard(name, args, "ileride Spotify'ı açsam ne olur?"), name)
+            self.assertIn("NOT EXECUTED", intent.guard(name, args, "mesajı gönderdin mi?"), name)
+            self.assertEqual(intent.guard(name, args, "Spotify'ı aç"), "", name)
+            self.assertEqual(intent.guard(name, args, "tamam"), "", name)          # confirmations go through
+
+    def test_looking_tools_answer_questions(self):
+        for name, args in (("weather_report", {}), ("recall_memory", {"query": "x"}), ("todo_list", {"action": "list"}),
+                           ("blender_studio", {"action": "status"}), ("system_status", {})):
+            self.assertEqual(intent.guard(name, args, "bitti mi?"), "", name)
+
+    def test_main_uses_the_guard_for_every_tool(self):
+        src = open(__import__("pathlib").Path(__file__).resolve().parent.parent / "main.py", encoding="utf-8").read()
+        self.assertIn("blocked = self._intent_guard(name, args)", src)
+
+
+class WorkStatus(unittest.TestCase):
+    def test_reports_real_outcomes_and_running_jobs(self):
+        from core import activity
+        from plugins import work_status
+        activity.record("files", "Dosya taşındı: rapor.pdf", "ok")
+        activity.record("web", "Yapılamadı: Web araması", "fail")
+        out = work_status.run({})
+        self.assertIn("Dosya taşındı: rapor.pdf (tamam)", out)
+        self.assertIn("BAŞARISIZ", out)
+        self.assertIn("Blender:", out)
+        self.assertTrue(intent.is_read_only("work_status", {}))
+
+
 class HologramGuard(unittest.TestCase):
     def test_question_does_not_model(self):
         from plugins import hologram

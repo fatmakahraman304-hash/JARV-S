@@ -97,3 +97,32 @@ def not_a_command(text: str, status: str = "") -> str:
             "hypothetical": "a hypothetical / capability question", "chat": "conversation"}.get(k, "not a command")
     return (f"NOT EXECUTED: the user's words were {what}, not a request to do it now. Answer them in their language"
             + (f" — current state: {status}" if status else "") + ". Do it only if they then ask for it.")
+
+
+# tools (or tool actions) that only look — they may answer any kind of question
+_LOOK_NAME = re.compile(r"(search|recall|weather|time|clock|date|status|screen|read|get_|list|find|look|check|info|news|"
+                        r"translat|calc|describe|inspect|query|web|memory|vision|camera|explain|define|knowledge|"
+                        r"lookup|fetch|price|stock|currency|wiki|summar|scan_research)", re.I)
+_LOOK_ACTIONS = {"status", "list", "inspect", "info", "get", "read", "search", "guide", "lessons", "knowledge",
+                 "preview", "show", "help", "query", "find", "check", "describe", "explain", "history", "state"}
+
+
+def is_read_only(name: str, args: dict | None = None) -> bool:
+    """A tool call that only looks. An explicit action decides first (todo_list action=add changes
+    things, blender_studio action=status only looks); without one, the tool's name does."""
+    args = args or {}
+    for key in ("action", "mode", "op", "command"):
+        v = str(args.get(key) or "").lower().strip()
+        if v:
+            return v in _LOOK_ACTIONS
+    return bool(_LOOK_NAME.search(name or ""))
+
+
+def guard(name: str, args: dict, said: str) -> str:
+    """For every tool call: '' when it may run; NOT EXECUTED when the user's words were a status question,
+    a how-to question or a hypothetical and the tool would change something."""
+    if not said or is_read_only(name, args):
+        return ""
+    if kind(said) in ("status", "how", "hypothetical"):
+        return not_a_command(said)
+    return ""

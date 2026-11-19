@@ -1363,6 +1363,7 @@ class JarvisLive:
         if not self._awake:
             self.ui.write_log("SYS: I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first.")
             return
+        self._last_user_text, self._last_user_at = text, time.monotonic()
         from core.blender_commands import scene_command
         scene = scene_command(text)
         if scene is not None:
@@ -1755,6 +1756,16 @@ class JarvisLive:
         activity.record_tool(fc.name, args, result=result)
         return resp
 
+    _last_user_text = ""
+    _last_user_at = 0.0
+
+    def _intent_guard(self, name: str, args: dict) -> str:
+        """'' to run the tool, else why not: the user's words were a question, not an order."""
+        if time.monotonic() - self._last_user_at > 90:
+            return ""                       # a tool the model chose on its own (briefing, follow-up …)
+        from core import intent
+        return intent.guard(name, args, self._last_user_text)
+
     async def _execute_tool_inner(self, fc) -> types.FunctionResponse:
         name = fc.name
         if name == "shutdown_jarvis":
@@ -1766,6 +1777,14 @@ class JarvisLive:
         print(f"[JARVIS] 🔧 {name}  {args}")
         _t_tool = time.monotonic()
         self.ui.set_state("THINKING")
+
+        # A question, a how-to or a "what if" never changes anything — whatever the tool.
+        blocked = self._intent_guard(name, args)
+        if blocked:
+            print(f"[JARVIS] 🛑 {name} not run — {blocked[:80]}")
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": blocked})
 
 
         if name == "save_memory":
@@ -2195,6 +2214,9 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
+                                # what the user is saying right now — the intent guard reads it
+                                self._last_user_text = " ".join(in_buf)
+                                self._last_user_at = self._last_user_speech
 
                         if sc.turn_complete:
                             user_text = " ".join(in_buf)
