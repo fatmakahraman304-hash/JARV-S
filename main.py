@@ -484,6 +484,9 @@ TOOL_DECLARATIONS = [
                     "type": "STRING",
                     "description": (
                         "identity — name, age, birthday, city, job, language, nationality | "
+                        "instructions — HOW THE USER WANTS YOU TO BEHAVE, said as a correction or a rule "
+                        "('don't call me sir', 'answer shorter', 'do not ask before X', 'never read the news "
+                        "in the morning'): value = the rule in English, followed every time from then on | "
                         "preferences — favorite food/color/music/film/game/sport, hobbies | "
                         "projects — active projects, goals, things being built | "
                         "relationships — friends, family, partner, colleagues | "
@@ -493,6 +496,8 @@ TOOL_DECLARATIONS = [
                 },
                 "key":   {"type": "STRING", "description": "Short snake_case key (e.g. name, favorite_food, sister_name)"},
                 "value": {"type": "STRING", "description": "Concise value in English (e.g. Murat, pizza, older sister)"},
+                "remove": {"type": "BOOLEAN", "description": "true = forget this key (e.g. the user takes back an "
+                                                             "instruction: 'you can call me sir again')"},
             },
             "required": ["category", "key", "value"]
         }
@@ -1877,7 +1882,10 @@ class JarvisLive:
             category = args.get("category", "notes")
             key      = args.get("key", "")
             value    = args.get("value", "")
-            if key and value:
+            if key and args.get("remove"):
+                from memory.memory_manager import forget
+                print(f"[Memory] 🗑️ {forget(key, category)}")
+            elif key and value:
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
             if not self.ui.muted:

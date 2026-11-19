@@ -66,6 +66,7 @@ PROMPT_MAX_PER_CATEGORY = 6
 def _empty_memory() -> dict:
     return {
         "identity":      {},
+        "instructions":  {},      # how the user wants JARVIS to behave — always in the prompt, never trimmed
         "preferences":   {},
         "projects":      {},
         "relationships": {},
@@ -151,8 +152,8 @@ def set_trim_notifier(fn) -> None:
 def _trim_to_limit(memory: dict) -> dict:
     if len(json.dumps(memory, ensure_ascii=False)) <= MEMORY_MAX_CHARS:
         return memory
-    entries = _all_entries(memory)
-    entries.sort(key=lambda t: t[2].get("updated", "0000-00-00"))
+    entries = [e for e in _all_entries(memory) if e[0] not in ("identity", "instructions")]   # who they are and
+    entries.sort(key=lambda t: t[2].get("updated", "0000-00-00"))                           # what they told JARVIS stay
     dropped, archived = [], {}
     for cat, key, entry in entries:
         if len(json.dumps(memory, ensure_ascii=False)) <= MEMORY_MAX_CHARS:
@@ -390,10 +391,15 @@ def format_memory_for_prompt(memory: dict | None) -> str:
             core_lines.append(f"{label}:")
             core_lines.extend(shown[cat])
 
-    if not core_lines and not indexed:
+    if not core_lines and not indexed and not (memory.get("instructions") or {}):
         return ""
 
-    out = [
+    out = []
+    orders = [(k, _entry_value(e)) for k, e in (memory.get("instructions", {}) or {}).items() if _entry_value(e)]
+    if orders:                                       # in full, first: a correction is followed every time
+        out += ["[STANDING INSTRUCTIONS FROM THE USER — follow them in every reply until the user changes them]",
+                *[f"  - {v}" for _k, v in orders], ""]
+    out += [
         "[WHAT YOU KNOW ABOUT THIS PERSON — use naturally, never recite like a list]",
         *core_lines,
     ]
