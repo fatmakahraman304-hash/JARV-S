@@ -1776,6 +1776,15 @@ class JarvisLive:
         except Exception:
             result = ""
         activity.record_tool(fc.name, args, result=result)
+        try:                                   # what the user asks for, when — habits come from this
+            asked = time.monotonic() - self._last_user_at < 90
+            rs = str(result or "")
+            if asked and activity.status_of(result) == "ok" and not rs.startswith(("NOT EXECUTED", "STILL RUNNING")) \
+                    and "status=ask" not in rs[:40]:
+                from core import habits
+                habits.record(fc.name, args)
+        except Exception as exc:
+            print(f"[Habits] {exc}")
         return resp
 
     _last_user_text = ""
@@ -1819,6 +1828,26 @@ class JarvisLive:
                         self.ui.write_log(f"SYS: Yeni JARVIS sürümü var ({info['sha'][:8]}).")
                         self.plugin_say("[UPDATE_AVAILABLE] " + summary(info))
             await asyncio.sleep(60)
+
+    async def _watch_habits(self) -> None:
+        """Every couple of hours, at a quiet moment: a command the user gives at the same time
+        day after day may become a routine — offered once, set up only on their yes."""
+        from core import habits
+        await asyncio.sleep(600)
+        while True:
+            try:
+                found = await asyncio.to_thread(habits.suggestions)
+            except Exception as exc:
+                print(f"[Habits] {exc}")
+                found = []
+            if found:
+                while not self._is_idle():
+                    await asyncio.sleep(30)
+                h = found[0]
+                habits.mark_offered(h["sig"])
+                self.ui.write_log(f"SYS: Alışkanlık fark edildi: {h['sig']} (~{h['time']}, {h['days']} gün)")
+                self.plugin_say(habits.offer_text(h))
+            await asyncio.sleep(7200)
 
     async def _flush_outbox(self) -> None:
         """Send what waited while the connection was down, in the order it came."""
@@ -3249,6 +3278,7 @@ class JarvisLive:
                     if self._outbox:
                         tg.create_task(self._flush_outbox())
                     tg.create_task(self._watch_updates())
+                    tg.create_task(self._watch_habits())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
