@@ -1164,8 +1164,10 @@ class JarvisLive:
 
     async def _drain_say(self) -> None:
         """Send queued plugin/background sentences one by one, each at a calm moment."""
+        from core import heartbeat
         while True:
             await asyncio.sleep(0.4)
+            heartbeat.beat("say_queue")
             if not self._say_queue or not self.session:
                 continue
             now = time.monotonic()
@@ -1918,9 +1920,11 @@ class JarvisLive:
     async def _watch_away(self) -> None:
         """When the user is back, tell them in one welcome what came up while they were away."""
         from core import away
+        from core import heartbeat
         await asyncio.sleep(5)
         while True:
             await asyncio.sleep(3)
+            heartbeat.beat("away")
             try:
                 now = time.monotonic()
                 quiet = now - (self._last_user_speech or 0.0)
@@ -2024,6 +2028,12 @@ class JarvisLive:
         except Exception as exc:
             print(f"[Watcher] {getattr(watcher, '__name__', watcher)} stopped: {exc}")
             try:
+                from core import heartbeat
+                heartbeat.stopped(str(getattr(watcher, "__name__", watcher)).replace("_watch_", "").replace("_drain_say", "say_queue"),
+                                  repr(exc))
+            except Exception:
+                pass
+            try:
                 from core import logbook
                 logbook.write(f"watcher {getattr(watcher, '__name__', watcher)} stopped: {exc!r}")
             except Exception:
@@ -2097,8 +2107,10 @@ class JarvisLive:
         if getattr(self, "_sentinel", None) is None:          # one view for the whole run, across reconnects
             self._sentinel = await asyncio.to_thread(sentinel.Sentinel)
             self._sentinel_notes = []
+        from core import heartbeat
         await asyncio.sleep(15)
         while True:
+            heartbeat.beat("sentinel")
             try:
                 self._sentinel_notes += await asyncio.to_thread(self._sentinel.tick)
                 await self._watch_home_once()
@@ -2118,8 +2130,10 @@ class JarvisLive:
         from core import away, vigil
         watch = getattr(self, "_vigil", None) or vigil.Vigil()   # survives reconnects: the stretch goes on
         self._vigil = watch
+        from core import heartbeat
         await asyncio.sleep(60)
         while True:
+            heartbeat.beat("vigil")
             try:
                 now = time.monotonic()
                 note = await asyncio.to_thread(

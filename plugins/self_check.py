@@ -22,7 +22,7 @@ PLUGIN = {
     "name": "self_check",
     "description": (
         "JARVIS checks itself end to end: the AI model and API key, internet, microphone and speakers, disk space, "
-        "memory file, plugins, Blender and its live link, key packages, recent errors — each really tested, with a fix for "
+        "memory file, plugins, Blender and its live link, key packages, recent errors, background watchers, smart home — each really tested, with a fix for "
         "every problem. Use for 'kendini kontrol et', 'sistem kontrolü', 'bir sorun var mı?', 'neden çalışmıyor?'; "
         "action=errors for 'son hataları göster', 'neden kapandı?', 'dün ne hata oldu?'."
     ),
@@ -163,9 +163,42 @@ def check_errors():
         "Ayrıntı için 'son hataları göster' de."
 
 
+NAMES = {"away": "siz-yokken takibi", "vigil": "mola notları", "sentinel": "çevre farkındalığı",
+         "say_queue": "konuşma sırası"}
+
+
+def check_watchers():
+    from core import heartbeat
+    st = heartbeat.status()
+    started = {k: v for k, v in st.items() if v["age"] is not None or not v["ok"]}
+    if not started:
+        return OK, "Arka plan görevleri henüz başlamadı (oturum yeni ya da bağlı değil)", ""
+    bad = [f"{NAMES.get(k, k)} ({v['why']})" for k, v in st.items() if not v["ok"]]
+    if bad:
+        return FAIL, "Duran arka plan görevi: " + ", ".join(bad), \
+            "JARVIS'i yeniden başlat; tekrar ederse 'son hataları göster' de."
+    return OK, f"{len(started)} arka plan görevi çalışıyor", ""
+
+
+def check_home():
+    from plugins import smart_home
+    cfg = smart_home._cfg()
+    if not (cfg.get("url") and cfg.get("token")):
+        return OK, "Akıllı ev bağlı değil (isteğe bağlı)", ""
+    try:
+        n = len(smart_home._states())
+        return OK, f"Home Assistant bağlı, {n} cihaz/sensör", ""
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        if code == 401:
+            return FAIL, "Home Assistant jetonu reddedildi", "Ayarlar → Bağlantılar → Akıllı ev: yeni jeton yapıştır."
+        return FAIL, f"Home Assistant'a ulaşılamıyor ({str(getattr(exc, 'reason', exc))[:60]})", \
+            "Home Assistant açık mı, bilgisayar aynı ağda mı?"
+
+
 CHECKS = (("Yapay zekâ", check_model), ("İnternet", check_internet), ("Ses", check_audio), ("Disk", check_disk),
           ("Hafıza", check_memory), ("Eklentiler", check_plugins), ("Blender", check_blender), ("Paketler", check_packages),
-          ("Hata kaydı", check_errors))
+          ("Hata kaydı", check_errors), ("Arka plan", check_watchers), ("Akıllı ev", check_home))
 
 
 def run_checks(timeout: float = 12.0) -> list[tuple[str, str, str, str]]:
