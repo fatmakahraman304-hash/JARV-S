@@ -152,6 +152,19 @@ class RealBlender(unittest.TestCase):
         report = studio.invoke(studio.executable(), studio.project_path(None), Path(self.tmp.name), "inspect")
         self.assertIn("Küre", {o["name"] for o in report["details"]})
 
+    def test_wrong_subject_is_rebuilt(self):
+        from core import gemini
+        bird = {"steps": [{"op": "create", "kind": "sphere", "name": "OiseauVolant"}]}
+        verdicts = [bird, {"ok": False, "wrong": "Masa yerine kuş yapılmış"}, {"ok": True}]
+        with patch.object(gemini, "as_json", side_effect=verdicts), patch.object(gemini, "text", return_value=GOOD) as model:
+            studio.process("new", "ahşap bir masa", None)
+        self.assertIn("kuş yapılmış", model.call_args.args[0])                    # told what went wrong
+        report = studio.invoke(studio.executable(), studio.project_path(None), Path(self.tmp.name), "inspect")
+        names = {o["name"] for o in report["details"]}
+        self.assertIn("Küre", names)
+        self.assertNotIn("OiseauVolant", names)
+        self.assertEqual(brain.load()[-1]["kind"], "fix")
+
     def test_study_keeps_only_verified_knowledge(self):
         from core import gemini
         notes = {"notes": "- bsdf.inputs['Roughness'] sets roughness", "demo": BROKEN}

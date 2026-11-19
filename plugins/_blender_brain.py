@@ -65,7 +65,8 @@ Rules:
 - The scene file is saved for you afterwards; do not call save_as_mainfile or quit Blender.
 - For a new scene add a camera aimed at the subject and good lighting (unless asked otherwise), set
   scene.camera, and use metres (real sizes).
-- Name objects in the user's language, uniquely.
+- Name objects in Turkish, uniquely (Masa, Masa ayağı, Kamera, Işık).
+- Build exactly the subject the user asked for — never a different object.
 - Prefer data API (bpy.data, bmesh) over bpy.ops when an operator would need a 3D viewport.
 - Make it detailed and realistic: bevels, subdivision, proper PBR materials, not placeholder blocks.
 Return ONLY the code, no explanations, no markdown fences."""
