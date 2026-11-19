@@ -2114,6 +2114,7 @@ class JarvisLive:
 
         def callback(indata, frames, time_info, status):
             nonlocal interruption_pending
+            self._mic_heartbeat = time.monotonic()      # the microphone is alive
             # ── Wake-word gate ───────────────────────────────────────────────
             # While asleep, the mic audio NEVER goes to Gemini (nothing is
             # streamed, so JARVIS can't respond to speech not addressed to it and
@@ -2214,10 +2215,44 @@ class JarvisLive:
                 )
                 _mic_stream = _open_mic(None)
 
-            with _mic_stream:
-                print("[JARVIS] 🎤 Mic stream open")
-                while True:
-                    await asyncio.sleep(0.1)
+            # Self-healing: a microphone pulled out mid-session (headset unplugged,
+            # Bluetooth dropped) does not raise — the stream simply stops calling
+            # back and JARVIS would stay deaf for good. No audio for a few seconds
+            # means: close it, find a microphone again (the chosen one, or the
+            # default) and carry on.
+            from core import selfheal
+            fails = 0
+            while True:
+                self._mic_heartbeat = time.monotonic()
+                with _mic_stream:
+                    print("[JARVIS] 🎤 Mic stream open")
+                    while not selfheal.mic_dead(self._mic_heartbeat, getattr(_mic_stream, "active", True)):
+                        await asyncio.sleep(0.25)
+                fails += 1
+                print("[JARVIS] 🔧 Mic stopped sending audio — reopening")
+                self.ui.write_log("SYS: Mikrofon sustu (çıkarılmış ya da bağlantısı kopmuş olabilir) — yeniden bağlanıyorum.")
+                _mic_stream = None
+                for attempt in range(1, 61):
+                    await asyncio.sleep(min(2.0 * attempt, 10.0))
+                    try:
+                        dev = audio_devices.resolve(get_input_device(), "input")
+                        _mic_stream = _open_mic(dev)
+                        break
+                    except Exception:
+                        try:
+                            _mic_stream = _open_mic(None)
+                            break
+                        except Exception as e2:
+                            if attempt in (1, 10, 30):
+                                print(f"[JARVIS] Mic still unavailable: {e2}")
+                if _mic_stream is None:
+                    raise RuntimeError("no microphone could be opened for two minutes")
+                self.ui.write_log("SYS: ✅ Mikrofon yeniden bağlandı.")
+                try:
+                    from core import activity
+                    activity.record("voice", "Mikrofon kendiliğinden yeniden bağlandı", "ok", count=False)
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[JARVIS] ❌ Mic: {e}")
             raise
