@@ -20,7 +20,8 @@ PLUGIN = {
                     "Hologramdaki modeli Blender'da fotoğraf gerçekliğinde çekmek için hologram (Cycles stüdyo render'ı); "
                     "Blender yüklü değilse install. "
                     "Kullanıcının AÇIK Blender penceresinde çalışmak için edit/script yeterli: canlı bağlantı varsa değişiklik "
-                    "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir; undo = geri al, redo = yinele. "
+                    "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir, 'onu/biraz daha' JARVIS'in son değiştirdiğidir; "
+                    "undo = geri al, redo = yinele; render = açık sahnenin render'ı (pencere donmaz); preview = açık sahneyi göster. "
                     "Kullanıcı tasarımcıdır: isteğini request alanına kendi sözleriyle, eksiksiz yaz. "
                     "'Blender'ın her şeyini öğren' = learn_all (kurulu Blender'ın tüm API'si + resmi kılavuz); ne bildiğini sormak "
                     "= knowledge; 'Blender'da X nasıl yapılır' = guide (kılavuzdan adım adım anlatır). "
@@ -28,7 +29,7 @@ PLUGIN = {
                     "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
                     "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | script | undo | redo | learn_all | knowledge | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
+        "action": {"type": "STRING", "description": "new | edit | script | preview | undo | redo | learn_all | knowledge | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
         "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
@@ -658,6 +659,16 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
             return "Açık bir Blender penceresine bağlı değilim; geri alma açık sahnede çalışır."
         live.undo(redo=action == "redo")
         return "Geri aldım." if action == "undo" else "Yineledim."
+    if action in ("render", "preview") and not project:
+        from plugins import _blender_live as live
+        if live.available():                           # the open window: render a copy, the window stays free
+            if action == "preview":
+                live.preview(player, "Blender — açık sahne")
+                return "Açık sahnenin görüntüsünü ekrana getirdim."
+            out = live.render(player)
+            return f"Render hazır: {out}"
+        if action == "preview":
+            return "Açık bir Blender penceresine bağlı değilim. Blender'ı aç (JARVIS bağlantısı kuruluysa kendiliğinden bağlanır)."
     if action in ("edit", "script") and not project:
         from plugins import _blender_live as live
         if live.available():                           # the user's open window: change it in place
@@ -761,6 +772,14 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
             big = brain.is_big(request)
             rounds = 2 if action == "edit" else 6 if big else MAX_ROUNDS
             output, score = refine(binary, folder, output, request, player=player, rounds=rounds)
+            if player is not None and hasattr(player, "show_image"):     # show the result in JARVIS's window
+                try:
+                    shot = Path(tempfile.mkdtemp(prefix="sonuc-", dir=folder))
+                    png, _ = views_sheet(binary, output, shot)
+                    if png:
+                        player.show_image(str(shot / "views.png"), f"Blender: {request[:40]}")
+                except Exception as exc:
+                    print(f"[Blender] Sonuç görüntüsü gösterilemedi: {exc}")
             if player is not None and score >= 0:
                 player.write_log(f"🟧 Blender sonucu: {max(score, 0):.0f}/10")
         if action in ("new", "edit", "script"):
@@ -791,7 +810,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if action == "status":
         return _status
     if action not in ("new", "edit", "script", "inspect", "open", "render", "animation", "glb", "guide", "teach", "study",
-                      "lessons", "hologram", "install", "undo", "redo", "learn_all", "knowledge"):
+                      "lessons", "hologram", "install", "undo", "redo", "learn_all", "knowledge", "preview"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
     if action in ("new", "edit", "guide", "script", "teach") and not request:

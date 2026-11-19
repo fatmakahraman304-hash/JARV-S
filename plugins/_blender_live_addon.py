@@ -61,6 +61,24 @@ def _state():
             "frame": scene.frame_current}
 
 
+def _snapshot():
+    """What every object looks like now — to tell afterwards exactly what JARVIS changed."""
+    snap = {}
+    for o in bpy.context.scene.objects:
+        mw = o.matrix_world
+        snap[o.name] = (tuple(round(v, 4) for row in mw for v in row), tuple(round(v, 4) for v in o.dimensions),
+                        tuple(s.material.name if s.material else "" for s in o.material_slots),
+                        len(o.data.vertices) if o.type == "MESH" and o.data else 0, o.hide_viewport)
+    return snap
+
+
+def _diff(before, after):
+    added = [n for n in after if n not in before]
+    removed = [n for n in before if n not in after]
+    changed = [n for n in after if n in before and after[n] != before[n]]
+    return {"added": added[:60], "removed": removed[:60], "changed": changed[:60]}
+
+
 def _issues():
     from mathutils import Vector
     ctx = bpy.context
@@ -116,6 +134,7 @@ def handle(req: dict) -> dict:
                 _in_window(lambda: bpy.ops.ed.undo_push(message="JARVIS öncesi"))
             except Exception:
                 pass
+            before = _snapshot()
             try:
                 exec(compile(req.get("code", ""), "jarvis_script.py", "exec"), env)
                 bpy.context.view_layer.update()
@@ -131,7 +150,11 @@ def handle(req: dict) -> dict:
                 _in_window(lambda: bpy.ops.ed.undo_push(message="JARVIS: " + (req.get("label") or "değişiklik")[:60]))
             except Exception:
                 pass
-            return {"ok": True, "state": _state()}
+            return {"ok": True, "state": _state(), "diff": _diff(before, _snapshot())}
+        if op == "copy":                                  # a copy of the open scene, for renders and checks
+            path = req.get("path")
+            bpy.ops.wm.save_as_mainfile(filepath=path, copy=True, check_existing=False)
+            return {"ok": True, "path": path}
         return {"ok": False, "error": f"unknown op {op}"}
     except Exception:
         return {"ok": False, "error": traceback.format_exc()}

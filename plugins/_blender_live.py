@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ADDON = Path(__file__).with_name("_blender_live_addon.py")
 TOKEN = ROOT / "memory" / "blender_live.token"
+LAST = ROOT / "memory" / "blender_live_last.json"       # what JARVIS changed last: what "onu / it" means
 PORT = 47863
 
 
@@ -87,7 +88,29 @@ def run(code: str, label: str = "") -> dict:
     r = call("exec", timeout=600.0, code=code, label=label)
     if not r.get("ok"):
         raise ValueError(r.get("error") or "Blender betiği çalışmadı")
+    d = r.get("diff") or {}
+    touched = (d.get("added") or []) + (d.get("changed") or [])
+    if touched and label not in ("aç", "seç"):
+        try:
+            LAST.parent.mkdir(parents=True, exist_ok=True)
+            LAST.write_text(json.dumps({"request": label, **d}, ensure_ascii=False), encoding="utf8")
+        except OSError:
+            pass
     return r["state"]
+
+
+def last_change() -> dict:
+    try:
+        return json.loads(LAST.read_text(encoding="utf8"))
+    except Exception:
+        return {}
+
+
+def copy_scene(path: str) -> str:
+    r = call("copy", timeout=120.0, path=path)
+    if not r.get("ok"):
+        raise ValueError(r.get("error") or "Sahnenin kopyası alınamadı")
+    return r["path"]
 
 
 def issues() -> list[str]:
@@ -107,8 +130,12 @@ def edit(request: str, player=None) -> str:
     from plugins import _blender_brain as brain
     st = state()
     sel = st.get("selected") or []
+    last = last_change()
+    recent = (last.get("added") or []) + (last.get("changed") or [])
     told = (f"{request}\n\nThis runs LIVE in the user's open Blender window. Selected objects (what 'bu', 'şu', 'bunu', "
-            f"'şunu', 'this', 'it' mean): {sel or 'none'}; active: {st.get('active')}.\n"
+            f"'şunu', 'this' mean): {sel or 'none'}; active: {st.get('active')}.\n"
+            f"What JARVIS changed last (for «{last.get('request', '')}») — what 'onu', 'o', 'it', 'biraz daha' refer to "
+            f"when nothing is selected: {recent[:20] or 'nothing yet'}.\n"
             "Change ONLY what the user said; keep every other object exactly as it is. Never call clear() or studio() "
             "unless the user asks; do not save or render.")
     if player is not None:
@@ -120,7 +147,76 @@ def edit(request: str, player=None) -> str:
                              f"without undoing the user's change:\n- " + "\n- ".join(found[:10]),
                              state(), st.get("version", "4"), lambda code: run(code, "düzeltme"), log=print)
         found = issues()
-    return "Yaptım." + (f" Hâlâ kopuk görünen parçalar var: {'; '.join(found[:3])}" if found else "")
+    score = look_live(request, player)
+    return "Yaptım." + (f" Hâlâ kopuk görünen parçalar var: {'; '.join(found[:3])}" if found else "") + \
+        (f" ({score:.0f}/10)" if score is not None else "")
+
+
+def _studio():
+    from plugins import blender_studio
+    return blender_studio
+
+
+def preview(player=None, title="Blender") -> tuple[bytes, list[str]]:
+    """Pictures of the open scene from several sides (rendered from a copy, so the window never freezes)."""
+    import tempfile
+    studio = _studio()
+    with tempfile.TemporaryDirectory() as temp:
+        copy = copy_scene(str(Path(temp) / "canli.blend"))
+        png, issues_ = studio.views_sheet(studio.executable(), Path(copy), Path(temp))
+        if png and player is not None and hasattr(player, "show_image"):
+            keep = ROOT / "memory" / "blender_preview.png"
+            keep.write_bytes(png)
+            player.show_image(str(keep), title)
+    return png, issues_
+
+
+def look_live(request: str, player=None):
+    """JARVIS looks at what it just did in the open window; real defects (not taste) get one fix."""
+    from plugins import _blender_brain as brain
+    try:
+        png, found = preview(player, f"Blender: {request[:40]}")
+        verdict = brain.look(png, request, found) if png else {}
+    except Exception as exc:
+        print(f"[Blender] Canlı önizleme olmadı: {exc}")
+        return None
+    if not verdict:
+        return None
+    if verdict.get("score", 10) < 7 and verdict.get("problems"):
+        st = state()
+        brain.run_with_fixes(f"{request}\nThis runs LIVE in the user's open Blender. Your change has these defects — "
+                             "fix them without changing anything the user did not ask for:\n- " +
+                             "\n- ".join(verdict["problems"][:6]), st, st.get("version", "4"),
+                             lambda code: run(code, request), log=print)
+        try:
+            png, found = preview(player, f"Blender: {request[:40]}")
+            again = brain.look(png, request, found) if png else {}
+            return again.get("score", verdict["score"]) if again else verdict["score"]
+        except Exception:
+            return verdict["score"]
+    return verdict["score"]
+
+
+def render(player=None, width=1920, height=1080, samples=128) -> Path:
+    """'Render al' on the open scene: a copy is rendered in the background with Cycles; the window stays free."""
+    import shutil
+    import tempfile
+    studio = _studio()
+    temp = Path(tempfile.mkdtemp(prefix="canli-render-"))
+    copy = copy_scene(str(temp / "canli.blend"))
+    studio.invoke(studio.executable(), Path(copy), temp, "render", auto_camera=True)
+    out = temp / "render.png"
+    if not out.is_file():
+        raise ValueError("Render dosyası oluşmadı.")
+    keep_dir = studio.ROOT / "Renderlar"
+    keep_dir.mkdir(parents=True, exist_ok=True)
+    import time as _t
+    final = keep_dir / f"render_{_t.strftime('%Y%m%d_%H%M%S')}.png"
+    shutil.copyfile(out, final)
+    shutil.rmtree(temp, ignore_errors=True)
+    if player is not None and hasattr(player, "show_image"):
+        player.show_image(str(final), "Blender render")
+    return final
 
 
 def open_file(path: str) -> None:

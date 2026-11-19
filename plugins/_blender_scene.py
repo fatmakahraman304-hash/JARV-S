@@ -652,6 +652,15 @@ def main():
     if request["mode"] == "glb":
         bpy.ops.export_scene.gltf(filepath=str(job / "scene.glb"), export_format="GLB")
     elif request["mode"] in ("render", "animation"):
+        if scene.camera is None and request.get("auto_camera"):
+            env = {"__name__": "jarvis_kit", "bpy": bpy}            # the user's scene has no camera: frame one
+            exec(compile(Path(__file__).with_name("_blender_kit.py").read_text(encoding="utf8"), "kit", "exec"), env)
+            env["frame_camera"]()
+            if not any(o.type == "LIGHT" for o in scene.objects):
+                sun = bpy.data.objects.new("Güneş", bpy.data.lights.new("Güneş", "SUN"))
+                sun.data.energy = 3.0
+                sun.rotation_euler = (math.radians(50), 0, math.radians(-30))
+                scene.collection.objects.link(sun)
         if scene.camera is None:
             raise ValueError("Sahnede etkin kamera yok")
         scene.render.image_settings.file_format = "PNG"

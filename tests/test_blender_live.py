@@ -91,6 +91,41 @@ class LiveLink(unittest.TestCase):
             live.edit("bunu kırmızı yap")
         self.assertIn("pant", model.call_args_list[1].args[0])               # the traceback went back
 
+    def test_3b_it_means_what_jarvis_changed_last(self):
+        from core import gemini
+        live.run("import bpy\nfor o in bpy.context.view_layer.objects: o.select_set(o.name == 'Cube')\n", "seç")
+        with patch.object(gemini, "text", return_value=RED), patch.object(brain, "look", return_value={}):
+            live.edit("bunu kırmızı yap")
+        live.run("import bpy\nfor o in bpy.context.view_layer.objects: o.select_set(False)\n", "seç")
+        grow = "import bpy\nbpy.data.objects['Cube'].scale = (2, 2, 2)\n"
+        with patch.object(gemini, "text", return_value=grow) as model, patch.object(brain, "look", return_value={}):
+            live.edit("onu iki kat büyüt")
+        self.assertIn("refer to when nothing is selected: ['Cube']", model.call_args.args[0])
+        self.assertEqual(live.last_change()["changed"], ["Cube"])
+
+    def test_3c_preview_and_render_from_a_copy(self):
+        shown = []
+        player = type("P", (), {"show_image": lambda self, path, title="": shown.append(path), "write_log": lambda self, m: None})()
+        png, issues = live.preview(player)
+        self.assertTrue(png.startswith(b"\x89PNG"))
+        live.run("import bpy\nsc = bpy.context.scene\nsc.render.engine = 'CYCLES'\nsc.cycles.samples = 4\n"
+                 "sc.render.resolution_x, sc.render.resolution_y = 320, 180\n", "ayar")
+        from plugins import blender_studio as studio
+        with patch.object(studio, "ROOT", Path(self.tmp.name) / "Blender"):
+            out = live.render(player)
+        self.assertTrue(out.read_bytes().startswith(b"\x89PNG"))
+        self.assertEqual(len(shown), 2)
+
+    def test_3d_live_review_fixes_real_defects(self):
+        from core import gemini
+        live.run("import bpy\nfor o in bpy.context.view_layer.objects: o.select_set(o.name == 'Cube')\n", "seç")
+        lift = "import bpy\nbpy.data.objects['Cube'].location.z = 0\n"
+        looks = [{"score": 4.0, "problems": ["Küp zeminin içine gömülmüş"]}, {"score": 9.0, "problems": []}]
+        with patch.object(gemini, "text", side_effect=[RED, lift]) as model, patch.object(brain, "look", side_effect=looks):
+            out = live.edit("bunu kırmızı yap")
+        self.assertIn("gömülmüş", model.call_args.args[0])
+        self.assertIn("9/10", out)
+
     def test_4_wrong_token_is_refused(self):
         with patch.object(live, "token", return_value="wrong"):
             with self.assertRaises(ConnectionError):
