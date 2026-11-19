@@ -1546,6 +1546,16 @@ class JarvisLive:
             mem_str += prompt_context()
         except Exception as exc:
             self.ui.write_log(f"SYS: Kalıcı hafıza okunamadı: {exc}")
+        try:                                           # the user's named routines: saying one runs it
+            from core.routines import desktop as _rd
+            _eng = _rd.engine()
+            _named = [r["name"] for r in (_eng.list() if _eng else [])
+                      if r.get("trigger", {}).get("type") == "command" and r.get("enabled")]
+            if _named:
+                mem_str += ("\n[NAMED ROUTINES — when the user says one of these names, run it with "
+                            "routines(action=run_now, name=…)]: " + ", ".join(_named[:30]) + "\n")
+        except Exception as exc:
+            print(f"[Routines] names: {exc}")
         try:
             from core import sync_hub
             mem_str += sync_hub.recent_context()      # what was said on the phone, TV …

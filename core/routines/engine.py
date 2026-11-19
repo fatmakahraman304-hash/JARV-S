@@ -179,6 +179,28 @@ class RoutineEngine:
     def _find(self, rid: str) -> dict | None:
         return next((r for r in self._doc["routines"] if r["id"] == rid), None)
 
+    def find_by_name(self, name: str) -> dict | None:
+        """The routine the user means by its name ('akşam modu', 'akşam modunu çalıştır')."""
+        import unicodedata
+
+        def norm(t):
+            t = unicodedata.normalize("NFKD", str(t or "").replace("ı", "i").replace("İ", "i").lower())
+            return " ".join("".join(c for c in t if not unicodedata.combining(c) and (c.isalnum() or c == " ")).split())
+        want = norm(name)
+        if not want:
+            return None
+        with self._lock:
+            rows = [dict(r) for r in self._doc["routines"] if not r.get("system")]
+        for r in rows:
+            if norm(r["name"]) == want:
+                return r
+        hits = [r for r in rows if norm(r["name"]) and (norm(r["name"]) in want or want in norm(r["name"]))]
+        if not hits:                                # Turkish endings: 'akşam modunu' still means 'akşam modu'
+            stem = lambda t: " ".join(w[:max(4, len(w) - 3)] for w in t.split())
+            hits = [r for r in rows if stem(norm(r["name"])) and stem(norm(r["name"])) in stem(want)]
+        hits.sort(key=lambda r: -len(r["name"]))
+        return hits[0] if hits else None
+
     def find_builtin(self, name: str) -> dict | None:
         with self._lock:
             r = next((r for r in self._doc["routines"] if r.get("builtin") == name), None)
@@ -287,6 +309,8 @@ class RoutineEngine:
             return "when the assistant starts"
         if t["type"] == "idle":
             return f"after {t['minutes']} min of quiet, at most every {t['cooldown']} min"
+        if t["type"] == "command":
+            return "when the user says its name"
         return R.describe_rule(t["rule"], self.tz())
 
     # ── the scheduler ────────────────────────────────────────────────────────
@@ -295,6 +319,8 @@ class RoutineEngine:
         kind = trigger.get("type")
         if kind == "startup":
             return {"type": "startup"}
+        if kind == "command":                       # runs only when the user calls it by name
+            return {"type": "command"}
         if kind == "idle":
             return {"type": "idle", "minutes": max(1, int(trigger.get("minutes") or 15)),
                     "cooldown": max(1, int(trigger.get("cooldown") or 20))}
@@ -302,7 +328,7 @@ class RoutineEngine:
             rule = dict(trigger["rule"])
             R.next_fire(rule, local_dt(time.time()))      # raises on a malformed rule
             return {"type": "time", "rule": rule}
-        raise ValueError("trigger must be time (with a rule), startup or idle")
+        raise ValueError("trigger must be time (with a rule), startup, idle or command")
 
     def _host(self, method: str, *args, default=None):
         fn = getattr(self.host, method, None)
@@ -394,7 +420,7 @@ class RoutineEngine:
             if kind == "say":
                 self.host.say(r["text"])
             elif kind == "prompt":
-                self.host.prompt(self.prompt_text(r))
+                self.host.prompt(self.prompt_text(r, asked=manual))
             elif kind == "task":
                 self.host.start_task(r["text"], r.get("agent") or "general",
                                      int(r.get("minutes") or 10), r.get("deliver") or "voice")
@@ -415,9 +441,10 @@ class RoutineEngine:
                 self._save()
         return result
 
-    def prompt_text(self, r: dict) -> str:
+    def prompt_text(self, r: dict, asked: bool = False) -> str:
         dt = self.local_dt(self._clock())
-        return (f"[ROUTINE '{r['name']}' — set up by the user earlier; nobody asked just now]\n"
+        who = "the user asked for it just now" if asked else "set up by the user earlier; nobody asked just now"
+        return (f"[ROUTINE '{r['name']}' — {who}]\n"
                 f"It is {dt.strftime('%A %d %B %Y, %H:%M')} for the user.\n"
                 f"{r['text']}\n"
                 "Do it now. Speak to the user in their own language, and use your tools if the "
