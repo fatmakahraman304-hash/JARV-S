@@ -76,20 +76,44 @@ CORE = {  # tools built into main.py (not plugins/actions)
 }
 
 
+def _declared(path: Path) -> tuple[str, str] | None:
+    """name and description of a plugin/action file, read from its source — never imported again here:
+    a second copy of a running module would have its own state (locks, queues) and break it."""
+    import ast
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict) and any(
+                isinstance(t, ast.Name) and t.id in ("PLUGIN", "TOOL") for t in node.targets):
+            fields = {}
+            for k, v in zip(node.value.keys, node.value.values):
+                if isinstance(k, ast.Constant) and k.value in ("name", "description"):
+                    try:
+                        fields[k.value] = ast.literal_eval(v)
+                    except ValueError:
+                        pass
+            if fields.get("name"):
+                return str(fields["name"]), str(fields.get("description") or "")
+    return None
+
+
 def installed() -> dict[str, str]:
     """name → first sentence of its description, for every enabled tool."""
     root = Path(__file__).resolve().parent.parent
     out = dict(CORE)
     try:
-        from core.action_loader import discover_actions
-        from core.plugin_loader import discover_plugins
-        acts = discover_actions(root / "actions", set(CORE), logger=lambda *_: None)
-        plugs = discover_plugins(root / "plugins", set(CORE) | set(acts._actions), logger=lambda *_: None)
-        for d in acts.get_tool_declarations() + plugs.get_tool_declarations():
-            desc = str(d.get("description") or "")
-            out[d["name"]] = desc.split(". ")[0][:140]
+        from memory.config_manager import get_plugin_enabled
     except Exception:
-        pass
+        get_plugin_enabled = lambda _n: True
+    for folder in ("actions", "plugins"):
+        for f in sorted((root / folder).glob("*.py")):
+            if f.name.startswith("_"):
+                continue
+            got = _declared(f)
+            if got and (folder == "actions" or get_plugin_enabled(got[0])):
+                out[got[0]] = got[1].split(". ")[0][:140]
     return out
 
 
