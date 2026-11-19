@@ -98,3 +98,30 @@ class HoldTest(unittest.TestCase):
             fake._awake = True
             self.assertFalse(main.JarvisLive._hold_for_later(fake, "[TOOL_LATE_RESULT] y"))
         self.assertEqual(added, [("result", "")])
+
+
+class WelcomeTest(unittest.TestCase):
+    def test_should_welcome(self):
+        with mock.patch.object(away, "welcome_enabled", lambda: True):
+            self.assertTrue(away.should_welcome(3 * 3600, False))
+            self.assertFalse(away.should_welcome(3 * 3600, True))     # woke with a command: that first
+            self.assertFalse(away.should_welcome(1800, False))        # a short absence: no ceremony
+        with mock.patch.object(away, "welcome_enabled", lambda: False):
+            self.assertFalse(away.should_welcome(5 * 3600, False))
+
+    def test_greeting_text(self):
+        text = away.greeting_instruction(3 * 3600, 20)
+        self.assertTrue(text.startswith("[WELCOME_BACK]"))
+        self.assertIn("evening", text)
+        self.assertIn("3 h", text)
+
+    def test_plugin_toggle(self):
+        from plugins import while_away
+        saved = {}
+        with mock.patch("memory.config_manager.save_plugin_config",
+                        lambda ns, vals: saved.setdefault(ns, {}).update(vals)), \
+             mock.patch("memory.config_manager.get_plugin_config", lambda ns: saved.get(ns, {})):
+            while_away.run({"action": "welcome_off"})
+            self.assertFalse(away.welcome_enabled())
+            while_away.run({"action": "welcome_on"})
+            self.assertTrue(away.welcome_enabled())

@@ -187,3 +187,34 @@ def ready_to_tell(awake: bool, speaking: bool, busy: bool, speech_quiet: float,
     if speech_quiet < 600:
         return True
     return input_idle is not None and input_idle < 60
+
+
+# ── welcome home ──────────────────────────────────────────────────────────────
+# "Welcome home, sir." After a long absence J.A.R.V.I.S. greets the user even when
+# nothing happened — but only when they came back to the desk on their own (not
+# when they woke JARVIS with a command: that command comes first), and only when
+# the user has not turned it off.
+
+WELCOME_AFTER = 2 * 3600        # away at least this long (after the 15-minute threshold)
+
+
+def welcome_enabled() -> bool:
+    try:
+        from memory.config_manager import get_plugin_config
+        return bool((get_plugin_config("away") or {}).get("welcome", True))
+    except Exception:
+        return True
+
+
+def should_welcome(away_for: float, woke_by_command: bool) -> bool:
+    return away_for >= WELCOME_AFTER and not woke_by_command and welcome_enabled()
+
+
+def greeting_instruction(away_for: float, hour: int) -> str:
+    """A welcome back with nothing to report."""
+    part = ("morning" if 5 <= hour < 12 else "afternoon" if hour < 18 else "evening" if hour < 23 else "night")
+    return ("[WELCOME_BACK] The user has just come back to the computer after about "
+            f"{_ago(away_for).replace(' ago', '')} away; it is {part} now. Nothing happened while they were "
+            "away. Greet them the way J.A.R.V.I.S. greets Tony coming home — one short, warm sentence "
+            "('Tekrar hoş geldiniz, efendim.' / 'İyi akşamlar, efendim; her şey yolunda.'), adding at most "
+            "that all is in order. Do not ask a question, do not list anything, do not call any tool.")

@@ -14,15 +14,26 @@ PLUGIN = {
     "description": (
         "What came up while the user was away or JARVIS was asleep — finished jobs, reminders, system alerts, "
         "updates that could not be told then. Use for 'ben yokken ne oldu?', 'kaçırdığım bir şey var mı?', "
-        "'what did I miss?', and to hear the last welcome-back report again. Never starts or repeats a job."
+        "'what did I miss?', and to hear the last welcome-back report again. Never starts or repeats a job. "
+        "action=welcome_off when the user does not want to be greeted on coming back to the desk "
+        "('döndüğümde karşılama'), welcome_on to have it again."
     ),
-    "parameters": {"type": "OBJECT", "properties": {}},
+    "parameters": {"type": "OBJECT", "properties": {
+        "action": {"type": "STRING", "description": "report (default) | welcome_on | welcome_off"},
+    }},
 }
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         from core import away
+        action = str((parameters or {}).get("action") or "report").strip().lower()
+        if action in ("welcome_on", "welcome_off"):
+            from memory.config_manager import save_plugin_config
+            on = action == "welcome_on"
+            save_plugin_config("away", {"welcome": on})
+            return ("The welcome back after a long absence is on." if on else
+                    "No more welcome back after an absence; news that came up while away is still told.")
         items = away.take()
         if items:
             return ("Not yet told — report these briefly, most important first, merging related items and "
