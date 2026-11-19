@@ -104,3 +104,11 @@ def ended_instruction(items: list[dict], describe_items) -> str:
             + describe_items(items) + "\nTell the user, J.A.R.V.I.S.-style, in at most three short "
             "sentences, most important first: merge related items, drop progress a later item makes "
             "stale, outcomes not steps. Do not call any tool, and do not repeat them later.")
+
+
+def chip_note(now: float | None = None) -> str:
+    """The short label for the state chip: '' when quiet is off."""
+    data = state(now)
+    if not data:
+        return ""
+    return "TOPLANTI" if data.get("listen") is False else "SESSİZ MOD"

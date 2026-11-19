@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
     _close_assistant_sig = pyqtSignal()
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
+    _mode_note_sig  = pyqtSignal(str)        # a standing mode beside the state: quiet, meeting …
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
     _world_map_sig = pyqtSignal(bool)
     _map_search_sig = pyqtSignal(object, str)
@@ -401,6 +402,7 @@ class MainWindow(QMainWindow):
         self._remote_update_sig.connect(self._start_update)
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._mode_note_sig.connect(self._apply_mode_note)
         self._scan_generation = 0
         self._gesture_generation = 0
         self._gesture_thread = None
@@ -3518,6 +3520,10 @@ class MainWindow(QMainWindow):
             return
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
+
+    def _apply_mode_note(self, note: str):
+        if hasattr(self, "_state_chip"):
+            self._state_chip.set_note(note)
 
     def _apply_state(self, state: str):
         self.hud.state    = state
