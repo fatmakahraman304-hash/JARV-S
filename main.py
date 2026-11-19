@@ -1776,6 +1776,15 @@ class JarvisLive:
         except Exception:
             result = ""
         activity.record_tool(fc.name, args, result=result)
+        try:                                   # a tool failed for a missing library JARVIS may install itself
+            from core import installer
+            pkg = installer.missing_package(result)
+            if pkg and fc.name != "install_package":
+                resp.response["result"] = (f"{result}\n[MISSING_PACKAGE] {pkg}: tell the user in one sentence that "
+                                           f"this needs '{pkg}', and offer to install it. Only if they agree, call "
+                                           f"install_package(package='{pkg}'), then retry their request.")
+        except Exception as exc:
+            print(f"[Installer] {exc}")
         try:                                   # what the user asks for, when — habits come from this
             asked = time.monotonic() - self._last_user_at < 90
             rs = str(result or "")
@@ -2614,13 +2623,41 @@ class JarvisLive:
                     await asyncio.to_thread(stream.write, bytes(batch))
                 except (RuntimeError, asyncio.CancelledError):
                     break   # executor shutting down — exit cleanly
+                except Exception as e:
+                    # The speaker went away (headset unplugged, Bluetooth dropped,
+                    # HDMI switched). Reopen it here — the chosen device if it is
+                    # back, else the default — instead of tearing down the session.
+                    print(f"[JARVIS] 🔧 Speaker error ({e}) — reopening")
+                    try:
+                        stream.stop()
+                    except Exception:
+                        pass
+                    stream = None
+                    for attempt in range(1, 31):
+                        await asyncio.sleep(min(1.0 * attempt, 5.0))
+                        try:
+                            stream = _open_spk(audio_devices.resolve(get_output_device(), "output"))
+                            break
+                        except Exception:
+                            try:
+                                stream = _open_spk(None)
+                                break
+                            except Exception:
+                                continue
+                    if stream is None:
+                        raise
+                    self.ui.write_log("SYS: ✅ Hoparlör yeniden bağlandı.")
         except Exception as e:
             print(f"[JARVIS] ❌ Play: {e}")
             raise
         finally:
             self.set_speaking(False)
-            stream.stop()
-            stream.close()
+            if stream is not None:
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception:
+                    pass
 
     # ── Morning briefing ────────────────────────────────────────────────────────
 

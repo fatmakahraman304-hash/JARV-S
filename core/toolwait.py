@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 
 DEFAULT = 45.0
-WAITS = {"dev_agent": 90.0, "web_search": 60.0, "application_learning": 90.0, "browser_control": 75.0}
+WAITS = {"install_package": 240.0, "dev_agent": 90.0, "web_search": 60.0, "application_learning": 90.0, "browser_control": 75.0}
 
 
 def still_running(name: str, wait: float) -> str:
