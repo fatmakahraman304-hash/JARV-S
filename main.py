@@ -1870,7 +1870,8 @@ class JarvisLive:
             return False
 
     _AWAY_KINDS = (("[TOOL_LATE_RESULT]", "result", ""), ("[UPDATE_AVAILABLE]", "update", "update"),
-                   ("[REMINDER", "reminder", ""), ("[HABIT_SUGGESTION]", "habit", "habit"))
+                   ("[REMINDER", "reminder", ""), ("[HEADS_UP]", "heads_up", ""),
+                   ("[HABIT_SUGGESTION]", "habit", "habit"))
 
     def _sleep_after_reply(self, reason: str = "sessiz mod") -> None:
         """Go to sleep once the confirmation now being spoken has been heard (asleep, audio is dropped)."""
@@ -2060,6 +2061,20 @@ class JarvisLive:
             except Exception:
                 pass
 
+    def _heads_up_once(self) -> None:
+        """A quarter of an hour before an appointment-like reminder: one heads-up (core/heads_up.py)."""
+        try:
+            from core import heads_up, sync_hub
+            told = getattr(self, "_heads_up_told", None)
+            if told is None:
+                told = self._heads_up_told = set()
+            for r in heads_up.due_soon(list(sync_hub._state.get("reminders") or []), told):
+                told.add(r.get("id"))
+                self.ui.write_log(f"SYS: Yaklaşan — {r.get('text', '')}")
+                self.plugin_say(heads_up.instruction(r))
+        except Exception as exc:
+            print(f"[HeadsUp] {exc}")
+
     async def _watch_home_once(self) -> None:
         """Home Assistant sensors (core/home_watch.py): doors/windows said as they change; smoke, gas,
         leaks are alarms — said even in quiet mode, ahead of anything else, and sent to the phone."""
@@ -2143,6 +2158,7 @@ class JarvisLive:
             try:
                 self._sentinel_notes += await asyncio.to_thread(self._sentinel.tick)
                 await self._watch_home_once()
+                self._heads_up_once()
                 talking = time.monotonic() - (self._last_user_speech or 0.0) < 5 or self._is_speaking
                 if self._sentinel_notes and not talking:
                     notes, self._sentinel_notes = self._sentinel_notes[-4:], []

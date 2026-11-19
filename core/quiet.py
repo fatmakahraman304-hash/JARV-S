@@ -81,7 +81,7 @@ def is_on(now: float | None = None) -> bool:
 
 def holds(kind: str, now: float | None = None) -> bool:
     """Whether something of this kind waits while quiet: everything volunteered, not reminders."""
-    return kind != "reminder" and is_on(now)
+    return kind not in ("reminder", "heads_up") and is_on(now)
 
 
 def describe(now: float | None = None) -> str:
