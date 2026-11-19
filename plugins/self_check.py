@@ -22,10 +22,14 @@ PLUGIN = {
     "name": "self_check",
     "description": (
         "JARVIS checks itself end to end: the AI model and API key, internet, microphone and speakers, disk space, "
-        "memory file, plugins, Blender and its live link, key packages — each really tested, with a fix for every "
-        "problem. Use for 'kendini kontrol et', 'sistem kontrolü', 'bir sorun var mı?', 'neden çalışmıyor?'."
+        "memory file, plugins, Blender and its live link, key packages, recent errors — each really tested, with a fix for "
+        "every problem. Use for 'kendini kontrol et', 'sistem kontrolü', 'bir sorun var mı?', 'neden çalışmıyor?'; "
+        "action=errors for 'son hataları göster', 'neden kapandı?', 'dün ne hata oldu?'."
     ),
-    "parameters": {"type": "OBJECT", "properties": {}},
+    "parameters": {"type": "OBJECT", "properties": {
+        "action": {"type": "STRING", "description": "check (default) | errors — the last problems from JARVIS's logbook "
+                                                    "('son hataları göster', 'neden kapandı?')"},
+    }},
 }
 
 OK, WARN, FAIL = "✅", "⚠️", "❌"
@@ -148,8 +152,20 @@ def check_packages():
     return OK, f"{py}; temel paketler tam", ""
 
 
+def check_errors():
+    from core import logbook
+    errs = logbook.recent_errors(hours=24, limit=5)
+    if not errs:
+        return OK, "Son 24 saatte kayda geçen hata yok", ""
+    crashes = [e for e in errs if "ÇÖKME" in e]
+    last = errs[-1][20:140]
+    return (FAIL if crashes else WARN), f"Son 24 saatte {len(errs)} hata kaydı; en sonuncusu: {last}", \
+        "Ayrıntı için 'son hataları göster' de."
+
+
 CHECKS = (("Yapay zekâ", check_model), ("İnternet", check_internet), ("Ses", check_audio), ("Disk", check_disk),
-          ("Hafıza", check_memory), ("Eklentiler", check_plugins), ("Blender", check_blender), ("Paketler", check_packages))
+          ("Hafıza", check_memory), ("Eklentiler", check_plugins), ("Blender", check_blender), ("Paketler", check_packages),
+          ("Hata kaydı", check_errors))
 
 
 def run_checks(timeout: float = 12.0) -> list[tuple[str, str, str, str]]:
@@ -171,8 +187,22 @@ def run_checks(timeout: float = 12.0) -> list[tuple[str, str, str, str]]:
     return sorted(out, key=lambda r: order.index(r[0]))
 
 
+def errors_report() -> str:
+    from core import logbook
+    errs = logbook.recent_errors(hours=72, limit=20)
+    if not errs:
+        return f"Son 3 günde günlükte hata yok. (Günlük: {logbook.path()})"
+    return (f"Günlükteki son hatalar (en yenisi en altta; dosya: {logbook.path()}):\n" + "\n".join(errs) +
+            "\n(Kullanıcıya teknik ayrıntıya boğmadan anlat: ne bozuldu, ne zaman, büyük ihtimalle neden, ne yapılmalı.)")
+
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
+        if str((parameters or {}).get("action") or "").lower() == "errors":
+            report = errors_report()
+            if player is not None and hasattr(player, "show_content"):
+                player.show_content("JARVIS günlüğü — son hatalar", report)
+            return report
         rows = run_checks()
         lines = [f"{mark} {label}: {text}" + (f"\n    → {fix}" if fix else "") for label, mark, text, fix in rows]
         bad = [r for r in rows if r[1] != OK]

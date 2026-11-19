@@ -3375,6 +3375,11 @@ def _exit_process(code: int = 0) -> None:
 
 
 def main():
+    try:                                   # everything printed and every crash, kept on disk
+        from core import logbook
+        print(f"[JARVIS] Günlük: {logbook.install()}")
+    except Exception as exc:
+        print(f"[JARVIS] Günlük dosyası açılamadı: {exc}")
     ui = JarvisUI("face.png")
     holder: dict = {}
 

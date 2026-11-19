@@ -58,7 +58,8 @@ class EveryTool(unittest.TestCase):
 
     def test_looking_tools_answer_questions(self):
         for name, args in (("weather_report", {}), ("recall_memory", {"query": "x"}), ("todo_list", {"action": "list"}),
-                           ("blender_studio", {"action": "status"}), ("system_status", {})):
+                           ("blender_studio", {"action": "status"}), ("system_status", {}),
+                           ("self_check", {"action": "errors"}), ("self_check", {})):
             self.assertEqual(intent.guard(name, args, "bitti mi?"), "", name)
 
     def test_main_uses_the_guard_for_every_tool(self):
