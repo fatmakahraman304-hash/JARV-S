@@ -62,3 +62,27 @@ class HomeWatchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PresenceTest(unittest.TestCase):
+    def person(self, state):
+        return {"entity_id": "person.murat", "state": state, "attributes": {"friendly_name": "Murat"}}
+
+    def test_arrive_and_leave(self):
+        w = hw.HomeWatch()
+        cfg = {"doors": True, "alarms": True, "presence": True}
+        w.tick([self.person("not_home")], cfg)
+        notes = w.tick([self.person("home")], cfg)
+        self.assertEqual(notes, [("arrive", "Murat arrived home.")])
+        self.assertTrue(hw.instruction(notes).startswith("[WELCOME_HOME]"))
+        self.assertEqual(w.tick([self.person("Work")], cfg), [("leave", "Murat left home.")])
+        self.assertEqual(w.tick([self.person("not_home")], cfg), [])       # work → elsewhere: not leaving home
+
+    def test_lights_left_on(self):
+        states = [{"entity_id": "light.salon", "state": "on", "attributes": {"friendly_name": "Salon"}},
+                  {"entity_id": "light.mutfak", "state": "off", "attributes": {"friendly_name": "Mutfak"}}]
+        self.assertEqual(hw.lights_left_on(states), ["Salon"])
+        title, body = hw.leaving_note(["Murat"], ["Salon"])
+        self.assertIn("evden çıktınız", title)
+        self.assertIn("Salon", body)
+        self.assertIsNone(hw.leaving_note(["Murat"], []))
