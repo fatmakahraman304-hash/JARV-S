@@ -3,7 +3,7 @@ yapıldı, yapılacaklar ve yarının hatırlatıcıları — ekranda ve kısaca
 from __future__ import annotations
 
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from plugins import _pc_kit as kit
 
@@ -11,9 +11,12 @@ PLUGIN = {
     "name": "day_report",
     "description": (
         "Gün sonu özeti: 'bugün nasıl geçti', 'günümü özetle', 'gün sonu raporu'. Ekran süresi, odak turları, "
-        "laptop pili, yapılacaklar ve sıradaki hatırlatıcılar; ayrıntısı ekranda açılır."
+        "laptop pili, yapılacaklar ve sıradaki hatırlatıcılar, ve JARVIS'in o gün gerçekten yaptığı işler; ayrıntısı "
+        "ekranda açılır. period=week: 'bu hafta neler yaptık', 'haftalık rapor' — JARVIS'in iş günlüğünden son 7 gün."
     ),
-    "parameters": {"type": "OBJECT", "properties": {}},
+    "parameters": {"type": "OBJECT", "properties": {
+        "period": {"type": "STRING", "description": "today (default) | week"},
+    }},
 }
 
 
@@ -45,6 +48,16 @@ def build(screen: str, focus: tuple[int, float], battery: str, todos: str, upcom
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
+    from core import journal
+    if str((parameters or {}).get("period") or "").lower() == "week":
+        today = date.today()
+        text = journal.summary(today - timedelta(days=6), today)
+        if player:
+            try:
+                player.show_content("HAFTALIK RAPOR", text)
+            except Exception:
+                pass
+        return text + "\n(Report it like J.A.R.V.I.S.: two or three sentences, the numbers that matter.)"
     try:
         from plugins import screen_time, laptop_battery
         screen = screen_time.report_text(kit.load(screen_time.FILE), "today")
@@ -71,6 +84,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         except Exception:
             pass
         spoken, full = build(screen, focus, battery, todos, upcoming)
+        work = journal.summary(date.today(), date.today())
+        if not work.startswith("No work"):
+            full += "\n\nJARVIS BUGÜN\n" + work
+            spoken += " JARVIS bugün: " + work.splitlines()[0]
         if player:
             try:
                 player.show_content("GÜN SONU", full)
