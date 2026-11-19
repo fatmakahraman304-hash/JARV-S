@@ -19,11 +19,14 @@ PLUGIN = {
                     "(notlar çıkarır, Blender'da deneyip doğrular); öğrendiklerini sormak için lessons. "
                     "Hologramdaki modeli Blender'da fotoğraf gerçekliğinde çekmek için hologram (Cycles stüdyo render'ı); "
                     "Blender yüklü değilse install. "
+                    "Kullanıcının AÇIK Blender penceresinde çalışmak için edit/script yeterli: canlı bağlantı varsa değişiklik "
+                    "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir; undo = geri al, redo = yinele. "
+                    "Kullanıcı tasarımcıdır: isteğini request alanına kendi sözleriyle, eksiksiz yaz. "
                     "Sahne veya render istendiğinde open_app kullanma. new/edit için gösterim isteğini result ile belirt. "
                     "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
                     "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | script | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
+        "action": {"type": "STRING", "description": "new | edit | script | undo | redo | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
         "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
@@ -623,9 +626,50 @@ def install():
     return f"Blender kurulamadı (winget çıkış kodu {r.returncode}): {tail[:200]}"
 
 
+_live_ready = False
+
+
+def ensure_live(binary):
+    """Install the live link into Blender once per session (new Blender windows pick it up)."""
+    global _live_ready
+    if _live_ready or not binary:
+        return
+    try:
+        from plugins import _blender_live as live
+        live.install(binary)
+        _live_ready = True
+    except Exception as exc:
+        print(f"[Blender] Canlı bağlantı kurulamadı: {exc}")
+
+
 def process(action, request, project, topic="", *, binary=None, result="save", player=None, model=""):
     if action == "install":
-        return install()
+        out = install()
+        try:
+            ensure_live(executable())
+        except Exception:
+            pass
+        return out
+    if action in ("undo", "redo"):
+        from plugins import _blender_live as live
+        if not live.available():
+            return "Açık bir Blender penceresine bağlı değilim; geri alma açık sahnede çalışır."
+        live.undo(redo=action == "redo")
+        return "Geri aldım." if action == "undo" else "Yineledim."
+    if action in ("edit", "script") and not project:
+        from plugins import _blender_live as live
+        if live.available():                           # the user's open window: change it in place
+            st = live.state()
+            opened = Path(st.get("file") or "")
+            if opened.name and (opened.parent / "plan.json").is_file():
+                # a JARVIS building is open: change its plan exactly, then show the result in the same window
+                result_text = process(action, request, str(opened), binary=binary or executable(), player=player)
+                try:
+                    live.open_file(str(project_path(None)))
+                except Exception as exc:
+                    return f"{result_text} (Açık pencereye yükleyemedim: {exc})"
+                return result_text
+            return live.edit(request, player)
     if action == "lessons":
         from plugins import _blender_brain as brain
         return brain.summary()
@@ -634,6 +678,7 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         brain.remember("tip", request, request)
         return "Tamam, Blender'da bunu öğrendim; bundan sonraki işlerde kullanacağım."
     binary = binary or executable()
+    ensure_live(binary)
     if action == "study":
         return study(binary, topic, request)
     if action == "hologram":
@@ -728,7 +773,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if action == "status":
         return _status
     if action not in ("new", "edit", "script", "inspect", "open", "render", "animation", "glb", "guide", "teach", "study",
-                      "lessons", "hologram", "install"):
+                      "lessons", "hologram", "install", "undo", "redo"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
     if action in ("new", "edit", "guide", "script", "teach") and not request:
@@ -744,7 +789,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return "Bir Blender işlemi sürüyor. Durumunu sorabilirsin."
 
     try:
-        binary = None if action == "install" else executable()
+        binary = None if action in ("install", "undo", "redo") else executable()
     except Exception as exc:
         _status = f"Blender işlemi başlamadı. {exc} İstersen 'Blender'ı kur' de, kendim kurayım."
         _lock.release()
