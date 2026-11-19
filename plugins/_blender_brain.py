@@ -94,7 +94,8 @@ Rules:
 - When the current scene already has objects and the request is a correction, CHANGE those objects (move, resize,
   replace, add missing parts); do not call clear() and do not add a second studio() if lights/camera exist.
 - Name objects in Turkish, uniquely (Masa, Masa ayağı, Kamera, Işık).
-- Build exactly the subject the user asked for — never a different object.
+- Build exactly the subject the user asked for — never a different object, and add nothing the user did not ask for.
+- The user is the designer: follow their words literally (sizes, colours, what to keep, what to delete).
 - Prefer data API (bpy.data, bmesh) over bpy.ops when an operator would need a 3D viewport.
 - Make it detailed and realistic: bevels, subdivision, proper PBR materials, not placeholder blocks.
 Return ONLY the code, no explanations, no markdown fences."""
@@ -270,7 +271,15 @@ x = width left→right, y = depth, FRONT facade faces -y; rects are [x0, y0, x1,
  "stairs": {"rect": [...]},                                  # required when floors > 1; ≥ 1.2 m × 2.6 m
  "roof": {"type": "gable"|"hip"|"flat", "pitch": 25–40, "overhang": 0.3–0.7},
  "style": {"facade": "plaster"|"brick"|"stone", "facade_color": [r,g,b], "base_color": [r,g,b], "roof_color": [r,g,b],
-           "frame_color": [r,g,b], "door_color": [r,g,b]}}
+           "frame_color": [r,g,b], "door_color": [r,g,b]},
+ "extras": [{"name": "Havuz", "code": "bpy script with the toolkit; world metres, ground z = 0, building centred on the origin"}],
+ "user_rules": ["Balkon olmasın", ...]}                      # the user's own decisions, kept for every later change
+Omit "balconies" entirely when there are none; omit "stairs" only for one floor.
+THE USER DESIGNS. Include ONLY what the user asked for plus what the building structurally needs (outer walls, slabs,
+an entrance, windows, stairs between floors). Never add balconies, pools, gardens, fences, decorations, extra floors or
+a style the user did not ask for. Anything the engine has no field for (pool, garden, fence, fireplace, car, tree,
+pergola, garage, interior furniture …) goes in "extras" as a toolkit script placed exactly where the user said
+(relative to the footprint), touching the ground or the part it sits on.
 Rules: rooms tile the floor without overlapping (corridor + stairs included), real room sizes (bedroom ≥ 9 m², living ≥ 18 m²),
 an apartment floor usually holds 2 flats around a central stair core; balcony positions lie on the facade and away from
 the corners; colours in 0–1 linear. Return ONLY the JSON."""
@@ -351,6 +360,28 @@ def make_plan(request: str, previous: dict | None = None, problems: list[str] | 
         ask += (f"\n\nCurrent plan:\n{json.dumps(previous, ensure_ascii=False)}\n"
                 "Revise it to fix these problems (keep what is right):\n- " + "\n- ".join(problems or []))
     plan = gemini.as_json(ask, tier=gemini.SMART)
+    return _checked(request, plan)
+
+
+def edit_plan(plan: dict, instruction: str) -> dict:
+    """Apply the user's instruction to the building — exactly that, nothing else."""
+    from core import gemini
+    ask = (f"{PLAN_DOC}\n\nCurrent building plan:\n{json.dumps(plan, ensure_ascii=False)}\n\n"
+           f"The user says: {instruction}\n"
+           "Apply exactly this change and keep EVERYTHING else identical (same sizes, rooms, names, extras, style). "
+           "To remove a room, delete it from the rooms list (its walls and doors go with it); to remove balconies drop "
+           "\"balconies\"; new things the engine has no field for go in \"extras\". If the instruction is a lasting "
+           "decision (\"balkon olmasın\", \"çatı düz olsun\"), add it to \"user_rules\". Respect existing user_rules "
+           "unless the user now says otherwise. Return the whole updated plan JSON.")
+    return _checked(instruction, gemini.as_json(ask, tier=gemini.SMART), keep=plan)
+
+
+def _checked(request, plan, keep=None):
+    from core import gemini
+    if isinstance(plan, dict) and keep is not None:           # never lose the user's decisions or extras by accident
+        rules = list(dict.fromkeys((keep.get("user_rules") or []) + (plan.get("user_rules") or [])))
+        if rules:
+            plan["user_rules"] = rules
     for _ in range(3):
         bad = check_plan(plan)
         if not bad:
@@ -363,10 +394,27 @@ def make_plan(request: str, previous: dict | None = None, problems: list[str] | 
     return plan
 
 
+def fix_extra(plan: dict, name: str, error: str) -> dict:
+    """One of the user's extras (pool, garden …) failed in Blender: fix its script, keep the rest."""
+    from core import gemini
+    extras = plan.get("extras") or []
+    for ex in extras:
+        if ex.get("name") == name:
+            ex["code"] = clean_code(gemini.text(
+                f"{KNOWLEDGE}\n{KIT_DOC}\nThis Blender script for '{name}' (part of a building, ground z = 0, building "
+                f"centred on the origin, {plan.get('width')}×{plan.get('depth')} m) failed:\n{ex.get('code', '')}\n"
+                f"Error:\n{error[-2500:]}\nReturn only the corrected script (no clear(), no studio()).",
+                tier=gemini.SMART) or ex.get("code", ""))
+    return plan
+
+
 LOOK = """You are JARVIS's eye, checking its own Blender work. The image shows the scene from up to four sides
 (scene camera / front / three-quarter / side / top). The user asked for: {request}
 Measured geometry problems: {issues}
-Judge like a demanding 3D artist. Return JSON:
+The user's own decisions (they are the designer — never contradict them, never suggest features they did not ask
+for, never judge taste): {rules}
+Judge the EXECUTION like a demanding 3D artist: broken or floating parts, gaps, parts through each other, wrong
+proportions for what was asked, missing things the user asked for, unrealistic materials. Return JSON:
 {{"subject_ok": true|false (is it clearly the requested thing?),
   "score": 0-10 (10 = indistinguishable from a real, well-made product; 6 = clearly right but plain; <5 = wrong/broken),
   "problems": ["concrete fixes in Turkish, with parts and directions — e.g. 'Ayaklar tablanın altına değmiyor: 4 ayağı
@@ -374,7 +422,7 @@ Judge like a demanding 3D artist. Return JSON:
 At most 8 problems, most important first."""
 
 
-def look(sheet_png: bytes, request: str, issues: list[str]) -> dict:
+def look(sheet_png: bytes, request: str, issues: list[str], rules: list[str] | None = None) -> dict:
     """Show the picture of the scene to the model; get a score and what to fix."""
     from core import gemini
     try:
@@ -382,7 +430,8 @@ def look(sheet_png: bytes, request: str, issues: list[str]) -> dict:
         part = types.Part.from_bytes(data=sheet_png, mime_type="image/png")
     except Exception:
         return {}
-    verdict = gemini.as_json([LOOK.format(request=request, issues="; ".join(issues) or "yok"), part], tier=gemini.SMART)
+    verdict = gemini.as_json([LOOK.format(request=request, issues="; ".join(issues) or "yok",
+                                          rules="; ".join(rules or []) or "yok"), part], tier=gemini.SMART)
     if not isinstance(verdict, dict) or "score" not in verdict:
         return {}
     try:
