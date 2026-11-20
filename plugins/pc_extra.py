@@ -242,9 +242,10 @@ def power(op: str, minutes, confirm: bool) -> str:
 
 def info() -> str:
     import psutil
+    from plugins._pc_kit import battery
     vm = psutil.virtual_memory()
     up = time.time() - psutil.boot_time()
-    bat = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    bat = battery()
     try:
         disk = psutil.disk_usage("C:\\" if WIN else "/")
         dtxt = f"disk {disk.used / 2**30:.0f}/{disk.total / 2**30:.0f} GB"

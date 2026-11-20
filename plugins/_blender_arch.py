@@ -636,7 +636,8 @@ def outdoor(target=None, samples=128, yaw=-32.0, pitch=10.0):
         bg.inputs["Strength"].default_value = 0.8
     scene.render.engine = "CYCLES"
     scene.cycles.samples = samples
-    scene.cycles.use_denoising = True
+    import _cycles
+    scene.cycles.use_denoising = getattr(_cycles, "with_openimagedenoise", True)
     try:
         scene.view_settings.view_transform = "AgX"
         scene.view_settings.look = "AgX - Medium High Contrast"

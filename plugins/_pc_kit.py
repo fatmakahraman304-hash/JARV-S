@@ -13,6 +13,14 @@ DATA = ROOT / "memory"
 _lock = threading.Lock()
 
 
+def battery():
+    import psutil
+    try:
+        return psutil.sensors_battery()
+    except (AttributeError, OSError, NotImplementedError):
+        return None
+
+
 def out(text: str) -> None:
     """print() that never fails: a Windows console in cp1252 cannot show
     Turkish letters and would raise UnicodeEncodeError."""
