@@ -37,6 +37,17 @@ class Check(unittest.TestCase):
             text = self_update.summary(info)
             self.assertIn("2 değişiklik", text)
             self.assertIn("Hafıza asla kaybolmuyor", text)
+            git(local, "config", "user.email", "t@t")
+            git(local, "config", "user.name", "t")
+            git(local, "commit", "--allow-empty", "-qm", "local")
+            with patch.object(app_updater, "_git", side_effect=fake):
+                diverged = app_updater.check(local)
+                self.assertFalse(diverged["newer"])
+                self.assertIn("ayrı ayrı", self_update.summary(diverged))
+                git(origin, "reset", "--hard", "HEAD~2")
+                ahead = app_updater.check(local)
+                self.assertFalse(ahead["newer"])
+                self.assertIn("ilerisinde", self_update.summary(ahead))
 
     def test_up_to_date(self):
         self.assertIn("güncel", self_update.summary({"newer": False, "current": "a" * 40}))

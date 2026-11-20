@@ -170,6 +170,11 @@ def _apply_zip(root, files, sha, branch):
         path = _target(root, name)
         if path.exists() and _hash(path.read_bytes()) != digest:
             raise RuntimeError(f'Yerel değişiklik korunuyor: {name}. Güncelleme uygulanmadı.')
+    if old:
+        for name in files.keys() - previous.keys():
+            path = _target(root, name)
+            if path.exists() and (not path.is_file() or _hash(path.read_bytes()) != _hash(files[name])):
+                raise RuntimeError(f'Yeni sürümdeki dosya yerel dosyayla çakışıyor: {name}. Güncelleme uygulanmadı.')
     names = set(files) | {n for n in previous if not _protected(n)}
     backup = root / '.jarvis-backups' / (time.strftime('%Y%m%d-%H%M%S') + '-' + sha[:8] + '-' + str(time.time_ns()))
     backup.mkdir(parents=True, exist_ok=False)
@@ -271,7 +276,8 @@ def update(root=ROOT, progress=lambda message: None):
             return False, f'JARVIS güncel · {sha[:8]}'
 
         if is_git:
-            _git(root, 'merge-base', '--is-ancestor', current, sha)
+            if int(_git(root, 'rev-list', '--count', f'{sha}..{current}')):
+                raise RuntimeError('Bu dalda GitHub sürümünde bulunmayan yerel commit var. Güncelleme durduruldu.')
             new_req = _git(root, 'show', f'{sha}:requirements.txt')
         else:
             progress('Yeni sürüm indiriliyor…')
@@ -325,14 +331,12 @@ def check(root=ROOT) -> dict:
         current = _git(root, 'rev-parse', 'HEAD')
         _git(root, 'fetch', '--no-tags', f'https://github.com/{REPOSITORY}.git', f'refs/heads/{branch}')
         sha = _git(root, 'rev-parse', 'FETCH_HEAD^{commit}')
+        ahead, behind = map(int, _git(root, 'rev-list', '--left-right', '--count', f'{current}...{sha}').split())
         changes = []
-        if sha != current:
-            try:
-                log = _git(root, 'log', '--format=%s', f'{current}..{sha}')
-                changes = [line.strip() for line in log.splitlines() if line.strip()][:15]
-            except RuntimeError:
-                pass
-        return {"newer": sha != current, "sha": sha, "current": current, "changes": changes, "branch": branch}
+        if behind and not ahead:
+            changes = _git(root, 'log', '-15', '--format=%s', f'{current}..{sha}').splitlines()
+        return {"newer": bool(behind and not ahead), "sha": sha, "current": current, "changes": changes,
+                "branch": branch, "ahead": ahead, "behind": behind}
     state_file = root / '.jarvis-update.json'
     state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
     channel = json.loads((root / 'update_channel.json').read_text('utf-8'))
