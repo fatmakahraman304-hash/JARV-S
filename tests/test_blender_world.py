@@ -4,12 +4,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from plugins import _blender_brain as brain
 from plugins import blender_studio as studio
 
 
 @unittest.skipUnless(shutil.which("blender"), "Blender binary required")
 class WorldWorkflow(unittest.TestCase):
-    def test_district_build_edit_animation(self):
+    @patch.object(brain, "look", return_value={})
+    def test_district_build_edit_animation(self, _look):
         from core import gemini
 
         plan = [
