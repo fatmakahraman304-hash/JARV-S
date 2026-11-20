@@ -216,6 +216,23 @@ def _apply_zip(root, files, sha, branch):
     return backup
 
 
+def _needs_dependency_install(old, new):
+    """Allow removal of ordinary package declarations, retaining pip directives verbatim."""
+    def declarations(content):
+        return [line.strip() for line in content.splitlines()
+                if line.strip() and not line.lstrip().startswith('#')]
+
+    before, after = declarations(old), declarations(new)
+    if before == after:
+        return False
+    # Options, included files and continued lines can affect neighbouring entries.
+    # Only apply the subset rule to independent package declarations.
+    if any(not re.match(r'^[A-Za-z0-9]', line) or line.endswith('\\')
+           for line in before + after):
+        return True
+    return not set(after).issubset(before)
+
+
 def update(root=ROOT, progress=lambda message: None):
     root = Path(root)
     if getattr(sys, 'frozen', False):
@@ -262,7 +279,7 @@ def update(root=ROOT, progress=lambda message: None):
             new_req = files['requirements.txt'].decode('utf-8')
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
-        if old_req.replace('\r\n', '\n').rstrip() != new_req.replace('\r\n', '\n').rstrip():
+        if _needs_dependency_install(old_req, new_req):
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. JARVIS’i kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
         progress('Yedek alınıyor ve güncelleme uygulanıyor…')
         note = ''
