@@ -1,20 +1,20 @@
 """Stop what JARVIS is doing: "dur", "iptal et", "vazgeçtim", "Blender'daki işi durdur".
 
-Reaches every kind of long job: the ones registered in core.jobs (Blender …),
-the background task engine (research, drafting) and a running hologram scan.
+Reaches every kind of long job: the ones registered in core.jobs (Blender …) and
+the background task engine (research, drafting).
 """
 from __future__ import annotations
 
 PLUGIN = {
     "name": "job_control",
     "description": (
-        "Stop or list JARVIS's long-running jobs (Blender builds/renders, background research and drafting tasks, a "
-        "hologram scan). Use when the user says stop / cancel / give up on a job that is running: 'dur', 'iptal et', "
+        "Stop or list JARVIS's long-running jobs (Blender builds/renders, background research and drafting tasks). "
+        "Use when the user says stop / cancel / give up on a job that is running: 'dur', 'iptal et', "
         "'vazgeçtim', 'Blender'daki işi durdur', 'araştırmayı iptal et'. action=list shows what is running."
     ),
     "parameters": {"type": "OBJECT", "properties": {
         "action": {"type": "STRING", "description": "cancel | list"},
-        "which": {"type": "STRING", "description": "Optional: words naming the job ('Blender', 'araştırma', 'hologram'); empty = all"},
+        "which": {"type": "STRING", "description": "Optional: words naming the job ('Blender', 'araştırma'); empty = all"},
     }, "required": ["action"]},
 }
 
@@ -59,11 +59,6 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                         stopped.append(f"Arka plan görevi '{t.get('title')}'")
                 except Exception:
                     pass
-        if player is not None and hasattr(player, "show_hologram") and (not w or "holo" in w or "tara" in w or "model" in w):
-            try:
-                player.show_hologram({"action": "cancel", "request": ""})
-            except Exception:
-                pass
         if not stopped:
             return "Durduracak süren bir iş bulamadım." + (f" ('{which}' ile eşleşen yok.)" if which else "")
         return "Durdurdum: " + "; ".join(stopped)

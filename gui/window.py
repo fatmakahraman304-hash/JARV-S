@@ -139,7 +139,6 @@ class MainWindow(QMainWindow):
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
     _control_center_sig = pyqtSignal(bool)   # open / close the Control Centre
     _chess_sig = pyqtSignal(bool)            # open / close the chess board
-    _holo_sig = pyqtSignal(object)           # hologram table: a command dict
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -442,7 +441,6 @@ class MainWindow(QMainWindow):
         self._review_sig.connect(self._show_review)
         self._control_center_sig.connect(self._set_control_center)
         self._chess_sig.connect(self._set_chess)
-        self._holo_sig.connect(self._holo_command)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -2024,11 +2022,6 @@ class MainWindow(QMainWindow):
         self._chess_btn.setToolTip("Satranç — asistanla oyna")
         self._chess_btn.clicked.connect(lambda: self._set_chess(self._chess_btn.isChecked()))
         row.addWidget(self._chess_btn)
-        self._holo_btn = IconButton("cube", 42)
-        self._holo_btn.setCheckable(True)
-        self._holo_btn.setToolTip("Hologram masası — kameradakini 3B modelle, elinle kontrol et")
-        self._holo_btn.clicked.connect(lambda: self._holo_command({"action": "open" if self._holo_btn.isChecked() else "close"}))
-        row.addWidget(self._holo_btn)
         attach = IconButton("attach", 42)
         attach.setToolTip("Dosya veya klasör ekle")
         attach.clicked.connect(lambda: self._drop_zone._browse())
@@ -3557,7 +3550,7 @@ class MainWindow(QMainWindow):
         """Keep the dock's Control Centre and chess buttons in step with what
         the centre shows."""
         current = self._hud_cam_stack.currentWidget()
-        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel"), ("_holo_btn", "_holo_panel")):
+        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel")):
             btn = getattr(self, btn_name, None) if btn_name in self.__dict__ else None
             page = self.__dict__.get(page_name)
             if btn is None:
@@ -3565,30 +3558,6 @@ class MainWindow(QMainWindow):
             on = page is not None and current is page
             if btn.isChecked() != on:
                 btn.setChecked(on)
-
-    # ── Hologram table ─────────────────────────────────────────────────────────
-    def _holo_command(self, cmd) -> None:
-        """Open the hologram table where the core sits and pass it a command
-        (scan, make, edit, explode, look …); "close" gives the centre back."""
-        cmd = cmd if isinstance(cmd, dict) else {}
-        panel = self.__dict__.get("_holo_panel")
-        if cmd.get("action") == "close":
-            if panel is not None and self._hud_cam_stack.currentWidget() is panel:
-                self._hud_cam_stack.setCurrentWidget(self.hud)
-            return
-        if panel is None:
-            from gui.holo_panel import HoloPanel
-            panel = self._holo_panel = HoloPanel(self._hud_cam_stack)
-            panel.back_requested.connect(lambda: self._hud_cam_stack.setCurrentWidget(self.hud))
-            panel.note.connect(self._log.append_log)
-            self._hud_cam_stack.addWidget(panel)
-            self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
-        self._hud_cam_stack.setCurrentWidget(panel)
-        panel.setFocus()
-        if cmd.get("action") not in (None, "", "open"):
-            panel.command(cmd)
-        if cmd.get("hands"):
-            panel.command({"action": "hands", "on": True})
 
     # ── Chess ──────────────────────────────────────────────────────────────────
     def _set_chess(self, opened: bool) -> None:

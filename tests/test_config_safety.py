@@ -24,10 +24,10 @@ class ConfigSafety(unittest.TestCase):
 
     def test_key_survives_a_broken_file(self):
         cm.save_api_keys("AIza-test-key-1234")
-        cm.save_hf_token("hf_" + "a" * 30)                     # second write: the first becomes the backup
+        cm.save_wake_word_enabled(True)                     # second write: the first becomes the backup
         self.file.write_text('{"gemini_api_key": "AIza', encoding="utf-8")   # cut off mid-write
         self.assertEqual(cm.load_api_keys().get("gemini_api_key"), "AIza-test-key-1234")
-        cm.save_hf_token("hf_" + "b" * 30)                     # a setter after the break keeps the key too
+        cm.save_wake_word_enabled(False)                     # a setter after the break keeps the key too
         data = json.loads(self.file.read_text(encoding="utf-8"))
         self.assertEqual(data["gemini_api_key"], "AIza-test-key-1234")
         self.assertTrue(list(Path(self.tmp.name).glob("api_keys.json.broken-*")))

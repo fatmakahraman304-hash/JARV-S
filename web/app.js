@@ -66,7 +66,6 @@
     document.body.classList.toggle('big', KIND === 'tv' || KIND === 'projector');
     document.body.classList.toggle('watch', KIND === 'watch');
     for (const k of Object.keys(KIND_NAMES)) document.body.classList.toggle('k-' + k, KIND === k);
-    $('t-holo').hidden = !(KIND === 'phone' || KIND === 'pc');      // the hologram table: phone and laptop only
     $('brand-name').textContent = (S.name || 'JARVIS').toUpperCase();
     $('brand-sub').textContent = 'AI OS · ' + (S.devName || KIND_NAMES[KIND]);
   }
@@ -763,8 +762,6 @@
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
     { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki JARVIS Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (JARVIS\'i projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
-    { name: 'hologram', description: 'Iron Man tarzı hologram masası: kameraya gösterilen nesneyi 3B holografik modele çevirir, kullanıcı elleriyle döndürür, büyütür, parçalara ayırır. "bunu dijital olarak modelle", "kameradakini tara", "hologramı aç", "bana bir Iron Man kaskı modelle" (request), "elimle kontrol edeyim" (hands). action: scan | make | open.',
-      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, request: { type: 'STRING' }, hands: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
@@ -923,15 +920,6 @@
         if (what === 'open') { const url = String(a.url || ''); if (!/^https?:\/\//i.test(url)) return 'Geçerli bir adres lazım.'; return await sendToDevice(a.device, { kind: 'open', url, title }); }
         if (!a.text) return 'Ne göndereyim?';
         return await sendToDevice(a.device, { kind: what === 'say' ? 'say' : 'text', text: String(a.text), title });
-      }
-      case 'hologram': {
-        if (KIND !== 'phone' && KIND !== 'pc') return 'Hologram masası telefonda ve laptopta çalışıyor; oradan "bunu dijital olarak modelle" de.';
-        const q = new URLSearchParams();
-        const act = String(a.action || 'scan').toLowerCase();
-        if (act === 'make' && a.request) q.set('make', String(a.request)); else if (act !== 'open') q.set('scan', '1');
-        if (a.hands !== false) q.set('hands', '1');
-        setTimeout(() => { location.href = 'hologram.html?' + q.toString(); }, 2500);   // let the answer be heard first
-        return 'Hologram masası açılıyor' + (q.get('scan') ? '; nesneyi kameraya göster.' : '.');
       }
       case 'open_app': return openApp(String(a.app || ''), String(a.query || ''), String(a.to || ''));
       case 'camera': return a.on ? await startVideo('camera', a.facing === 'front' ? 'user' : 'environment') : (stopVideo(), 'Kamera kapandı.');

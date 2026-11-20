@@ -17,7 +17,6 @@ PLUGIN = {
                     "Her şeyi Python ile yapmak için script (JARVIS bpy betiği yazar, hata çıkarsa kendisi düzeltir ve öğrenir). "
                     "Kullanıcı Blender hakkında bir şey öğretirse teach; JARVIS'in bir konuyu kendi kendine öğrenmesi için study "
                     "(notlar çıkarır, Blender'da deneyip doğrular); öğrendiklerini sormak için lessons. "
-                    "Hologramdaki modeli Blender'da fotoğraf gerçekliğinde çekmek için hologram (Cycles stüdyo render'ı); "
                     "Blender yüklü değilse install. "
                     "Kullanıcının AÇIK Blender penceresinde çalışmak için edit/script yeterli: canlı bağlantı varsa değişiklik "
                     "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir, 'onu/biraz daha' JARVIS'in son değiştirdiğidir; "
@@ -29,12 +28,11 @@ PLUGIN = {
                     "Durum sorulduğunda veya devam et denildiğinde önce status sonucunu oku. "
                     "Yalnızca araç sonucunu bildir; uygulamanın açık olması sahnenin hazır olduğunu göstermez."),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "new | edit | script | preview | undo | redo | learn_all | knowledge | inspect | render | animation | glb | open | guide | teach | study | lessons | hologram | install | status"},
+        "action": {"type": "STRING", "description": "new | edit | script | preview | undo | redo | learn_all | knowledge | inspect | render | animation | glb | open | guide | teach | study | lessons | install | status"},
         "request": {"type": "STRING", "description": "Kullanıcının eksiksiz Blender tarifi"},
         "result": {"type": "STRING", "description": "new/edit sonrası: save (varsayılan), open (projeyi göster), render (PNG göster), both (projeyi ve PNG göster)"},
         "topic": {"type": "STRING", "description": "guide için İngilizce Blender operatör araması, örneğin uv.unwrap, sculpt veya armature"},
         "project": {"type": "STRING", "description": "İsteğe bağlı mevcut .blend dosyasının tam yolu"},
-        "model": {"type": "STRING", "description": "hologram için isteğe bağlı .glb/.obj/.stl yolu (boşsa hologramdaki son model)"}
     }, "required": ["action"]},
 }
 
@@ -46,7 +44,6 @@ PLUGIN_SETTINGS = {
 
 ROOT = Path.home() / "JARVIS" / "Blender"
 WORKER = Path(__file__).with_name("_blender_scene.py")
-HOLO_GLB = Path(__file__).resolve().parent.parent / "memory" / "holo_current.glb"     # the hologram writes its model here
 _lock = threading.Lock()
 _status = "Henüz bir Blender işlemi başlatılmadı."
 SPEC = """Output JSON {"steps":[...]} or {"unsupported":"Türkçe açıklama"} if any
@@ -602,25 +599,6 @@ def study(binary, topic, request=""):
     return f"'{request or topic}' konusunu öğrendim ve Blender {version}'da deneyip doğruladım."
 
 
-def hologram_render(binary, model, player=None, w=1920, h=1080, samples=128, height_m=0.0):
-    """The hologram's model as a studio photograph from Cycles."""
-    src = Path(model) if model else HOLO_GLB
-    if not src.is_file():
-        raise ValueError("Hologramda Blender'a gönderilecek model yok. Önce hologramda bir model aç.")
-    ROOT.mkdir(parents=True, exist_ok=True)
-    folder = Path(tempfile.mkdtemp(prefix="hologram-", dir=ROOT))
-    invoke(binary, None, folder, "studio", model=str(src), width=w, height=h, samples=samples, height_m=height_m)
-    out = folder / "render.png"
-    if not out.is_file() or not out.stat().st_size:
-        raise ValueError("Blender render dosyasını oluşturamadı.")
-    pointer = folder / "latest.tmp"
-    pointer.write_text(folder.name, encoding="utf8")
-    pointer.replace(ROOT / "latest.txt")                       # "projeyi aç" opens this studio scene
-    if player is not None and hasattr(player, "show_image"):
-        player.show_image(str(out), "Blender stüdyo render'ı")
-    return out
-
-
 def _windows() -> bool:
     return os.name == "nt"
 
@@ -682,7 +660,7 @@ def ensure_live(binary):
         print(f"[Blender] Canlı bağlantı kurulamadı: {exc}")
 
 
-def process(action, request, project, topic="", *, binary=None, result="save", player=None, model=""):
+def process(action, request, project, topic="", *, binary=None, result="save", player=None):
     if action == "install":
         out = install()
         try:
@@ -744,10 +722,6 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
         return know.status()
     if action == "study":
         return study(binary, topic, request)
-    if action == "hologram":
-        out = hologram_render(binary, model or project if str(model or project or "").lower().endswith((".glb", ".gltf", ".obj", ".stl")) else "",
-                              player=player)
-        return f"Blender stüdyo render'ı hazır. {out}"
     if action == "guide":
         from core import gemini
         manual_answer = know.answer(request)              # the official manual + this Blender's API
@@ -847,14 +821,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if action == "status":
         return _status
     if action not in ("new", "edit", "script", "inspect", "open", "render", "animation", "glb", "guide", "teach", "study",
-                      "lessons", "hologram", "install", "undo", "redo", "learn_all", "knowledge", "preview"):
+                      "lessons", "install", "undo", "redo", "learn_all", "knowledge", "preview"):
         return "Hangi Blender işlemini yapayım?"
     request = str(p.get("request") or "").strip()
     if action in ("new", "edit", "guide", "script", "teach") and not request:
         return "Blender'da ne yapmamı istersin?"
     if action == "study" and not (request or p.get("topic")):
         return "Blender'da hangi konuyu öğreneyim?"
-    if request and action in ("new", "edit", "script", "install", "hologram", "render", "animation", "undo", "redo",
+    if request and action in ("new", "edit", "script", "install", "render", "animation", "undo", "redo",
                               "learn_all", "study"):
         from core import intent                         # a question or a "what if" is answered, never executed
         if not intent.should_act(request):
@@ -902,7 +876,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         try:
             with jobs.running(f"Blender: {action} {request[:60]}".strip(), cancel=stop_all):
                 _status = process(action, request, p.get("project"), p.get("topic") or "",
-                                  binary=binary, result=p.get("result") or "save", player=player, model=p.get("model") or "")
+                                  binary=binary, result=p.get("result") or "save", player=player)
         except jobs.Cancelled:
             _status = "Blender işini senin isteğinle durdurdum; yarım kalan sahne kaydedilmedi."
         except Exception as exc:

@@ -1,6 +1,5 @@
 """JARVIS's Blender brain: lessons, script checks, the fix-and-retry loop, and
-(with a real Blender on PATH) scripts, self-study and the hologram studio render."""
-import json
+(with a real Blender on PATH) scripts and self-study."""
 import os
 import shutil
 import tempfile
@@ -230,27 +229,6 @@ for i, (x, y) in enumerate([(-0.54, -0.29), (0.54, -0.29), (-0.54, 0.29), (0.54,
         self.assertLess(time.time() - t0, 15)                        # stopped, not waited out
         self.assertIn("durdurdum", studio._status)
         self.assertEqual(jobs.current(), [])
-
-    def test_hologram_studio_render(self):
-        from core import holo_model as hm
-        model = hm.clean({"name": "Kupa", "parts": [
-            {"name": "gövde", "shape": "cylinder", "size": [8, 10, 8], "pos": [0, 5, 0], "color": "#d8d4cc", "rough": 0.25},
-            {"name": "kulp", "shape": "torus", "size": [5, 5, 1.2], "pos": [5, 5, 0], "rot": [90, 0, 0], "color": "#d8d4cc"}]})
-        glb = Path(self.tmp.name) / "kupa.glb"
-        glb.write_bytes(hm.export_glb(hm.build_mesh(model), model))
-        out = studio.hologram_render(studio.executable(), str(glb), w=480, h=270, samples=16, height_m=0.1)
-        self.assertTrue(out.read_bytes().startswith(b"\x89PNG"))
-        self.assertTrue((out.parent / "scene.blend").is_file())
-        frame = json.loads((out.parent / "frame.json").read_text())
-        (x0, x1), (y0, y1) = frame["ndc_x"], frame["ndc_y"]
-        self.assertTrue(0.0 <= x0 < x1 <= 1.0 and 0.0 <= y0 < y1 <= 1.0, frame)     # all of it in the picture
-        self.assertGreater(max(x1 - x0, y1 - y0), 0.7, frame)                      # and filling it
-        self.assertLess(abs((x0 + x1) / 2 - 0.5), 0.06, frame)                     # centred
-        self.assertLess(abs((y0 + y1) / 2 - 0.5), 0.06, frame)
-        keep = os.environ.get("BLENDER_RENDER_DIR")
-        if keep:
-            Path(keep).mkdir(parents=True, exist_ok=True)
-            shutil.copy(out, Path(keep) / "studio_mug.png")
 
 
 if __name__ == "__main__":

@@ -105,8 +105,8 @@ class JobControl(unittest.TestCase):
         started.wait(2)
         self.assertIn("ŞU AN SÜRÜYOR: Blender: new apartman", work_status.run({}))
         self.assertIn("Blender: new apartman", job_control.run({"action": "list"}))
-        self.assertEqual(job_control.run({"action": "cancel", "which": "hologram-yok"}),
-                         "Durduracak süren bir iş bulamadım. ('hologram-yok' ile eşleşen yok.)")
+        self.assertEqual(job_control.run({"action": "cancel", "which": "iş-yok"}),
+                         "Durduracak süren bir iş bulamadım. ('iş-yok' ile eşleşen yok.)")
         self.assertIn("Durdurdum: Blender: new apartman", job_control.run({"action": "cancel", "which": "blender"}))
         self.assertTrue(stopped.wait(2))
         self.assertEqual(jobs.current(), [])
@@ -121,13 +121,6 @@ class JobControl(unittest.TestCase):
                     continue
         with self.assertRaises(jobs.Cancelled):
             retrying()
-
-
-class HologramGuard(unittest.TestCase):
-    def test_question_does_not_model(self):
-        from plugins import hologram
-        player = type("P", (), {"show_hologram": lambda self, c: (_ for _ in ()).throw(AssertionError("acted"))})()
-        self.assertIn("NOT EXECUTED", hologram.run({"action": "make", "request": "ileride araba istesem yapar mı?"}, player))
 
 
 if __name__ == "__main__":
