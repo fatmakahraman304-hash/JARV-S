@@ -75,7 +75,7 @@ class LiveLink(unittest.TestCase):
     def test_2_this_means_the_selection(self):
         from core import gemini
         live.run("import bpy\nfor o in bpy.context.view_layer.objects: o.select_set(o.name == 'Cube')\n")
-        with patch.object(gemini, "text", return_value=RED) as model:
+        with patch.object(gemini, "text", return_value=RED) as model, patch.object(brain, "look", return_value={}):
             out = live.edit("bunu kırmızı yap")
         self.assertIn("Yaptım", out)
         self.assertIn("['Cube']", model.call_args.args[0])                 # it knew what "bunu" was

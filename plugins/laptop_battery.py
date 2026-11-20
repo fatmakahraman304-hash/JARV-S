@@ -49,8 +49,7 @@ def crossing(prev, cur: float, plugged: bool) -> str:
 
 
 def _battery():
-    import psutil
-    return psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    return kit.battery()
 
 
 def _loop(player):
@@ -74,12 +73,12 @@ def _loop(player):
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         act = str((parameters or {}).get("action") or "status").lower()
-        b = _battery()
-        if b is None:
-            return "Bu bilgisayarda pil yok ya da okunamıyor (masaüstü olabilir)."
         if act == "unwatch":
             _watch["on"] = False
             return "Pil uyarıları kapatıldı."
+        b = _battery()
+        if b is None:
+            return "Bu bilgisayarda pil yok ya da okunamıyor (masaüstü olabilir)."
         if act == "watch":
             if not _watch["on"]:
                 _watch.update(on=True, last=b.percent)

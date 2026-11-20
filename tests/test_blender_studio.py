@@ -47,7 +47,7 @@ class BlenderWorkflow(unittest.TestCase):
                         return real_popen(args, **kwargs)
                     return Mock()
 
-                with patch.object(studio.subprocess, "Popen", side_effect=spawn) as popen:
+                with patch.object(studio, "ensure_live"), patch.object(studio.subprocess, "Popen", side_effect=spawn) as popen:
                     studio.process("new", "Kırmızı bir küpü döndür", None, result="both", player=player)
                     gui = [c.args[0] for c in popen.call_args_list if "--background" not in c.args[0]]
                     self.assertEqual(gui, [[studio.executable(), "--disable-autoexec",

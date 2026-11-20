@@ -429,7 +429,8 @@ def studio(job, request):
     r = scene.render
     r.engine = "CYCLES"
     scene.cycles.samples = int(request.get("samples", 128))
-    scene.cycles.use_denoising = True
+    import _cycles
+    scene.cycles.use_denoising = getattr(_cycles, "with_openimagedenoise", True)
     try:
         scene.cycles.device = "GPU" if request.get("gpu") else "CPU"
     except Exception:
@@ -497,7 +498,8 @@ def views(job, request):
     r = scene.render
     r.engine = "CYCLES"
     scene.cycles.samples = int(request.get("samples", 12))
-    scene.cycles.use_denoising = True
+    import _cycles
+    scene.cycles.use_denoising = getattr(_cycles, "with_openimagedenoise", True)
     try:
         scene.cycles.device = "CPU"
     except Exception:
@@ -652,6 +654,10 @@ def main():
     if request["mode"] == "glb":
         bpy.ops.export_scene.gltf(filepath=str(job / "scene.glb"), export_format="GLB")
     elif request["mode"] in ("render", "animation"):
+        if scene.render.engine == "CYCLES" and scene.cycles.denoiser != "OPTIX":
+            import _cycles
+            if not getattr(_cycles, "with_openimagedenoise", True):
+                scene.cycles.use_denoising = False
         if scene.camera is None and request.get("auto_camera"):
             env = {"__name__": "jarvis_kit", "bpy": bpy}            # the user's scene has no camera: frame one
             exec(compile(Path(__file__).with_name("_blender_kit.py").read_text(encoding="utf8"), "kit", "exec"), env)

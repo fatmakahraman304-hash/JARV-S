@@ -77,6 +77,14 @@ class ClipboardTests(unittest.TestCase):
 
 
 class BatteryTests(unittest.TestCase):
+    def test_missing_sensor_and_unwatch(self):
+        with mock.patch("psutil.sensors_battery", create=True, side_effect=FileNotFoundError):
+            self.assertIn("pil yok", laptop_battery.run({"action": "status"}))
+        with mock.patch.dict(laptop_battery._watch, on=True), mock.patch.object(laptop_battery, "_battery") as read:
+            laptop_battery.run({"action": "unwatch"})
+            self.assertFalse(laptop_battery._watch["on"])
+            read.assert_not_called()
+
     def test_advice(self):
         self.assertIn("şarja tak", laptop_battery.advice(15, False, 1800).lower())
         self.assertIn("30 dk", laptop_battery.advice(50, False, 1800))
