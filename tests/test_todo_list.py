@@ -31,8 +31,18 @@ class TodoListTest(unittest.TestCase):
         self.assertIn("Faturayı öde", todo_list.run({"action": "done", "item": "fatura"}))
         self.assertNotIn("yapılacak: Faturayı öde", self.mem["notes"])
         self.assertIn("bulamadım", todo_list.run({"action": "done", "item": "yok"}))
-        self.assertIn("1 madde", todo_list.run({"action": "clear_done"}))
+        todo_list.run({"action": "clear_done"})
+        self.assertIn("yapılacak: Süt al", self.mem["notes"])
+        self.assertIn("1 madde", todo_list.run({"action": "clear"}))
         self.assertIn("başka not", self.mem["notes"])                     # other notes untouched
+
+    def test_ambiguous_completion_preserves_tasks_and_exact_match_wins(self):
+        from plugins import todo_list
+        for item in ("İlaç al", "İlaç al ve ara"):
+            todo_list.run({"action": "add", "item": item})
+        self.assertIn("Hangi madde", todo_list.run({"action": "done", "item": "ilaç"}))
+        self.assertIn("Tamamlandı", todo_list.run({"action": "done", "item": "ilaç al"}))
+        self.assertEqual(todo_list.run({"action": "list"}), "1. İlaç al ve ara")
 
 
 if __name__ == "__main__":

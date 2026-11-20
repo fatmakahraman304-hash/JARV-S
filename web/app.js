@@ -762,7 +762,7 @@
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
     { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki JARVIS Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (JARVIS\'i projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
-    { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done.',
+    { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
   ];
   const extraTools = {}, extraPrompt = [];
@@ -1443,13 +1443,18 @@
     }
     if (act === 'done') {
       const q = item.toLocaleLowerCase('tr');
-      const hit = items.find(([k]) => k.slice(TODO.length).toLocaleLowerCase('tr').includes(q));
-      if (!q || !hit) return 'Listede böyle bir şey bulamadım.';
+      const matches = items.filter(([k]) => q && k.slice(TODO.length).toLocaleLowerCase('tr').includes(q));
+      const exact = matches.filter(([k]) => k.slice(TODO.length).toLocaleLowerCase('tr') === q);
+      const candidates = exact.length ? exact : matches;
+      if (candidates.length > 1) return 'Hangi maddeyi tamamladın? ' + candidates.map(([k]) => k.slice(TODO.length)).join(', ');
+      const hit = candidates[0];
+      if (!hit) return 'Listede böyle bir şey bulamadım.';
       drop(hit[0]); persist();
       if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
       return `Tamamlandı ve listeden çıktı: ${hit[0].slice(TODO.length)}`;
     }
-    if (act === 'clear_done' || act === 'clear') {
+    if (act === 'clear_done') return 'Tamamlanan maddeler zaten listeden çıkarılıyor. Açık görevlerin korunuyor.';
+    if (act === 'clear') {
       const n = items.length; items.forEach(([k]) => drop(k)); persist();
       if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
       return `${n} madde silindi.`;

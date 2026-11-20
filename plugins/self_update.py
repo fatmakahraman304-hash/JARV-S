@@ -20,11 +20,16 @@ PLUGIN = {
 
 
 def summary(info: dict) -> str:
+    if info.get("ahead"):
+        if info.get("behind"):
+            return "Yerel dal ile GitHub dalı ayrı ayrı ilerlemiş. Güncellemek için önce commitleri birleştirmek gerekiyor."
+        return "Yerel dal GitHub sürümünün ilerisinde. Alınacak güncelleme yok."
     if not info.get("newer"):
         return f"JARVIS güncel (sürüm {info.get('current', '')[:8]})."
     ch = info.get("changes") or []
     lines = "\n".join(f"- {c}" for c in ch[:10])
-    return (f"Yeni bir JARVIS sürümü var ({info.get('sha', '')[:8]}, {len(ch)} değişiklik):\n{lines}\n"
+    count = f", {info['behind']} değişiklik" if info.get('behind') else ""
+    return (f"Yeni bir JARVIS sürümü var ({info.get('sha', '')[:8]}{count}).\n{lines}\n"
             "(Kullanıcıya en önemli yenilikleri bir iki cümleyle anlat ve şimdi güncelleyip yeniden başlatayım mı diye sor.)")
 
 

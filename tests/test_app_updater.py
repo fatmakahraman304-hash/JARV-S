@@ -99,6 +99,15 @@ class UpdaterTests(unittest.TestCase):
             u._apply_zip(self.root, self.files, 'b' * 40, 'main')
         self.assertEqual((self.root / 'main.py').read_text(), 'custom')
 
+    def test_new_release_file_cannot_overwrite_personal_file(self):
+        u._apply_zip(self.root, self.files, self.sha, 'main')
+        local = self.root / 'custom.py'
+        local.write_bytes(b'personal')
+        with self.assertRaisesRegex(RuntimeError, 'custom.py'):
+            u._apply_zip(self.root, {**self.files, 'custom.py': b'upstream'}, 'b' * 40, 'main')
+        self.assertEqual(local.read_bytes(), b'personal')
+        self.assertEqual(json.loads((self.root / '.jarvis-update.json').read_text())['sha'], self.sha)
+
     def test_removed_tracked_file_deleted_custom_file_kept(self):
         u._apply_zip(self.root, {**self.files, 'obsolete.py': b'old'}, self.sha, 'main')
         (self.root / 'custom.py').write_text('keep')
