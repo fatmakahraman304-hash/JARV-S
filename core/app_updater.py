@@ -42,7 +42,7 @@ def _local_changes(root):
     for staged in ((), ('--cached',)):
         # --name-only ignores whitespace options, so read the patch itself: a
         # file counts only if it still has a hunk once CR at line end is ignored.
-        patch_text = _git(root, 'diff', *staged, '--ignore-cr-at-eol', '--no-color', '--no-ext-diff', '-U0')
+        patch_text = _git(root, 'diff', *staged, '--ignore-cr-at-eol', '--no-renames', '--no-color', '--no-ext-diff', '-U0')
         current = None
         for line in patch_text.splitlines():
             if line.startswith('diff --git '):
@@ -323,5 +323,5 @@ def check(root=ROOT) -> dict:
     commit = json.loads(_get(f'https://api.github.com/repos/{REPOSITORY}/commits/{quote(branch, safe="")}'))
     sha = commit['sha']
     return {"newer": sha != state.get('sha'), "sha": sha, "current": state.get('sha') or "",
-            "changes": [str(commit.get('commit', {}).get('message', '')).splitlines()[0]] if sha != state.get('sha') else [],
+            "changes": str(commit.get('commit', {}).get('message', '')).splitlines()[:1] if sha != state.get('sha') else [],
             "branch": branch}

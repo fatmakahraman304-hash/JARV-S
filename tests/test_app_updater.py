@@ -35,6 +35,12 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual(get.call_count, 1)
         self.assertFalse((self.root / '.jarvis-update.lock').exists())
 
+    def test_zip_check_accepts_empty_commit_message(self):
+        with patch.object(u, '_get', return_value=json.dumps({'sha': self.sha, 'commit': {'message': ''}}).encode()):
+            result = u.check(self.root)
+        self.assertTrue(result['newer'])
+        self.assertEqual(result['changes'], [])
+
     def test_git_fast_forward_and_backup(self):
         import subprocess
         def git(*args):
@@ -194,6 +200,13 @@ class GitLocalChangesTests(unittest.TestCase):
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.new)
         self.assertIn(b'line three', (self.root / 'main.py').read_bytes())
         self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')
+
+    def test_staged_rename_survives_update(self):
+        self.git('mv', 'notes.py', 'renamed.py')
+        ok, msg = u.update(self.root)
+        self.assertTrue(ok, msg)
+        self.assertEqual((self.root / 'renamed.py').read_bytes(), b'a = 1\n')
+        self.assertFalse((self.root / 'notes.py').exists())
 
     def test_real_edit_is_kept_and_reapplied(self):
         (self.root / 'notes.py').write_bytes(b'a = 2  # my change\n')
