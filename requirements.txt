@@ -142,6 +142,3 @@ pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
 # macOS / Linux OS actions (volume, brightness, reminders) shell out to native
 # tools (pactl / brightnessctl / osascript / systemd), so no extra Python
 # packages are needed there — nothing Windows-specific is ever pulled in.
-
-# Hologram table: real 3D models from a photo via open image-to-3D Spaces (TRELLIS.2, Hunyuan3D…)
-gradio_client>=1.3
