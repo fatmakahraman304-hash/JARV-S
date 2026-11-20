@@ -126,6 +126,16 @@ class UpdaterTests(unittest.TestCase):
                 u.update(self.root)
         self.assertFalse((self.root / '.jarvis-update.lock').exists())
 
+    def test_dependency_removal_does_not_block_zip_update(self):
+        (self.root / 'requirements.txt').write_text('test==1\nold-package>=1\n')
+        with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):
+            self.assertTrue(u.update(self.root)[0])
+        self.assertEqual((self.root / 'requirements.txt').read_text(), 'test==1\n')
+
+    def test_changed_constraint_or_removed_pip_option_needs_install(self):
+        self.assertTrue(u._needs_dependency_install('pkg>=1', 'pkg>=2'))
+        self.assertTrue(u._needs_dependency_install('-c constraints.txt\npkg', 'pkg'))
+
     def test_dependency_change_does_not_modify_source(self):
         self.files['requirements.txt'] = b'new-dependency==2\n'
         with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):
