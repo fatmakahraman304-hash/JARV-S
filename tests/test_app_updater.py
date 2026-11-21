@@ -429,3 +429,37 @@ with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_e
         self.assertTrue(marker.exists())
         self.assertEqual((self.root / "main.py").read_bytes(), b"new main")
         self.assertTrue((self.root / "a-added.py").is_file())
+
+    def test_committed_rollback_preserves_personal_edits_and_is_resumable(self):
+        self.interrupt(".jarvis-update.json")
+        self.recover()
+        edited = self.root / "main.py"
+        edited.write_bytes(b"my edit")
+        with self.assertRaisesRegex(RuntimeError, "Yerel değişiklik"):
+            u.rollback_zip(self.root)
+        self.assertEqual(edited.read_bytes(), b"my edit")
+        edited.write_bytes(b"new main")
+        import subprocess
+        import sys
+        stop_script = """
+import os, sys
+from pathlib import Path
+from unittest.mock import patch
+from core import app_updater as u
+root=Path(sys.argv[1])
+replace=u.os.replace
+def stop(src, dst):
+    replace(src, dst)
+    if Path(dst) == root / 'gui/window.py':
+        os._exit(77)
+with patch.object(u.os, 'replace', side_effect=stop):
+    u.rollback_zip(root)
+"""
+        child = subprocess.run([sys.executable, "-c", stop_script, str(self.root)], timeout=20)
+        self.assertEqual(child.returncode, 77)
+        self.assertTrue(self.recover()[0])
+        for rel, content in self.old.items():
+            self.assertEqual((self.root / rel).read_bytes(), content)
+        self.assertEqual(json.loads((self.root / ".jarvis-update.json").read_bytes())["sha"], "a" * 40)
+        self.assertFalse((self.root / "a-added.py").exists())
+        self.assertEqual(self.private.read_bytes(), b"local settings")
