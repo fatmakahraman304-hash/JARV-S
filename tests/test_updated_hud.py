@@ -26,6 +26,8 @@ class UpdatedHudTests(unittest.TestCase):
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
                 for p, data in sources.items():
+                    if version == 3 and p == "main.py":
+                        data = b"raise SystemExit(23)"
                     z.writestr("repo/" + p, data)
                 z.writestr("repo/acceptance_version.py", f"version={version}")
             return buf.getvalue()
@@ -47,6 +49,10 @@ class UpdatedHudTests(unittest.TestCase):
                 script = (
                     "from acceptance_version import version\n"
                     "from ui import MaykUI\n"
+                    "import os\n"
+                    "from pathlib import Path\n"
+                    "receipt = Path('hud-ready')\n"
+                    "os.environ['MAYK_RESTART_RECEIPT'] = str(receipt.resolve())\n"
                     "from PyQt6.QtCore import QTimer\n"
                     "from PyQt6.QtWidgets import QTextEdit\n"
                     "from core import confirm\n"
@@ -56,6 +62,8 @@ class UpdatedHudTests(unittest.TestCase):
                     "detail = '<b>literal</b>' * 60\n"
                     "confirm.request('test', 'Onay', detail, lambda: 'ok')\n"
                     "ui._app.processEvents()\n"
+                    "assert receipt.is_file()\n"
+                    "receipt.unlink()\n"
                     "overlay = ui._win._confirm_overlay\n"
                     "assert overlay.findChild(QTextEdit).toPlainText() == detail\n"
                     "overlay.answered.emit(False)\n"
@@ -96,4 +104,19 @@ class UpdatedHudTests(unittest.TestCase):
             launch(1)
             update(2)
             launch(2)
+            update(3)
+            previous = subprocess.Popen([sys.executable, "-c", "pass"])
+            previous.wait(timeout=10)
+            restart = subprocess.run([sys.executable, "-X", "utf8", str(root / "tools/restart_app.py"),
+                                      str(previous.pid), str(root)], cwd=root, capture_output=True,
+                                     timeout=30, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+            self.assertEqual(restart.returncode, 1, restart.stderr)
+            self.assertIn("kod 23", restart.stdout)
+            rollback = subprocess.run([sys.executable, "-m", "core.app_updater", "--rollback"],
+                                      cwd=root, capture_output=True, timeout=30)
+            self.assertEqual(rollback.returncode, 0, rollback.stderr)
+            launch(2)
+            app_updater.rollback_zip(root)
+            launch(1)
+            self.assertEqual(json.loads((root / ".jarvis-update.json").read_text())["sha"], "1" * 40)
             self.assertEqual(json.loads(cfg.read_text())["assistant_name"], "MAYK test")
