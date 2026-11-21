@@ -231,15 +231,22 @@ class PipelineEngine:
         servers reject outright, and a model that keeps the result without the
         request reads it as something the user said.
         """
-        total, cut = 0, 0
+        # A screenshot alone can exceed the text-history budget. Keep the
+        # active request and all of its tool calls/results together.
+        latest = next((i for i in range(len(self._history) - 1, -1, -1)
+                       if self._history[i]["role"] == "user"), 0)
+        total = 0
+        cut = 0
         for i in range(len(self._history) - 1, -1, -1):
             total += len(json.dumps(self._history[i], ensure_ascii=False))
             if total > self._history_chars:
-                cut = i + 1
+                cut = min(i + 1, latest)
+                while cut < latest and self._history[cut]["role"] != "user":
+                    cut += 1
                 break
-        while cut < len(self._history) and self._history[cut].get("role") == "tool":
-            cut += 1
-        return self._history[cut:]
+        if cut:
+            del self._history[:cut]
+        return self._history.copy()
 
     # ── the four methods main.py calls ───────────────────────────────────────
     async def send_realtime_input(self, *, audio) -> None:
