@@ -90,6 +90,8 @@ class ProvidersOverlay(_HudOverlay):
     # (provider id, [(value, label), ...]) from a worker that went and asked an
     # endpoint what it offers.
     _models_ready = pyqtSignal(str, list)
+    # NVIDIA API testi 45 saniyeye uzayabilir; sonuç yalnızca Qt iş parçacığında gösterilir.
+    _nvidia_probe_ready = pyqtSignal(str, bool, str)
     _OW = 760                       # the window's own minimum is 820
 
     # Which provider fills each slot, and what the slot is FOR — in the words
@@ -122,6 +124,8 @@ class ProvidersOverlay(_HudOverlay):
         # nothing in this folder may run before somebody opens it.
         self._live_ready.connect(self._on_live_ready)
         self._models_ready.connect(self._on_models_ready)
+        self._nvidia_probe_ready.connect(self._on_nvidia_probe_ready)
+        self._nvidia_testing: set[str] = set()
         self._model_cache: dict[str, list] = {}
         self._fetching: set = set()
         for _kind in ("tts", "stt", "llm"):
@@ -1037,12 +1041,40 @@ class ProvidersOverlay(_HudOverlay):
             lb.setText(text)
             lb.setStyleSheet(f"color: {colour}; background: transparent; border: none;")
 
+    def _on_nvidia_probe_ready(self, pid: str, ok: bool, msg: str) -> None:
+        """Ağ testi arka planda yapılır; etikete yalnızca Qt ana iş parçacığı dokunur."""
+        self._nvidia_testing.discard(pid)
+        self._say(pid, ("✓  " if ok else "✕  ") + msg, C.GREEN if ok else C.ACC)
+
     def _test(self, pid: str) -> None:
         # Read the boxes BEFORE letting Qt run. `processEvents` will happily
         # deliver a queued rebuild, which deletes the very widgets this is
         # about to read — and a deleted QWidget raises rather than returning
         # something wrong, so it takes the click down with it.
         values = self._values(pid)
+        if pid == "openai_compat@nvidia":
+            if pid in self._nvidia_testing:
+                return
+            if not str(values.get("api_key") or "").strip():
+                self._say(pid, "✕  NVIDIA API anahtarı girilmedi.", C.ACC)
+                return
+            self._nvidia_testing.add(pid)
+            self._say(pid, "NVIDIA modeli sınanıyor… Yanıt biraz sürebilir.", C.TEXT_DIM)
+
+            def work():
+                try:
+                    inst = self._registry.build(pid, dict(values))
+                    ok, msg = inst.probe(check_vision=False)
+                except Exception:
+                    # Gizli anahtar ve sunucunun ham hatası ekrana aktarılmaz.
+                    ok, msg = False, "NVIDIA bağlantı testi tamamlanamadı. Yeniden deneyin."
+                try:
+                    self._nvidia_probe_ready.emit(pid, ok, msg)
+                except RuntimeError:
+                    pass  # Panel kapatılmış olabilir.
+
+            threading.Thread(target=work, daemon=True).start()
+            return
         self._say(pid, "Kontrol ediliyor…", C.TEXT_DIM)
         QApplication.processEvents()
         try:
