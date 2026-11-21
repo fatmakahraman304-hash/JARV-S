@@ -20,7 +20,7 @@ API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
 PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
-from core import claude_coding, codex_coding, gemini
+from core import gemini
 
 MODEL_PLANNER    = gemini.SMART
 MODEL_WRITER     = gemini.SMART
@@ -41,23 +41,34 @@ def _coding_provider() -> str:
 
 
 def _get_model(model_name: str = gemini.SMART):
-    """Planning and writing whole files — the reasoning tier, and a long
-    deadline because the answer is a source file rather than a sentence.
-
-    Which model answers is core/coding_router's choice: the best one that is
-    installed and not resting (Claude Code, Codex, the chosen coding API,
-    then Gemini), and the next one the moment one hits its limit."""
-    from core import coding_router
+    """Kod planlamasında DeepSeek Pro → Flash → Gemini sırasını uygula."""
+    from core import coding_router, deepseek_account, jarvis_agent
+    from types import SimpleNamespace
 
     class _Routed:
         def generate_content(self, contents):
             chosen = _coding_provider()
             for p in coding_router.ladder(chosen):
                 try:
-                    if p == codex_coding.PROVIDER_ID:
-                        resp = codex_coding.generate_content(contents)
-                    elif p == claude_coding.PROVIDER_ID:
-                        resp = claude_coding.generate_content(contents)
+                    if p == jarvis_agent.PROVIDER_ID:
+                        key = deepseek_account.api_key()
+                        if not key:
+                            raise RuntimeError("DeepSeek API anahtarı bulunamadı.")
+                        if deepseek_account.balance_status(key)["available"] is False:
+                            raise RuntimeError("DeepSeek 402: bakiye yetersiz")
+                        last_error = None
+                        for model in jarvis_agent.deepseek_models():
+                            try:
+                                return SimpleNamespace(text=deepseek_account.complete_text(
+                                    contents, model=model))
+                            except RuntimeError as exc:
+                                last_error = exc
+                                # 402 tüm DeepSeek modelleri için ortak bakiye durumudur.
+                                if "402" in str(exc):
+                                    break
+                                if not coding_router.should_switch(exc):
+                                    raise
+                        raise last_error or RuntimeError("DeepSeek yanıt vermedi")
                     elif p == coding_router.GEMINI:
                         resp = gemini.call(contents, tier=model_name, timeout_ms=60000)
                     else:
@@ -66,14 +77,12 @@ def _get_model(model_name: str = gemini.SMART):
                     if resp is None:
                         raise RuntimeError(f"{coding_router.name(p)} yanıt vermedi")
                     return resp
-                except Exception as e:
-                    if p == coding_router.GEMINI or not coding_router.should_switch(e):
-                        if p == coding_router.GEMINI and "yanıt vermedi" in str(e):
-                            raise RuntimeError("every model on the ladder failed") from e
+                except Exception as exc:
+                    if p == coding_router.GEMINI or not coding_router.should_switch(exc):
                         raise
-                    coding_router.rest(p, e)
-                    _log(_player_ref, f"{coding_router.name(p)}: {str(e)[:120]} — switching to the next model.")
-            raise RuntimeError("every model on the ladder failed")
+                    coding_router.rest(p, exc)
+                    _log(_player_ref, f"{coding_router.name(p)} kullanılamadı; sıradaki modele geçiliyor.")
+            raise RuntimeError("Kodlama için kullanılabilir model bulunamadı.")
 
     return _Routed()
 
@@ -503,7 +512,7 @@ def _build_project(
             log(f"Agent mode failed ({str(e)[:160]}); building the usual way.")
         if done is not None:
             return done
-    if provider in {codex_coding.PROVIDER_ID, claude_coding.PROVIDER_ID} or provider in EXPLICIT_CODING_PROVIDERS:
+    if provider in EXPLICIT_CODING_PROVIDERS:
         log(f"Coding with {provider.partition('@')[2] or provider}.")
     else:
         log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
@@ -1746,7 +1755,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
                         open_editor: bool) -> str:
     from core import agent_coding
     from core.code_checks import Protection
-    who = "Claude Code" if provider == claude_coding.PROVIDER_ID else "Codex"
+    who = "MAYK kod ajanı"
     _update("writing")
     _log(player, f"{who} works inside the project as an agent: reading, editing, testing…")
     before = agent_coding.snapshot(folder)
@@ -1838,7 +1847,7 @@ def _build_with_agent(description: str, language: str, project_name: str, provid
                       player) -> str:
     """A new project, written, run and tested by the agent in its own folder."""
     from core import agent_coding
-    who = "Claude Code" if provider == claude_coding.PROVIDER_ID else "Codex"
+    who = "MAYK kod ajanı"
     base = project_name or re.sub(r"[^\w]+", "_", description.lower())[:40].strip("_") or "jarvis_project"
     name = re.sub(r"[^\w\-]", "_", base)
     project_dir = PROJECTS_DIR / name
