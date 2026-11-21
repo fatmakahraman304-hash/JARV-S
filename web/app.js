@@ -1395,7 +1395,7 @@
       await new Promise(r => setTimeout(r, 2000));
       try { const hit = J((await Cloud.read())[`outbox-${d.id}.json`], []).find(o => o.id === id); if (hit) return hit.reply; } catch {}
     }
-    return `${d.controls || 'Projeksiyon'} komutu aldı ama yanıt vermedi (açık mı?).`;
+    return `${d.controls || 'Projeksiyon'} yanıt vermedi. Hedef alıcı kimliği: ${d.id}. Alıcı uygulamasındaki cihaz kimliğiyle karşılaştır; farklıysa eski eşleştirme kaydı seçilmiş olabilir.`;
   }
   async function remote(kind, arg, extra = {}) {
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil.';
