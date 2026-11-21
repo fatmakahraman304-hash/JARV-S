@@ -98,6 +98,7 @@ public class ReceiverService extends Service {
         Gist gist = new Gist(p.getString("tok", ""), p.getString("gist", ""));
         String me = deviceId(this);
         long lastBeat = 0;
+        long delayMs = 5000;
         while (running) {
             try {
                 Map<String, String> files = gist.files();
@@ -122,18 +123,21 @@ public class ReceiverService extends Service {
                     for (int i = Math.max(0, outbox.length() - 30); i < outbox.length(); i++) keep.put(outbox.get(i));
                     writes.put("outbox-" + me + ".json", keep.toString());
                 }
-                if (SystemClock.elapsedRealtime() - lastBeat > 30000) {
+                if (SystemClock.elapsedRealtime() - lastBeat > 60000) {
                     writes.put("device-" + me + ".json", beat(me).toString());
                 }
                 if (!writes.isEmpty()) gist.write(writes);
                 if (writes.containsKey("device-" + me + ".json")) lastBeat = SystemClock.elapsedRealtime();
                 status = "bağlı · cihaz kimliği: " + me;
+                delayMs = 5000;
             } catch (Exception e) {
                 status = "hata: " + e.getMessage();
-                // Retry the heartbeat after a failed write instead of waiting 30 seconds.
-                lastBeat = 0;
+                // Back off on API errors; do not hammer GitHub with retries.
+                String error = e.getMessage() == null ? "" : e.getMessage();
+                delayMs = error.contains("GitHub 403") || error.contains("GitHub 429")
+                        ? 60000 : Math.min(30000, delayMs * 2);
             }
-            SystemClock.sleep(3000);
+            SystemClock.sleep(delayMs);
         }
     }
 
