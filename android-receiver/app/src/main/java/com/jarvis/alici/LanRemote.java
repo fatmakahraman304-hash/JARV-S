@@ -103,24 +103,27 @@ final class LanRemote {
             if (!path.equals("/" + secret) && !path.equals("/" + secret + "/cmd")) { respond(s, 404, "Bulunamadı"); return; }
             if ("GET".equals(method) && path.equals("/" + secret)) { respond(s, 200, page()); return; }
             if (!"POST".equals(method) || !path.endsWith("/cmd")) { respond(s, 405, "İzin verilmiyor"); return; }
-            int len = -1; String origin = "", host = "";
+            int len = -1;
             for (String line : lines) {
                 String low = line.toLowerCase(Locale.US);
                 if (low.startsWith("content-length:")) len = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
-                if (low.startsWith("origin:")) origin = line.substring(line.indexOf(':') + 1).trim();
-                if (low.startsWith("host:")) host = line.substring(line.indexOf(':') + 1).trim();
             }
-            if (!origin.isEmpty() && !origin.equals("http://" + host)) { respond(s, 403, "Kaynak reddedildi"); return; }
             if (len < 1 || len > 2048) { respond(s, 400, "Geçersiz istek"); return; }
             byte[] body = new byte[len]; int pos = 0;
             while (pos < len) { int n = in.read(body, pos, len-pos); if (n < 0) return; pos += n; }
-            String op = "", arg = "";
+            String op = "", arg = "", csrf = "";
             for (String pair : new String(body, StandardCharsets.UTF_8).split("&")) {
                 int eq = pair.indexOf('='); if (eq < 0) continue;
                 String k = URLDecoder.decode(pair.substring(0,eq), "UTF-8");
                 String v = URLDecoder.decode(pair.substring(eq+1), "UTF-8");
-                if ("op".equals(k)) op = v; if ("arg".equals(k)) arg = v;
+                if ("op".equals(k)) op = v;
+                if ("arg".equals(k)) arg = v;
+                if ("csrf".equals(k)) csrf = v;
             }
+            // Safari/iOS may send Origin: null from a local HTTP page. The
+            // unguessable token must appear in both the URL and form body;
+            // do not reject an otherwise valid local command by Origin alone.
+            if (!secret.equals(csrf)) { respond(s, 403, "Gecersiz kumanda anahtari"); return; }
             if (!("key".equals(op) || "app".equals(op) || "url".equals(op) || "search".equals(op))) { respond(s, 400, "Komut desteklenmiyor"); return; }
             String reply = handler.command(op, arg);
             respond(s, 200, "<meta charset='utf-8'><meta name='viewport' content='width=device-width'><body style='background:#111;color:white;font:20px sans-serif;padding:20px'><p>" + escape(reply) + "</p><a style='color:orange' href='/" + secret + "'>Kumandaya dön</a></body>");
@@ -132,12 +135,23 @@ final class LanRemote {
         String[][] keys = {{"Ses +","volume_up"},{"Ses −","volume_down"},{"Sessiz","mute"},{"Ana ekran","home"},{"Geri","back"},{"Yukarı","up"},{"Aşağı","down"},{"Sol","left"},{"Sağ","right"},{"OK","enter"},{"Oynat / durdur","play_pause"}};
         for (String[] k : keys) h.append(form("key", k[1], k[0]));
         h.append("<h3>Uygulamalar</h3>").append(form("app","youtube","YouTube")).append(form("app","netflix","Netflix")).append(form("app","settings","Ayarlar"));
-        h.append("<h3>YouTube ara</h3><form method='post' action='/").append(secret).append("/cmd'><input type='hidden' name='op' value='search'><input name='arg' placeholder='Aranacak video'><button>Ara</button></form>");
+        h.append("<h3>YouTube ara</h3><form method='post' action='/").append(secret).append("/cmd'><input type='hidden' name='csrf' value='").append(secret).append("'><input type='hidden' name='op' value='search'><input name='arg' placeholder='Aranacak video'><button>Ara</button></form>");
+        h.append("<p id='result' role='status' aria-live='polite'></p>");
+        // Fetch sends the same authenticated POST without iOS's unsafe-form
+        // navigation warning. Forms still work if JavaScript is disabled.
+        h.append("<script>document.addEventListener('submit',async function(e){"
+                + "const f=e.target;if(!f.matches('form'))return;e.preventDefault();"
+                + "const out=document.getElementById('result');out.textContent='Gönderiliyor…';"
+                + "try{const r=await fetch(f.action,{method:'POST',body:new URLSearchParams(new FormData(f))});"
+                + "const t=await r.text();const d=new DOMParser().parseFromString(t,'text/html');"
+                + "out.textContent=(r.ok?'':'Hata: ')+(d.body?d.body.textContent.trim():t);}"
+                + "catch(err){out.textContent='Bağlantı hatası: '+err.message;}"
+                + "});</script>");
         h.append("</html>"); return h.toString();
     }
 
     private String form(String op, String arg, String title) {
-        return "<form style='display:inline-block' method='post' action='/" + secret + "/cmd'><input type='hidden' name='op' value='" + op + "'><input type='hidden' name='arg' value='" + arg + "'><button>" + title + "</button></form>";
+        return "<form style='display:inline-block' method='post' action='/" + secret + "/cmd'><input type='hidden' name='csrf' value='" + secret + "'><input type='hidden' name='op' value='" + op + "'><input type='hidden' name='arg' value='" + arg + "'><button>" + title + "</button></form>";
     }
     private static String escape(String s) { return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"); }
     private void respond(Socket s, int code, String html) throws IOException {
