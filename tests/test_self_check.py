@@ -18,6 +18,21 @@ class SelfCheck(unittest.TestCase):
         self.assertIn("❌ Yapay zekâ: Yapay zekâ anahtarı yok\n    → Ayarlara anahtar gir.", out)
         self.assertTrue(out.startswith(("1 konuda", "2 konuda", "3 konuda", "4 konuda")))
 
+    def test_alternate_model_without_gemini_key(self):
+        with patch("memory.config_manager.get_gemini_key", return_value=""), \
+             patch.dict("os.environ", {"GEMINI_API_KEY": ""}), \
+             patch("memory.config_manager.get_sidecar_provider", return_value="local"), \
+             patch("core.gemini.text", side_effect=[" OK ", "not ok"]):
+            self.assertEqual(sc.check_model()[0], sc.OK)
+            self.assertEqual(sc.check_model()[0], sc.FAIL)
+
+    def test_loaded_plugin_errors_reach_the_report(self):
+        records = [{"file": "sample.py", "valid": False, "error": "invalid declaration"}]
+        with patch.object(sc, "CHECKS", (("Eklentiler", sc.check_plugins),)):
+            report = sc.run({}, player=type("Player", (), {"get_plugins": lambda self: records})())
+        self.assertIn("sample.py", report)
+        self.assertIn(sc.WARN, report)
+
     def test_a_hung_check_cannot_hold_it_up(self):
         def slow():
             time.sleep(5)

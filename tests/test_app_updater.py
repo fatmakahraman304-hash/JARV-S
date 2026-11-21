@@ -145,6 +145,11 @@ class UpdaterTests(unittest.TestCase):
         self.assertTrue(u._needs_dependency_install('pkg>=1', 'pkg>=2'))
         self.assertTrue(u._needs_dependency_install('-c constraints.txt\npkg', 'pkg'))
 
+    def test_inline_package_comments_do_not_require_reinstallation(self):
+        self.assertFalse(u._needs_dependency_install('certifi>=2024  # old', 'certifi>=2024  # new'))
+        self.assertTrue(u._needs_dependency_install('pkg @ https://example.org/a#sha256=1',
+                                                   'pkg @ https://example.org/a#sha256=2'))
+
     def test_dependency_change_does_not_modify_source(self):
         self.files['requirements.txt'] = b'new-dependency==2\n'
         with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):

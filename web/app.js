@@ -2042,7 +2042,7 @@
   };
 
   // ── start ────────────────────────────────────────────────────────────────
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js' + new URL(document.currentScript.src).search).catch(() => {});
   window.addEventListener('online', () => setState(S.key ? 'idle' : 'setup'));
   window.addEventListener('offline', () => setState('offline'));
   setState(S.key ? 'idle' : 'setup');

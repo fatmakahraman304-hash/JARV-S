@@ -224,8 +224,12 @@ def _apply_zip(root, files, sha, branch):
 def _needs_dependency_install(old, new):
     """Allow removal of ordinary package declarations, retaining pip directives verbatim."""
     def declarations(content):
-        return [line.strip() for line in content.splitlines()
-                if line.strip() and not line.lstrip().startswith('#')]
+        # pip joins continued lines before removing comments. Keep those
+        # manifests conservative, since the position of a comment matters.
+        lines = content.splitlines()
+        if not any(line.rstrip().endswith('\\') for line in lines):
+            lines = [re.split(r'\s+#', line, maxsplit=1)[0] for line in lines]
+        return [line.strip() for line in lines if line.strip() and not line.lstrip().startswith('#')]
 
     before, after = declarations(old), declarations(new)
     if before == after:

@@ -1,16 +1,39 @@
 /* MAYK web — app shell cache. Network first, so an update reaches every
  * device on its next open; the cache only answers when offline. */
-const CACHE = 'jarvis-web-v5';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
-self.addEventListener('fetch', e => {
-  const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.origin !== location.origin) return;   // GitHub, Gemini: never cached
-  if (u.pathname.endsWith('version.json')) return;                            // always the live version
-  // no-cache: always ask the server (a 304 is cheap), so an update is seen at once
-  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); return r; })
-                                .catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
+const BUILD = new URL(self.location.href).searchParams.get('v') || 'development';
+const PREFIX = 'mayk-web:' + self.registration.scope + ':';
+const CACHE = PREFIX + BUILD;
+const SCRIPTS = ['reactor', 'chess', 'devkit', 'app', 'dev-common', 'dev-phone',
+                 'dev-tablet', 'dev-tv', 'dev-projector', 'dev-watch'];
+const suffix = BUILD === 'development' ? '' : '?v=' + BUILD;
+const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
+               'icon-512.png', ...SCRIPTS.map(name => name + '.js' + suffix)];
+const urls = new Set(SHELL.map(path => new URL(path, self.registration.scope).href));
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(
+    keys.filter(key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key))
+  )).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET' || !request.url.startsWith(self.registration.scope)) return;
+  const navigation = request.mode === 'navigate';
+  if (!navigation && !urls.has(request.url)) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      const response = await fetch(request, { cache: 'no-cache' });
+      if (response.ok || response.status < 500) return response;
+      return await cache.match(navigation ? 'index.html' : request) || response;
+    } catch (error) {
+      const saved = await cache.match(navigation ? 'index.html' : request);
+      if (saved) return saved;
+      throw error;
+    }
+  })());
 });
 
 // Notifications sent by the user's computer while this page is closed
