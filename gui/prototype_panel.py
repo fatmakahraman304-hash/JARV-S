@@ -38,7 +38,7 @@ class PrototypePanel(QWidget):
         row = QHBoxLayout()
         row.addWidget(QLabel("Çevrimdışı web prototipi"))
         row.addStretch()
-        back = QPushButton("CORE’a dön")
+        back = QPushButton("ANA EKRANA DÖN")
         back.clicked.connect(self.back_requested)
         row.addWidget(back)
         layout.addLayout(row)
