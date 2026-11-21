@@ -27,7 +27,7 @@ def get_base_dir() -> Path:
 
 
 BASE_DIR         = get_base_dir()
-from memory.continuity import data_dir, memory_words, recall_terms
+from memory.continuity import data_dir, memory_words, recall_terms, related_word
 MEMORY_PATH      = data_dir() / "long_term.json"
 BACKUP_PATH      = MEMORY_PATH.with_suffix(".json.bak")        # the last good file, kept before every write
 ARCHIVE_PATH     = MEMORY_PATH.with_name("long_term_archive.json")   # what a full memory let go of — still searchable
@@ -473,7 +473,7 @@ def _score(query_words: set[str], cat: str, key: str, value: str) -> tuple[int, 
             weight += 6
         elif term in category:
             weight += 2
-        elif len(term) >= 4 and any(word.startswith(term) for word in words):
+        elif any(related_word(term, word) for word in words):
             weight += 1
         else:
             continue
