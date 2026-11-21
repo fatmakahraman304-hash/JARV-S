@@ -827,6 +827,45 @@ def _log(player, msg: str) -> None:
             pass
 
 
+def status_text() -> str:
+    """Gerçek iş parçacığı, son ilerleme ve kalıcı proje günlüğünden durum."""
+    j = _job_snapshot()
+    if j:
+        finished = j.get("finished")
+        elapsed = int(max(0, (finished or time.time()) - j.get("started", time.time())))
+        step = j.get("steps") or []
+        last = step[-1][1][:180] if step else "Henüz ilerleme kaydı yok."
+        if finished is None:
+            # Preparing is not proof that a worker thread has started.
+            state = ("çalışıyor" if j.get("worker_started")
+                     else "hazırlanıyor (iş parçacığı henüz doğrulanmadı)")
+            silent_for = int(max(0, time.time() - j.get("updated", j["started"])))
+            note = (f" Son işlem {silent_for} saniye önce; uzun model yanıtı bekleniyor olabilir."
+                    if silent_for >= 60 else "")
+        else:
+            state = j.get("status") or "tamamlandı"
+            note = ""
+        return (f"Kodlama görevi #{j.get('journal_id') or '?'} '{j['folder']}': "
+                f"{state}, aşama: {j.get('phase') or j.get('status')}, "
+                f"geçen süre: {elapsed} sn. Son kayıt: {last}.{note} "
+                f"İş sonucu: {str(j.get('result') or 'Henüz tamamlanmadı')[:240]}")
+    try:
+        from memory.continuity import projects
+        recent = projects(limit=5)
+    except Exception:
+        return "Kodlama görevi geçmişi şu anda okunamıyor; işin bittiği doğrulanamadı."
+    if not recent:
+        return "Kayıtlı bir kodlama görevi yok; başlatılmış işlem doğrulanamadı."
+    p = recent[0]
+    state = str(p.get("status") or "bilinmiyor")
+    if state == "çalışıyor":
+        state = "kayıtta çalışıyor görünüyor, ancak bu oturumda iş parçacığı doğrulanamadı"
+    return (f"Son kayıtlı kodlama görevi #{p['id']} '{p['title']}': {state}; "
+            f"aşama {p.get('stage', '?')}; son güncelleme {p.get('updated', '?')}. "
+            f"Son bilgi: {str(p.get('note') or 'Yok')[:240]}. "
+            "Bu bilgi kayıt geçmişidir; şu an çalıştığına dair tek başına kanıt değildir.")
+
+
 def _status_report() -> str:
     """What the coding agent is doing, or did — for the assistant to say."""
     j = _job_snapshot()
@@ -842,8 +881,7 @@ def _status_report() -> str:
             return ("Şu anda çalışan kodlama görevi yok. Görev geçmişi: " + "; ".join(lines)
                     + (". Yarım kalanlar mode='resume' ile sürdürülebilir." if pend else ".")
                     + " Kullanıcıya kısa ve Türkçe olarak aktar.")
-        return ("Kodlama ajanı bu oturumda henüz bir klasörde çalışmadı. "
-                "Kullanıcıya tek Türkçe cümlede aktar.")
+        return status_text() + " Kullanıcıya kayıtlı sonucu doğru ve kısa biçimde aktar."
     took = (j["finished"] or time.time()) - j["started"]
     files = "; ".join(f"{p} ({f.get('action', '?')}, {f.get('state', '?')}): "
                       f"{f.get('what', '')}" for p, f in j["files"].items())
@@ -2001,7 +2039,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
-            _journal(pid, status={"done": "bitti", "nothing changed": "bitti",
+            _journal(pid, status={"done": "bitti", "nothing changed": "değişiklik yok",
                                   "finished with problems": "sorunlu bitti",
                                   "failed": "başarısız"}.get(status, status), note=result)
             try:
@@ -2017,7 +2055,38 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             speak(f"[DEV_AGENT_DONE] {result[:900]} | Kullanıcıya bir veya iki "
                   f"Türkçe cümlede ne yapıldığını anlat. Dosya yollarını sesli okuma.")
 
-    threading.Thread(target=work, daemon=True, name="dev_agent-job").start()
+    worker = threading.Thread(target=work, daemon=True, name="dev_agent-job")
+    try:
+        worker.start()
+    except RuntimeError as exc:
+        failure = f"Kodlama işi başlatılamadı: {type(exc).__name__}: {str(exc)[:160]}"
+        _journal(pid, status="başarısız", note=failure)
+        _update("failed", result=failure, finished=time.time())
+        _job_lock.release()
+        return failure
+    with _state_lock:
+        if _JOB and _JOB.get("finished") is None:
+            _JOB["worker_started"] = True
+            _JOB["updated"] = time.time()
+    _publish()
+
+    # Model yanıtı uzun sürse bile SQLite günlüğünde canlılık izi bırak.
+    # İş bittiğinde heartbeat kendiliğinden durur; başka iş başlatmaz.
+    def heartbeat():
+        while worker.is_alive():
+            worker.join(timeout=20)
+            if not worker.is_alive():
+                break
+            snap = _job_snapshot()
+            if snap.get("finished") is not None or snap.get("journal_id") != pid:
+                break
+            recent = snap.get("steps") or []
+            note = recent[-1][1] if recent else "Kodlama işi hâlâ sürüyor."
+            _journal(pid, status="çalışıyor",
+                     note=f"{snap.get('phase') or snap.get('status')}: {note}"[:4000])
+    if pid:
+        threading.Thread(target=heartbeat, daemon=True, name="dev_agent-heartbeat").start()
+
     # Kept short on purpose: this is what the assistant turns into speech, and
     # every word here is time before the user hears anything.
     return (f"[STARTED] Kodlama ajanı ({who}) şu anda "
