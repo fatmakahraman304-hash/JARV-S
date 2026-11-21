@@ -51,3 +51,19 @@ Yeni kod kurulmuş ancak çalışmıyorsa, MAYK kapalıyken bu sürümün günce
 ```
 
 İkinci komutu yalnızca önceki sürümün geri yüklendiği doğrulandıktan sonra çalıştırın. Geri dönüş dosyaları ve önceki sürüm kaydını denetler. Yerel düzenleme varsa durur. Geri dönüşün kendisi kesilirse `--recover` ile devam edilir. Bu yol, geri dönüş kaydı içeren bir ZIP güncellemesi gerektirir. Git kurulumunda yukarıdaki yedek dal yöntemi geçerlidir.
+
+## Konuşma ve görev geçmişini yedekleme
+
+MAYK çalışırken, kendi hesabınıza özel yerel bir NTFS klasöründe yeni bir yedek oluşturabilirsiniz. Her yedek için yeni bir dosya adı seçin.
+
+```powershell
+.\.venv\Scripts\python.exe -m memory.continuity --backup "$env:LOCALAPPDATA\MAYK-Yedek\gecmis-01.sqlite3"
+```
+
+Yedek, SQLite’a kaydedilmiş konuşmaları, görevleri ve uygulama kayıtlarını içerir. Kişisel metinler içerdiği için erişimini sınırlayın. API anahtarları, persona ayarları ve diğer hafıza dosyaları ayrıca korunmalıdır.
+
+Yeni bir Windows kurulumu veya boş bir veri klasöründe, MAYK kapalıyken geri yükleyin. Komut mevcut geçmişi korur ve aynı adlı dosyanın üzerine yazmaz.
+
+```powershell
+.\.venv\Scripts\python.exe -m memory.continuity --restore "$env:LOCALAPPDATA\MAYK-Yedek\gecmis-01.sqlite3"
+```
