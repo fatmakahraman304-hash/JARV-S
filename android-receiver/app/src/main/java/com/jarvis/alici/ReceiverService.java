@@ -98,9 +98,11 @@ public class ReceiverService extends Service {
         Gist gist = new Gist(p.getString("tok", ""), p.getString("gist", ""));
         String me = deviceId(this);
         long lastBeat = 0;
-        long delayMs = 5000;
+        long delayMs = 10000;
+        String phase = "okuma";
         while (running) {
             try {
+                phase = "okuma";
                 Map<String, String> files = gist.files();
                 Map<String, String> writes = new HashMap<>();
                 JSONArray inbox = new JSONArray(orEmpty(files.get("inbox-" + me + ".json"), "[]"));
@@ -126,16 +128,19 @@ public class ReceiverService extends Service {
                 if (SystemClock.elapsedRealtime() - lastBeat > 60000) {
                     writes.put("device-" + me + ".json", beat(me).toString());
                 }
-                if (!writes.isEmpty()) gist.write(writes);
+                if (!writes.isEmpty()) {
+                    phase = "yazma";
+                    gist.write(writes);
+                }
                 if (writes.containsKey("device-" + me + ".json")) lastBeat = SystemClock.elapsedRealtime();
                 status = "bağlı · cihaz kimliği: " + me;
-                delayMs = 5000;
+                delayMs = 10000;
             } catch (Exception e) {
-                status = "hata: " + e.getMessage();
+                status = phase + " hatası: " + e.getMessage();
                 // Back off on API errors; do not hammer GitHub with retries.
                 String error = e.getMessage() == null ? "" : e.getMessage();
                 delayMs = error.contains("GitHub 403") || error.contains("GitHub 429")
-                        ? 60000 : Math.min(30000, delayMs * 2);
+                        ? 120000 : Math.min(60000, delayMs * 2);
             }
             SystemClock.sleep(delayMs);
         }
