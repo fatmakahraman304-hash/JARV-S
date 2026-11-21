@@ -21,6 +21,7 @@ import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.ImageView;
 
@@ -112,9 +113,12 @@ public class MainActivity extends Activity {
 
         Button update = button("↻ MAYK Alıcı'yı güncelle");
         update.setOnClickListener(v -> downloadUpdate());
-        root.addView(update);
+        root.addView(update, 0);
 
-        setContentView(root);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        setContentView(scroll);
         handle(getIntent());
         a11y.requestFocus();
     }
