@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
     _video_seek_sig  = pyqtSignal(float, bool)          # seconds, relative
     _video_pause_sig = pyqtSignal(bool)
     _clipboard_sig  = pyqtSignal(str)        # clipboard text changed (thread-safe)
-    _confirm_sig    = pyqtSignal(str, str)   # (title, detail) — irreversible-action gate
+    _confirm_sig    = pyqtSignal(str, str, str)   # (title, detail) — irreversible-action gate
     _confirm_hide_sig = pyqtSignal()
     _wake_dl_sig    = pyqtSignal(bool, str)  # wake-word install finished (ok, message)
     _quiz_sig       = pyqtSignal(str, object, object)  # (topic, questions, grader)
@@ -3436,10 +3436,10 @@ class MainWindow(QMainWindow):
 
     # ── Irreversible-action confirmation ─────────────────────────────────────
 
-    def _show_confirm_banner(self, title: str, detail: str):
+    def _show_confirm_banner(self, title: str, detail: str, token: str):
         self._hide_confirm_banner()
         ov = ConfirmBanner(title, detail, parent=self.centralWidget())
-        ov.answered.connect(self._on_confirm_answered)
+        ov.answered.connect(lambda accepted: self._on_confirm_answered(accepted, token))
         self._centre_overlay(ov)
         self._confirm_overlay = ov
 
@@ -3450,14 +3450,14 @@ class MainWindow(QMainWindow):
             ov.deleteLater()
             self._confirm_overlay = None
 
-    def _on_confirm_answered(self, accepted: bool):
+    def _on_confirm_answered(self, accepted: bool, token: str):
         # Tear the banner down first: core.confirm.resolve() may be about to
         # shut the machine down, and a live widget mid-callback is not where you
         # want to be when that happens.
         self._hide_confirm_banner()
         try:
             from core.confirm import resolve
-            resolve(bool(accepted))
+            resolve(bool(accepted), token)
         except Exception as e:
             self._log.append_log(f"ERR: Confirmation failed — {e}")
 
