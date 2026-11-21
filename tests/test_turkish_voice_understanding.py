@@ -19,6 +19,10 @@ class InputTranscriptTests(unittest.TestCase):
             parts = merge_input_chunk(parts, new)
         self.assertEqual(combined_text(parts), "MAYK ışığı aç")
 
+    def test_short_mayk_partial_then_full_phrase(self):
+        parts = merge_input_chunk(["MAYK"], "MAYK sesi biraz kıs")
+        self.assertEqual(combined_text(parts), "MAYK sesi biraz kıs")
+
     def test_word_boundary_overlap_only_once(self):
         parts = []
         for new in ("MAYK Spotify'ı aç", "Spotify'ı aç sonra sesi kıs"):
