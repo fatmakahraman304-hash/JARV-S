@@ -1,4 +1,4 @@
-"""Application research and isolated, checked Mayk adapter development."""
+"""Application research and isolated, checked MAYK adapter development."""
 import json
 import threading
 from memory.continuity import applications, set_application, record
@@ -15,7 +15,7 @@ def report():
 
 def instruction_for(name, goal, sources):
     return (
-        f"Add a Mayk integration for application {json.dumps(name, ensure_ascii=False)}. "
+        f"Add a MAYK integration for application {json.dumps(name, ensure_ascii=False)}. "
         f"User requirements: {json.dumps(goal, ensure_ascii=False)}. "
         "Inspect existing computer_control, screenview, screenact, apps and send_message first. "
         "Reuse working controls. Discover the installed app and its version; do not install it silently. "
@@ -45,7 +45,7 @@ def start(name, goal, player, publish=False):
     if len(goal) > 4000:
         return "İstenen işlemleri 4000 karakterden kısa yaz."
     if player is None:
-        return "Geliştirme için Mayk arayüzü gerekli."
+        return "Geliştirme için MAYK arayüzü gerekli."
     from plugins import github_develop as github
     if not _LOCK.acquire(False):
         return "Bir uygulama geliştirme işi sürüyor; durumunu kontrol edebilirsin."
@@ -87,7 +87,7 @@ def start(name, goal, player, publish=False):
                 if not dev_agent._job_lock.acquire(False):
                     raise RuntimeError("Başka bir kod geliştirme işi sürüyor.")
                 try:
-                    dev_agent._new_job(github.WORK, "Mayk", request, player, kind="improve")
+                    dev_agent._new_job(github.WORK, "MAYK", request, player, kind="improve")
                     result = dev_agent._improve_folder(github.WORK, request, player, open_editor=False)
                     changes = github.command(["git", "status", "--porcelain"])
                     if not changes.strip():

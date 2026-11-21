@@ -18,7 +18,7 @@ PLUGIN = {
 def run(parameters, player=None, session_memory=None):
     request = getattr(player, "research_scan", None)
     if not callable(request):
-        return "Araştırma için Mayk masaüstü arayüzü gerekli."
+        return "Araştırma için MAYK masaüstü arayüzü gerekli."
     subject = parameters.get("subject") or ""
     if not isinstance(subject, str) or len(subject) > 180:
         return "Araştırılacak başlığı kısalt."

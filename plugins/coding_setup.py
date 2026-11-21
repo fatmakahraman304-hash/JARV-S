@@ -1,5 +1,5 @@
 """
-Kodlama kurulumu: Mayk'ın en güçlü kodlama ajanıyla (Claude Code, Opus) çalışıp
+Kodlama kurulumu: MAYK'ın en güçlü kodlama ajanıyla (Claude Code, Opus) çalışıp
 çalışmadığını söyler, eksikse kurar ve giriş ekranını açar.
 
 "Kodlama kurulumunu kontrol et", "Claude Code'u kur", "Claude'a giriş yap",
@@ -14,7 +14,7 @@ import threading
 PLUGIN = {
     "name": "coding_setup",
     "description": (
-        "Mayk'ın kodlama ajanını hazırla ve durumunu söyle: 'kodlama kurulumunu kontrol et', "
+        "MAYK'ın kodlama ajanını hazırla ve durumunu söyle: 'kodlama kurulumunu kontrol et', "
         "'Claude Code'u kur', 'Claude'a giriş yap', 'kodlamada Opus/Sonnet kullan'. "
         "action: status | install | login | model | deepseek. deepseek için name: DeepSeek API anahtarı "
         "(kodlamayı DeepSeek yapar); model için name: opus | sonnet | tam model adı."
@@ -33,7 +33,7 @@ PLUGIN = {
 def _say(player, text: str) -> None:
     if player:
         try:
-            player.write_log(f"Mayk: {text}")
+            player.write_log(f"MAYK: {text}")
         except Exception:
             pass
 
@@ -51,8 +51,8 @@ def status() -> str:
     try:
         from core import jarvis_agent
         names = [b.name for b in jarvis_agent.brains()]
-        lines.append("Mayk'ın kendi kod ajanı hazır; beyinleri sırayla: " + ", ".join(names[:5]) + "."
-                     if names else "Mayk'ın kendi kod ajanı için beyin yok.")
+        lines.append("MAYK'ın kendi kod ajanı hazır; beyinleri sırayla: " + ", ".join(names[:5]) + "."
+                     if names else "MAYK'ın kendi kod ajanı için beyin yok.")
         if not jarvis_agent.deepseek_ready():
             lines.append("Kodlamayı DeepSeek yapsın diye 'DeepSeek anahtarımı ekle' de.")
     except Exception:
@@ -81,7 +81,7 @@ def _install(player) -> None:
         tail = out[-1] if out else ""
         if r.returncode == 0 or "already installed" in (r.stdout + r.stderr).lower():
             _say(player, "Claude Code kuruldu. Şimdi 'Claude'a giriş yap' de; açılan pencerede hesabınla giriş yap. "
-                         "Gerekirse Mayk'ı yeniden aç.")
+                         "Gerekirse MAYK'ı yeniden aç.")
         else:
             _say(player, f"Claude Code kurulamadı (kod {r.returncode}): {tail[:200]}")
     except Exception as exc:
@@ -105,7 +105,7 @@ def _login() -> str:
             if not term:
                 return "Bir terminal açıp 'claude auth login' yazman gerekiyor."
             subprocess.Popen([term, "--", exe, "auth", "login"])
-        return ("Giriş penceresi açıldı: tarayıcıda Claude hesabınla giriş yap. Bitince Mayk kodlamada "
+        return ("Giriş penceresi açıldı: tarayıcıda Claude hesabınla giriş yap. Bitince MAYK kodlamada "
                 "Opus'u kullanır.")
     except Exception as exc:
         return f"Giriş penceresi açılamadı: {exc}. PowerShell'de 'claude auth login' yazabilirsin."

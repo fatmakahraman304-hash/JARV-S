@@ -1,4 +1,4 @@
-"""Mayk everywhere: memory merge, setup link, remote commands, web page wiring."""
+"""MAYK everywhere: memory merge, setup link, remote commands, web page wiring."""
 import base64
 import json
 import re
@@ -64,12 +64,12 @@ class VoiceOwnerTest(unittest.TestCase):
 class SetupLinkTest(unittest.TestCase):
     def test_link_carries_settings(self):
         with mock.patch.object(sync_hub, "settings", return_value={"github_token": "ghp_x", "gist_id": "abc"}), \
-             mock.patch.object(sync_hub, "_assistant_name", return_value="Mayk"):
+             mock.patch.object(sync_hub, "_assistant_name", return_value="MAYK"):
             link = sync_hub.setup_link("AIzaKEY")
         self.assertTrue(link.startswith(sync_hub.WEB_URL + "#s="))
         blob = link.split("#s=", 1)[1]
         data = json.loads(base64.urlsafe_b64decode(blob + "=" * (-len(blob) % 4)))
-        self.assertEqual(data, {"g": "AIzaKEY", "t": "ghp_x", "i": "abc", "n": "Mayk"})
+        self.assertEqual(data, {"g": "AIzaKEY", "t": "ghp_x", "i": "abc", "n": "MAYK"})
 
 
 class CommandTest(unittest.TestCase):

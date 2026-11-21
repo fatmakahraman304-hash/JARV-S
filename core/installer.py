@@ -1,5 +1,5 @@
 """
-Mayk — Dependency auto-installer.
+MAYK — Dependency auto-installer.
 
 Called automatically on first launch and after engine reconfiguration.
 Installs only the packages that are actually missing, then exits cleanly.
@@ -139,8 +139,8 @@ def install_for_config(config: dict, log: Callable | None = None) -> None:
 
 
 # ── Missing packages found while working ──────────────────────────────────
-# A tool that fails because a library is missing says "pip install X". Mayk
-# offers to install it — but only a package Mayk itself depends on (the lists
+# A tool that fails because a library is missing says "pip install X". MAYK
+# offers to install it — but only a package MAYK itself depends on (the lists
 # above or requirements.txt): a tool result is text, and text must never be able
 # to make the assistant install an arbitrary package.
 
@@ -168,7 +168,7 @@ def _base(pkg: str) -> str:
 
 
 def missing_package(text: str) -> str:
-    """The package a tool result asks for ('pip install pyautogui'), if Mayk may install it; else ''."""
+    """The package a tool result asks for ('pip install pyautogui'), if MAYK may install it; else ''."""
     import re
     m = re.search(r"pip install ([A-Za-z0-9_.\-\[\]<>=]+)", str(text or ""))
     if not m:
@@ -179,7 +179,7 @@ def missing_package(text: str) -> str:
 
 def install(pkg: str, log: Callable | None = None) -> tuple[bool, str]:
     if _base(pkg) not in known_packages():
-        return False, f"'{pkg}' Mayk'ın kendi paketlerinden değil; güvenlik için kurmuyorum."
+        return False, f"'{pkg}' MAYK'ın kendi paketlerinden değil; güvenlik için kurmuyorum."
     ok = _pip(pkg, log)
     importlib.invalidate_caches()
     return ok, (f"'{pkg}' kuruldu." if ok else f"'{pkg}' kurulamadı (pip hata verdi).")

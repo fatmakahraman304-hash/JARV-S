@@ -1,4 +1,4 @@
-name: Mayk regression tests
+name: MAYK regression tests
 on:
   push:
     branches: [main, feature/osiris-world-command]

@@ -63,7 +63,7 @@ class AwayTest(unittest.TestCase):
         self.assertTrue(text.startswith("[AWAY_DIGEST]"))
         self.assertIn("render done", text)
         self.assertIn("1 h 1 min", text)
-        self.assertIn("Mayk", text)
+        self.assertIn("MAYK", text)
 
     def test_plugin(self):
         from plugins import while_away
@@ -147,7 +147,7 @@ class PushTest(unittest.TestCase):
     def test_phone_note(self):
         t, b = away.phone_note("[TOOL_LATE_RESULT] The 'blender_studio' tool you started earlier has just "
                                "finished. Tell the user... Result: Render saved to Desktop.", "result")
-        self.assertEqual(t, "Mayk — blender studio tamamlandı")
+        self.assertEqual(t, "MAYK — blender studio tamamlandı")
         self.assertEqual(b, "Render saved to Desktop.")
         self.assertEqual(away.phone_note("[SYSTEM_ALERT] CPU 95%", "system")[1], "CPU 95%")
         self.assertIsNone(away.phone_note("x", "update"))
@@ -155,7 +155,7 @@ class PushTest(unittest.TestCase):
     def test_should_push(self):
         with mock.patch.object(away, "push_enabled", lambda: True):
             self.assertTrue(away.should_push("result", 3600, now=100))
-            self.assertFalse(away.should_push("result", 30, now=100))     # at the desk, Mayk just asleep
+            self.assertFalse(away.should_push("result", 30, now=100))     # at the desk, MAYK just asleep
             self.assertFalse(away.should_push("result", None, now=100))
             self.assertFalse(away.should_push("reminder", 3600, now=100)) # reminders push on their own
             away._last_push["at"] = 100

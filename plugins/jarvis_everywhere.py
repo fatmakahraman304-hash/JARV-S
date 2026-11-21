@@ -1,9 +1,9 @@
 """
-Mayk her cihazda — telefon, tablet, TV, projeksiyon, saat.
+MAYK her cihazda — telefon, tablet, TV, projeksiyon, saat.
 
 Kurulum: kullanıcının GitHub hesabında gizli bir gist açılır (ortak hafıza ve
 cihazlar arası posta kutusu, core/sync_hub.py), sonra diğer cihazları tek
-dokunuşla kuran bir bağlantı ve karekod üretilir. Web Mayk (web/, GitHub
+dokunuşla kuran bir bağlantı ve karekod üretilir. Web MAYK (web/, GitHub
 Pages) o bağlantıyla açılınca beyni Gemini olur ve bu bilgisayar kapalıyken de
 konuşur, dinler, görür, kod yazar, hafızayı kullanır.
 """
@@ -15,14 +15,14 @@ from pathlib import Path
 PLUGIN = {
     "name": "jarvis_everywhere",
     "description": (
-        "Set up or manage Mayk on the user's other devices (phone, tablet, TV, projector, "
+        "Set up or manage MAYK on the user's other devices (phone, tablet, TV, projector, "
         "smart watch) so they work on their own even when this computer is off, with the "
         "same memory. action='setup' with the user's GitHub token (gist permission) creates "
         "the shared memory and shows the one-tap setup link and QR code; action='link' shows "
         "the link/QR again; action='status' tells whether syncing works; action='update_all' "
-        "updates Mayk on every device at once (phones, tablets, TVs, watches reload, other "
+        "updates MAYK on every device at once (phones, tablets, TVs, watches reload, other "
         "computers press GÜNCELLE, then this one). Trigger phrases: "
-        "'Mayk'ı telefona/tablete/televizyona kur', 'her cihazda çalışsın', 'kurulum linki', "
+        "'MAYK'ı telefona/tablete/televizyona kur', 'her cihazda çalışsın', 'kurulum linki', "
         "'bütün cihazları güncelle'."
     ),
     "parameters": {
@@ -38,9 +38,9 @@ PLUGIN = {
 }
 
 _HOWTO = (
-    "1) github.com/settings/tokens/new?scopes=gist&description=Mayk adresini aç.\n"
+    "1) github.com/settings/tokens/new?scopes=gist&description=MAYK adresini aç.\n"
     "2) Süreyi 'No expiration' seç, sadece 'gist' kutusu işaretli olsun, 'Generate token'a bas.\n"
-    "3) Çıkan ghp_ ile başlayan anahtarı Mayk'ın yazı kutusuna şöyle yaz:\n"
+    "3) Çıkan ghp_ ile başlayan anahtarı MAYK'ın yazı kutusuna şöyle yaz:\n"
     "   token ghp_xxxxxxxx — kur"
 )
 
@@ -81,7 +81,7 @@ def _open(path: Path) -> None:
 
 def _link_text(link: str, qr: Path | None) -> str:
     return (
-        "Diğer cihazlarda Mayk'ı açmak için:\n\n"
+        "Diğer cihazlarda MAYK'ı açmak için:\n\n"
         "• Telefon / tablet: karekodu kamerayla okut ya da bağlantıyı kendine gönderip aç.\n"
         "• Televizyon / projeksiyon: tarayıcısında bağlantıyı aç (ya da telefonda açıp "
         "  Ayarlar → 'Bu cihazı TV yap').\n"
@@ -115,7 +115,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if action == "status":
             s = sync_hub.settings()
             if not s.get("gist_id"):
-                _show(player, "Mayk her cihazda — kurulum", _HOWTO)
+                _show(player, "MAYK her cihazda — kurulum", _HOWTO)
                 return "Henüz kurulmadı. GitHub anahtarını ekrana yazdığım adımlarla alıp bana ver."
             return f"Ortak hafıza durumu: {sync_hub.status()}."
 
@@ -124,7 +124,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             if not token:
                 token = s.get("github_token", "")
             if not token:
-                _show(player, "Mayk her cihazda — kurulum", _HOWTO)
+                _show(player, "MAYK her cihazda — kurulum", _HOWTO)
                 return "Bir GitHub anahtarı lazım; nasıl alacağını ekrana yazdım."
             gist_id = s.get("gist_id", "")
             if gist_id:
@@ -141,11 +141,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
         if action == "link":
             if not sync_hub.settings().get("gist_id"):
-                _show(player, "Mayk her cihazda — kurulum", _HOWTO)
+                _show(player, "MAYK her cihazda — kurulum", _HOWTO)
                 return "Önce kurulum gerekiyor; adımları ekrana yazdım."
             link = sync_hub.setup_link(get_gemini_key() or "")
             qr = _qr_file(link)
-            _show(player, "Mayk her cihazda", _link_text(link, qr))
+            _show(player, "MAYK her cihazda", _link_text(link, qr))
             if qr:
                 threading.Thread(target=_open, args=(qr,), daemon=True).start()
             return ("Hazır. Karekodu ekranda açtım; telefonla, tabletle okut. "
@@ -153,4 +153,4 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
         return "Ne yapacağımı anlayamadım: kur, bağlantı ya da durum diyebilirsin."
     except Exception as exc:
-        return f"Mayk her cihazda kurulamadı: {exc}"
+        return f"MAYK her cihazda kurulamadı: {exc}"

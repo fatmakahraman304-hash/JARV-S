@@ -1,4 +1,4 @@
-# Rules for coding agents working on Mayk
+# Rules for coding agents working on MAYK
 
 The built-in coding agent (`actions/dev_agent.py`) reads this file before every
 change it makes to this project, and so should any other agent or contributor.

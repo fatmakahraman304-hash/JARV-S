@@ -23,9 +23,9 @@ class ConfigSafety(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_legacy_assistant_name_becomes_mayk(self):
-        for old in ("JARVIS", "J.A.R.V.I.S.", "Jarvis"):
+        for old in ("JARVIS", "J.A.R.V.I.S.", "Jarvis", "Mayk", "mayk", "M.A.Y.K"):
             self.file.write_text(json.dumps({"assistant_name": old, "user_name": "Ada"}))
-            self.assertEqual(cm.get_assistant_name(), "Mayk")
+            self.assertEqual(cm.get_assistant_name(), "MAYK")
             self.assertEqual(cm.get_user_name(), "Ada")
         self.file.write_text(json.dumps({"assistant_name": "Friday"}))
         self.assertEqual(cm.get_assistant_name(), "Friday")

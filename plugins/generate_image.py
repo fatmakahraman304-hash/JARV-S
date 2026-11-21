@@ -1,5 +1,5 @@
 """
-Resim üret ve değiştir — Mayk'ın kendi çizimi.
+Resim üret ve değiştir — MAYK'ın kendi çizimi.
 
 "Bana gün batımında bir kartal çiz", sonra "gökyüzünü mor yap", "kartalın
 üstüne bir taç koy". Ek bir uygulama yok: Gemini'nin resim modelleri çizer
@@ -11,7 +11,7 @@ import threading
 PLUGIN = {
     "name": "generate_image",
     "description": (
-        "Draw a NEW picture from a description, or CHANGE a picture: the last one Mayk drew, "
+        "Draw a NEW picture from a description, or CHANGE a picture: the last one MAYK drew, "
         "or a file the user gives / uploaded. Use mode='new' for 'çiz', 'resim yap', 'görsel "
         "oluştur', 'logo tasarla'; mode='edit' for changes to the picture just made or a given "
         "image ('rengini değiştir', 'arka planı sil', 'şunu ekle', 'yazıyı kaldır'). Write the "
@@ -39,7 +39,7 @@ _busy = threading.Lock()
 def _say(player, text: str) -> None:
     if player:
         try:
-            player.write_log(f"Mayk: {text}")
+            player.write_log(f"MAYK: {text}")
         except Exception:
             pass
 
@@ -79,7 +79,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                     return
                 if player:
                     try:
-                        player.show_image(str(path), "Düzenlenen resim" if source else "Mayk çizdi")
+                        player.show_image(str(path), "Düzenlenen resim" if source else "MAYK çizdi")
                     except Exception:
                         pass
                 _say(player, f"Resim hazır: {path}" + (f" — {info[:200]}" if info else ""))

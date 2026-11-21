@@ -1,4 +1,4 @@
-/* Mayk on the TV (and every big screen: the projector uses this too).
+/* MAYK on the TV (and every big screen: the projector uses this too).
  *
  *  1. The remote's arrows move between buttons (spatial navigation, like Android TV).
  *  2. Back key (Tizen, webOS, Android TV, Esc/Backspace) closes whatever is open.
@@ -7,10 +7,10 @@
  *     move around so nothing burns into the panel.
  *  5. Overscan: ⚙ → screen edge margin, for TVs that crop the picture.
  *  6. A big, bright focus ring you can see from the sofa.
- *  7. A video sent to the TV ("bunu televizyonda aç") plays right in Mayk —
+ *  7. A video sent to the TV ("bunu televizyonda aç") plays right in MAYK —
  *     TV browsers block pop-up windows.
  *  8. Quick commands you can pick with the remote: hava, ajanda, haberler, durum.
- *  9. Large live captions of what Mayk says.
+ *  9. Large live captions of what MAYK says.
  * 10. Refreshes itself at 04:00 when nobody is using it (TV browsers leak memory).
  */
 (() => {
@@ -56,7 +56,7 @@
   document.querySelector('.tools').after(qbar);
   qbar.querySelectorAll('button').forEach(b => b.onclick = () => J.say(QUICK[+b.dataset.i][1]));
 
-  // 7 ── videos play inside Mayk ──────────────────────────────────────────
+  // 7 ── videos play inside MAYK ──────────────────────────────────────────
   const player = document.createElement('div'); player.id = 'tvplayer'; player.hidden = true;
   player.innerHTML = '<button class="btn pri" type="button">✕ Kapat (Geri)</button><iframe allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>';
   document.body.appendChild(player);

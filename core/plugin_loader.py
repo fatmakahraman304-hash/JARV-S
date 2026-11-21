@@ -272,7 +272,7 @@ def _load_error(path: Path, plugins_dir: Path, exc: Exception) -> str:
                 # advice. These names belong to this project, and telling
                 # somebody to install a same-named stranger from an index is a
                 # supply-chain hazard dressed up as a fix. A plugin written
-                # against a newer Mayk version reaches this line, and the honest answer
+                # against a newer MAYK version reaches this line, and the honest answer
                 # is that the app is behind the plugin, not that a package is
                 # absent.
                 needed = "/".join(missing) + ".py"

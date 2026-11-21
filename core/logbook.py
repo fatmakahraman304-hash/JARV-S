@@ -1,4 +1,4 @@
-"""Mayk's logbook: everything printed, every traceback and every crash, kept on disk.
+"""MAYK's logbook: everything printed, every traceback and every crash, kept on disk.
 
 Before this the console was the only record — closed with the window, so "why did
 it stop yesterday?" had no answer. `install()` (called first thing at startup)
@@ -105,7 +105,7 @@ def install(directory: Path | None = None) -> Path:
     _path = d / "jarvis.log"
     _file = open(_path, "a", encoding="utf-8", errors="replace")
     _installed = True
-    write(f"──────── Mayk başladı (Python {sys.version.split()[0]}, {sys.platform}) ────────")
+    write(f"──────── MAYK başladı (Python {sys.version.split()[0]}, {sys.platform}) ────────")
     sys.stdout = _Tee(sys.stdout)
     sys.stderr = _Tee(sys.stderr)
     old_hook = sys.excepthook

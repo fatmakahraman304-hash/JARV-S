@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <title>Mayk</title>
+  <title>M.A.Y.K</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --pri: #ff8a1c; --acc: #ffc04d; --hot: #ffdc94; --text: #f3ece5; --dim: #9b9087; --med: #d2c7bd;
@@ -161,7 +161,7 @@
   <div class="app">
     <header class="top">
       <button class="ib" id="b-menu" type="button" aria-label="Menü">☰</button>
-      <div class="brand"><b id="brand-name">Mayk</b><small id="brand-sub">AI OS</small></div>
+      <div class="brand"><b id="brand-name">M.A.Y.K</b><small id="brand-sub">AI OS</small></div>
       <div class="top-r">
         <button class="ib" id="b-chat" type="button" aria-label="Konuşma">💬</button>
         <button class="ib" id="b-set" type="button" aria-label="Ayarlar">⚙</button>
@@ -172,7 +172,7 @@
       <div class="hud" id="hud"></div></aside>
 
     <section class="main">
-      <div class="core"><canvas id="core" aria-label="Mayk çekirdeği"></canvas></div>
+      <div class="core"><canvas id="core" aria-label="MAYK çekirdeği"></canvas></div>
       <div id="st-title">Hazır</div>
       <div id="st-sub">Mikrofona dokun ya da yaz.</div>
       <canvas id="wave" width="600" height="68"></canvas>
@@ -187,7 +187,7 @@
     <section class="bottom">
       <form class="ask" id="ask" autocomplete="off">
         <button class="mic" id="mic" type="button" aria-label="Konuş">🎙️</button>
-        <input id="inp" placeholder="Mayk'a bir şey sor…" enterkeyhint="send">
+        <input id="inp" placeholder="MAYK'a bir şey sor…" enterkeyhint="send">
         <button class="mic send" type="submit" aria-label="Gönder">➤</button>
       </form>
       <div class="tools">
@@ -211,14 +211,14 @@
   <div class="scrim" id="scrim" hidden></div>
 
   <section class="sheet" id="s-setup" hidden>
-    <h2>Mayk KURULUMU</h2>
-    <div class="note" id="f-ios" hidden><b>Ana ekrandaki Mayk, Safari'deki ayarları göremez</b> (Apple uygulamayı ayrı tutar). Hafızan kaybolmadı, ortak hafızada duruyor.
-      Safari'de Mayk'ı aç → ⚙️ → <b>"Ana ekran için kopyala"</b>, sonra buraya dön ve:
+    <h2>M.A.Y.K KURULUMU</h2>
+    <div class="note" id="f-ios" hidden><b>Ana ekrandaki MAYK, Safari'deki ayarları göremez</b> (Apple uygulamayı ayrı tutar). Hafızan kaybolmadı, ortak hafızada duruyor.
+      Safari'de MAYK'ı aç → ⚙️ → <b>"Ana ekran için kopyala"</b>, sonra buraya dön ve:
       <div class="row" style="margin-top:8px"><button class="btn pri" id="f-paste" type="button">📋 Kurulumu yapıştır</button></div></div>
-    <div class="note" id="f-move" hidden>Ana ekrana ekleyeceksen önce bunu kopyala; ana ekrandaki Mayk'ta "Yapıştır" de, her şey taşınır:
+    <div class="note" id="f-move" hidden>Ana ekrana ekleyeceksen önce bunu kopyala; ana ekrandaki MAYK'ta "Yapıştır" de, her şey taşınır:
       <div class="row" style="margin-top:8px"><button class="btn pri" id="f-copy" type="button">📱 Ana ekran için kopyala</button></div></div>
-    <p>Bu cihazdaki Mayk'ın beyni Gemini'dir; bilgisayarın kapalıyken de çalışır. En kolayı: bilgisayardaki Mayk'a
-      <b>"Mayk'ı her cihaza kur"</b> de, çıkan karekodu bu cihazla okut. Ya da bilgileri elle gir:</p>
+    <p>Bu cihazdaki MAYK'ın beyni Gemini'dir; bilgisayarın kapalıyken de çalışır. En kolayı: bilgisayardaki MAYK'a
+      <b>"MAYK'ı her cihaza kur"</b> de, çıkan karekodu bu cihazla okut. Ya da bilgileri elle gir:</p>
     <label for="f-key">Gemini API anahtarı</label><input id="f-key" type="password" autocomplete="off" placeholder="AIza…">
     <label for="f-tok">GitHub anahtarı (ortak hafıza için, gist izni)</label><input id="f-tok" type="password" autocomplete="off" placeholder="ghp_… (isteğe bağlı)">
     <label for="f-gist">Ortak hafıza kimliği (gist)</label><input id="f-gist" autocomplete="off" placeholder="boş bırakırsan yeni açılır">
@@ -231,7 +231,7 @@
     <select id="f-voice"><option>Charon</option><option>Puck</option><option>Kore</option><option>Fenrir</option><option>Aoede</option><option>Orus</option><option>Zephyr</option></select>
     <div class="row"><button class="btn pri" id="f-save" type="button">Kaydet</button><button class="btn" id="f-link" type="button">Bu kurulumu başka cihaza gönder</button>
       <button class="btn" id="f-close" type="button">Kapat</button></div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="f-alici" type="button">📲 Mayk Alıcı'yı indir (projeksiyon/TV)</button><button class="btn" id="f-alici-link" type="button">🔗 Alıcıyı bağla</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="f-alici" type="button">📲 MAYK Alıcı'yı indir (projeksiyon/TV)</button><button class="btn" id="f-alici-link" type="button">🔗 Alıcıyı bağla</button></div>
     <div class="row" style="margin-top:8px"><button class="btn" id="f-paste2" type="button">📋 Kurulum bağlantısı yapıştır</button><button class="btn" id="f-push" type="button">🔔 Bildirimleri aç (sayfa kapalıyken de)</button></div>
     <p id="f-status" style="margin-top:10px"></p>
   </section>
@@ -249,7 +249,7 @@
 
   <section class="sheet" id="s-remote" hidden>
     <h2>PROJEKSİYON / TV <button class="ib" data-close type="button">✕</button></h2>
-    <p id="rm-note">Laptoptaki Mayk üzerinden (Wi-Fi + ADB). İlk kez: laptopa "projeksiyonu kur" de.</p>
+    <p id="rm-note">Laptoptaki MAYK üzerinden (Wi-Fi + ADB). İlk kez: laptopa "projeksiyonu kur" de.</p>
     <div class="pad">
       <span></span><button class="btn" data-k="up" type="button">▲</button><span></span>
       <button class="btn" data-k="left" type="button">◀</button><button class="btn pri" data-k="ok" type="button">OK</button><button class="btn" data-k="right" type="button">▶</button>
@@ -295,7 +295,7 @@
 
   <section class="sheet" id="s-pc" hidden>
     <h2>BİLGİSAYAR <button class="ib" data-close type="button">✕</button></h2>
-    <p id="pc-note">Bilgisayardaki Mayk'a doğrudan komut.</p>
+    <p id="pc-note">Bilgisayardaki MAYK'a doğrudan komut.</p>
     <div class="pcgrid">
       <button class="btn" data-q="volume_down" type="button">🔉 Ses −</button><button class="btn" data-q="mute" type="button">🔇 Sessiz</button><button class="btn" data-q="volume_up" type="button">🔊 Ses +</button>
       <button class="btn" data-q="prev" type="button">⏮ Önceki</button><button class="btn" data-q="play_pause" type="button">⏯ Oynat</button><button class="btn" data-q="next" type="button">⏭ Sonraki</button>
@@ -313,7 +313,7 @@
 
   <section class="sheet" id="s-image" hidden>
     <h2>RESİM <button class="ib" data-close type="button">✕</button></h2>
-    <img id="img-view" alt="Mayk'ın çizdiği resim" style="width:100%;max-height:62vh;object-fit:contain;border-radius:12px;border:1px solid var(--line2);background:#000">
+    <img id="img-view" alt="MAYK'ın çizdiği resim" style="width:100%;max-height:62vh;object-fit:contain;border-radius:12px;border:1px solid var(--line2);background:#000">
     <p id="img-note" style="margin-top:8px"></p>
     <form class="ask" id="img-edit" autocomplete="off" style="margin-top:10px">
       <input id="img-edit-inp" placeholder="Değiştir: ör. gökyüzünü mor yap">

@@ -1,4 +1,4 @@
-"""Mayk learns from a failure that it fixed itself, and uses the cure the next time."""
+"""MAYK learns from a failure that it fixed itself, and uses the cure the next time."""
 import tempfile
 import unittest
 from pathlib import Path

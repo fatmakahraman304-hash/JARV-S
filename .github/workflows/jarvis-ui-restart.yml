@@ -1,4 +1,4 @@
-name: Mayk left-controls and restart tests
+name: MAYK left-controls and restart tests
 
 on:
   push:

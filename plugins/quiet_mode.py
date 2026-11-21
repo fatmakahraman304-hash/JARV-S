@@ -1,6 +1,6 @@
 """'Bir saat rahatsız etme', 'toplantıdayım', 'film izliyorum sessiz ol', 'sessiz modu kapat'.
 
-The state and rules are core/quiet.py; Mayk holds back everything it would
+The state and rules are core/quiet.py; MAYK holds back everything it would
 volunteer and tells it in one short report when quiet ends.
 """
 from __future__ import annotations
@@ -8,12 +8,12 @@ from __future__ import annotations
 PLUGIN = {
     "name": "quiet_mode",
     "description": (
-        "Do-not-disturb for Mayk itself: while on, it volunteers nothing (finished jobs, things it noticed, "
+        "Do-not-disturb for MAYK itself: while on, it volunteers nothing (finished jobs, things it noticed, "
         "offers, check-ins, news wait and are told in one short report afterwards); reminders still come and "
         "it still answers when spoken to. 'bir saat rahatsız etme', 'toplantıdayım', 'film izliyorum, sessiz "
         "ol', 'ben söyleyene kadar sessiz', 'sessiz modu kapat', 'sessiz mod açık mı'. "
         "action: on | off | status. minutes: how long (omit for 'until I say'). reason: optional, e.g. 'meeting'. "
-        "listen=false for a meeting or a phone call ('toplantıdayım', 'telefondayım', 'görüşmedeyim'): Mayk also "
+        "listen=false for a meeting or a phone call ('toplantıdayım', 'telefondayım', 'görüşmedeyim'): MAYK also "
         "stops listening so other people's words are not taken as commands, and wakes by itself when it ends."
     ),
     "parameters": {"type": "OBJECT", "properties": {

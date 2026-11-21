@@ -1,11 +1,11 @@
-# Mayk arayüz düzeni ve güncelleme sonrası yeniden başlatma
+# MAYK arayüz düzeni ve güncelleme sonrası yeniden başlatma
 
 ## Arayüz yerleşimi
 
 - **Sol üst:** Ayarlar (dişli), Kontroller (kaydırıcı), **GÜNCELLE** ve tam ekran.
 - **Sağ üst:** Saat ve tarih.
 - **Sol sütun (eski halinde):** SYSTEMS, NETWORK, STATUS, görevler ve konum bölümü.
-- **Orta:** Mayk HUD; dinliyor/konuşuyor durumu burada kalır.
+- **Orta:** MAYK HUD; dinliyor/konuşuyor durumu burada kalır.
 - **Sağ sütun (eski halinde):** COMMUNICATIONS (sohbet geçmişi), COMMAND
   (metin komutu, dosya seçimi, mikrofon ve konuşmayı durdurma).
 
@@ -25,11 +25,11 @@ yeniden başlatma işlemini planlar. Bu davranış zaten mevcuttu; yeni
 
 Normal başlatma:
 1. `tools/restart_app.py` bağımsız yardımcı süreç olarak açılır.
-2. Mayk mevcut Qt/konuşma oturumunu kapatır.
+2. MAYK mevcut Qt/konuşma oturumunu kapatır.
 3. Yardımcı, önceki sürecin kapanmasını bekler ve yeni `main.py`
    sürecini aynı Python ortamıyla başlatır.
 
-Yardımcı çalıştırılamazsa Mayk kendiliğinden kapanmaz; ekranda hata
+Yardımcı çalıştırılamazsa MAYK kendiliğinden kapanmaz; ekranda hata
 gösterilir ve elle kapatıp açmak gerektiği açıklanır.
 
 **Sınır:** Güncelleme Python bağımlılıklarının değişmesini gerektiriyorsa

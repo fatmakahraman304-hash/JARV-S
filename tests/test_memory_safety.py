@@ -1,4 +1,4 @@
-"""Mayk never loses what it knows: a broken memory file comes back from the last good copy,
+"""MAYK never loses what it knows: a broken memory file comes back from the last good copy,
 and a full memory archives (not deletes) its oldest facts, which recall still finds."""
 import json
 import tempfile

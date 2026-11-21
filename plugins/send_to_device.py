@@ -3,7 +3,7 @@ Bilgisayardan başka bir cihaza gönder: "bu resmi televizyonda göster", "harit
 telefonuma aç", "kodu tablete at", "telefona 'çıkıyorum' yaz".
 
 Gönderilen şey ortak gist'teki o cihazın gelen kutusuna gider (core/sync_hub.
-send_to_device); telefondaki/TV'deki Mayk sayfası birkaç saniye içinde alır ve
+send_to_device); telefondaki/TV'deki MAYK sayfası birkaç saniye içinde alır ve
 açar, gösterir ya da söyler (web/app.js runInbox).
 """
 
@@ -87,7 +87,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         ok, msg = sync_hub.send_to_device(device, cmd)
         if player and ok:
             try:
-                player.write_log(f"Mayk: {msg}")
+                player.write_log(f"MAYK: {msg}")
             except Exception:
                 pass
         return msg

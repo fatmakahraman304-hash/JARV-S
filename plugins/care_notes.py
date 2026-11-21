@@ -1,4 +1,4 @@
-"""Care notes: Mayk mentions — once — a long stretch without a break or working in the small hours.
+"""Care notes: MAYK mentions — once — a long stretch without a break or working in the small hours.
 
 'Bana mola hatırlatma' → off. 'Mola hatırlatmalarını aç' → on. 'Dört saatte bir söyle' → hours=4.
 The watching itself is core/vigil.py; this only holds the user's choice.
@@ -8,7 +8,7 @@ from __future__ import annotations
 PLUGIN = {
     "name": "care_notes",
     "description": (
-        "Mayk's care notes — the single, film-style remark when the user has worked for hours without a break "
+        "MAYK's care notes — the single, film-style remark when the user has worked for hours without a break "
         "or is still at it in the small hours. Turn them off ('bana mola hatırlatma', 'gece uyarma'), back on, "
         "change after how many hours, or ask whether they are on. action: on | off | status | set. "
         "hours: for set (1–12). late_night: for set, whether the small-hours note is wanted."

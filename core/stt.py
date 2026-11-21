@@ -1,5 +1,5 @@
 """
-Speech-to-Text engines for Mayk.
+Speech-to-Text engines for MAYK.
 
 Whisper  – offline transcription via faster-whisper (VAD-buffered)
 Vosk     – offline streaming transcription (lighter)

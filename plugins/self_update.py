@@ -1,4 +1,4 @@
-"""Mayk's own updates: "yeni sürüm var mı?", "neler yeni?", "kendini güncelle".
+"""MAYK's own updates: "yeni sürüm var mı?", "neler yeni?", "kendini güncelle".
 
 check: asks GitHub (read-only) and lists what the new version changes.
 update: the same updater as the GÜNCELLE button — a backup branch first, then the
@@ -9,8 +9,8 @@ from __future__ import annotations
 PLUGIN = {
     "name": "self_update",
     "description": (
-        "Mayk's own software updates from GitHub. action=check: is there a newer version and what changed ('yeni sürüm "
-        "var mı?', 'neler yeni?', 'güncelleme var mı?'). action=update: update and restart Mayk now ('kendini güncelle', "
+        "MAYK's own software updates from GitHub. action=check: is there a newer version and what changed ('yeni sürüm "
+        "var mı?', 'neler yeni?', 'güncelleme var mı?'). action=update: update and restart MAYK now ('kendini güncelle', "
         "'güncelle', 'evet güncelle' after you offered an update). action=auto_on / auto_off: update automatically when idle."
     ),
     "parameters": {"type": "OBJECT", "properties": {
@@ -25,11 +25,11 @@ def summary(info: dict) -> str:
             return "Yerel dal ile GitHub dalı ayrı ayrı ilerlemiş. Güncellemek için önce commitleri birleştirmek gerekiyor."
         return "Yerel dal GitHub sürümünün ilerisinde. Alınacak güncelleme yok."
     if not info.get("newer"):
-        return f"Mayk güncel (sürüm {info.get('current', '')[:8]})."
+        return f"MAYK güncel (sürüm {info.get('current', '')[:8]})."
     ch = info.get("changes") or []
     lines = "\n".join(f"- {c}" for c in ch[:10])
     count = f", {info['behind']} değişiklik" if info.get('behind') else ""
-    return (f"Yeni bir Mayk sürümü var ({info.get('sha', '')[:8]}{count}).\n{lines}\n"
+    return (f"Yeni bir MAYK sürümü var ({info.get('sha', '')[:8]}{count}).\n{lines}\n"
             "(Kullanıcıya en önemli yenilikleri bir iki cümleyle anlat ve şimdi güncelleyip yeniden başlatayım mı diye sor.)")
 
 
@@ -43,7 +43,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                     else "Tamam, yeni sürüm çıkınca önce sana soracağım.")
         if action == "update":
             if player is None or not hasattr(player, "start_update"):
-                return "Güncellemeyi başlatamadım: Mayk penceresi yok."
+                return "Güncellemeyi başlatamadım: MAYK penceresi yok."
             player.start_update()
             return "Güncellemeyi başlattım: önce yedek alıyorum, sonra kurup yeniden başlayacağım."
         from core import app_updater

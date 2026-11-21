@@ -141,7 +141,7 @@ class ReportTests(unittest.TestCase):
 class SleepTests(unittest.TestCase):
     def test_sleep_commands_and_negation(self):
         from core.snap_wake import is_sleep_command
-        for text in ['uyu', 'FRIDAY uyu', 'Mayk uyu', 'Mayk uyku moduna geç']:
+        for text in ['uyu', 'FRIDAY uyu', 'MAYK uyu', 'MAYK uyku moduna geç']:
             self.assertTrue(is_sleep_command(text), text)
         for text in ['uyuma', 'mayk uyu deme', 'bilgisayarı uyut', 'uyu dedim ama şimdi konuş']:
             self.assertFalse(is_sleep_command(text), text)
@@ -164,7 +164,7 @@ class SleepTests(unittest.TestCase):
 class MapNavigationTests(unittest.TestCase):
     def test_world_map_command_routes_without_a_geocoding_request(self):
         player = Mock()
-        self.assertIs(normal_map.map_command_for_text("Mayk, Dünya haritasını aç."), True)
+        self.assertIs(normal_map.map_command_for_text("MAYK, Dünya haritasını aç."), True)
         self.assertIs(normal_map.map_command_for_text("Haritayı kapat"), False)
         self.assertIsNone(normal_map.map_command_for_text("Gazimağusa’yı haritada aç"))
         with patch.object(normal_map, "search") as search:

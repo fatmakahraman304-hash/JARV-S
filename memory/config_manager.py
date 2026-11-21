@@ -123,8 +123,8 @@ def save_api_keys(gemini_api_key: str) -> None:
 
 def normalized_assistant_name(value):
     name = str(value or "").strip()
-    if not name or name.replace(".", "").casefold() in {"jarvis", "jarvi̇s"}:
-        return "Mayk"
+    if not name or name.replace(".", "").casefold() in {"jarvis", "jarvi̇s", "mayk"}:
+        return "MAYK"
     return name
 
 
@@ -163,8 +163,8 @@ def is_configured() -> bool:
 
 
 def get_assistant_name() -> str:
-    """Return the configured assistant name, or 'Mayk' if not set."""
-    return load_api_keys().get("assistant_name", "Mayk") or "Mayk"
+    """Return the configured assistant name, or 'MAYK' if not set."""
+    return load_api_keys().get("assistant_name", "MAYK") or "MAYK"
 
 
 def get_user_name() -> str:
@@ -208,7 +208,7 @@ def save_voice(voice_name: str) -> None:
 
 
 def get_wake_word_enabled() -> bool:
-    """Whether local wake-word gating is on (assistant sleeps until 'Hey Mayk')."""
+    """Whether local wake-word gating is on (assistant sleeps until 'Hey MAYK')."""
     return load_api_keys().get("wake_word_enabled", False)
 
 

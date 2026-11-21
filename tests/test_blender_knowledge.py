@@ -1,4 +1,4 @@
-"""Mayk's Blender knowledge: this Blender's whole API, the official manual,
+"""MAYK's Blender knowledge: this Blender's whole API, the official manual,
 and the search that feeds both into every Blender prompt."""
 import gzip
 import json

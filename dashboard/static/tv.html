@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mayk · Ekran</title>
+  <title>MAYK · Ekran</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --line: rgba(255,150,60,.18); --line2: rgba(255,150,60,.35); --blue: #ff8a1c; --cyan: #ffc04d;
@@ -64,8 +64,8 @@
 <body class="st-idle">
   <section id="pair" hidden>
     <div>
-      <h1>Mayk</h1>
-      <p>Telefonda Mayk'ı aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
+      <h1>MAYK</h1>
+      <p>Telefonda MAYK'ı aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
       <div id="code">······</div>
       <small id="pair-note">Kod 5 dakika geçerli, sonra kendiliğinden yenilenir.</small>
     </div>
@@ -77,9 +77,9 @@
       <div id="date"></div>
       <div class="sys"><div class="ring"></div><div><b>SİSTEM DURUMU</b><span id="sys-st">Hazır</span></div></div>
     </div>
-    <div class="brand"><b>Mayk</b><small id="brand-dev">AI OS</small></div>
+    <div class="brand"><b>MAYK</b><small id="brand-dev">AI OS</small></div>
     <div class="center">
-      <div class="reactor" id="reactor"><canvas id="core" aria-label="Mayk çekirdeği"></canvas></div>
+      <div class="reactor" id="reactor"><canvas id="core" aria-label="MAYK çekirdeği"></canvas></div>
       <div id="st-title">Hazır</div>
       <div id="st-sub">Komut bekleniyor.</div>
       <canvas id="wave" width="800" height="90"></canvas>
@@ -231,14 +231,14 @@
           if (m.speaker === 'user') { $('q').textContent = '“' + m.text + '”'; $('a').textContent = ''; }
           else $('a').textContent = m.text;
           const row = document.createElement('div');
-          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'Mayk'}:</b> ${esc(m.text).slice(0, 160)}`;
+          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'MAYK'}:</b> ${esc(m.text).slice(0, 160)}`;
           $('log').appendChild(row);
           while ($('log').children.length > 12) $('log').firstChild.remove();
         }
       };
     }
     setInterval(() => { if (token && cur !== 'offline') devices(); }, 10000);
-    // a new Mayk version on the computer: the TV reloads by itself
+    // a new MAYK version on the computer: the TV reloads by itself
     let tvVersion = null;
     setInterval(async () => {
       try {

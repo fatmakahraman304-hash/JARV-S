@@ -1,4 +1,4 @@
-"""Open or close the Control Centre: Mayk's network and live activity feed.
+"""Open or close the Control Centre: MAYK's network and live activity feed.
 
 The window does the work (gui/control_center.py); this plugin only asks the
 Qt thread to switch to it through player.show_control_center, which is
@@ -11,10 +11,10 @@ PLUGIN = {
     "name": "control_center",
     "description": (
         "Open or close the Control Centre (Kontrol Merkezi): the network view of "
-        "Mayk's capabilities and apps with the live activity feed of every action "
+        "MAYK's capabilities and apps with the live activity feed of every action "
         "taken this session. Use when the user says 'kontrol merkezini aç', "
         "'ağı göster', 'canlı etkinliği göster', 'show the control centre/network', "
-        "or asks what Mayk has done so far in this session (action='summary'). "
+        "or asks what MAYK has done so far in this session (action='summary'). "
         "Not for system CPU/memory stats — use system_status for those."
     ),
     "parameters": {

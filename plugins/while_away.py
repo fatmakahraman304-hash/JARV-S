@@ -1,6 +1,6 @@
 """'Ben yokken ne oldu?' — what came up while the user was away.
 
-Mayk keeps what it could not tell an empty room (core/away.py) and tells it
+MAYK keeps what it could not tell an empty room (core/away.py) and tells it
 once when the user is back. This answers the question directly: what is still
 waiting to be told (and marks it told), or, if that was already said, the last
 welcome-back report again. Read-only otherwise: it never starts anything.
@@ -12,7 +12,7 @@ import time
 PLUGIN = {
     "name": "while_away",
     "description": (
-        "What came up while the user was away or Mayk was asleep — finished jobs, reminders, system alerts, "
+        "What came up while the user was away or MAYK was asleep — finished jobs, reminders, system alerts, "
         "updates that could not be told then. Use for 'ben yokken ne oldu?', 'kaçırdığım bir şey var mı?', "
         "'what did I miss?', and to hear the last welcome-back report again. Never starts or repeats a job. "
         "action=welcome_off when the user does not want to be greeted on coming back to the desk "

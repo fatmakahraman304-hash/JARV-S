@@ -1,7 +1,7 @@
 {
-  "name": "Mayk",
-  "short_name": "Mayk",
-  "description": "Mayk her cihazda — telefon, tablet, TV, projeksiyon, saat.",
+  "name": "MAYK",
+  "short_name": "MAYK",
+  "description": "MAYK her cihazda — telefon, tablet, TV, projeksiyon, saat.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

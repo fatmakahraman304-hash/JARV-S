@@ -1,6 +1,6 @@
-name: Mayk web (GitHub Pages)
+name: MAYK web (GitHub Pages)
 
-# The web Mayk for phones, tablets, TVs, projectors and watches: web/ plus the
+# The web MAYK for phones, tablets, TVs, projectors and watches: web/ plus the
 # shared reactor core, published to https://<owner>.github.io/<repo>/ over
 # HTTPS (which is what lets the microphone and camera work on every device).
 on:

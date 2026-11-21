@@ -20,7 +20,7 @@ Bilgisayar kapanırsa iş 'yarıda kaldı' olur; dış uygulama eylemleri tekrar
 Uygulamaların sunduğu işlemler ve gereken izinler değişir. Kod testleri,
 gerçek Windows uygulamasında yapılan denemenin yerini tutmaz.
 
-Windows kabul denemesi: kısa bir konuşma yap, Mayk'ı kapatıp yeniden aç;
+Windows kabul denemesi: kısa bir konuşma yap, MAYK'ı kapatıp yeniden aç;
 Nerede kaldık panelini ve hafıza sorgusunu kontrol et. Güncellemeden sonra
 aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama seç,
 önce otomatik yayını kapatarak araştırma ve geliştirme sonuçlarını incele.
@@ -31,7 +31,7 @@ aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama
 Ayarlar → Uygulamalar → WhatsApp Business → Ayarla. Twilio WhatsApp
 Business göndericisinin numarasını, Auth Token'ı ve dışarıdan erişilebilen
 HTTPS alan adını gir. HTTPS'te yalnızca aşağıdaki iki webhook yolunu,
-Mayk'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
+MAYK'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
 
 - Twilio göndericisinin gelen mesaj webhook'u **POST `/whatsapp/message`**
   olmalı. WhatsApp Sandbox üzerinden mesaj akışı da denenebilir.
@@ -40,10 +40,10 @@ Mayk'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
   olmalı. Proxy, sesli konuşma sırasındaki `?turn=` sorgusunu korumalı.
 
 Mesaj ve arama için ayrı açma/kapama seçenekleri var. Mesajlara tanımladığın
-metin döner. Aramalarda Mayk kendini otomatik asistan olarak tanıtır ve
+metin döner. Aramalarda MAYK kendini otomatik asistan olarak tanıtır ve
 sık sorulan sorular alanındaki anahtar kelimelerle eşleşen cevapları Türkçe
 okur. Örnek kural `çalışma saatleri = Hafta içi 9–18.`. Arama sesi Twilio
-tarafında işlenir. Mayk arama transkriptini diske yazmaz. Mayk ve HTTPS
+tarafında işlenir. MAYK arama transkriptini diske yazmaz. MAYK ve HTTPS
 bağlantısı açık olduğu sürece çalışır. Bu bağlantı Twilio'ya kayıtlı Business
 numarası içindir. Yerel dinleyicinin açılması dış bağlantının kurulduğunu
 belirtmez. Gerçek telefondan önce mesaj, ardından sesli arama yaparak doğrula.

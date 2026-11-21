@@ -1,4 +1,4 @@
-"""What Mayk has been doing, and what is still running.
+"""What MAYK has been doing, and what is still running.
 
 The answer to "bitti mi?", "ne yaptın?", "hâlâ çalışıyor mu?", "Blender'daki iş ne
 durumda?" — read from the real records: the activity log every tool call goes
@@ -14,7 +14,7 @@ from pathlib import Path
 PLUGIN = {
     "name": "work_status",
     "description": (
-        "What Mayk did recently and what is still running in the background — the real outcomes (done, failed, "
+        "What MAYK did recently and what is still running in the background — the real outcomes (done, failed, "
         "still working). Use it for status questions about your own work: 'bitti mi?', 'ne yaptın?', 'hâlâ çalışıyor "
         "mu?', 'kurulum ne durumda?', 'is it done?'. Never starts or repeats a job."
     ),

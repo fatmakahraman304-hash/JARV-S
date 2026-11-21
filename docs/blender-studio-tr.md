@@ -1,8 +1,8 @@
-# Mayk ile Blender
+# MAYK ile Blender
 
-Masaüstü Mayk'ı Blender kurulu bilgisayarda başlat. Eklenti Blender'ı PATH'te,
+Masaüstü MAYK'ı Blender kurulu bilgisayarda başlat. Eklenti Blender'ı PATH'te,
 Windows'ta standart Blender Foundation klasöründe veya macOS'ta Applications
-altında arar. Sahne planlama ve soru yanıtlama Mayk'ın ayarlı modelini kullanır.
+altında arar. Sahne planlama ve soru yanıtlama MAYK'ın ayarlı modelini kullanır.
 
 | Örnek komut | Sonuç |
 | --- | --- |
@@ -14,7 +14,7 @@ altında arar. Sahne planlama ve soru yanıtlama Mayk'ın ayarlı modelini kulla
 | “Blender'da UV unwrap nasıl yapılır?” | Kurulu Blender'ın operatör bilgilerini kullanarak adımları açıklar. |
 | “Blender işleminin durumu ne?” | Sonucu veya devam eden işlemin durumunu bildirir. |
 
-Kendi dosyanı düzenlemek için önce Blender'da kaydet ve Mayk'a tam
+Kendi dosyanı düzenlemek için önce Blender'da kaydet ve MAYK'a tam
 `.blend` yolunu ver. İşlemler ayrı bir Blender sürecinde yürür. Yeni sürümler
 kullanıcı klasöründeki `JARVIS/Blender` altında oluşur. “Son proje” en son
 başarıyla kaydedilip yeniden açılarak doğrulanan sahnedir. Render, sahnenin
@@ -47,11 +47,11 @@ Karmaşık tariflerde planlayıcı işi 2–8 aşamaya ayırabilir. Her aşama b
 tamamlanamazsa son başarılı proje seçili kalır. “Zaman çizelgesini animasyon
 olarak render al” komutu her kareyi ayrı bir PNG olarak kaydeder.
 
-Windows'ta Mayk, çalışan Blender veya Blender Launcher işleminin klasöründeki
+Windows'ta MAYK, çalışan Blender veya Blender Launcher işleminin klasöründeki
 `blender.exe` dosyasını da bulabilir. Özel bir kurulumu elle seçmek için
-`JARVIS_BLENDER_EXE` ortam değişkenine dosyanın tam yolunu verip Mayk'ı yeniden
+`JARVIS_BLENDER_EXE` ortam değişkenine dosyanın tam yolunu verip MAYK'ı yeniden
 başlatabilirsin. “Mahalleyi oluştur, projeyi ve renderi aç” isteği kaydedilen
-projeyi Blender'da açar ve PNG çıktısını Mayk'ta gösterir.
+projeyi Blender'da açar ve PNG çıktısını MAYK'ta gösterir.
 
 Yazılı sahne isteğini doğrudan Blender aracına göndermek için örneğin
 “Gazimağusa esintili, 11 binalı ve bir parklı sahil mahallesi oluştur. Projeyi ve renderi aç”

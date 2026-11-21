@@ -1,4 +1,4 @@
-/* Mayk chess for every device — the same rules and engine as the desktop
+/* MAYK chess for every device — the same rules and engine as the desktop
  * (core/chess_engine.py), ported line for line: castling, en passant,
  * promotion, check, mate, stalemate, 50-move rule, threefold repetition,
  * insufficient material; SAN out; SAN, UCI or Turkish in ("at f3", "Af3",

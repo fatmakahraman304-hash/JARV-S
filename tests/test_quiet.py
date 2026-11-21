@@ -1,4 +1,4 @@
-"""Quiet mode: Mayk volunteers nothing, reminders still come, held items told once it ends."""
+"""Quiet mode: MAYK volunteers nothing, reminders still come, held items told once it ends."""
 import tempfile
 import unittest
 from pathlib import Path

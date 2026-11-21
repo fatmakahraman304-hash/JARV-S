@@ -9,7 +9,7 @@ from plugins import camera_scan as command
 
 class ScanCommandTests(unittest.TestCase):
     def test_explicit_command_and_negation(self):
-        self.assertTrue(camera_scan.is_scan_command("Mayk, verileri aktar ve yansıt!"))
+        self.assertTrue(camera_scan.is_scan_command("MAYK, verileri aktar ve yansıt!"))
         self.assertTrue(camera_scan.is_scan_command("FRIDAY kamerayı tara."))
         self.assertFalse(camera_scan.is_scan_command("kamerayı tarama"))
         self.assertFalse(camera_scan.is_scan_command("verileri aktar ve yansıt diyebilir miyim"))
