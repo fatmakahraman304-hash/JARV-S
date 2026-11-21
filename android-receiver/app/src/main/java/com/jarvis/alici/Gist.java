@@ -48,13 +48,42 @@ final class Gist {
         return out.toString("UTF-8");
     }
 
+    /** Keep diagnostics useful without ever displaying the token or a response body. */
+    private static Exception githubError(HttpURLConnection c, int code) {
+        String message = "";
+        try {
+            InputStream err = c.getErrorStream();
+            if (err != null) {
+                String raw = read(err);
+                message = new JSONObject(raw).optString("message", "").toLowerCase(java.util.Locale.ROOT);
+            }
+        } catch (Exception ignored) { }
+        String reason;
+        if (message.contains("rate limit") || message.contains("secondary rate")) {
+            reason = "istek sınırı";
+        } else if (message.contains("resource not accessible") || message.contains("permission")) {
+            reason = "erişim izni";
+        } else if (message.contains("bad credentials")) {
+            reason = "geçersiz anahtar";
+        } else if (code == 403) {
+            reason = "erişim reddedildi (izin veya istek sınırı)";
+        } else if (code == 401) {
+            reason = "geçersiz anahtar";
+        } else if (code == 404) {
+            reason = "Gist bulunamadı veya erişim yok";
+        } else {
+            reason = "HTTP hatası";
+        }
+        return new Exception("GitHub " + code + " · " + reason);
+    }
+
     /** Files of the gist; the cached copy when nothing changed (304). */
     Map<String, String> files() throws Exception {
         HttpURLConnection c = open("GET", "/gists/" + id);
         if (!etag.isEmpty() && cache != null) c.setRequestProperty("If-None-Match", etag);
         int code = c.getResponseCode();
         if (code == 304 && cache != null) return cache;
-        if (code != 200) throw new Exception("GitHub " + code);
+        if (code != 200) throw githubError(c, code);
         etag = c.getHeaderField("ETag") == null ? "" : c.getHeaderField("ETag");
         JSONObject files = new JSONObject(read(c.getInputStream())).getJSONObject("files");
         Map<String, String> out = new HashMap<>();
