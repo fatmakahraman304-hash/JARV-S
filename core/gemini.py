@@ -64,6 +64,7 @@ THE LADDER, MEASURED
 """
 from __future__ import annotations
 
+from collections import deque
 import asyncio
 import json
 import re
@@ -267,6 +268,25 @@ _cooldown: dict[str, float] = {}
 # retired model back in front of a call.
 _gone: set[str] = set()
 _cool_lock = threading.Lock()
+_recent_attempts = deque(maxlen=256)
+
+
+def model_report() -> dict:
+    """Per-rung metrics for the last 256 one-shot attempts in this process."""
+    with _cool_lock:
+        attempts = list(_recent_attempts)
+    report = {}
+    for model, elapsed, reason in attempts:
+        row = report.setdefault(model, {"attempts": 0, "errors": 0, "total_ms": 0, "last_error": ""})
+        row["attempts"] += 1
+        row["total_ms"] += elapsed
+        if reason:
+            row["errors"] += 1
+            row["last_error"] = reason
+    for row in report.values():
+        row["mean_ms"] = round(row.pop("total_ms") / row["attempts"])
+        row["error_rate"] = row["errors"] / row["attempts"]
+    return report
 
 
 def _cool(model: str, seconds: float = _COOLDOWN_SECONDS) -> None:
@@ -308,7 +328,8 @@ def is_key_error(err: str) -> bool:
     """
     low = err.lower()
     return ("api key not valid" in low or "api_key_invalid" in low
-            or "api key expired" in low or "invalid api key" in low)
+            or "api key expired" in low or "invalid api key" in low
+            or bool(re.search(r"\b401\b", low)) or "unauthenticated" in low)
 
 
 def is_quota_error(err: str) -> bool:
@@ -778,6 +799,8 @@ def call(contents, tier: str = FAST, config=None,
     for model in tried:
         if key_refused and not model.startswith(PROVIDER_PREFIX):
             continue                     # same key, same answer — a provider does not use it
+        started = time.monotonic()
+        reason = ""
         try:
             if model == LIVE:
                 reply = _live_call(contents, config, timeout_ms, resolved_key)
@@ -794,22 +817,31 @@ def call(contents, tier: str = FAST, config=None,
             return cl.models.generate_content(**kwargs)
         except Exception as e:
             msg = str(e)
-            if is_key_error(msg) and not model.startswith(PROVIDER_PREFIX):
-                key_refused = True
-                print(f"[Gemini] the API key was refused — {msg[:120]}")
+            if is_key_error(msg):
+                reason = "auth"
+                if not model.startswith(PROVIDER_PREFIX):
+                    key_refused = True
+                print(f"[Gemini] {model}: authentication failed")
             elif is_quota_error(msg):
+                reason = "quota"
                 _cool(model)
                 print(f"[Gemini] {model}: out of quota — skipping it for "
                       f"{_COOLDOWN_SECONDS // 60} minutes")
             elif is_gone_error(msg):
+                reason = "unavailable_model"
                 _cool(model, _GONE_SECONDS)
                 print(f"[Gemini] {model}: unavailable to this key — set aside")
-            elif is_unavailable_error(msg):
+            elif isinstance(e, TimeoutError) or "timeout" in type(e).__name__.lower() or is_unavailable_error(msg):
+                reason = "timeout" if isinstance(e, TimeoutError) or "timeout" in type(e).__name__.lower() else "service"
                 _cool(model, _UNAVAILABLE_SECONDS)
                 print(f"[Gemini] {model}: not answering — resting it for "
                       f"{_UNAVAILABLE_SECONDS // 60} minutes")
             else:
-                print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
+                reason = "connection" if isinstance(e, ConnectionError) else "other"
+                print(f"[Gemini] {model}: {type(e).__name__}")
+        finally:
+            with _cool_lock:
+                _recent_attempts.append((model, (time.monotonic() - started) * 1000, reason))
     return None
 
 
