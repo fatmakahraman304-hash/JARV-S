@@ -12,6 +12,11 @@ from memory import memory_manager as memory
 
 
 class MemoryTests(unittest.TestCase):
+    def setUp(self):
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.enterContext(patch.object(memory, "BACKUP_PATH", directory / "backup.json"))
+        self.enterContext(patch.object(memory, "_LEGACY_MEMORY_PATH", directory / "legacy.json"))
+
     def test_failed_replacement_preserves_previous_memory(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "long_term.json"
