@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import hashlib
@@ -301,7 +302,7 @@ Code for {file_path}:"""
 
 def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
     if not dependencies:
-        return "No external dependencies."
+        return "Harici bağımlılık gerekmiyor."
 
     to_install = []
     for dep in dependencies:
@@ -316,7 +317,7 @@ def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
             print(f"[DevAgent] ✓ Already installed: {pkg_name}")
 
     if not to_install:
-        return f"All dependencies already installed: {', '.join(dependencies)}"
+        return f"Tüm bağımlılıklar kurulu: {', '.join(dependencies)}"
 
     print(f"[DevAgent] 📦 Installing: {to_install}")
     try:
@@ -327,10 +328,10 @@ def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
             timeout=120, cwd=str(project_dir)
         )
         if result.returncode == 0:
-            return f"Installed: {', '.join(to_install)}"
-        return f"Install warning (non-fatal): {result.stderr[:200]}"
+            return f"Kuruldu: {', '.join(to_install)}"
+        return f"Kurulum uyarısı (kritik değil): {result.stderr[:200]}"
     except subprocess.TimeoutExpired:
-        return "Dependency install timed out (non-fatal)."
+        return "Bağımlılık kurulumunun süresi doldu (kritik değil)."
     except Exception as e:
         return f"Kurulum uyarısı (kritik değil): {e}"
 
@@ -359,15 +360,21 @@ def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
     print(f"[DevAgent] 🚀 Running: {run_command}")
     try:
         parts = run_command.split()
-        if parts[0].lower() == "python":
+        env = os.environ.copy()
+        if parts[0].lower() in ("python", "python3", "py"):
             parts[0] = sys.executable
+            # Windows Python can emit cp1254/cp1252 into pipes by default.
+            # Make the child output UTF-8 to match our explicit UTF-8 decoder.
+            env["PYTHONIOENCODING"] = "utf-8"
+            env["PYTHONUTF8"] = "1"
 
         result = subprocess.run(
             parts,
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             timeout=timeout,
-            cwd=str(project_dir)
+            cwd=str(project_dir),
+            env=env,
         )
 
         stdout = result.stdout.strip()
@@ -379,12 +386,15 @@ def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
         if stderr:
             combined_parts.append(f"STDERR:\n{stderr}")
 
-        return "\n\n".join(combined_parts) if combined_parts else "Ran with no output."
+        result_text = "\n\n".join(combined_parts) if combined_parts else "Program çıktı üretmedi."
+        if result.returncode == 0:
+            return "BAŞARILI (çıkış kodu: 0)\n" + result_text
+        return f"BAŞARISIZ (çıkış kodu: {result.returncode})\n" + result_text
 
     except subprocess.TimeoutExpired:
         return f"Süre sınırı doldu: {timeout}s — uygulama veya sunucu arka planda çalışıyor olabilir."
     except FileNotFoundError as e:
-        return f"Command not found: {e}"
+        return f"Komut bulunamadı: {e}"
     except Exception as e:
         return f"Çalıştırma hatası: {e}"
 
@@ -1839,20 +1849,23 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     took = time.monotonic() - started
     parts = []
     if changed:
-        parts.append(f"changed {len(changed)} file{'s' if len(changed) != 1 else ''} ({', '.join(changed[:8])})")
+        parts.append(f"{len(changed)} dosya değiştirildi ({', '.join(changed[:8])})")
     if created:
-        parts.append(f"created {len(created)} ({', '.join(created[:8])})")
+        parts.append(f"{len(created)} dosya oluşturuldu ({', '.join(created[:8])})")
     if deleted:
-        parts.append(f"deleted {len(deleted)} ({', '.join(deleted[:8])})")
-    msg = f"Done with '{folder.name}' in {took:.0f}s by {who}: {' and '.join(parts)}."
+        parts.append(f"{len(deleted)} dosya silindi ({', '.join(deleted[:8])})")
+    msg = f"'{folder.name}' projesi {who} tarafından {took:.0f} saniyede işlendi: {'; '.join(parts)}."
     if summary:
         msg += f" {summary.strip()[:700]}"
     if problems:
-        msg += (" These still fail and need a look: "
+        msg += (" Şu kontroller hâlâ başarısız: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
+    elif stack and stack.get("test_cmd"):
+        msg += " MAYK dosya ve proje testi kontrollerinde yeni hata bulmadı."
     else:
-        msg += " MAYK'ın kendi testleri başarılı."
-    msg += " Say 'undo' to put everything back."
+        msg += (" MAYK dosya kontrollerinde yeni hata bulmadı; "
+                "projenin otomatik test komutu algılanmadı.")
+    msg += " Değişiklikleri geri almak için 'geri al' komutunu kullanın."
     _log(player, msg)
     return msg
 

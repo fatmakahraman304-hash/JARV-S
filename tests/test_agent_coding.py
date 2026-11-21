@@ -118,6 +118,8 @@ class AgentModeTest(unittest.TestCase):
                                                   "claude_code", None, 0.0, False)
             self.assertIn("app.py", msg)
             self.assertIn("test_app.py", msg)
+            self.assertIn("otomatik test komutu algılanmadı", msg)
+            self.assertNotIn("MAYK'ın kendi testleri başarılı", msg)
             self.assertEqual((root / ".env").read_text(), "KEY=secret\n")   # secrets put back
             undo["fn"]()
             self.assertEqual((root / "app.py").read_text(), "def total(x):\n    return x\n")
