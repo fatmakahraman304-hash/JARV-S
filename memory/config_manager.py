@@ -584,6 +584,58 @@ def _without_deepseek(block: dict) -> dict:
     return block
 
 
+
+def _purged_deepseek_data(data: dict) -> dict:
+    """Yalnızca kaldırılan sağlayıcının anahtar/ayarlarını temizle."""
+    data = dict(data or {})
+    data.pop("deepseek_api_key", None)
+    data.pop("deepseek_key", None)
+    pc = data.get("plugin_config")
+    if isinstance(pc, dict):
+        pc = dict(pc)
+        pc.pop("deepseek", None)
+        coding = pc.get("coding")
+        if isinstance(coding, dict):
+            pc["coding"] = {
+                key: value for key, value in coding.items()
+                if not str(key).casefold().startswith("deepseek")
+            }
+        data["plugin_config"] = pc
+    providers = data.get("providers")
+    if isinstance(providers, dict):
+        data["providers"] = _without_deepseek(_upgrade_ids(dict(providers)))
+    return data
+
+
+@_locked
+def purge_deepseek_settings() -> bool:
+    """MAYK'ın kaldırılan DeepSeek ayarlarını bir kez yerel dosyadan temizle.
+
+    Başka modellerin anahtarlarına veya uygulama ayarlarına dokunmaz.
+    Kullanıcının eski yedek dosyasında da kaldırılan anahtar kalmamasını sağlar.
+    """
+    if not CONFIG_FILE.exists():
+        return False
+    data = _read_for_write()
+    cleaned = _purged_deepseek_data(data)
+    changed = cleaned != data
+    if changed:
+        _write_config(cleaned)
+    backup = _backup_file()
+    if backup.exists():
+        try:
+            original = json.loads(backup.read_text(encoding="utf-8"))
+            if isinstance(original, dict):
+                safe = _purged_deepseek_data(original)
+                if safe != original:
+                    tmp = backup.with_name(backup.name + ".tmp")
+                    tmp.write_text(json.dumps(safe, indent=4), encoding="utf-8")
+                    os.replace(tmp, backup)
+        except (OSError, ValueError, TypeError):
+            pass  # Hatalı yedek dosyayı silmeyelim.
+    return changed
+
+
 def get_providers() -> dict:
     """Aktif sağlayıcılar (kaldırılan DeepSeek ayarları hariç)."""
     val = load_api_keys().get("providers")
