@@ -53,6 +53,20 @@ class LocationMapTests(unittest.TestCase):
             self.assertFalse(panel._busy)
         panel.close()
 
+    def test_hud_requires_click_before_external_location_lookup(self):
+        from PyQt6.QtNetwork import QNetworkAccessManager
+        with patch.object(QNetworkAccessManager, "get") as get:
+            panel = LocationPanel()
+            self.app.processEvents()
+            get.assert_not_called()
+            self.assertFalse(panel.timer.isActive())
+            panel.locate.click()
+            self.assertEqual(get.call_count, 1)
+            self.assertEqual(get.call_args.args[0].url().host(), "ipwho.is")
+            panel.locate.click()
+            self.assertEqual(get.call_count, 1)
+            panel.close()
+
     def test_offline_start_does_not_invent_a_city(self):
         panel = LocationPanel(auto_start=False)
         panel._location_ready(Reply(failed=True))
