@@ -103,3 +103,41 @@ def status_text() -> str:
     amounts = ", ".join(f"{x['total']} {x['currency']}" for x in info["balances"] if x["total"])
     return ("DeepSeek kullanılabilir. Kalan bakiye: " + amounts + "."
             if amounts else "DeepSeek kullanılabilir; bakiye tutarı sağlayıcıdan alınamadı.")
+
+
+def complete_text(prompt: str, *, model: str = "deepseek-v4-pro") -> str:
+    """Planlama/kod üretimi için araçsız DeepSeek metin çağrısı."""
+    key = api_key()
+    if not key:
+        raise RuntimeError("DeepSeek API anahtarı bulunamadı.")
+    body = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Sen MAYK'ın kodlama yardımcısısın. Kullanıcının dilinde, tercihen Türkçe yanıt ver. İstenen kodu eksiksiz üret."},
+            {"role": "user", "content": str(prompt)},
+        ],
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.deepseek.com/chat/completions", data=body,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        msg = {
+            401: "API anahtarı geçersiz", 402: "bakiye yetersiz",
+            404: "model bulunamadı", 429: "kullanım sınırı",
+            500: "sunucu hatası", 503: "sunucu yoğun",
+            504: "zaman aşımı",
+        }.get(exc.code, "API isteği başarısız")
+        raise RuntimeError(f"DeepSeek {exc.code}: {msg}") from None
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("DeepSeek yanıtına ulaşılamadı.") from None
+    choices = data.get("choices") or []
+    answer = (choices[0].get("message") or {}).get("content") if choices else ""
+    if not isinstance(answer, str) or not answer.strip():
+        raise RuntimeError("DeepSeek boş yanıt verdi.")
+    return answer.strip()
