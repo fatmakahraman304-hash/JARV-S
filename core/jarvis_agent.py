@@ -1,26 +1,8 @@
-"""
-core/jarvis_agent.py — MAYK's own coding agent. No subscription needed.
+"""MAYK'ın kendi kodlama ajanı: DeepSeek V4 Pro → Flash → Gemini.
 
-Claude Code and Codex are rented: when the subscription ends, they are gone.
-This agent is MAYK's own. It works the way they do — looks around the
-project, reads the files it needs, makes exact edits, runs the code and the
-tests, reads the errors and fixes them until it works — and only borrows a
-"brain" to think with, choosing the best one that is free right now:
-
-    1. DeepSeek — the user's chosen coder (new accounts get free tokens for a
-       month, then it is pay-as-you-go and very cheap). An empty balance
-       answers 402 and Gemini takes over.
-    2. Gemini, with the key MAYK already has, as the backup (the best model
-       the key can use is found by asking Google which models exist — model
-       names change every few months, so none is hard-coded)
-
-If one brain is at its limit, the next takes over in the middle of the job;
-the work done so far (the files) stays.
-
-Tools the brain gets: list_files, read_file, search, write_file, edit_file,
-run (building/testing commands only — never delete, never git commit/push),
-fetch_url (documentation) and finish. Everything stays inside the project
-folder. No Qt; raises only RuntimeError with a sentence for the user.
+Dosyaları analiz eder, düzenler ve test eder. Kod değişiklikleri proje klasöründe
+kalır; API anahtarları aracıya, günlük dosyalarına veya model istemine verilmez.
+DeepSeek bakiyesi ya da kota sınırı dolarsa sıradaki uygun modele geçilir.
 """
 
 from __future__ import annotations
@@ -440,26 +422,51 @@ def gemini_models(key: str) -> list[str]:
     return _gemini_cache["models"]
 
 
+def deepseek_models() -> list[str]:
+    """Önce güçlü V4 Pro, ardından hızlı/ekonomik Flash.
+
+    Eski model takma adları yeni API'de kaldırıldığı için otomatik dönüştürülür.
+    """
+    cfg = _settings()
+    requested = cfg.get("deepseek_models")
+    if isinstance(requested, str):
+        requested = [requested]
+    aliases = {"deepseek-chat": "deepseek-flash",
+               "deepseek-reasoner": "deepseek-v4-pro",
+               "deepseek-v4-flash": "deepseek-flash"}
+    models = requested if isinstance(requested, (list, tuple)) and requested else [
+        "deepseek-v4-pro", "deepseek-flash"]
+    models = [aliases.get(str(m).strip(), str(m).strip()) for m in models]
+    return list(dict.fromkeys(m for m in models if m))
+
+
 def brains() -> list:
-    """Every brain that can work right now, best first."""
+    """Kullanılabilir kodlama modelleri: DeepSeek → Gemini."""
+    from core import deepseek_account
     cfg = _settings()
     out = []
-    if cfg.get("deepseek_key"):
-        for m in (cfg.get("deepseek_models") or ["deepseek-chat"]):
-            out.append(OpenAIBrain("https://api.deepseek.com/v1", cfg["deepseek_key"], m, "DeepSeek"))
-    key = _gemini_key()
-    if key and cfg.get("use_gemini", True) is not False:
-        out += [GeminiBrain(key, m) for m in gemini_models(key)]
+    key = deepseek_account.api_key()
+    if key:
+        info = deepseek_account.balance_status(key)
+        # Bakiye kesin olarak yetersizse DeepSeek'e gereksiz istek yapma.
+        # Ağ hatasını asla 'bakiye bitti' diye yorumlama.
+        if info["available"] is not False:
+            out.extend(OpenAIBrain("https://api.deepseek.com", key, m, "DeepSeek")
+                       for m in deepseek_models())
+    gemini_key = _gemini_key()
+    if gemini_key and cfg.get("use_gemini", True) is not False:
+        out.extend(GeminiBrain(gemini_key, m) for m in gemini_models(gemini_key))
     return out
 
 
 def available() -> bool:
-    cfg = _settings()
-    return bool(cfg.get("deepseek_key") or _gemini_key())
+    from core import deepseek_account
+    return bool(deepseek_account.api_key() or _gemini_key())
 
 
 def deepseek_ready() -> bool:
-    return bool(_settings().get("deepseek_key"))
+    from core import deepseek_account
+    return bool(deepseek_account.api_key())
 
 
 # ── the loop ─────────────────────────────────────────────────────────────────
@@ -491,6 +498,11 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
             text, calls, raw = brain.turn(history)
         except BrainError as e:
             err = str(e)
+            # 402 aynı hesap bakiyesidir; Flash denemek de işe yaramaz.
+            if (isinstance(brain, OpenAIBrain) and brain.name.startswith("DeepSeek")
+                    and ("402" in err or "insufficient balance" in err.casefold())):
+                pool = [b for b in pool if not (
+                    isinstance(b, OpenAIBrain) and b.name.startswith("DeepSeek"))]
             wait = _retry_after(err)
             if "429" in err and 0 < wait <= 60 and "limit: 0" not in err:
                 log(f"  {brain.name} dakikalık sınırda; {int(wait) + 1} sn bekliyor.")
@@ -514,7 +526,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
             if idle >= 2:
                 # answered in words without tools: take it as the summary
                 return text.strip() or "İş bitti."
-            history.append({"role": "user", "text": "Use the tools to do the work, then call finish."})
+            history.append({"role": "user", "text": "Araçları kullanarak işi tamamla; ardından finish çağır."})
             continue
         idle = 0
         for c in calls:
