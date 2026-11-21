@@ -91,7 +91,7 @@ class ProvidersOverlay(_HudOverlay):
     # endpoint what it offers.
     _models_ready = pyqtSignal(str, list)
     # NVIDIA API testi 45 saniyeye uzayabilir; sonuç yalnızca Qt iş parçacığında gösterilir.
-    _nvidia_probe_ready = pyqtSignal(str, bool, str)
+    _nvidia_probe_ready = pyqtSignal(str, bool, str, str, str)
     _OW = 760                       # the window's own minimum is 820
 
     # Which provider fills each slot, and what the slot is FOR — in the words
@@ -1041,9 +1041,22 @@ class ProvidersOverlay(_HudOverlay):
             lb.setText(text)
             lb.setStyleSheet(f"color: {colour}; background: transparent; border: none;")
 
-    def _on_nvidia_probe_ready(self, pid: str, ok: bool, msg: str) -> None:
-        """Ağ testi arka planda yapılır; etikete yalnızca Qt ana iş parçacığı dokunur."""
+    def _on_nvidia_probe_ready(
+            self, pid: str, ok: bool, msg: str, original_model: str, working_model: str
+    ) -> None:
+        """Başarılı alternatif modeli ana iş parçacığında seç ve kayda hazırla."""
         self._nvidia_testing.discard(pid)
+        if ok and working_model and working_model != original_model:
+            entry = self._edits.get(pid, {}).get("model")
+            if entry is not None and isinstance(entry[0], QComboBox):
+                box = entry[0]
+                # Test sırasında kullanıcı farklı model seçtiyse tercihini değiştirme.
+                if self._combo_value(box) == original_model:
+                    index = box.findData(working_model)
+                    if index < 0:
+                        box.addItem(working_model, working_model)
+                        index = box.count() - 1
+                    box.setCurrentIndex(index)
         self._say(pid, ("✓  " if ok else "✕  ") + msg, C.GREEN if ok else C.ACC)
 
     def _test(self, pid: str) -> None:
@@ -1069,7 +1082,8 @@ class ProvidersOverlay(_HudOverlay):
                     # Gizli anahtar ve sunucunun ham hatası ekrana aktarılmaz.
                     ok, msg = False, "NVIDIA bağlantı testi tamamlanamadı. Yeniden deneyin."
                 try:
-                    self._nvidia_probe_ready.emit(pid, ok, msg)
+                    self._nvidia_probe_ready.emit(
+                        pid, ok, msg, str(values.get("model") or ""), str(inst.model))
                 except RuntimeError:
                     pass  # Panel kapatılmış olabilir.
 

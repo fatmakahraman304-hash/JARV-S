@@ -352,8 +352,11 @@ class OpenAIBrain:
         if self.name.startswith("NVIDIA"):
             body["max_tokens"] = 4096
         headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
+        # NVIDIA GLM-5.3 zaman aşımı yaşadığında tek model 5 dakika bloke etmesin.
+        nvidia_timeout = 22 if self.model == "z-ai/glm-5.3-flash" else 90
+        timeout = nvidia_timeout if self.name.startswith("NVIDIA") else 300
         try:
-            js = _http_json(f"{self.base}/chat/completions", body, headers, timeout=300)
+            js = _http_json(f"{self.base}/chat/completions", body, headers, timeout=timeout)
         except BrainError as exc:
             if self.name.startswith("NVIDIA"):
                 # Ham sağlayıcı hatasını veya özel kimlik bilgilerini günlüğe yazma.

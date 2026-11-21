@@ -51,8 +51,8 @@ class NvidiaAccountTests(unittest.TestCase):
              mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
              mock.patch("memory.config_manager.get_provider_config", return_value={}):
             models = nvidia.available_models("private", refresh=True)
-        self.assertEqual(models[:2], ["z-ai/glm-5.3-flash",
-                                     "nvidia/nemotron-3.5-super-vl-120b-a12b"])
+        self.assertEqual(models[:2], ["nvidia/nemotron-3.5-super-vl-120b-a12b",
+                                     "z-ai/glm-5.3-flash"])
         request = req.call_args.args[0]
         self.assertEqual(request.full_url, "https://integrate.api.nvidia.com/v1/models")
         self.assertNotIn("private", repr(models))
@@ -75,7 +75,7 @@ class NvidiaAccountTests(unittest.TestCase):
              mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
              mock.patch("memory.config_manager.get_provider_config", return_value={}):
             available = nvidia.available_models("test-key", refresh=True)
-        self.assertIn("z-ai/glm-5.3-flash", available)
+        self.assertIn("nvidia/nemotron-3.5-lightning-30b-a3b", available)
         self.assertEqual(nvidia._CACHE["reason"], "unavailable")
 
     def test_complete_request_and_secret_never_in_error(self):
@@ -172,12 +172,14 @@ class NvidiaRoutingTests(unittest.TestCase):
         from providers.llm_openai import PRESETS, CATALOG
         self.assertEqual(PRESETS["NVIDIA"], nvidia.BASE_URL)
         self.assertEqual(next(p for p in CATALOG if p["id"] == "nvidia")["values"]["model"],
-                         "z-ai/glm-5.3-flash")
+                         "nvidia/nemotron-3.5-lightning-30b-a3b")
         from pathlib import Path
         panel = (Path(__file__).resolve().parents[1] / "gui/providers_panel.py").read_text(
             encoding="utf-8")
         self.assertIn("NVIDIA anahtarınızı", panel)
         self.assertIn('("@deepseek", "@nvidia")', panel)
+        self.assertIn("working_model", panel)
+        self.assertIn("box.setCurrentIndex(index)", panel)
 
     def test_nvidia_settings_hints_are_in_turkish(self):
         from providers.llm_openai import PROVIDER, CATALOG
@@ -232,7 +234,8 @@ class NvidiaProbeTests(unittest.TestCase):
         ):
             with self.subTest(error=error):
                 instance = self._provider()
-                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)):
+                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)), \
+                     mock.patch("core.nvidia_account.available_models", return_value=[]):
                     ok, message = instance.probe(check_vision=False)
                 self.assertFalse(ok)
                 self.assertIn(expected, message)
@@ -247,7 +250,8 @@ class NvidiaProbeTests(unittest.TestCase):
             ("SSL verification failed", "bağlantısı kurulamadı"),
         ):
             with self.subTest(error=error):
-                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)):
+                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)), \
+                     mock.patch("core.nvidia_account.available_models", return_value=[]):
                     ok, message = instance.probe(check_vision=False)
                 self.assertFalse(ok)
                 self.assertIn(expected, message)
@@ -260,8 +264,69 @@ class NvidiaProbeTests(unittest.TestCase):
             ok, message = instance.probe(check_vision=False)
         self.assertTrue(ok)
         self.assertIn("saniyede yanıt verdi", message)
-        self.assertEqual(complete.call_args.kwargs["timeout"], 45.0)
+        self.assertEqual(complete.call_args.kwargs["timeout"], 18.0)
         vision.assert_not_called()
+
+
+    def test_glm_504_automatically_tests_nemotron_and_updates_choice(self):
+        instance = self._provider()
+        first = "z-ai/glm-5.3-flash"
+        alternate = "nvidia/nemotron-3.5-lightning-30b-a3b"
+        tried = []
+
+        def fake_complete(messages, **kwargs):
+            tried.append((instance.model, kwargs["timeout"]))
+            if instance.model == first:
+                raise RuntimeError("504 Model sunucusu yanıt vermedi")
+            return ("ok", [])
+
+        with mock.patch.object(instance, "complete", side_effect=fake_complete), \
+             mock.patch("core.nvidia_account.available_models",
+                        return_value=[first, alternate,
+                                      "nvidia/nemotron-3.5-super-vl-120b-a12b"]):
+            ok, msg = instance.probe(check_vision=False)
+        self.assertTrue(ok)
+        self.assertEqual(instance.model, alternate)
+        self.assertEqual(tried[:2], [(first, 18.0), (alternate, 25.0)])
+        self.assertIn("KAYDET VE UYGULA", msg)
+
+    def test_authentication_and_quota_failures_do_not_test_other_models(self):
+        for status in ("401 Yetkisiz", "402 Yetersiz kredi",
+                       "403 Erişim yok", "429 Kullanım sınırı"):
+            with self.subTest(status=status):
+                instance = self._provider()
+                with mock.patch.object(instance, "complete",
+                                       side_effect=RuntimeError(status)) as complete, \
+                     mock.patch("core.nvidia_account.available_models") as models:
+                    ok, msg = instance.probe(check_vision=False)
+                self.assertFalse(ok)
+                self.assertEqual(complete.call_count, 1)
+                models.assert_not_called()
+                self.assertEqual(instance.model, "z-ai/glm-5.3-flash")
+
+    def test_all_alternate_models_fail_without_changing_original_choice(self):
+        instance = self._provider()
+        first = "z-ai/glm-5.3-flash"
+        with mock.patch.object(instance, "complete",
+                               side_effect=RuntimeError("504 API provider internal error")) as complete, \
+             mock.patch("core.nvidia_account.available_models",
+                        return_value=[first, "nvidia/nemotron-3.5-lightning-30b-a3b",
+                                      "nvidia/nemotron-3.5-super-vl-120b-a12b"]):
+            ok, msg = instance.probe(check_vision=False)
+        self.assertFalse(ok)
+        self.assertEqual(instance.model, first)
+        self.assertEqual(complete.call_count, 3)
+        self.assertIn("Alternatif NVIDIA modelleri de yanıt vermedi.", msg)
+
+    def test_connection_failures_do_not_retry_other_models(self):
+        instance = self._provider()
+        with mock.patch.object(instance, "complete",
+                               side_effect=RuntimeError("ConnectError: connection refused")) as complete, \
+             mock.patch("core.nvidia_account.available_models") as models:
+            ok, _ = instance.probe(check_vision=False)
+        self.assertFalse(ok)
+        self.assertEqual(complete.call_count, 1)
+        models.assert_not_called()
 
     def test_other_provider_keeps_original_probe_timeout(self):
         from providers.llm_openai import OpenAICompatLLM
