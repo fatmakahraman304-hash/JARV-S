@@ -31,7 +31,7 @@ def _norm(text: str) -> str:
 _Q_PARTICLE = r"\b(mi|mu|misin|musun|miyim|miyiz|midir|mudur|mi ki|miydi|muydu|misiniz|musunuz)\b"
 _STATUS = re.compile(
     r"(\b(yukledin|kurdun|yaptin|bitirdin|actin|kaydettin|gonderdin|indirdin|ogrendin|bitti|tamamlandi|hazir|calisiyor|"
-    r"oldu|yuklendi|kuruldu|indi|basladi|durdu|acildi|kapandi|var|devam ediyor)\w*\s+" + _Q_PARTICLE + r")"
+    r"oldu|yuklendi|kuruldu|indi|basladi|durdu|acildi|kapandi|var|devam ediyor|guncelledin|kontrol ettin|test ettin|duzelttin|calistirdin|baslattin|tamamladin|sildin|tasidin)\w*\s+" + _Q_PARTICLE + r")"
     r"|\b(ne durumda|ne asamada|nerede kaldi|ne zaman biter|ne kadar kaldi|durum ne|durumu ne)\b"
     r"|\b(is it done|did you|have you|is it (ready|installed|finished|running)|what'?s the status|how far)\b")
 _HOW = re.compile(r"\b(nasil (yapilir|yaparim|yapabilirim|yapiyorsun|olur|calisir|kullanilir|acilir|kurulur)|"
@@ -45,7 +45,7 @@ _CHAT = re.compile(r"^(selam|merhaba|naber|nasilsin|gunaydin|iyi aksamlar|iyi ge
                    r"eyvallah|tamam|peki|anladim|harika|super|evet|hayir|hi|hello|thanks|thank you|ok|okay)\b")
 _COMMAND_END = re.compile(r"\b(yap|kur|ac|kapat|sil|ekle|cikar|degistir|getir|goster|gonder|kaydet|indir|yukle|baslat|"
                           r"durdur|dur|iptal et|iptal|vazgec|olustur|ciz|render al|tasi|buyut|kucult|boya|cevir|uygula|ogren|ogret|"
-                          r"yapin|kurun|acin|silin|ekleyin|gelistir|duzelt|hazirla|bul|ara|yaz|oku|cal|"
+                          r"yapin|kurun|acin|silin|ekleyin|gelistir|duzelt|hazirla|bul|ara|yaz|oku|cal|"r"kontrol et|test et|guncelle|incele|duzenle|arastir|listele|acikla|ozetle|yeniden baslat|"
                           r"make|build|create|install|open|close|delete|remove|add|change|show|send|save|render|start|stop|"
                           r"fix|move|paint|draw)\b[^?]*[.!]?$")
 
