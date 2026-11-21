@@ -123,13 +123,15 @@ public class ReceiverService extends Service {
                     writes.put("outbox-" + me + ".json", keep.toString());
                 }
                 if (SystemClock.elapsedRealtime() - lastBeat > 30000) {
-                    lastBeat = SystemClock.elapsedRealtime();
                     writes.put("device-" + me + ".json", beat(me).toString());
                 }
                 if (!writes.isEmpty()) gist.write(writes);
-                status = "bağlı";
+                if (writes.containsKey("device-" + me + ".json")) lastBeat = SystemClock.elapsedRealtime();
+                status = "bağlı · cihaz kimliği: " + me;
             } catch (Exception e) {
                 status = "hata: " + e.getMessage();
+                // Retry the heartbeat after a failed write instead of waiting 30 seconds.
+                lastBeat = 0;
             }
             SystemClock.sleep(3000);
         }
