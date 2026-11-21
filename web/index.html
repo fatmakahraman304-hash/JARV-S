@@ -258,7 +258,18 @@
 
   <section class="sheet" id="s-remote" hidden>
     <h2>PROJEKSİYON / TV <button class="ib" data-close type="button">✕</button></h2>
-    <p id="rm-note">Laptoptaki MAYK üzerinden (Wi-Fi + ADB). İlk kez: laptopa "projeksiyonu kur" de.</p>
+    <p id="rm-note">Projeksiyon kontrolü</p>
+    <div class="note" style="margin:8px 0 12px">
+      <b>📡 Yerel Wi-Fi bağlantısı (GitHub kotası gerekmez)</b>
+      <p id="rm-lan-state" style="margin:6px 0">Projeksiyon MAYK Alıcı adresini buraya kaydet.</p>
+      <label for="rm-lan-url">Projeksiyondaki tam yerel kumanda adresi</label>
+      <input id="rm-lan-url" type="password" autocomplete="off" spellcheck="false" placeholder="http://192.168...:18765/uzun-kod">
+      <div class="row" style="margin-top:8px">
+        <button class="btn pri" id="rm-lan-save" type="button">💾 Bağlantıyı kaydet</button>
+        <button class="btn" id="rm-lan-open" type="button">📱 Hızlı yerel kumandayı aç</button>
+      </div>
+      <small>Sesli komut ve bu ekrandaki tuşlar yerel alıcıya yönlendirilir. iPhone güvenliği nedeniyle işlem sırasında kısa bir sayfa geçişi olabilir; sesli görüşme kesilirse mikrofona tekrar dokun.</small>
+    </div>
     <div class="pad">
       <span></span><button class="btn" data-k="up" type="button">▲</button><span></span>
       <button class="btn" data-k="left" type="button">◀</button><button class="btn pri" data-k="ok" type="button">OK</button><button class="btn" data-k="right" type="button">▶</button>
