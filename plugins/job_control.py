@@ -45,6 +45,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             waiting = []
         if action == "list":
             lines = jobs.describe() + waiting + [f"- Arka plan görevi '{t.get('title')}': {t.get('status')}" for t in tasks]
+            try:
+                from actions import dev_agent
+                if dev_agent._job_lock.locked():
+                    snap = dev_agent._job_snapshot()
+                    if snap and snap.get("finished") is None:
+                        lines.append(f"- ŞU AN SÜRÜYOR: Kodlama '{snap['folder']}' "
+                                     f"(aşama: {snap.get('phase') or snap.get('status')})")
+            except Exception:
+                pass
             return "Şu an süren işler:\n" + "\n".join(lines) if lines else "Şu an süren bir iş yok."
         stopped = jobs.cancel(which)
         if waiting and (not which or "blender" in which.lower() or "sıra" in which.lower()):

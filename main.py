@@ -1339,8 +1339,14 @@ class MaykLive:
                 return
             from actions import dev_agent
             p = recent[0]
-            self.ui.write_log(f"SYS: '{p['title']}' projesi yarıda kalmıştı — kaldığı yerden devam ediyorum.")
-            dev_agent._start_resume(str(p["id"]), player=self.ui)
+            result = dev_agent._start_resume(str(p["id"]), player=self.ui)
+            if str(result).startswith("[STARTED]"):
+                self.ui.write_log(
+                    f"SYS: '{p['title']}' projesi yarıda kalmıştı; "
+                    f"kodlama görevi yeniden başlatıldı (#{p['id']}).")
+            else:
+                self.ui.write_log(
+                    f"SYS: '{p['title']}' projesi sürdürülemedi: {str(result)[:180]}")
         except Exception as exc:
             print(f"[Resume] {exc}")
 

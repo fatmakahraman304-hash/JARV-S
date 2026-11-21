@@ -76,9 +76,9 @@ def _background() -> list[str]:
         pass
     try:
         from actions import dev_agent
-        st = getattr(dev_agent, "status_text", None)
-        if callable(st):
-            out.append(f"- Kodlama ajanı: {st()}")
+        # dev_agent.status_text() tek bir gerçek kaynaktan, aktif iş
+        # parçacığı ve SQLite günlük kaydından durumu okur.
+        out.append(f"- Kodlama ajanı: {dev_agent.status_text()}")
     except Exception:
         pass
     return out
@@ -93,8 +93,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if bg:
             parts.append("ARKA PLANDAKİ İŞLER:\n" + "\n".join(bg))
         parts.append("SON YAPILANLAR:\n" + ("\n".join(act) if act else "- bu oturumda henüz bir iş yapılmadı"))
-        parts.append("(Kullanıcıya kendi dilinde, kısaca ve doğru söyle: biten, süren, başarısız olan. Hiçbir işi yeniden "
-                     "başlatma.)")
+        parts.append("(Bu çıktılar gerçek iş kaydıdır. Kullanıcıya çalışan iş ile yalnızca geçmişte kayıtlı "
+                     "olan işi ayırarak söyle. Hiçbir işi bu durum sorgusuyla yeniden başlatma.)")
         return "\n\n".join(parts)
     except Exception as exc:
         return f"Durum okunamadı: {exc}"

@@ -747,14 +747,15 @@ _PHASES = {"improve": ["reading", "planning", "writing", "checking", "testing"],
 
 
 def _new_job(folder: Path, model: str, instruction: str, player,
-             kind: str = "improve") -> None:
+             kind: str = "improve", journal_id=None) -> None:
     global _JOB, _player_ref
+    now = time.time()
     with _state_lock:
         _JOB = {"folder": folder.name, "path": str(folder), "model": model,
                 "kind": kind, "phases": _PHASES[kind],
                 "request": instruction, "status": "starting",
-                "started": time.time(), "finished": None, "summary": "",
-                "files": {}, "steps": [], "result": ""}
+                "started": now, "updated": now, "finished": None, "summary": "",
+                "journal_id": journal_id, "files": {}, "steps": [], "result": ""}
     _player_ref = player
     _publish()
 
@@ -781,6 +782,7 @@ def _update(status: str | None = None, file: str | None = None,
     with _state_lock:
         if not _JOB:
             return
+        _JOB["updated"] = time.time()
         if status:
             _JOB["status"] = status
             if status in _JOB["phases"]:
@@ -788,6 +790,12 @@ def _update(status: str | None = None, file: str | None = None,
         if file and file_state:
             _JOB["files"].setdefault(file, {})["state"] = file_state
         _JOB.update(fields)
+        pid = _JOB.get("journal_id")
+        detail = _JOB["steps"][-1][1] if _JOB["steps"] else ""
+        phase = _JOB.get("phase") or status or _JOB["status"]
+    # Never hold the UI state lock while performing SQLite I/O.
+    if pid and status and not fields.get("finished"):
+        _journal(pid, status="çalışıyor", note=(f"{phase}: {detail}" if detail else phase))
     _publish()
 
 
@@ -798,14 +806,64 @@ def _log(player, msg: str) -> None:
         pass
     with _state_lock:
         if _JOB and _JOB.get("finished") is None:
-            _JOB["steps"].append([round(time.time() - _JOB["started"], 1), msg])
+            now = time.time()
+            _JOB["updated"] = now
+            _JOB["steps"].append([round(now - _JOB["started"], 1), msg])
             del _JOB["steps"][:-60]
+            pid = _JOB.get("journal_id")
+            # Persist progress at most once every 15s; do not write every log.
+            persist = bool(pid and now - _JOB.get("_last_journal_at", 0) >= 15)
+            if persist:
+                _JOB["_last_journal_at"] = now
+        else:
+            persist, pid = False, None
+    if persist:
+        _journal(pid, note=msg)
     _publish()
     if player:
         try:
             player.write_log(f"[DevAgent] {msg}")
         except Exception:
             pass
+
+
+def status_text() -> str:
+    """Gerçek iş parçacığı, son ilerleme ve kalıcı proje günlüğünden durum."""
+    j = _job_snapshot()
+    if j:
+        finished = j.get("finished")
+        elapsed = int(max(0, (finished or time.time()) - j.get("started", time.time())))
+        step = j.get("steps") or []
+        last = step[-1][1][:180] if step else "Henüz ilerleme kaydı yok."
+        if finished is None:
+            # Preparing is not proof that a worker thread has started.
+            state = ("çalışıyor" if j.get("worker_started")
+                     else "hazırlanıyor (iş parçacığı henüz doğrulanmadı)")
+            silent_for = int(max(0, time.time() - j.get("updated", j["started"])))
+            note = (f" Son işlem {silent_for} saniye önce; uzun model yanıtı bekleniyor olabilir."
+                    if silent_for >= 60 else "")
+        else:
+            state = j.get("status") or "tamamlandı"
+            note = ""
+        return (f"Kodlama görevi #{j.get('journal_id') or '?'} '{j['folder']}': "
+                f"{state}, aşama: {j.get('phase') or j.get('status')}, "
+                f"geçen süre: {elapsed} sn. Son kayıt: {last}.{note} "
+                f"İş sonucu: {str(j.get('result') or 'Henüz tamamlanmadı')[:240]}")
+    try:
+        from memory.continuity import projects
+        recent = projects(limit=5)
+    except Exception:
+        return "Kodlama görevi geçmişi şu anda okunamıyor; işin bittiği doğrulanamadı."
+    if not recent:
+        return "Kayıtlı bir kodlama görevi yok; başlatılmış işlem doğrulanamadı."
+    p = recent[0]
+    state = str(p.get("status") or "bilinmiyor")
+    if state == "çalışıyor":
+        state = "kayıtta çalışıyor görünüyor, ancak bu oturumda iş parçacığı doğrulanamadı"
+    return (f"Son kayıtlı kodlama görevi #{p['id']} '{p['title']}': {state}; "
+            f"aşama {p.get('stage', '?')}; son güncelleme {p.get('updated', '?')}. "
+            f"Son bilgi: {str(p.get('note') or 'Yok')[:240]}. "
+            "Bu bilgi kayıt geçmişidir; şu an çalıştığına dair tek başına kanıt değildir.")
 
 
 def _status_report() -> str:
@@ -820,11 +878,10 @@ def _status_report() -> str:
             pend, done = [], []
         if pend or done:
             lines = [f"#{p['id']} {p['title']} — {p['status']}" for p in (pend or done)]
-            return ("Şu anda çalışan kodlama görevi yok. Görev geçmişi: " + "; ".join(lines)
-                    + (". Yarım kalanlar mode='resume' ile sürdürülebilir." if pend else ".")
-                    + " Kullanıcıya kısa ve Türkçe olarak aktar.")
-        return ("Kodlama ajanı bu oturumda henüz bir klasörde çalışmadı. "
-                "Kullanıcıya tek Türkçe cümlede aktar.")
+            return (status_text() + " Diğer görev kayıtları: " + "; ".join(lines)
+                    + (". Yarım kalan bir iş varsa mode='resume' ile sürdürülebilir." if pend else ".")
+                    + " Kullanıcıya canlı iş ile geçmiş kaydı farkını doğru ve kısa aktar.")
+        return status_text() + " Kullanıcıya kayıtlı sonucu doğru ve kısa biçimde aktar."
     took = (j["finished"] or time.time()) - j["started"]
     files = "; ".join(f"{p} ({f.get('action', '?')}, {f.get('state', '?')}): "
                       f"{f.get('what', '')}" for p, f in j["files"].items())
@@ -1930,8 +1987,8 @@ def _start_improve(folder_raw: str, instruction: str, speak=None, player=None) -
 
     provider = _coding_provider()
     who = provider.partition("@")[2] or provider or "kodlama modeli"
-    _new_job(folder, who, instruction, player, kind="improve")
     pid = _journal_start("improve", folder.name, folder, instruction)
+    _new_job(folder, who, instruction, player, kind="improve", journal_id=pid)
     return _run_job(lambda: _improve_folder(folder, instruction, player),
                     folder.name, who, speak, player, pid=pid)
 
@@ -1982,7 +2039,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
-            _journal(pid, status={"done": "bitti", "nothing changed": "bitti",
+            _journal(pid, status={"done": "bitti", "nothing changed": "değişiklik yok",
                                   "finished with problems": "sorunlu bitti",
                                   "failed": "başarısız"}.get(status, status), note=result)
             try:
@@ -1998,7 +2055,38 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             speak(f"[DEV_AGENT_DONE] {result[:900]} | Kullanıcıya bir veya iki "
                   f"Türkçe cümlede ne yapıldığını anlat. Dosya yollarını sesli okuma.")
 
-    threading.Thread(target=work, daemon=True, name="dev_agent-job").start()
+    worker = threading.Thread(target=work, daemon=True, name="dev_agent-job")
+    try:
+        worker.start()
+    except RuntimeError as exc:
+        failure = f"Kodlama işi başlatılamadı: {type(exc).__name__}: {str(exc)[:160]}"
+        _journal(pid, status="başarısız", note=failure)
+        _update("failed", result=failure, finished=time.time())
+        _job_lock.release()
+        return failure
+    with _state_lock:
+        if _JOB and _JOB.get("finished") is None:
+            _JOB["worker_started"] = True
+            _JOB["updated"] = time.time()
+    _publish()
+
+    # Model yanıtı uzun sürse bile SQLite günlüğünde canlılık izi bırak.
+    # İş bittiğinde heartbeat kendiliğinden durur; başka iş başlatmaz.
+    def heartbeat():
+        while worker.is_alive():
+            worker.join(timeout=20)
+            if not worker.is_alive():
+                break
+            snap = _job_snapshot()
+            if snap.get("finished") is not None or snap.get("journal_id") != pid:
+                break
+            recent = snap.get("steps") or []
+            note = recent[-1][1] if recent else "Kodlama işi hâlâ sürüyor."
+            _journal(pid, status="çalışıyor",
+                     note=f"{snap.get('phase') or snap.get('status')}: {note}"[:4000])
+    if pid:
+        threading.Thread(target=heartbeat, daemon=True, name="dev_agent-heartbeat").start()
+
     # Kept short on purpose: this is what the assistant turns into speech, and
     # every word here is time before the user hears anything.
     return (f"[STARTED] Kodlama ajanı ({who}) şu anda "
@@ -2017,8 +2105,8 @@ def _start_build(description: str, language: str, project_name: str,
     _job_name = name
     provider = _coding_provider()
     who = provider.partition("@")[2] or provider or "kodlama modeli"
-    _new_job(PROJECTS_DIR / name, who, description, player, kind="build")
     pid = _journal_start("build", name, PROJECTS_DIR / name, description)
+    _new_job(PROJECTS_DIR / name, who, description, player, kind="build", journal_id=pid)
 
     def job():
         try:
@@ -2166,7 +2254,7 @@ def _start_resume(target: str, speak=None, player=None) -> str:
     _journal(pick["id"], status="çalışıyor")
     st = pick.get("stages") or {}
     if pick["kind"] == "build" and isinstance(st, dict) and st.get("plan") and folder.is_dir():
-        _new_job(folder, who, pick["instruction"], player, kind="build")
+        _new_job(folder, who, pick["instruction"], player, kind="build", journal_id=pick["id"])
         done = sum(1 for s in st["plan"]["stages"] if s.get("done"))
         _log(player, f"Resuming '{pick['title']}' at stage {done + 1}/{len(st['plan']['stages'])}.")
         return _run_job(lambda: _build_staged(pick["instruction"], st.get("language", "python"), "",
@@ -2176,7 +2264,7 @@ def _start_resume(target: str, speak=None, player=None) -> str:
         _job_lock.release()
         _journal(pick["id"], status="iptal", note="folder no longer exists")
         return f"The folder of '{pick['title']}' no longer exists, so it cannot be resumed."
-    _new_job(folder, who, pick["instruction"], player, kind="improve")
+    _new_job(folder, who, pick["instruction"], player, kind="improve", journal_id=pick["id"])
     instruction = (pick["instruction"] + "\n\n(This job was interrupted before it finished. Look at the "
                    "folder as it is now, keep what is already done, and complete the rest.)")
     return _run_job(lambda: _improve_folder(folder, instruction, player),
