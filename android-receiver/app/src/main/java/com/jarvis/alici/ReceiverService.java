@@ -197,8 +197,15 @@ public class ReceiverService extends Service {
     private String key(String k) {
         AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
         switch (k) {
-            case "volume_up": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI); return "Ses açıldı.";
-            case "volume_down": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI); return "Ses kısıldı.";
+            case "volume_up": case "volume_down": {
+                int before = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                int direction = "volume_up".equals(k) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
+                int after = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                return after == before ? "Ses değişmedi (" + after + "/" + max + "). Ses sınırda olabilir."
+                        : "Ses seviyesi: " + before + " → " + after + " / " + max;
+            }
             case "mute": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI); return "Sessiz/sesli.";
             case "play_pause": return media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "Oynat/durdur.");
             case "play": return media(KeyEvent.KEYCODE_MEDIA_PLAY, "Oynatılıyor.");
