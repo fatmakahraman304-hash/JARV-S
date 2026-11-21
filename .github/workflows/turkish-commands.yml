@@ -1,0 +1,42 @@
+name: MAYK Türkçe komut testleri
+
+on:
+  pull_request:
+    paths:
+      - "core/voice_commands.py"
+      - "core/snap_wake.py"
+      - "core/intent.py"
+      - "core/prompt.txt"
+      - "plugins/github_develop.py"
+      - "tests/test_turkish_commands.py"
+      - "main.py"
+      - "web/app.js"
+      - ".github/workflows/turkish-commands.yml"
+  push:
+    branches: [main]
+    paths:
+      - "core/voice_commands.py"
+      - "core/snap_wake.py"
+      - "core/intent.py"
+      - "core/prompt.txt"
+      - "plugins/github_develop.py"
+      - "tests/test_turkish_commands.py"
+      - "main.py"
+      - "web/app.js"
+      - ".github/workflows/turkish-commands.yml"
+  workflow_dispatch:
+
+jobs:
+  turkish-commands:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Asgari test gereksinimleri
+        run: python -m pip install numpy
+      - name: Türkçe komut regresyon testleri
+        run: python -m unittest -v tests.test_turkish_commands
+      - name: Değişen Python modülleri için sözdizimi denetimi
+        run: python -m compileall -q core/voice_commands.py core/snap_wake.py core/intent.py plugins/github_develop.py main.py

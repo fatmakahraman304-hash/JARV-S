@@ -7,12 +7,24 @@ import numpy as np
 
 
 def is_sleep_command(text: str) -> bool:
-    text = unicodedata.normalize("NFKC", text).replace("İ", "i").casefold()
+    """Yalnızca açık Türkçe uyku komutları; başka bir işlemi durdurma değil."""
+    text = unicodedata.normalize(
+        "NFKD", (text or "").replace("İ", "i").replace("I", "ı").casefold()
+    )
+    text = "".join(ch for ch in text if not unicodedata.combining(ch)).replace("ı", "i")
     words = re.findall(r"[^\W_]+", text, re.UNICODE)
     if words and words[0] in {"mayk", "friday"}:
         words = words[1:]
-    return words in (["uyu"], ["uyku", "moduna", "geç"])
-
+    return words in (
+        ["uyu"],
+        ["artik", "uyu"],
+        ["uyku", "moduna", "gec"],
+        ["uyku", "modunu", "ac"],
+        ["uykuya", "gec"],
+        ["uykuna", "gec"],
+        ["dinlemeyi", "birak"],
+        ["dinlemeyi", "durdur"],
+    )
 
 class SnapDetector:
     """Detect a short, sharp transient after quiet, across callback boundaries."""

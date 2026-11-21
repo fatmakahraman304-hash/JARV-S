@@ -68,15 +68,26 @@ _LOCAL_COMMANDS = {
     "/git sync": "sync",
     "/git test": "test",
     "github geliştirme alanını main ile eşitle": "sync",
+    "github geliştirme alanını ana dal ile eşitle": "sync",
+    "github geliştirme alanını güncelle": "sync",
+    "github geliştirme dalını güncelle": "sync",
+    "mayk github geliştirme dalını eşitle": "sync",
     "github geliştirme alanındaki testleri çalıştır": "test",
     "github geliştirme alanındaki testleri çalıştır ve sonucu göster": "test",
+    "github testlerini çalıştır": "test",
+    "github testlerini çalıştır ve sonucu göster": "test",
+    "mayk github testlerini çalıştır": "test",
+}
+from core.voice_commands import normalize_command
+
+_NORMALIZED_LOCAL_COMMANDS = {
+    normalize_command(text): mode for text, mode in _LOCAL_COMMANDS.items()
 }
 
 
 def local_command_mode(text: str) -> str | None:
-    """Recognize explicit typed commands without interpreting free-form prose."""
-    normalized = " ".join(text.strip().replace("İ", "i").casefold().split())
-    return _LOCAL_COMMANDS.get(normalized.rstrip(".!"))
+    """Tam eşleşen Türkçe geliştirme komutlarını, yazım farklarıyla tanı."""
+    return _NORMALIZED_LOCAL_COMMANDS.get(normalize_command(text))
 
 
 class TestFailure(RuntimeError):
