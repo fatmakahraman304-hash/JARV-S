@@ -179,6 +179,27 @@ class NvidiaRoutingTests(unittest.TestCase):
         self.assertIn("NVIDIA anahtarınızı", panel)
         self.assertIn('("@deepseek", "@nvidia")', panel)
 
+    def test_nvidia_settings_hints_are_in_turkish(self):
+        from providers.llm_openai import PROVIDER, CATALOG
+        from pathlib import Path
+        fields = {field.key: field for field in PROVIDER["needs"]}
+        self.assertEqual(fields["api_key"].label, "API anahtarı")
+        self.assertIn("YENİLE", fields["model"].hint)
+        self.assertNotIn("REFRESH", fields["model"].hint)
+        self.assertEqual(fields["vision"].label, "Görselleri anlayabilir")
+        self.assertEqual(fields["base_url"].label, "API adresi")
+        self.assertIn("kendiniz girin", next(entry for entry in CATALOG
+                                             if entry["id"] == "custom")["note"])
+
+        panel = (Path(__file__).resolve().parents[1] / "gui/providers_panel.py").read_text(
+            encoding="utf-8")
+        self.assertIn("API anahtarınızı buraya yapıştırın", panel)
+        self.assertIn("Önce Gemini — seçilen model yedek", panel)
+        self.assertIn("Önce seçilen model — Gemini yedek", panel)
+        self.assertIn("kodlama ajanının DeepSeek → NVIDIA → Gemini sırasından ayrıdır", panel)
+        self.assertNotIn('hint=f"Needed — create one', panel)
+        self.assertNotIn('f"{f.label}   (optional)"', panel)
+
 
 if __name__ == "__main__":
     unittest.main()

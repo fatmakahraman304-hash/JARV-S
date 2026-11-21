@@ -720,7 +720,7 @@ class ProvidersOverlay(_HudOverlay):
             # refuse every request without one.
             if f.key == "api_key" and entry.get("local") is False:
                 f = replace(f, required=True,
-                            hint=f"Needed — create one in your {entry['label']} account")
+                            hint=f"{entry['label']} API anahtarınızı buraya yapıştırın")
             if f.key == "backend":
                 carried[f.key] = (self._line(
                     str(entry.get("values", {}).get("backend")
@@ -774,7 +774,7 @@ class ProvidersOverlay(_HudOverlay):
         if self._more.get(pid):
             lay.addWidget(self._label("─" * 46, 7, C.BORDER))
             for f, w in advanced:
-                lay.addWidget(self._label(f"{f.label}   (optional)", 7, C.TEXT_DIM))
+                lay.addWidget(self._label(f"{f.label}   (isteğe bağlı)", 7, C.TEXT_DIM))
                 lay.addWidget(w)
                 if f.hint and not isinstance(w, QLineEdit):
                     lay.addWidget(self._label(f.hint, 7, C.TEXT_DIM))
@@ -831,7 +831,8 @@ class ProvidersOverlay(_HudOverlay):
             "Belgeleri okumak, ekrana bakmak ve kod yazmak gibi işler, "
             "sohbetten bağımsız arka plan istekleridir. Bunlar Gemini’nin "
             "metin kotasını kullanır. Bu istekleri başka bir modele "
-            "yönlendirmek sesli konuşmayı değiştirmez.",
+            "yönlendirmek sesli konuşmayı değiştirmez. Buradaki öncelik "
+            "kodlama ajanının DeepSeek → NVIDIA → Gemini sırasından ayrıdır.",
             7, C.TEXT_DIM))
 
         # Read the stored choice BEFORE the box exists. The first version asked
@@ -842,7 +843,7 @@ class ProvidersOverlay(_HudOverlay):
         def fmt(entry, _decl):
             mark = "🖥" if entry.get("local") else (
                 "☁" if entry.get("local") is False else "  ")
-            return f"{mark}  {entry['label']} sağlayıcısını yedek olarak kullan"
+            return f"{mark}  {entry['label']} modelini arka plan isteklerinde kullan"
 
         self._sidecar_combo = self._service_combo(
             "llm", ("Yalnızca Gemini — mevcut ayar", ""), fmt)
@@ -851,9 +852,9 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(self._sidecar_combo)
 
         self._first_combo = self._combo()
-        self._first_combo.addItem("Önce Gemini — daha hızlı", "after")
+        self._first_combo.addItem("Önce Gemini — seçilen model yedek", "after")
         self._first_combo.addItem(
-            "Önce diğer model — daha çok işlem cihazınızda kalır", "before")
+            "Önce seçilen model — Gemini yedek", "before")
         self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
         lay.addWidget(self._first_combo)
 
