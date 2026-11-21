@@ -1813,8 +1813,8 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
     try:
         from core.code_checks import (detect_stack, run_tests, runtime_problems,
                                       static_problems, test_regressions)
-    except Exception:
-        return {}
+    except ImportError as exc:
+        return {"(tests)": f"Test altyapısı yüklenemedi: {type(exc).__name__}"}
     stack = stack or detect_stack(folder)
     problems = static_problems(folder, written, stack)
     to_run = {r: t for r, t in written.items() if r not in problems}
@@ -1828,6 +1828,8 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                  else test_regressions(baseline, after))
         if broke:
             problems["(tests)"] = broke
+        elif after and not after["ok"]:
+            problems["(tests)"] = "Önceden başarısız olan proje testleri hâlâ başarısız."
     return {r: p for r, p in problems.items() if r in written or r == "(tests)"}
 
 
@@ -1840,6 +1842,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     _update("writing")
     _log(player, f"{who} proje klasöründe kod ajanı olarak çalışıyor: okuyor, düzenliyor, test ediyor…")
     before = agent_coding.snapshot(folder)
+    protection = Protection(folder)
     extra, summary, problems = "", "", {}
     changed: list[str] = []
     created: list[str] = []
@@ -1858,21 +1861,29 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         after = agent_coding.snapshot(folder)
         changed, created, deleted = agent_coding.diff(before, after)
         # Protected files (secrets, local settings) are put back, whatever the agent did.
-        protection = Protection(folder)
-        for rel in list(changed) + list(created):
-            why = protection.reason(rel)
-            if why:
-                _log(player, f"Put back {rel}: {why}.")
-                agent_coding.restore(folder, {rel: before[rel]} if rel in before else {}, [rel])
-                (changed if rel in changed else created).remove(rel)
+        for group in (changed, created, deleted):
+            for rel in group.copy():
+                why = protection.reason(rel)
+                if why:
+                    original = before.get(rel)
+                    agent_coding.restore(folder, {rel: original} if original else {}, [rel])
+                    path = folder / rel
+                    if original:
+                        restored = original[3] is not None and path.is_file() and path.read_bytes() == original[3]
+                    else:
+                        restored = not path.exists()
+                    if not restored:
+                        raise RuntimeError(f"Korunan dosyanın geri yüklenmesi doğrulanamadı: {rel}")
+                    _log(player, f"Korunan dosya önceki durumuna getirildi: {rel}")
+                    group.remove(rel)
         with _state_lock:
             if _JOB:
                 _JOB["files"] = {r: {"action": "edit", "state": "done"} for r in changed}
                 _JOB["files"].update({r: {"action": "create", "state": "done"} for r in created})
-                _JOB["summary"] = summary[:400]
+                _JOB["files"].update({r: {"action": "delete", "state": "done"} for r in deleted})
         _publish()
         written = _text_files(folder, changed + created)
-        if not written:
+        if not (changed or created or deleted):
             break
         _update("testing")
         _log(player, "Ajanın çalışması MAYK testleriyle doğrulanıyor…")
@@ -1888,7 +1899,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
             _update("writing")
 
     if not (changed or created or deleted):
-        return summary or f"{who} looked at '{folder.name}' but changed nothing."
+        return f"{who} looked at '{folder.name}' but changed nothing."
 
     final_after = list(agent_coding.snapshot(folder))
 
@@ -1912,8 +1923,9 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     if deleted:
         parts.append(f"{len(deleted)} dosya silindi ({', '.join(deleted[:8])})")
     msg = f"'{folder.name}' projesi {who} tarafından {took:.0f} saniyede işlendi: {'; '.join(parts)}."
-    if summary:
-        msg += f" {summary.strip()[:700]}"
+    with _state_lock:
+        if _JOB:
+            _JOB["verification"] = "failed" if problems else ("done" if stack and stack.get("test_cmd") else "unverified")
     if problems:
         msg += (" Şu kontroller hâlâ başarısız: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
@@ -2029,7 +2041,12 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             result = job()
             with _state_lock:
                 wrote = any(f.get("state") == "done" for f in _JOB["files"].values())
-            if not wrote:
+                verification = _JOB.get("verification")
+            if verification == "failed":
+                status = "finished with problems"
+            elif verification == "unverified":
+                status = "unverified"
+            elif not wrote:
                 status = "nothing changed"
             elif ("couldn't fully fix" in result or "could not" in result.lower()
                   or "still fail their test" in result):
