@@ -953,7 +953,7 @@
           let errMsg = 'Upload failed';
           try { errMsg = JSON.parse(xhr.responseText).error || errMsg; } catch {}
           if (bar) bar.style.background = '#f87171';
-          if (st)  { st.textContent = 'ERR'; st.className = 'fc-status err'; }
+          if (st)  { st.textContent = 'HATA'; st.className = 'fc-status err'; }
           if (lbl) lbl.textContent = errMsg;
         }
       };
@@ -961,8 +961,8 @@
       xhr.onerror = () => {
         const st  = document.getElementById(`${id}_st`);
         const lbl = card.querySelector('.fc-lbl');
-        if (st)  { st.textContent = 'ERR'; st.className = 'fc-status err'; }
-        if (lbl) lbl.textContent = 'Connection error';
+        if (st)  { st.textContent = 'HATA'; st.className = 'fc-status err'; }
+        if (lbl) lbl.textContent = 'Bağlantı hatası';
       };
 
       const fd = new FormData();

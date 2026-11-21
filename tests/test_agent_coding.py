@@ -92,9 +92,9 @@ class AgentModeTest(unittest.TestCase):
         self.assertFalse(self.da._use_agent(""))
         self.assertFalse(self.da._use_agent("openai_compat@openai"))
         with mock.patch.object(agent_coding, "available", return_value=True):
-            self.assertTrue(self.da._use_agent("claude_code"))
-            with mock.patch("memory.config_manager.get_plugin_setting", return_value=False):
-                self.assertFalse(self.da._use_agent("codex_cli"))
+            self.assertTrue(self.da._use_agent("jarvis_agent"))
+            self.assertFalse(self.da._use_agent("claude_code"))
+            self.assertFalse(self.da._use_agent("codex_cli"))
 
     def test_improve_with_agent_restores_secrets_and_registers_undo(self):
         with tempfile.TemporaryDirectory() as d:
@@ -159,41 +159,34 @@ class RouterTest(unittest.TestCase):
 
     def test_order_and_rest(self):
         both = lambda p: True
-        self.assertEqual(self.r.ladder("openai_compat@openai", both),
-                         ["claude_code", "codex_cli", "jarvis_agent", "openai_compat@openai", ""])
-        self.assertEqual(self.r.ladder("", lambda p: p == "codex_cli"), ["codex_cli", ""])
-        secs = self.r.rest("claude_code", RuntimeError("Claude Code kullanım sınırına ulaşıldı."))
+        self.assertEqual(self.r.ladder("openai_compat@deepseek", both),
+                         ["jarvis_agent", "openai_compat@deepseek", ""])
+        self.assertEqual(self.r.ladder("claude_code", both), ["jarvis_agent", ""])
+        self.assertEqual(self.r.ladder("codex_cli", both), ["jarvis_agent", ""])
+        self.assertEqual(self.r.ladder("", lambda p: p == "codex_cli"), [""])
+        secs = self.r.rest("jarvis_agent", RuntimeError("429: kullanım sınırı"))
         self.assertEqual(secs, self.r.LIMIT_REST)
-        self.assertEqual(self.r.ladder("", both), ["codex_cli", "jarvis_agent", ""])
+        self.assertEqual(self.r.ladder("", both), [""])
         with mock.patch.object(self.r.time, "time", return_value=time.time() + self.r.LIMIT_REST + 5):
-            self.assertEqual(self.r.ladder("", both), ["claude_code", "codex_cli", "jarvis_agent", ""])
-        self.assertEqual(self.r.rest("codex_cli", RuntimeError("Codex oturumu doğrulanamadı")), self.r.DOWN_REST)
+            self.assertEqual(self.r.ladder("", both), ["jarvis_agent", ""])
+        self.assertEqual(self.r.rest("openai_compat@deepseek", RuntimeError("401")),
+                         self.r.DOWN_REST)
 
     def test_what_counts_as_switchable(self):
         self.assertTrue(self.r.should_switch(RuntimeError("429 Too Many Requests")))
         self.assertTrue(self.r.should_switch(RuntimeError("Claude Code oturumu kapalı.")))
         self.assertFalse(self.r.should_switch(RuntimeError("SyntaxError in your request")))
 
-    def test_dev_agent_switches_text_model_on_limit(self):
+    def test_dev_agent_switches_to_gemini_when_deepseek_balance_is_empty(self):
         from actions import dev_agent
-        calls = []
-
-        def claude(prompt):
-            calls.append("claude")
-            raise RuntimeError("Claude Code kullanım sınırına ulaşıldı.")
-
-        def codex(prompt):
-            calls.append("codex")
-            return mock.Mock(text="ok")
-        with mock.patch.object(self.r, "ladder", side_effect=lambda chosen="": [
-                p for p in ("claude_code", "codex_cli") if not self.r.resting(p)] + [""]), \
-             mock.patch.object(dev_agent.claude_coding, "generate_content", side_effect=claude), \
-             mock.patch.object(dev_agent.codex_coding, "generate_content", side_effect=codex):
-            out = dev_agent._get_model().generate_content("yaz")
-            self.assertEqual(out.text, "ok")
-            self.assertEqual(calls, ["claude", "codex"])
-            dev_agent._get_model().generate_content("yine")      # claude rests now: straight to codex
-            self.assertEqual(calls, ["claude", "codex", "codex"])
+        from core import deepseek_account, jarvis_agent
+        model = mock.Mock(text="Gemini yanıtı")
+        with mock.patch.object(self.r, "ladder", return_value=["jarvis_agent", ""]), \
+             mock.patch.object(deepseek_account, "api_key", return_value="private-key"), \
+             mock.patch.object(deepseek_account, "balance_status", return_value={"available": False}), \
+             mock.patch.object(dev_agent.gemini, "call", return_value=model) as gem:
+            self.assertEqual(dev_agent._get_model().generate_content("kod").text, "Gemini yanıtı")
+        gem.assert_called_once()
 
     def test_agents_switch_on_limit(self):
         from actions import dev_agent
@@ -245,10 +238,13 @@ class OpusFirstTest(unittest.TestCase):
 
     def test_setup_plugin_reports_and_saves_model(self):
         from plugins import coding_setup
-        with mock.patch("core.agent_coding.available", return_value=False):
-            self.assertIn("Claude Code kurulu değil", coding_setup.run({"action": "status"}))
+        from core import deepseek_account
+        with mock.patch.object(deepseek_account, "status_text", return_value="DeepSeek kullanılabilir."), \
+             mock.patch.object(deepseek_account, "api_key", return_value="key"), \
+             mock.patch.object(deepseek_account, "balance_status", return_value={"available": True}):
+            self.assertIn("DeepSeek kullanılabilir.", coding_setup.run({"action": "status"}))
         saved = {}
-        with mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
-             mock.patch("memory.config_manager.save_plugin_config", side_effect=lambda ns, v: saved.update({ns: v})):
-            coding_setup.run({"action": "model", "name": "sonnet"})
-        self.assertEqual(saved["coding"]["model"], "sonnet")
+        with mock.patch("memory.config_manager.save_plugin_config",
+                        side_effect=lambda ns, v: saved.update({ns: v})):
+            coding_setup.run({"action": "model", "name": "pro"})
+        self.assertEqual(saved["coding"]["deepseek_models"][0], "deepseek-v4-pro")

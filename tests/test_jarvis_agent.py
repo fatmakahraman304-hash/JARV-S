@@ -70,7 +70,7 @@ class ToolSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ws = ja.Workspace(Path(d), log=lambda m: None)
             self.assertIn("dışına", ws.call("write_file", {"path": "../kacak.txt", "content": "x"}))
-            self.assertIn("Refused", ws.call("write_file", {"path": ".env", "content": "KEY=1"}))
+            self.assertIn("Reddedildi", ws.call("write_file", {"path": ".env", "content": "KEY=1"}))
 
     def test_only_build_and_test_commands(self):
         ok = ja.Workspace.allowed
@@ -84,8 +84,8 @@ class ToolSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ws = ja.Workspace(Path(d), log=lambda m: None)
             (Path(d) / "f.txt").write_text("a\na\n")
-            self.assertIn("2 times", ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b"}))
-            self.assertIn("not found", ws.call("edit_file", {"path": "f.txt", "old": "zzz", "new": "b"}))
+            self.assertIn("2 kez", ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b"}))
+            self.assertIn("bulunamadı", ws.call("edit_file", {"path": "f.txt", "old": "zzz", "new": "b"}))
             ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b", "replace_all": True})
             self.assertEqual((Path(d) / "f.txt").read_text(), "b\nb\n")
 
@@ -130,11 +130,17 @@ class BrainChoiceTest(unittest.TestCase):
         self.assertEqual(h.call_args[0][1]["tools"][0]["type"], "function")
 
     def test_deepseek_first_when_added(self):
-        with mock.patch.object(ja, "_settings", return_value={"deepseek_key": "sk-x"}), \
+        from core import deepseek_account
+        with mock.patch.object(ja, "_settings", return_value={}), \
+             mock.patch.object(deepseek_account, "api_key", return_value="sk-x"), \
+             mock.patch.object(deepseek_account, "balance_status", return_value={"available": True}), \
              mock.patch.object(ja, "_gemini_key", return_value="g"), \
              mock.patch.object(ja, "gemini_models", return_value=["gemini-3.6-flash"]):
             names = [b.name for b in ja.brains()]
-        self.assertEqual(names, ["DeepSeek (deepseek-chat)", "Gemini (gemini-3.6-flash)"])
+        self.assertEqual(names, [
+            "DeepSeek (deepseek-v4-pro)", "DeepSeek (deepseek-flash)",
+            "Gemini (gemini-3.6-flash)"
+        ])
 
     def test_deepseek_leads_the_coding_ladder(self):
         from core import coding_router

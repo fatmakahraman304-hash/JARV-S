@@ -945,11 +945,11 @@ class MainWindow(QMainWindow):
                         and not self._video_sound_out.isMuted())
         if sound_on and not self._muted:
             self._video_auto_muted = True
-            self._set_muted(True, "The video's sound is on — silence it, close "
-                                  "it, or press F4 to talk. Typing still works.")
+            self._set_muted(True, "Videonun sesi açık olduğu için mikrofon sessize alındı. "
+                                  "Konuşmak için videoyu durdurun veya F4'e basın. Yazılı komut kullanabilirsiniz.")
         elif not sound_on and self._video_auto_muted:
             self._video_auto_muted = False
-            self._set_muted(False, "The video is quiet again.")
+            self._set_muted(False, "Videonun sesi artık kapalı.")
 
     def _sync_video_sound(self) -> None:
         """Keep the separate soundtrack in step with the picture.
@@ -1911,10 +1911,10 @@ class MainWindow(QMainWindow):
         if not r:
             return
         stamp = lambda ts: _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts))  # noqa: E731
-        lines = [r["name"], "", f"When: {eng.describe(r)}"]
+        lines = [r["name"], "", f"Zaman: {eng.describe(r)}"]
         if r["trigger"]["type"] == "time" and r.get("next_ts") and r.get("enabled"):
-            lines.append(f"Next: {stamp(r['next_ts'])}")
-        what = {"say": "Says", "prompt": "Carries out", "task": "Background task"}.get(r["kind"])
+            lines.append(f"Sonraki çalışma: {stamp(r['next_ts'])}")
+        what = {"say": "Söylüyor", "prompt": "Uyguluyor", "task": "Arka plan görevi"}.get(r["kind"])
         if what and r.get("text"):
             lines.append(f"{what}: {r['text']}")
         for key, value in (r.get("options") or {}).items():
@@ -1924,13 +1924,15 @@ class MainWindow(QMainWindow):
             elif value not in ("", None):
                 lines.append(f"{key}: {value}")
         state = "on" if r.get("enabled") else "off"
-        lines.append(f"State: {state}{' · held back in quiet hours' if r.get('quiet') else ''}"
-                     f" · ran {int(r.get('runs') or 0)} times")
+        lines.append(f"Durum: {'açık' if r.get('enabled') else 'kapalı'}"
+                     f"{' · sessiz saatlerde bekliyor' if r.get('quiet') else ''}"
+                     f" · {int(r.get('runs') or 0)} kez çalıştı")
         if r.get("last_run"):
-            lines.append(f"Last: {stamp(r['last_run'])} — {r.get('last_result') or ''}")
-        lines += ["", "Change it by voice — \"move the briefing to 08:30\", "
-                      "\"turn the check-in off\", \"remind me every Friday at 17:00\"."]
-        self._show_content("ROUTINE", "\n".join(lines)[:4000])
+            lines.append(f"Son çalışma: {stamp(r['last_run'])} — {r.get('last_result') or ''}")
+        lines += ["", "Sesli komutlarla değiştirebilirsiniz: "
+                      "\"Sabah özetini 08.30’a al\", \"hatırlatıcıyı kapat\", "
+                      "\"her cuma 17.00’de hatırlat\"."]
+        self._show_content("RUTİN", "\n".join(lines)[:4000])
 
     def _refresh_tasks(self) -> None:
         if getattr(self, "_tasks_stack", None) is not None and self._tasks_stack.currentIndex() == 2:

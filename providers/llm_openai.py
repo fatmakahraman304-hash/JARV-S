@@ -117,54 +117,55 @@ _CLOUD = {"model": "", "max_tools": "", "max_tool_chars": ""}
 
 CATALOG = (
     {"id": "ollama",     "label": "Ollama",
-     "note": "on this computer · free", "local": True,
+     "note": "bu bilgisayarda · ücretsiz", "local": True,
      "values": {"base_url": PRESETS["Ollama"], **_LOCAL}},
     {"id": "lmstudio",   "label": "LM Studio",
-     "note": "on this computer · free", "local": True,
+     "note": "bu bilgisayarda · ücretsiz", "local": True,
      "values": {"base_url": PRESETS["LM Studio"], **_LOCAL}},
     {"id": "llamacpp",   "label": "llama.cpp",
-     "note": "on this computer · free", "local": True,
+     "note": "bu bilgisayarda · ücretsiz", "local": True,
      "values": {"base_url": PRESETS["llama.cpp server"], **_LOCAL}},
     {"id": "vllm",       "label": "vLLM",
-     "note": "on this computer · free", "local": True,
+     "note": "bu bilgisayarda · ücretsiz", "local": True,
      "values": {"base_url": PRESETS["vLLM"], **_LOCAL}},
     {"id": "jan",        "label": "Jan",
-     "note": "on this computer · free", "local": True,
+     "note": "bu bilgisayarda · ücretsiz", "local": True,
      "values": {"base_url": PRESETS["Jan"], **_LOCAL}},
     {"id": "gemini",     "label": "Google Gemini",
-     "note": "cloud · leave the key empty to use your Gemini key", "local": False,
+     "note": "bulut · kayıtlı Gemini anahtarını kullanmak için boş bırakın", "local": False,
      "values": {"base_url": PRESETS["Google Gemini"], **_CLOUD,
                 "model": "gemini-3.5-flash"}},
     {"id": "minimax",    "label": "MiniMax",
-     "note": "cloud · needs a key", "local": False,
+     "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["MiniMax"], **_CLOUD,
                 "model": "MiniMax-M3.1-Flash"}},
     {"id": "groq",       "label": "Groq",
-     "note": "cloud · very fast · free tier", "local": False,
+     "note": "bulut · çok hızlı · ücretsiz kullanım hakkı", "local": False,
      "values": {"base_url": PRESETS["Groq"], **_CLOUD}},
     {"id": "openai",     "label": "OpenAI",
-     "note": "cloud · needs a key", "local": False,
+     "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["OpenAI"], **_CLOUD}},
     {"id": "anthropic",  "label": "Claude (Anthropic)",
-     "note": "cloud · needs an Anthropic API key", "local": False,
+     "note": "bulut · Anthropic API anahtarı gerekir", "local": False,
      "values": {"base_url": "https://api.anthropic.com/v1", **_CLOUD}},
     {"id": "deepseek",   "label": "DeepSeek",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["DeepSeek"], **_CLOUD}},
+     "note": "bulut · API anahtarı gerekir", "local": False,
+     "values": {"base_url": PRESETS["DeepSeek"], **_CLOUD,
+                "model": "deepseek-v4-pro"}},
     {"id": "mistral",    "label": "Mistral",
-     "note": "cloud · needs a key", "local": False,
+     "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Mistral"], **_CLOUD}},
     {"id": "xai",        "label": "xAI (Grok)",
-     "note": "cloud · needs a key", "local": False,
+     "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["xAI"], **_CLOUD}},
     {"id": "openrouter", "label": "OpenRouter",
-     "note": "cloud · many models behind one key", "local": False,
+     "note": "bulut · tek anahtarla birçok model", "local": False,
      "values": {"base_url": PRESETS["OpenRouter"], **_CLOUD}},
     {"id": "together",   "label": "Together",
-     "note": "cloud · needs a key", "local": False,
+     "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Together"], **_CLOUD}},
     {"id": "cerebras",   "label": "Cerebras",
-     "note": "cloud · needs a key", "local": False,
+     "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Cerebras"], **_CLOUD}},
     {"id": "custom",     "label": "Something else",
      "note": "type the address yourself", "local": None,
@@ -649,9 +650,9 @@ class OpenAICompatLLM:
         person reading it is trying to get a model working, not debug HTTP.
         """
         if not self.base:
-            return False, "No address set."
+            return False, "Sunucu adresi girilmedi."
         if not self.model:
-            return False, "No model chosen."
+            return False, "Model seçilmedi."
         import time
         t0 = time.monotonic()
         try:
@@ -661,12 +662,11 @@ class OpenAICompatLLM:
         except Exception as e:
             msg = str(e)
             if "401" in msg or "403" in msg:
-                return False, "The server refused the key."
+                return False, "Sunucu API anahtarını reddetti."
             if "404" in msg:
-                return False, f"No model called '{self.model}' at that address."
+                return False, f"Bu adreste '{self.model}' modeli bulunamadı."
             if "Connect" in msg or "connect" in msg or "timed out" in msg:
-                return False, ("Nothing answered at that address — is the "
-                               "server running?")
+                return False, "Bu adresten yanıt alınamadı. Sunucu çalışıyor mu?"
             return False, _terse(msg, 90)
 
         took = time.monotonic() - t0
@@ -674,8 +674,8 @@ class OpenAICompatLLM:
         if check_vision:
             self._vision_known = ""          # TEST always re-measures
             seen = self.ensure_vision_known()
-            note = "  |  can see images" if seen else "  |  text only"
-        return True, f"Answered in {took:.2f}s{note}"
+            note = "  |  görselleri anlayabilir" if seen else "  |  yalnızca metin"
+        return True, f"{took:.2f} saniyede yanıt verdi{note}"
 
 
 def _with_address(exc: Exception, base: str) -> Exception:
@@ -741,7 +741,7 @@ PROVIDER = {
         # plain text it rendered as a box LIST had nothing to populate.
         Field("model", "Model", kind="choice", choices=(),
               hint="Filled in from the server — press REFRESH if it is empty"),
-        Field("api_key", "API key", kind="secret", required=False,
+        Field("api_key", "API anahtarı", kind="secret", required=False,
               hint="Local servers usually need none"),
         # Filled in by TEST, not asked. The user is the wrong person to ask
         # whether a model is multimodal — see OpenAICompatLLM.can_see. Kept as a
@@ -750,12 +750,12 @@ PROVIDER = {
         Field("vision", "Can see images", kind="bool",
               default=False, required=False, advanced=True,
               hint="Set automatically when you press TEST"),
-        Field("max_tools", "Tool limit", kind="number", default=0,
+        Field("max_tools", "Araç sınırı", kind="number", default=0,
               required=False, advanced=True,
-              hint="0 = no limit. Small models choose badly past about 12"),
-        Field("max_tool_chars", "Tool prompt limit", kind="number", default=0,
+              hint="0 = sınırsız. Küçük modeller 12 araçtan sonra zorlanabilir"),
+        Field("max_tool_chars", "Araç açıklama sınırı", kind="number", default=0,
               required=False, advanced=True,
-              hint="0 = no limit. Characters of tool descriptions sent each  turn"),
+              hint="0 = sınırsız. Her istekte modele gönderilen araç açıklaması uzunluğu"),
     ),
     "caps": {"tools": True, "tool_format": "openai"},
     "factory": _make,

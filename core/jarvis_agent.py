@@ -1,26 +1,8 @@
-"""
-core/jarvis_agent.py — MAYK's own coding agent. No subscription needed.
+"""MAYK'ın kendi kodlama ajanı: DeepSeek V4 Pro → Flash → Gemini.
 
-Claude Code and Codex are rented: when the subscription ends, they are gone.
-This agent is MAYK's own. It works the way they do — looks around the
-project, reads the files it needs, makes exact edits, runs the code and the
-tests, reads the errors and fixes them until it works — and only borrows a
-"brain" to think with, choosing the best one that is free right now:
-
-    1. DeepSeek — the user's chosen coder (new accounts get free tokens for a
-       month, then it is pay-as-you-go and very cheap). An empty balance
-       answers 402 and Gemini takes over.
-    2. Gemini, with the key MAYK already has, as the backup (the best model
-       the key can use is found by asking Google which models exist — model
-       names change every few months, so none is hard-coded)
-
-If one brain is at its limit, the next takes over in the middle of the job;
-the work done so far (the files) stays.
-
-Tools the brain gets: list_files, read_file, search, write_file, edit_file,
-run (building/testing commands only — never delete, never git commit/push),
-fetch_url (documentation) and finish. Everything stays inside the project
-folder. No Qt; raises only RuntimeError with a sentence for the user.
+Dosyaları analiz eder, düzenler ve test eder. Kod değişiklikleri proje klasöründe
+kalır; API anahtarları aracıya, günlük dosyalarına veya model istemine verilmez.
+DeepSeek bakiyesi ya da kota sınırı dolarsa sıradaki uygun modele geçilir.
 """
 
 from __future__ import annotations
@@ -61,53 +43,50 @@ _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "env", "__pycache__", "di
               ".idea", ".vscode", ".mypy_cache", ".pytest_cache", ".jarvis_backup"}
 
 SYSTEM = (
-    "You are MAYK's coding agent, working inside one project folder through tools. You are a senior "
-    "engineer who owns the result: the user asked by voice and will not review your diff, so what you "
-    "hand back must simply work.\n"
-    "Work like this:\n"
-    "1. Look before you change: list_files, search and read_file the code that matters; reuse what the "
-    "project already has.\n"
-    "2. Plan the steps in your head, then do them one by one.\n"
-    "3. Build it completely — no placeholders, no TODOs, no fake data in place of real logic. A website "
-    "gets real content, a responsive layout and working links.\n"
-    "4. Change files with edit_file (exact, small replacements); use write_file for new files or a full "
-    "rewrite of a small file. Never touch secrets, keys or settings files; never delete the user's data.\n"
-    "5. Verify: run the tests or the program with run, read the errors, fix, run again until it works. "
-    "Check your work once more for bugs before finishing.\n"
-    "6. When done, call finish with a summary IN TURKISH: what you built or changed, how you checked it, "
-    "how to open or run it (3–5 sentences, no code).\n"
-    "Only call the tools; paths are relative to the project folder."
+    "Sen MAYK'ın kodlama ajanısın. Yalnızca verilen proje klasöründe çalışırsın. "
+    "Deneyimli bir yazılım mühendisi gibi eksiksiz ve doğrulanmış çözüm üret. "
+    "Kullanıcı Türkçe konuşuyorsa yanıtların, günlük açıklamaların ve özetlerin Türkçe olsun.\n"
+    "1. Önce incele: list_files, search ve read_file ile mevcut yapıyı anla; tekrar kullanılabilecek kodu bul.\n"
+    "2. Gerekli adımları planla ve sırayla uygula.\n"
+    "3. Gerçek işlevleri tamamla. Sahte veri, boş fonksiyon veya TODO bırakma. "
+    "Web uygulamasında gerçek içerik, duyarlı tasarım ve çalışan bağlantılar kullan.\n"
+    "4. Mevcut dosyalarda küçük ve tam edit_file değişiklikleri yap; yeni dosyalar için "
+    "write_file kullan. API anahtarlarına, şifrelere, yerel ayarlara dokunma ve kullanıcı verisini silme.\n"
+    "5. run ile testleri veya uygulamayı çalıştır; hataları okuyup düzelt. İşini bitirmeden bir kez daha kontrol et.\n"
+    "6. Bittiğinde finish aracını çağır; ne yaptığını ve nasıl doğruladığını "
+    "Türkçe 3–5 cümlede açıkla. Sadece açıklama yaparak işi bitirmiş sayma.\n"
+    "Yalnızca tanımlanmış araçları çağır; dosya yolları proje klasörüne göreli olmalıdır."
 )
 
 TOOLS = [
-    {"name": "list_files", "description": "List files and folders (skips node_modules, .git, venv …).",
+    {"name": "list_files", "description": "Dosya ve klasörleri listele (.git, venv ve node_modules hariç).",
      "parameters": {"type": "object", "properties": {
-         "path": {"type": "string", "description": "folder, relative; default '.'"},
-         "depth": {"type": "integer", "description": "how deep, 1-4; default 2"}}}},
-    {"name": "read_file", "description": "Read a text file with line numbers (up to 500 lines at a time).",
+         "path": {"type": "string", "description": "Göreli klasör yolu; varsayılan '.'"},
+         "depth": {"type": "integer", "description": "Arama derinliği: 1–4, varsayılan 2"}}}},
+    {"name": "read_file", "description": "Bir metin dosyasını satır numaralarıyla oku (en fazla 500 satır).",
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}},
          "required": ["path"]}},
-    {"name": "search", "description": "Search the project's text files with a regular expression.",
+    {"name": "search", "description": "Projede düzenli ifadeyle metin ara.",
      "parameters": {"type": "object", "properties": {
-         "pattern": {"type": "string"}, "glob": {"type": "string", "description": "e.g. *.py; default all"}},
+         "pattern": {"type": "string"}, "glob": {"type": "string", "description": "Örn. *.py; varsayılan: tümü"}},
          "required": ["pattern"]}},
-    {"name": "write_file", "description": "Create a file or replace its whole content.",
+    {"name": "write_file", "description": "Yeni dosya oluştur veya tüm içeriğini değiştir.",
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}},
-    {"name": "edit_file", "description": "Replace an exact piece of text in a file. `old` must appear exactly "
-                                         "once unless replace_all is true; include enough context.",
+    {"name": "edit_file", "description": "Dosyada belirtilen metni birebir değiştir. Eski metin, replace_all kullanılmadığında "
+                                         "yalnızca bir kez bulunmalıdır; yeterli bağlam belirt.",
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "old": {"type": "string"}, "new": {"type": "string"},
          "replace_all": {"type": "boolean"}}, "required": ["path", "old", "new"]}},
-    {"name": "run", "description": "Run a command in the project folder to build, run or test (python, "
-                                   "pytest, npm, node, go, cargo, …). Returns exit code and output.",
+    {"name": "run", "description": "Proje klasöründe derleme, çalıştırma veya test komutu uygula (python, "
+                                   "pytest, npm, node, go, cargo vb.). Çıkış kodunu ve sonucu döndürür.",
      "parameters": {"type": "object", "properties": {
-         "command": {"type": "string"}, "timeout": {"type": "integer", "description": "seconds, default 120"}},
+         "command": {"type": "string"}, "timeout": {"type": "integer", "description": "Saniye cinsinden süre; varsayılan 120"}},
          "required": ["command"]}},
-    {"name": "fetch_url", "description": "Read a documentation web page as text.",
+    {"name": "fetch_url", "description": "Bir dokümantasyon sayfasını metin olarak oku.",
      "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}},
-    {"name": "finish", "description": "The work is done and checked: give the summary in Turkish.",
+    {"name": "finish", "description": "İş tamamlandı ve doğrulandı: sonucu Türkçe özetle.",
      "parameters": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"]}},
 ]
 
@@ -134,12 +113,12 @@ class Workspace:
         try:
             fn = getattr(self, "t_" + name, None)
             if fn is None:
-                return f"Unknown tool {name}."
+                return f"Bilinmeyen araç: {name}."
             return fn(**{k: v for k, v in (args or {}).items() if v is not None})
         except TypeError as exc:
-            return f"Wrong arguments for {name}: {exc}"
+            return f"{name} için geçersiz parametreler: {exc}"
         except Exception as exc:
-            return f"Error: {type(exc).__name__}: {exc}"
+            return f"Hata: {type(exc).__name__}: {exc}"
 
     def t_list_files(self, path=".", depth=2):
         base = self._path(path)
@@ -167,7 +146,7 @@ class Workspace:
     def t_read_file(self, path, start_line=1, end_line=None):
         p = self._path(path)
         if not p.is_file():
-            return f"No such file: {path}"
+            return f"Dosya bulunamadı: {path}"
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
         s = max(1, int(start_line or 1))
         e = min(len(lines), int(end_line or s + MAX_READ_LINES - 1), s + MAX_READ_LINES - 1)
@@ -195,32 +174,32 @@ class Workspace:
                         hits.append(f"{fp.relative_to(self.root).as_posix()}:{n}: {line.strip()[:200]}")
                         if len(hits) >= 80:
                             return "\n".join(hits) + "\n… (more hits)"
-        return "\n".join(hits) or "No matches."
+        return "\n".join(hits) or "Eşleşme bulunamadı."
 
     def t_write_file(self, path, content):
         p = self._path(path)
         if p.name.lower() in (".env", "api_keys.json", "credentials.json"):
-            return "Refused: that file holds secrets."
+            return "Reddedildi: bu dosyada gizli bilgiler var."
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(str(content), encoding="utf-8")
         self.changed.add(p.relative_to(self.root).as_posix())
         self.log(f"  Yazdı: {p.relative_to(self.root).as_posix()}")
-        return f"Wrote {path} ({len(str(content))} chars)."
+        return f"{path} yazıldı ({len(str(content))} karakter)."
 
     def t_edit_file(self, path, old, new, replace_all=False):
         p = self._path(path)
         if not p.is_file():
-            return f"No such file: {path}"
+            return f"Dosya bulunamadı: {path}"
         text = p.read_text(encoding="utf-8", errors="replace")
         n = text.count(old) if old else 0
         if n == 0:
-            return "The `old` text was not found. Read the file again and copy it exactly."
+            return "Eski metin bulunamadı. Dosyayı yeniden okuyup tam metni kullanın."
         if n > 1 and not replace_all:
-            return f"`old` appears {n} times; add more surrounding text or set replace_all."
+            return f"`old` metni {n} kez geçiyor; daha uzun bağlam belirtin veya replace_all kullanın."
         p.write_text(text.replace(old, new) if replace_all else text.replace(old, new, 1), encoding="utf-8")
         self.changed.add(p.relative_to(self.root).as_posix())
         self.log(f"  Düzenledi: {p.relative_to(self.root).as_posix()}")
-        return f"Edited {path} ({n if replace_all else 1} replacement)."
+        return f"{path} düzenlendi ({n if replace_all else 1} değiştirme)."
 
     @staticmethod
     def allowed(command: str) -> bool:
@@ -235,8 +214,8 @@ class Workspace:
 
     def t_run(self, command, timeout=120):
         if not self.allowed(command):
-            return ("Refused: only building, running and testing commands are allowed "
-                    "(no deleting, no git commit/push, no downloads).")
+            return ( "Reddedildi: yalnızca derleme, çalıştırma ve test komutlarına izin verilir "
+                    "(silme, git commit/push veya indirme işlemleri yasaktır).")
         self.log(f"  Çalıştırıyor: {str(command)[:140]}")
         try:
             r = subprocess.run(command, shell=True, cwd=self.root, capture_output=True, text=True,
@@ -250,11 +229,11 @@ class Workspace:
                 out = out[:MAX_OUTPUT // 2] + "\n… (cut) …\n" + out[-MAX_OUTPUT // 2:]
             return f"exit code {r.returncode}\n{out}"
         except subprocess.TimeoutExpired:
-            return "Timed out. If it is a server or a program that keeps running, do not start it; test it another way."
+            return "Süre sınırı doldu. Sürekli çalışan sunucu veya programsa yeniden açmayın; başka yöntemle test edin."
 
     def t_fetch_url(self, url):
         if not str(url).startswith(("http://", "https://")):
-            return "Only web addresses."
+            return "Yalnızca web adresleri kabul edilir."
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 MAYK"})
         with urllib.request.urlopen(req, timeout=20) as r:
             raw = r.read(600_000).decode("utf-8", errors="replace")
@@ -440,26 +419,51 @@ def gemini_models(key: str) -> list[str]:
     return _gemini_cache["models"]
 
 
+def deepseek_models() -> list[str]:
+    """Önce güçlü V4 Pro, ardından hızlı/ekonomik Flash.
+
+    Eski model takma adları yeni API'de kaldırıldığı için otomatik dönüştürülür.
+    """
+    cfg = _settings()
+    requested = cfg.get("deepseek_models")
+    if isinstance(requested, str):
+        requested = [requested]
+    aliases = {"deepseek-chat": "deepseek-flash",
+               "deepseek-reasoner": "deepseek-v4-pro",
+               "deepseek-v4-flash": "deepseek-flash"}
+    models = requested if isinstance(requested, (list, tuple)) and requested else [
+        "deepseek-v4-pro", "deepseek-flash"]
+    models = [aliases.get(str(m).strip(), str(m).strip()) for m in models]
+    return list(dict.fromkeys(m for m in models if m))
+
+
 def brains() -> list:
-    """Every brain that can work right now, best first."""
+    """Kullanılabilir kodlama modelleri: DeepSeek → Gemini."""
+    from core import deepseek_account
     cfg = _settings()
     out = []
-    if cfg.get("deepseek_key"):
-        for m in (cfg.get("deepseek_models") or ["deepseek-chat"]):
-            out.append(OpenAIBrain("https://api.deepseek.com/v1", cfg["deepseek_key"], m, "DeepSeek"))
-    key = _gemini_key()
-    if key and cfg.get("use_gemini", True) is not False:
-        out += [GeminiBrain(key, m) for m in gemini_models(key)]
+    key = deepseek_account.api_key()
+    if key:
+        info = deepseek_account.balance_status(key)
+        # Bakiye kesin olarak yetersizse DeepSeek'e gereksiz istek yapma.
+        # Ağ hatasını asla 'bakiye bitti' diye yorumlama.
+        if info["available"] is not False:
+            out.extend(OpenAIBrain("https://api.deepseek.com", key, m, "DeepSeek")
+                       for m in deepseek_models())
+    gemini_key = _gemini_key()
+    if gemini_key and cfg.get("use_gemini", True) is not False:
+        out.extend(GeminiBrain(gemini_key, m) for m in gemini_models(gemini_key))
     return out
 
 
 def available() -> bool:
-    cfg = _settings()
-    return bool(cfg.get("deepseek_key") or _gemini_key())
+    from core import deepseek_account
+    return bool(deepseek_account.api_key() or _gemini_key())
 
 
 def deepseek_ready() -> bool:
-    return bool(_settings().get("deepseek_key"))
+    from core import deepseek_account
+    return bool(deepseek_account.api_key())
 
 
 # ── the loop ─────────────────────────────────────────────────────────────────
@@ -491,6 +495,11 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
             text, calls, raw = brain.turn(history)
         except BrainError as e:
             err = str(e)
+            # 402 aynı hesap bakiyesidir; Flash denemek de işe yaramaz.
+            if (isinstance(brain, OpenAIBrain) and brain.name.startswith("DeepSeek")
+                    and ("402" in err or "insufficient balance" in err.casefold())):
+                pool = [b for b in pool if not (
+                    isinstance(b, OpenAIBrain) and b.name.startswith("DeepSeek"))]
             wait = _retry_after(err)
             if "429" in err and 0 < wait <= 60 and "limit: 0" not in err:
                 log(f"  {brain.name} dakikalık sınırda; {int(wait) + 1} sn bekliyor.")
@@ -514,7 +523,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
             if idle >= 2:
                 # answered in words without tools: take it as the summary
                 return text.strip() or "İş bitti."
-            history.append({"role": "user", "text": "Use the tools to do the work, then call finish."})
+            history.append({"role": "user", "text": "Araçları kullanarak işi tamamla; ardından finish çağır."})
             continue
         idle = 0
         for c in calls:

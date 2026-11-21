@@ -8,20 +8,11 @@ from core import code_checks, codex_coding
 
 
 class CodingModelTests(unittest.TestCase):
-    def test_codex_answers_when_it_is_the_best_available(self):
-        # The coding router picks the best installed model; with only Codex
-        # installed and free, Codex answers and nothing else is called.
-        from actions import dev_agent
-        from core import coding_router
-        from types import SimpleNamespace
-
-        with patch.object(dev_agent, "_coding_provider", return_value=codex_coding.PROVIDER_ID), \
-             patch.object(coding_router, "ladder", return_value=[codex_coding.PROVIDER_ID, ""]), \
-             patch.object(codex_coding, "generate_content", return_value=SimpleNamespace(text="kod")) as gen, \
-             patch.object(dev_agent.gemini, "call") as gem:
-            self.assertEqual(dev_agent._get_model().generate_content("yaz").text, "kod")
-        gen.assert_called_once_with("yaz")
-        gem.assert_not_called()
+    def test_codex_is_not_a_coding_agent_choice(self):
+        from core import coding_router, agent_coding
+        self.assertNotIn(codex_coding.PROVIDER_ID, coding_router.AGENTS)
+        self.assertNotIn(codex_coding.PROVIDER_ID, agent_coding.AGENT_PROVIDERS)
+        self.assertFalse(agent_coding.available(codex_coding.PROVIDER_ID))
 
     def test_codex_receives_context_through_stdin_and_returns_final_reply(self):
         def run(args, **options):

@@ -10,22 +10,11 @@ from core import claude_coding
 
 
 class ClaudeCodingTests(unittest.TestCase):
-    def test_selected_coding_provider_uses_local_cli_without_running_tools(self):
-        completed = subprocess.CompletedProcess(
-            [], 0, json.dumps({"is_error": False, "result": "new source"}), "",
-        )
-        with patch.object(dev_agent, "_coding_provider", return_value=claude_coding.PROVIDER_ID), patch.object(
-            claude_coding, "_executable", return_value="claude"
-        ), patch.object(claude_coding.subprocess, "run", return_value=completed) as run:
-            reply = dev_agent._get_model().generate_content("project context")
-
-        self.assertEqual(reply.text, "new source")
-        args = run.call_args.args[0]
-        self.assertEqual(args[args.index("--tools") + 1], "")
-        self.assertIn("--strict-mcp-config", args)
-        self.assertIn("--no-session-persistence", args)
-        self.assertNotIn("project context", args)
-        self.assertEqual(run.call_args.kwargs["input"], "project context")
+    def test_claude_is_not_a_coding_agent_choice(self):
+        from core import coding_router, agent_coding
+        self.assertNotIn(claude_coding.PROVIDER_ID, coding_router.AGENTS)
+        self.assertNotIn(claude_coding.PROVIDER_ID, agent_coding.AGENT_PROVIDERS)
+        self.assertFalse(agent_coding.available(claude_coding.PROVIDER_ID))
 
     def test_windows_find_official_native_install_when_path_is_stale(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(
