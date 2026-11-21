@@ -285,7 +285,7 @@ class ChessPanel(QWidget):
         root.setSpacing(10)
 
         bar = QHBoxLayout()
-        back = QPushButton("‹  CORE")
+        back = QPushButton("‹  ANA EKRAN")
         back.setStyleSheet(btn_css("dim", align="center"))
         back.setFixedSize(96, 32)
         back.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.5))
