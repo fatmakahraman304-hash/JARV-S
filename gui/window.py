@@ -945,11 +945,11 @@ class MainWindow(QMainWindow):
                         and not self._video_sound_out.isMuted())
         if sound_on and not self._muted:
             self._video_auto_muted = True
-            self._set_muted(True, "The video's sound is on — silence it, close "
+            self._set_muted(True, "Videonun sesi açık — videoyu kapatmadan önce sesi kıs, "
                                   "it, or press F4 to talk. Typing still works.")
         elif not sound_on and self._video_auto_muted:
             self._video_auto_muted = False
-            self._set_muted(False, "The video is quiet again.")
+            self._set_muted(False, "Videonun sesi artık kapalı.")
 
     def _sync_video_sound(self) -> None:
         """Keep the separate soundtrack in step with the picture.
@@ -1914,7 +1914,7 @@ class MainWindow(QMainWindow):
         lines = [r["name"], "", f"When: {eng.describe(r)}"]
         if r["trigger"]["type"] == "time" and r.get("next_ts") and r.get("enabled"):
             lines.append(f"Next: {stamp(r['next_ts'])}")
-        what = {"say": "Says", "prompt": "Carries out", "task": "Background task"}.get(r["kind"])
+        what = {"say": "Söylüyor", "prompt": "Uyguluyor", "task": "Arka plan görevi"}.get(r["kind"])
         if what and r.get("text"):
             lines.append(f"{what}: {r['text']}")
         for key, value in (r.get("options") or {}).items():
@@ -1928,7 +1928,7 @@ class MainWindow(QMainWindow):
                      f" · ran {int(r.get('runs') or 0)} times")
         if r.get("last_run"):
             lines.append(f"Last: {stamp(r['last_run'])} — {r.get('last_result') or ''}")
-        lines += ["", "Change it by voice — \"move the briefing to 08:30\", "
+        lines += ["", "Sesle değiştirebilirsiniz — \"Sabah özetini 08.30’a al\", "
                       "\"turn the check-in off\", \"remind me every Friday at 17:00\"."]
         self._show_content("ROUTINE", "\n".join(lines)[:4000])
 
