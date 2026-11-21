@@ -1464,8 +1464,8 @@ class TaskRow(QWidget):
             return f"{used:.0f}/{t['budget']['minutes']}m"
         if s == "scheduled":
             return time.strftime("%H:%M", time.localtime(t.get("not_before") or 0))
-        return {"waiting_quota": "WAIT", "queued": "QUEUED", "done": "DONE",
-                "failed": "FAILED", "cancelled": "STOPPED"}.get(s, s.upper())
+        return {"waiting_quota": "BEKLİYOR", "queued": "SIRADA", "done": "BİTTİ",
+                "failed": "HATA", "cancelled": "DURDU"}.get(s, s.upper())
 
     def paintEvent(self, _):
         t = self._task
