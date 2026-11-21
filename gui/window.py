@@ -1575,7 +1575,12 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 self._update_done_sig.emit(False, f"Güncelleme uygulanamadı: {exc}")
         # Non-daemon: an ordinary window close must not interrupt a file transaction.
-        threading.Thread(target=work, name="jarvis-update", daemon=False).start()
+        self._update_worker = threading.Thread(target=work, name="jarvis-update", daemon=False)
+        try:
+            self._update_worker.start()
+        except RuntimeError as exc:
+            self._update_worker = None
+            self._update_done(False, f"Güncelleme başlatılamadı: {exc}")
 
     def _update_progress(self, message):
         if hasattr(self, "_update_btn"):
