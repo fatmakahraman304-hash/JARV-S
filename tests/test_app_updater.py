@@ -333,3 +333,99 @@ class GitLocalChangesTests(unittest.TestCase):
             u.update(self.root)
         self.assertEqual(personal.read_bytes(), b'personal')
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.old)
+
+
+class InterruptedZipTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.old = {"main.py": b"old main", "gui/window.py": b"old hud",
+                    "requirements.txt": b"test==1", "a-removed.py": b"old"}
+        u._apply_zip(self.root, self.old, "a" * 40, "main")
+        (self.root / "update_channel.json").write_text('{"branch":"main"}')
+        self.private = self.root / "config/api_keys.json"
+        self.private.parent.mkdir()
+        self.private.write_bytes(b"local settings")
+
+    def interrupt(self, stop_at):
+        import subprocess
+        import sys
+        script = """
+import io,json,os,sys,zipfile
+from pathlib import Path
+from unittest.mock import patch
+from core import app_updater as u
+root=Path(sys.argv[1])
+buf=io.BytesIO()
+with zipfile.ZipFile(buf,'w') as z:
+    for path,data in [('main.py',b'new main'),('gui/window.py',b'new hud'),
+                      ('a-added.py',b'new file'),('requirements.txt',b'test==1')]:
+        z.writestr('repo/'+path,data)
+replace=u.os.replace
+def stop(src,dst):
+    replace(src,dst)
+    if Path(dst)==root/sys.argv[2]:
+        os._exit(79)
+with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_effect=[
+        json.dumps({'sha':'b'*40}).encode(),buf.getvalue()]):
+    u.update(root)
+"""
+        child = subprocess.run([sys.executable, "-c", script, str(self.root), stop_at],
+                               capture_output=True, timeout=20)
+        self.assertEqual(child.returncode, 79, child.stderr)
+        self.assertTrue((self.root / ".jarvis-update.lock").exists())
+
+    def recover(self):
+        with patch.object(u, "_get", side_effect=AssertionError("recovery must be offline")):
+            return u.update(self.root)
+
+    def test_partial_update_restores_old_edited_added_and_removed_files(self):
+        self.interrupt("main.py")
+        self.assertTrue(self.recover()[0])
+        self.assertFalse((self.root / "a-added.py").exists())
+        for rel, data in self.old.items():
+            self.assertEqual((self.root / rel).read_bytes(), data)
+        self.assertEqual(self.private.read_bytes(), b"local settings")
+        self.assertFalse((self.root / ".jarvis-update.lock").exists())
+
+    def test_committed_update_survives_process_exit_before_unlock(self):
+        self.interrupt(".jarvis-update.json")
+        self.assertTrue(self.recover()[0])
+        self.assertEqual((self.root / "main.py").read_bytes(), b"new main")
+        self.assertFalse((self.root / "a-removed.py").exists())
+        state = json.loads((self.root / ".jarvis-update.json").read_text())
+        self.assertEqual(state["sha"], "b" * 40)
+
+    def test_personal_edit_stops_recovery_before_any_files_are_changed(self):
+        self.interrupt("main.py")
+        (self.root / "main.py").write_bytes(b"personal edit")
+        with self.assertRaisesRegex(RuntimeError, "Yerel içerik"):
+            self.recover()
+        self.assertEqual((self.root / "main.py").read_bytes(), b"personal edit")
+        self.assertTrue((self.root / "a-added.py").exists())
+        self.assertTrue((self.root / ".jarvis-update.lock").exists())
+
+    def test_offline_command_can_be_run_twice_without_starting_the_hud(self):
+        import subprocess
+        import sys
+        self.interrupt("main.py")
+        core = self.root / "core"
+        core.mkdir()
+        (core / "__init__.py").touch()
+        (core / "app_updater.py").write_bytes(Path(u.__file__).read_bytes())
+        for message in ("Kurtarma doğrulandı", "Bekleyen ZIP kurtarması yok"):
+            cmd = subprocess.run([sys.executable, "-X", "utf8", "-m", "core.app_updater", "--recover"],
+                                 cwd=self.root, capture_output=True, timeout=15)
+            self.assertEqual(cmd.returncode, 0, cmd.stderr)
+            self.assertIn(message, cmd.stdout.decode("utf-8"))
+        self.assertEqual((self.root / "main.py").read_bytes(), b"old main")
+
+    def test_corrupt_backup_blocks_changes_and_keeps_marker(self):
+        self.interrupt("main.py")
+        marker = self.root / ".jarvis-update.lock"
+        journal = json.loads(marker.read_bytes()[len(u._ZIP_MARKER):])
+        (self.root / ".jarvis-backups" / journal["backup"] / "main.py").write_bytes(b"broken")
+        with self.assertRaisesRegex(RuntimeError, "Yedek doğrulanamadı"):
+            self.recover()
+        self.assertTrue(marker.exists())
+        self.assertEqual((self.root / "main.py").read_bytes(), b"new main")
+        self.assertTrue((self.root / "a-added.py").is_file())
