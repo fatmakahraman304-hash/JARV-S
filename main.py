@@ -1696,6 +1696,29 @@ class MaykLive:
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
+        # Live ses modeli konuşmayı da yorumluyor; yalnızca STT motorunu
+        # ayarlamak Gemini Live oturumunu etkilemez. Bu talimat, Türkçeye
+        # öncelik verirken kullanıcı açıkça dil değiştirirse onu da korur.
+        parts.append(
+            "[TURKISH SPEECH UNDERSTANDING]\n"
+            "This is a Turkish-first voice conversation. Recognize everyday "
+            "Turkish pronunciation and inflected commands, including MAYK, "
+            "M.A.Y.K., and 'Mayk' as the assistant's name. "
+            "Keep Turkish as the response language unless the user clearly "
+            "and intentionally requests another language or has an unmistakable "
+            "conversation in that language. A single unclear sound, accidental "
+            "foreign-looking transcript or short filler is NOT a language switch. "
+            "Do not invent words, commands, meanings, actions, objects or people "
+            "to fill unclear audio. If a short utterance is uncertain, ask one "
+            "short natural Turkish confirmation instead of acting on a guess. "
+            "When the user says 'yanlış anladın', 'öyle demedim' or corrects a "
+            "word, prioritize their correction and explicitly restate the "
+            "correct intent before proceeding. Distinguish questions ('yaptın mı') "
+            "from commands ('yap'); preserve negation ('yapma', 'kapatma'). "
+            "Do not repeat an operation because a partial audio transcript "
+            "or trailing speaker echo repeats. Never claim to have understood "
+            "a command that was not actually clear."
+        )
         parts.append(
             "In voice replies, use natural pacing and an expressive tone suited to "
             "the conversation: warm and calm for concerns, brighter for good news, "
@@ -2824,14 +2847,18 @@ class MaykLive:
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = _clean_transcript(sc.input_transcription.text)
                             if txt:
-                                in_buf.append(txt)
+                                from core.live_transcript import merge_input_chunk, combined_text
+                                # Live API kimi zaman tüm cümleyi tekrar gönderir.
+                                # Düz metin parçalarını körü körüne biriktirmek
+                                # komutun iki kez duyulmuş gibi görünmesine yol açar.
+                                in_buf = merge_input_chunk(in_buf, txt)
                                 self._last_user_speech = time.monotonic()
-                                # what the user is saying right now — the intent guard reads it
-                                self._last_user_text = " ".join(in_buf)
+                                # Niyet koruması, tekrarsız konuşma metnini kullanır.
+                                self._last_user_text = combined_text(in_buf)
                                 self._last_user_at = self._last_user_speech
 
                         if sc.turn_complete:
-                            user_text = " ".join(in_buf)
+                            user_text = " ".join(in_buf).strip()
                             if self._awake and is_close_command(user_text):
                                 in_buf, out_buf = [], []
                                 self.interrupt()
