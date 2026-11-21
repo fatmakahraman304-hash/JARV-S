@@ -172,8 +172,8 @@ CATALOG = (
     {"id": "cerebras",   "label": "Cerebras",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Cerebras"], **_CLOUD}},
-    {"id": "custom",     "label": "Something else",
-     "note": "type the address yourself", "local": None,
+    {"id": "custom",     "label": "Diğer sağlayıcı",
+     "note": "API adresini kendiniz girin", "local": None,
      "values": {}},
 )
 
@@ -736,25 +736,25 @@ PROVIDER = {
     # What the panel lists instead of this provider's own name. See CATALOG.
     "catalog": CATALOG,
     "needs": (
-        Field("base_url", "Address", kind="choice",
+        Field("base_url", "API adresi", kind="choice",
               choices=tuple(PRESETS.values()),
               default=PRESETS["Ollama"],
-              hint="A preset, or any address serving /v1/chat/completions"),
+              hint="Hazır adres veya /v1/chat/completions sunan başka bir API adresi"),
         # A choice rather than free text, even though the list starts empty:
         # LIST fills it from the endpoint itself, and the panel keeps a choice
         # field typeable so an unlisted model can still be entered. Declared as
         # plain text it rendered as a box LIST had nothing to populate.
         Field("model", "Model", kind="choice", choices=(),
-              hint="Filled in from the server — press REFRESH if it is empty"),
+              hint="Sunucudan otomatik alınır; boşsa YENİLE düğmesine basın"),
         Field("api_key", "API anahtarı", kind="secret", required=False,
-              hint="Local servers usually need none"),
+              hint="Yerel sunucular genellikle API anahtarı istemez"),
         # Filled in by TEST, not asked. The user is the wrong person to ask
         # whether a model is multimodal — see OpenAICompatLLM.can_see. Kept as a
         # field so the answer is stored and so somebody who knows better can
         # override it under MORE.
-        Field("vision", "Can see images", kind="bool",
+        Field("vision", "Görselleri anlayabilir", kind="bool",
               default=False, required=False, advanced=True,
-              hint="Set automatically when you press TEST"),
+              hint="TEST ET düğmesine basıldığında otomatik algılanır"),
         Field("max_tools", "Araç sınırı", kind="number", default=0,
               required=False, advanced=True,
               hint="0 = sınırsız. Küçük modeller 12 araçtan sonra zorlanabilir"),
