@@ -186,10 +186,10 @@ class MaykUI:
     def on_audio_device_change(self, cb):
         self._win.on_audio_device_change = cb
 
-    def show_confirm(self, title: str, detail: str) -> None:
+    def show_confirm(self, title: str, detail: str, token: str) -> None:
         """Thread-safe: raise the irreversible-action gate. Called from action
         handlers running in executor threads, so it goes through a signal."""
-        self._win._confirm_sig.emit(str(title)[:120], str(detail)[:300])
+        self._win._confirm_sig.emit(str(title), str(detail), token)
 
     def hide_confirm(self) -> None:
         """Thread-safe: take the gate down."""
