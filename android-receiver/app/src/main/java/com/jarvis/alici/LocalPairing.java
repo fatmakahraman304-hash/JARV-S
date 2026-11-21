@@ -74,7 +74,7 @@ final class LocalPairing {
                 if (n >= 4 && h[n-4] == 13 && h[n-3] == 10 && h[n-2] == 13 && h[n-1] == 10) break;
             }
             String headers = headerBytes.toString("UTF-8");
-            String[] lines = headers.split("\\r\\n");
+            String[] lines = headers.split("\r\n");
             if (lines.length == 0) return;
             String[] request = lines[0].split(" ");
             if (request.length < 2 || !request[1].equals("/" + nonce)) { respond(s, 404, "Bulunamadı"); return; }
@@ -108,7 +108,7 @@ final class LocalPairing {
     private void respond(Socket s, int code, String html) throws Exception {
         byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
         OutputStream out = s.getOutputStream();
-        out.write(("HTTP/1.1 " + code + " OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: " + bytes.length + "\\r\\nCache-Control: no-store\\r\\nConnection: close\\r\\nX-Content-Type-Options: nosniff\\r\\n\\r\\n").getBytes(StandardCharsets.UTF_8));
+        out.write(("HTTP/1.1 " + code + " OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + bytes.length + "\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         out.write(bytes);
         out.flush();
     }
