@@ -713,7 +713,7 @@ def _nvidia_probe_message(error: Exception) -> str:
     """
     raw = str(error or "")
     lower = raw.casefold()
-    code = re.match(r"^([1-5][0-9]{2})(?:\\b|\\s)", raw)
+    code = re.match(r"^([1-5][0-9]{2})(?:\b|\s)", raw)
     status = int(code.group(1)) if code else None
     if status in (401, 403):
         return f"NVIDIA HTTP {status}: API anahtarı reddedildi veya modele erişim izni yok."
