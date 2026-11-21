@@ -30,6 +30,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,14 +173,20 @@ def read_gist(token: str, gist_id: str, etag: str = ""):
         return {}, "", (js or {}).get("message", f"GitHub {st}") if isinstance(js, dict) else f"GitHub {st}"
     files = {}
     for name, f in (js.get("files") or {}).items():
-        if f.get("truncated") and f.get("raw_url"):
+        if f.get("truncated"):
             try:
-                rq = urllib.request.Request(f["raw_url"], headers={"Authorization": f"Bearer {token}",
-                                                                  "User-Agent": "JARVIS-sync"})
+                url = f["raw_url"]
+                origin = urlsplit(url)
+                if origin.scheme != "https" or origin.netloc.lower() != "gist.githubusercontent.com":
+                    raise ValueError("unexpected raw origin")
+                rq = urllib.request.Request(url, headers={"User-Agent": "JARVIS-sync"})
+                rq.add_unredirected_header("Authorization", f"Bearer {token}")
                 with urllib.request.urlopen(rq, timeout=15) as r:
                     files[name] = r.read().decode("utf-8")
-            except Exception:
-                continue
+            except (OSError, ValueError, KeyError):
+                # Partial snapshots can make a failed download look like an
+                # empty memory or inbox and cause the next PATCH to erase it.
+                return {}, "", "Gist dosyası eksik alındı. Eşitleme ertelendi."
         else:
             files[name] = f.get("content") or ""
     return files, tag, ""
