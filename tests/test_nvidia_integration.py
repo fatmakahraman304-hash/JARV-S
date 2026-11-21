@@ -201,5 +201,79 @@ class NvidiaRoutingTests(unittest.TestCase):
         self.assertNotIn('f"{f.label}   (optional)"', panel)
 
 
+class NvidiaProbeTests(unittest.TestCase):
+    """MODEL LISTE başarılı olsa bile gerçek chat çağrısının hatası anlaşılmalı."""
+
+    @staticmethod
+    def _provider(key="secret-do-not-show"):
+        from providers.llm_openai import OpenAICompatLLM, PRESETS
+        return OpenAICompatLLM({
+            "base_url": PRESETS["NVIDIA"],
+            "api_key": key,
+            "model": "z-ai/glm-5.3-flash",
+        })
+
+    def test_nvidia_probe_requires_key(self):
+        instance = self._provider("")
+        with mock.patch.object(instance, "complete") as complete:
+            ok, message = instance.probe(check_vision=False)
+        self.assertFalse(ok)
+        self.assertIn("anahtarı girilmedi", message)
+        complete.assert_not_called()
+
+    def test_nvidia_probe_http_errors_are_actionable(self):
+        for error, expected in (
+            ("401 API anahtarı reddedildi", "HTTP 401"),
+            ("403 Permission denied", "HTTP 403"),
+            ("402 Payment Required", "HTTP 402"),
+            ("429 Too Many Requests", "HTTP 429"),
+            ("404 Model not found", "HTTP 404"),
+            ("504 API provider internal error: timed out", "HTTP 504"),
+        ):
+            with self.subTest(error=error):
+                instance = self._provider()
+                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)):
+                    ok, message = instance.probe(check_vision=False)
+                self.assertFalse(ok)
+                self.assertIn(expected, message)
+                self.assertNotIn("Sunucu çalışıyor mu?", message)
+                self.assertNotIn("secret-do-not-show", message)
+
+    def test_nvidia_probe_distinguishes_timeout_from_network(self):
+        instance = self._provider()
+        for error, expected in (
+            ("ReadTimeout: timed out connecting", "zamanında yanıt vermedi"),
+            ("ConnectError: All connection attempts failed", "bağlantısı kurulamadı"),
+            ("SSL verification failed", "bağlantısı kurulamadı"),
+        ):
+            with self.subTest(error=error):
+                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)):
+                    ok, message = instance.probe(check_vision=False)
+                self.assertFalse(ok)
+                self.assertIn(expected, message)
+                self.assertNotIn("Sunucu çalışıyor mu?", message)
+
+    def test_nvidia_probe_uses_extra_timeout_without_extra_vision_call(self):
+        instance = self._provider()
+        with mock.patch.object(instance, "complete", return_value=("ok", [])) as complete, \
+             mock.patch.object(instance, "ensure_vision_known") as vision:
+            ok, message = instance.probe(check_vision=False)
+        self.assertTrue(ok)
+        self.assertIn("saniyede yanıt verdi", message)
+        self.assertEqual(complete.call_args.kwargs["timeout"], 45.0)
+        vision.assert_not_called()
+
+    def test_other_provider_keeps_original_probe_timeout(self):
+        from providers.llm_openai import OpenAICompatLLM
+        instance = OpenAICompatLLM({
+            "base_url": "http://127.0.0.1:11434/v1",
+            "model": "test-model",
+        })
+        with mock.patch.object(instance, "complete", return_value=("ok", [])) as complete:
+            ok, _ = instance.probe(check_vision=False)
+        self.assertTrue(ok)
+        self.assertEqual(complete.call_args.kwargs["timeout"], 20.0)
+
+
 if __name__ == "__main__":
     unittest.main()
