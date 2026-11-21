@@ -1244,7 +1244,21 @@
 
   // ── chess on every device (engine: web/chess.js, same as the desktop's) ──
   const CH = window.JarvisChess;
-  const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  // Built-in SVG pieces: no OS emoji fallback (iOS renders ♟ as a 3-D
+  // black pawn even for the white side). Every piece uses the same viewBox.
+  const PIECE_SHAPES = {
+    p: '<circle cx="22.5" cy="12" r="5.4"/><path d="M19 17.5h7c0 5 4 9.5 5 15H14c1-5.5 5-10 5-15Z"/><path d="M13 32h19l2 5H11z"/><path d="M10 37h25v3H10z"/>',
+    n: '<path d="M14 34c1-5 0-9-3-11l-4-3 5-6 6-2 1-7 5 5 5-1 5 11-3 14H14Z"/><path d="M10 20l6-1" fill="none" stroke="var(--piece-detail)" stroke-width="2"/><circle cx="21" cy="16" r="1.5" fill="var(--piece-detail)" stroke="none"/><path d="M12 34h22l2 5H10z"/>',
+    b: '<circle cx="22.5" cy="6.5" r="2.3"/><path d="M22.5 9c5.2 4 9.2 9.8 8 15.8-.6 3.5-3.6 5.8-4.5 8.2h-7c-1-2.6-4.5-5.9-5-9.4-.8-5.4 3-11 8.5-14.6Z"/><path d="M28.7 14.2l-10.5 13" fill="none" stroke="var(--piece-detail)" stroke-width="2"/><path d="M14 33h17l2 5H12z"/><path d="M10 38h25v2H10z"/>',
+    r: '<path d="M10 10h6v4h4v-4h5v4h4v-4h6v9H10z"/><path d="M13 19h19l-3 15H16z"/><path d="M11 34h23v5H11z"/><path d="M10 39h25v2H10z"/>',
+    q: '<circle cx="10" cy="11" r="2.2"/><circle cx="18" cy="7.5" r="2.2"/><circle cx="27" cy="7.5" r="2.2"/><circle cx="35" cy="11" r="2.2"/><path d="M11 16l6 8 5.5-11 5.5 11 6-8-4 17H15z"/><path d="M14 33h17v3H14z"/><path d="M11 36h23v4H11z"/>',
+    k: '<path d="M21 5h3v7h7v3h-7v5h-3v-5h-7v-3h7z"/><path d="M20 19c-6 0-8 4-8 8 0 3 3 6 5 8h11c2-2 5-5 5-8 0-4-2-8-8-8z"/><path d="M13 35h19v5H13z"/>',
+  };
+  const PIECE_NAMES = { p: 'Piyon', n: 'At', b: 'Fil', r: 'Kale', q: 'Vezir', k: 'Şah' };
+  function pieceSvg(piece) {
+    const color = piece === piece.toUpperCase() ? 'white' : 'black';
+    return `<svg class="ch-piece ${color}" viewBox="0 0 45 45" aria-hidden="true" focusable="false"><g fill="var(--piece-fill)" stroke="var(--piece-stroke)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PIECE_SHAPES[piece.toLowerCase()]}</g></svg>`;
+  }
   const chess = (() => { const g = J(localStorage.getItem('jarvis_chess'), null);
     return { sans: g?.sans || [], userWhite: g?.userWhite ?? true, level: g?.level || 'orta', teach: !!g?.teach, sel: null, hint: null, coach: '' }; })();
   function chessBoard() { const b = new CH.Board(); for (const san of chess.sans) { const m = b.parse(san); if (!m) break; b.push(m); } return b; }
@@ -1263,7 +1277,8 @@
       const rr = chess.userWhite ? r : 7 - r, ff = chess.userWhite ? f : 7 - f, s = rr * 8 + ff, p = b.sq[s];
       const cls = [((rr + ff) % 2) ? 'l' : 'd', p !== '.' ? (p === p.toUpperCase() ? 'w' : 'b') : '', chess.sel === s ? 'sel' : '',
         last && (last[0] === s || last[1] === s) ? 'last' : '', targets.includes(s) ? 'tgt' : '', chess.hint && (chess.hint[0] === s || chess.hint[1] === s) ? 'hint' : ''].join(' ');
-      html += `<div class="${cls}" data-s="${s}">${p !== '.' ? GLYPH[p] : ''}</div>`;
+      const label = p === '.' ? 'Boş kare' : (p === p.toUpperCase() ? 'Beyaz ' : 'Siyah ') + PIECE_NAMES[p.toLowerCase()];
+      html += `<button type="button" class="ch-square ${cls}" data-s="${s}" aria-label="${label} ${CH.sqName(s)}" aria-pressed="${chess.sel === s}">${p !== '.' ? pieceSvg(p) : ''}</button>`;
     }
     $('ch-board').innerHTML = html;
     $('ch-status').textContent = chessState(b).status;
