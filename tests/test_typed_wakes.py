@@ -7,7 +7,7 @@ class TypedWakes(unittest.TestCase):
     def test_source(self):
         src = (Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
         self.assertIn('self.wake(reason="yazılı komut")', src)
-        self.assertNotIn("I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first.", src)
+        self.assertNotIn("I'm asleep — say 'Hey Mayk' or tap WAKE NOW first.", src)
 
 
 if __name__ == "__main__":

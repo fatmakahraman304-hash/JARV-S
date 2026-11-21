@@ -826,7 +826,7 @@ class MaykLive:
         return True
 
     def _on_wake_detected(self) -> None:
-        """Called from the detector thread when 'Hey Jarvis' is heard."""
+        """Called from the detector thread when 'Hey Mayk' is heard."""
         self.wake(reason="wake word")
 
     def wake(self, reason: str = "wake word") -> None:
@@ -863,7 +863,7 @@ class MaykLive:
         self.ui.set_state("SLEEPING")
         if self._snap_detector is not None:
             return
-        self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey Jarvis' to wake me.")
+        self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey Mayk' to wake me.")
 
     def _sleep_until_snap(self) -> None:
         if self._snap_detector is not None:
@@ -927,7 +927,7 @@ class MaykLive:
             self.wake(reason="you tapped wake")
 
     def _ui_wake_install(self) -> tuple[bool, str]:
-        """Download openwakeword + the model (runs in a UI worker thread)."""
+        """Download Vosk and the Mayk wake model (runs in a UI worker thread)."""
         # Triggered by the user pressing the button, so its progress is exactly
         # what they are waiting to see.
         return wake_install(logger=lambda m: print(f"[Wake] {m}"),
@@ -3742,7 +3742,7 @@ class MaykLive:
                         self.ui.write_log("SYS: Reconnected — conversation restored.")
 
                     # Wake word: if enabled, come up ASLEEP (mic gated, silent)
-                    # until the user says "Hey Jarvis" or taps wake in the UI.
+                    # until the user says "Hey Mayk" or taps wake in the UI.
                     #
                     # Only on the FIRST connect of a run. A reconnect — a dropped
                     # network, the server rotating the connection — used to put an
@@ -3776,7 +3776,7 @@ class MaykLive:
                     elif self._wake_enabled and wake_ok and (first_connect or not self._awake):
                         self._awake = False
                         self.ui.set_state("SLEEPING")
-                        self.ui.write_log("SYS: Mayk online — sleeping. Say 'Hey Jarvis' to wake me.")
+                        self.ui.write_log("SYS: Mayk online — sleeping. Say 'Hey Mayk' to wake me.")
                     else:
                         self._awake = True
                         self.ui.set_state("LISTENING")

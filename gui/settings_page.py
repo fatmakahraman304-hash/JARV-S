@@ -192,7 +192,7 @@ class SettingsPage(QDialog):
         switch(general, 'Günlük özet', 'Günlük bilgilendirme rutinini etkinleştir.', cfg.get_brief_enabled, owner._toggle_brief)
         action(general, 'Masaüstü kısayolu', 'Mayk’a masaüstünden hızlı eriş.', owner._create_desktop_shortcut)
         voice = page('Ses ve mikrofon', 'Dinleme şeklini ve ses cihazlarını yönet.')
-        switch(voice, 'Uyandırma kelimesi', 'Seslenerek uyandır. Gerekirse model kurulumu açılır.', lambda: owner._wake_state().get('enabled', False), owner._toggle_wake_word)
+        switch(voice, 'Uyandırma kelimesi', '“Hey Mayk” diyerek uyandır. İlk kullanımda çevrimdışı ses modeli indirilir.', lambda: owner._wake_state().get('enabled', False), owner._toggle_wake_word)
         switch(voice, 'Basılı tutarak konuş', 'Yalnızca konuşma tuşunu basılı tutarken dinle.', cfg.get_push_to_talk_enabled, owner._toggle_ptt)
         action(voice, 'Ses cihazları', 'Mikrofon ve hoparlör seçimini değiştir.', owner._open_audio_devices)
         action(voice, 'Uyut / uyandır', 'Geçerli dinleme durumunu değiştir.', owner._tap_wake_manual)
