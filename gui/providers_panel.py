@@ -33,8 +33,6 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QProgressBar, QSlider,
 )
 
-from core.claude_coding import PROVIDER_ID as CLAUDE_CODE
-from core.codex_coding import PROVIDER_ID as CODEX_CLI
 from gui.theme import (
     C,
 )
@@ -227,7 +225,7 @@ class ProvidersOverlay(_HudOverlay):
                       for slot, sid in dict(get_pipeline()).items()}
         self._sidecar = self._normalise(get_sidecar_provider(), "llm")
         coding = get_coding_provider()
-        self._coding = coding if coding in {CODEX_CLI, CLAUDE_CODE} else self._normalise(coding, "llm")
+        self._coding = "" if coding in {"claude_code", "codex_cli"} else self._normalise(coding, "llm")
         self._sidecar_first = get_sidecar_first()
         self._rebuild_body()
 
@@ -885,8 +883,9 @@ class ProvidersOverlay(_HudOverlay):
         head = self._label("🛠  KODLAMA", 9, C.PRI, bold=True)
         w, lay = self._box([head])
         lay.addWidget(self._label(
-            "Proje geliştirmenizi istediğinizde planlama, kod yazma ve "
-            "düzeltme yapan modeldir. Dosyalar Masaüstü/JarvisProjects’e kaydedilir.",
+            "MAYK kodlamada önce DeepSeek V4 Pro, ardından DeepSeek Flash kullanır; "
+            "DeepSeek bakiyesi veya sınırı dolarsa Gemini'ye geçer. "
+            "DeepSeek API anahtarını sağlayıcı ayarlarından kaydedebilirsiniz.",
             7, C.TEXT_DIM))
 
         sid = self._coding
@@ -894,22 +893,19 @@ class ProvidersOverlay(_HudOverlay):
         def fmt(entry, _decl):
             mark = "🖥" if entry.get("local") else (
                 "☁" if entry.get("local") is False else "  ")
-            star = "   ★ önerilen" if entry.get("id") == "minimax" else ""
+            star = "   ★ ilk tercih" if entry.get("id") == "deepseek" else ""
             return f"{mark}  {entry['label']} ile kodla{star}"
 
         self._coding_combo = self._service_combo(
-            "llm", ("Arka plan istekleriyle aynı", ""), fmt)
-        # The sponsor's model sits directly under the default, where it is the
-        # first real choice anybody sees — not buried twelfth in the list.
+            "llm", ("Otomatik: DeepSeek V4 Pro → Flash → Gemini", ""), fmt)
+        # DeepSeek seçeneği ilk sırada; eski abonelik tabanlı CLI kod ajanları yok.
         for i in range(self._coding_combo.count()):
-            if (self._coding_combo.itemData(i) or "").endswith("@minimax"):
-                text = self._coding_combo.itemText(i)
-                data = self._coding_combo.itemData(i)
+            if (self._coding_combo.itemData(i) or "").endswith("@deepseek"):
+                label = self._coding_combo.itemText(i)
+                value = self._coding_combo.itemData(i)
                 self._coding_combo.removeItem(i)
-                self._coding_combo.insertItem(1, text, data)
+                self._coding_combo.insertItem(1, label, value)
                 break
-        self._coding_combo.insertItem(1, "Codex CLI (ChatGPT)", CODEX_CLI)
-        self._coding_combo.insertItem(2, "Claude Code", CLAUDE_CODE)
         self._select(self._coding_combo, sid)
         self._coding_combo.currentIndexChanged.connect(self._coding_changed)
         lay.addWidget(self._coding_combo)
@@ -917,14 +913,6 @@ class ProvidersOverlay(_HudOverlay):
         if not sid:
             lay.addWidget(self._label(
                 "Kod, yukarıdaki arka plan isteklerini yanıtlayan modelle yazılır.",
-                7, C.TEXT_DIM))
-        elif sid == CLAUDE_CODE:
-            lay.addWidget(self._label(
-                "Windows’a Claude Code kur ve PowerShell’de claude auth login çalıştır.",
-                7, C.TEXT_DIM))
-        elif sid == CODEX_CLI:
-            lay.addWidget(self._label(
-                "Codex CLI kur ve PowerShell’de codex login ile ChatGPT hesabını bağla.",
                 7, C.TEXT_DIM))
         elif sid == self._sidecar:
             lay.addWidget(self._label(
@@ -949,7 +937,7 @@ class ProvidersOverlay(_HudOverlay):
         sid = self._coding_combo.currentData() or ""
         self._remember_edits()
         self._coding = sid
-        if sid and sid not in {CODEX_CLI, CLAUDE_CODE}:
+        if sid:
             self._apply_entry("llm", sid)
             self._fetch_models(sid)
         QTimer.singleShot(0, self._rebuild_body)
