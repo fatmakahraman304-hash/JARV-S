@@ -37,3 +37,17 @@ Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya 
 - Git için `git status --short`, `git branch --list "jarvis-backup/*"`, `git stash list` ve `git rev-parse HEAD` ile durumu kaydedin. Önceki sürümü denemek için yedek dalı ayrı bir çalışma klasöründe açabilirsiniz.
 - ZIP için güncelleme günlüğündeki yedek konumunu ve `.jarvis-update.json` dosyasını saklayın. Yedek klasörü işlem öncesinde var olan dosyaları içerir. Yeni eklenmiş dosyalar veya yarıda kalmış işlem nedeniyle klasörün tek başına eksiksiz bir kurulum olduğu varsayılamaz. Bilinen çalışan sürümü ayrı klasörde açıp kişiselleştirme ve hafızayı doğrulayın.
 - Yardımcı süreç günlüğü Windows’ta `%LOCALAPPDATA%\Jarvis\logs\restart.log` yolundadır. Bu günlükteki başlatma kaydı, mikrofonun veya modelin hazır olduğunu tek başına doğrulamaz.
+
+
+## Dosyalar kurulduktan sonra HUD açılmıyorsa
+
+Normal yeniden başlatmada yardımcı süreç eski MAYK’ın çıkmasını bekler. Yeni pencere görünür olup Qt olay döngüsü çalıştığında açılış onayını `restart.log` dosyasına yazar. Süreç erken kapanırsa çıkış kodunu kaydeder. 90 saniyede onay gelmezse günlükte açılışın doğrulanamadığı belirtilir. Bu durumda Görev Yöneticisi’nde MAYK’ın hâlâ açık olup olmadığını kontrol edin.
+
+Yeni kod kurulmuş ancak çalışmıyorsa, MAYK kapalıyken bu sürümün güncellediği **ZIP kurulumunda** son güncellemeyi çevrimdışı geri almak için kurulum klasöründe çalıştırın.
+
+```powershell
+.\.venv\Scripts\python.exe -m core.app_updater --rollback
+.\.venv\Scripts\python.exe main.py
+```
+
+İkinci komutu yalnızca önceki sürümün geri yüklendiği doğrulandıktan sonra çalıştırın. Geri dönüş dosyaları ve önceki sürüm kaydını denetler. Yerel düzenleme varsa durur. Geri dönüşün kendisi kesilirse `--recover` ile devam edilir. Bu yol, geri dönüş kaydı içeren bir ZIP güncellemesi gerektirir. Git kurulumunda yukarıdaki yedek dal yöntemi geçerlidir.
