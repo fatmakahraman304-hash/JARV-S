@@ -534,6 +534,8 @@ def check(root=ROOT) -> dict:
             "branch": branch}
 
 if __name__ == "__main__":
+    if sys.stdout is not None and not sys.stdout.isatty():
+        sys.stdout.reconfigure(encoding="utf-8")
     import argparse
     parser = argparse.ArgumentParser(description="Kesilen MAYK ZIP güncellemesini çevrimdışı kurtar.")
     action = parser.add_mutually_exclusive_group(required=True)
