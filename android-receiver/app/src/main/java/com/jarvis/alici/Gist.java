@@ -74,7 +74,7 @@ final class Gist {
         } else {
             reason = "HTTP hatası";
         }
-        return new Exception("GitHub " + code + " · " + reason);
+        return new Exception("GitHub " + code + " · " + reason + " · kalan API hakkı: " + (c.getHeaderField("X-RateLimit-Remaining") == null ? "bilinmiyor" : c.getHeaderField("X-RateLimit-Remaining")));
     }
 
     /** Files of the gist; the cached copy when nothing changed (304). */
@@ -112,7 +112,7 @@ final class Gist {
         c.setRequestProperty("Content-Type", "application/json");
         try (OutputStream o = c.getOutputStream()) { o.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
         int code = c.getResponseCode();
-        if (code >= 300) throw new Exception("GitHub " + code);
+        if (code >= 300) throw githubError(c, code);
         etag = "";
         cache = null;
     }
