@@ -107,6 +107,10 @@ public class MainActivity extends Activity {
             }
         });
 
+        Button lan = button("Wi-Fi kumanda bağlantısını göster");
+        lan.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("iPhone için yerel kumanda").setMessage(ReceiverService.lanAddress + "\n\nBu adresi iPhone Safari'de aç. Aynı Wi-Fi ağına bağlı olmalısın.").setPositiveButton("Tamam", null).show());
+        root.addView(lan);
+
         Button web = button("Projeksiyonda MAYK'ı aç");
         web.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ReceiverService.WEB))));
         root.addView(web);
@@ -247,7 +251,7 @@ public class MainActivity extends Activity {
                 : a11yRunning ? "açık ✓" : "izin açık, servis henüz çalışmıyor";
         status.setText("Bağlantı: " + (linked ? "kurulu" : "kurulmadı — 2. adım") + "\n"
                 + "Erişilebilirlik: " + a11yStatus + "\n"
-                + "Dinleme: " + ReceiverService.status + "\n\n"
+                + "Dinleme: " + ReceiverService.status + "\n" + "Wi-Fi kumanda: " + ReceiverService.lanAddress + "\n\n"
                 + "Hazır olunca telefondaki MAYK'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
         ui.postDelayed(this::refresh, 3000);
     }
