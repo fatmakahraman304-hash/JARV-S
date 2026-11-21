@@ -1,4 +1,4 @@
-"""MAYK kodlama sırası: DeepSeek (V4 Pro → Flash) ve ardından Gemini.
+"""MAYK kodlama sırası: DeepSeek → NVIDIA Build → Gemini.
 
 Eski Claude Code ve Codex CLI kodlama rotasında bulunmaz.
 Kota veya bağlantı hatasında sıradaki model devralır; dinlenme süreleri
@@ -21,7 +21,7 @@ DOWN_REST = 15 * 60            # signed out / not installed / would not start
 GEMINI = ""                    # the Gemini ladder (never rests)
 
 AGENTS = (jarvis_agent.PROVIDER_ID,)
-NAMES = {jarvis_agent.PROVIDER_ID: "MAYK kod ajanı (DeepSeek öncelikli)",
+NAMES = {jarvis_agent.PROVIDER_ID: "MAYK kod ajanı (DeepSeek → NVIDIA)",
          GEMINI: "Gemini"}
 
 _lock = threading.Lock()
@@ -70,7 +70,9 @@ def is_unavailable(err) -> bool:
     return any(w in s for w in ("oturum", "not logged in", "login", "401", "bulunamadı",
                                 "başlatılamadı", "not found", "unauthorized", "sürümü eski",
                                 "desteklemiyor", "zaman aşımı", "süre sınırını", "timeout",
-                                "404", "403", "503", "server overloaded", "network",
+                                "404", "403", "500", "502", "503", "504",
+                                "server overloaded", "network", "bağlantı hatası",
+                                "ulaşılamadı", "kullanılamadı", "boş yanıt",
                                 "yanıt vermedi", "every model on the ladder failed"))
 
 

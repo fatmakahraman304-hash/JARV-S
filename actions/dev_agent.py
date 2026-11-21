@@ -41,8 +41,8 @@ def _coding_provider() -> str:
 
 
 def _get_model(model_name: str = gemini.SMART):
-    """Kod planlamasında DeepSeek Pro → Flash → Gemini sırasını uygula."""
-    from core import coding_router, deepseek_account, jarvis_agent
+    """Planlama ve metin üretiminde DeepSeek → NVIDIA → Gemini."""
+    from core import coding_router, deepseek_account, jarvis_agent, nvidia_account
     from types import SimpleNamespace
 
     class _Routed:
@@ -51,24 +51,35 @@ def _get_model(model_name: str = gemini.SMART):
             for p in coding_router.ladder(chosen):
                 try:
                     if p == jarvis_agent.PROVIDER_ID:
-                        key = deepseek_account.api_key()
-                        if not key:
-                            raise RuntimeError("DeepSeek API anahtarı bulunamadı.")
-                        if deepseek_account.balance_status(key)["available"] is False:
-                            raise RuntimeError("DeepSeek 402: bakiye yetersiz")
                         last_error = None
-                        for model in jarvis_agent.deepseek_models():
-                            try:
-                                return SimpleNamespace(text=deepseek_account.complete_text(
-                                    contents, model=model))
-                            except RuntimeError as exc:
-                                last_error = exc
-                                # 402 tüm DeepSeek modelleri için ortak bakiye durumudur.
-                                if "402" in str(exc):
-                                    break
-                                if not coding_router.should_switch(exc):
-                                    raise
-                        raise last_error or RuntimeError("DeepSeek yanıt vermedi")
+                        deepseek_key = deepseek_account.api_key()
+                        if deepseek_key and deepseek_account.balance_status(deepseek_key)["available"] is not False:
+                            for model in jarvis_agent.deepseek_models():
+                                try:
+                                    return SimpleNamespace(text=deepseek_account.complete_text(
+                                        contents, model=model))
+                                except RuntimeError as exc:
+                                    last_error = exc
+                                    # 402 hesap genelindeki bakiyedir: diğer DeepSeek modellerini deneme.
+                                    if "402" in str(exc):
+                                        break
+                                    if not coding_router.should_switch(exc):
+                                        raise
+                        nvidia_key = nvidia_account.api_key()
+                        if nvidia_key:
+                            for model in nvidia_account.available_models(nvidia_key):
+                                try:
+                                    return SimpleNamespace(text=nvidia_account.complete_text(
+                                        contents, model=model))
+                                except RuntimeError as exc:
+                                    last_error = exc
+                                    if not coding_router.should_switch(exc):
+                                        raise
+                                    if "401" in str(exc) or "403" in str(exc) or "402" in str(exc):
+                                        break
+                        if last_error:
+                            raise last_error
+                        raise RuntimeError("DeepSeek veya NVIDIA kodlama modeli kullanılamadı.")
                     elif p == coding_router.GEMINI:
                         resp = gemini.call(contents, tier=model_name, timeout_ms=60000)
                     else:
@@ -81,7 +92,7 @@ def _get_model(model_name: str = gemini.SMART):
                     if p == coding_router.GEMINI or not coding_router.should_switch(exc):
                         raise
                     coding_router.rest(p, exc)
-                    _log(_player_ref, f"{coding_router.name(p)} kullanılamadı; sıradaki modele geçiliyor.")
+                    _log(_player_ref, f"{coding_router.name(p)} sınırda veya kullanılamıyor; sıradaki model deneniyor.")
             raise RuntimeError("Kodlama için kullanılabilir model bulunamadı.")
 
     return _Routed()

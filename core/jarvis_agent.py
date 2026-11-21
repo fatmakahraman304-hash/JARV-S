@@ -349,8 +349,18 @@ class OpenAIBrain:
                 msgs.append(m)
         body = {"model": self.model, "messages": msgs, "temperature": 0.2,
                 "tools": [{"type": "function", "function": t} for t in TOOLS]}
+        if self.name.startswith("NVIDIA"):
+            body["max_tokens"] = 4096
         headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
-        js = _http_json(f"{self.base}/chat/completions", body, headers, timeout=300)
+        try:
+            js = _http_json(f"{self.base}/chat/completions", body, headers, timeout=300)
+        except BrainError as exc:
+            if self.name.startswith("NVIDIA"):
+                # Ham sağlayıcı hatasını veya özel kimlik bilgilerini günlüğe yazma.
+                code = re.match(r"^([1-5][0-9]{2})\b", str(exc))
+                raise BrainError("NVIDIA API " + (
+                    code.group(1) if code else "bağlantı hatası")) from None
+            raise
         if js.get("error"):
             raise BrainError(str(js["error"])[:300])
         msg = ((js.get("choices") or [{}])[0].get("message")) or {}
@@ -438,18 +448,20 @@ def deepseek_models() -> list[str]:
 
 
 def brains() -> list:
-    """Kullanılabilir kodlama modelleri: DeepSeek → Gemini."""
-    from core import deepseek_account
+    """Kodlamada DeepSeek → NVIDIA Build → Gemini model sırası."""
+    from core import deepseek_account, nvidia_account
     cfg = _settings()
     out = []
     key = deepseek_account.api_key()
     if key:
         info = deepseek_account.balance_status(key)
-        # Bakiye kesin olarak yetersizse DeepSeek'e gereksiz istek yapma.
-        # Ağ hatasını asla 'bakiye bitti' diye yorumlama.
         if info["available"] is not False:
             out.extend(OpenAIBrain("https://api.deepseek.com", key, m, "DeepSeek")
                        for m in deepseek_models())
+    nvidia_key = nvidia_account.api_key()
+    if nvidia_key:
+        out.extend(OpenAIBrain(nvidia_account.BASE_URL, nvidia_key, model, "NVIDIA")
+                   for model in nvidia_account.available_models(nvidia_key))
     gemini_key = _gemini_key()
     if gemini_key and cfg.get("use_gemini", True) is not False:
         out.extend(GeminiBrain(gemini_key, m) for m in gemini_models(gemini_key))
@@ -457,8 +469,8 @@ def brains() -> list:
 
 
 def available() -> bool:
-    from core import deepseek_account
-    return bool(deepseek_account.api_key() or _gemini_key())
+    from core import deepseek_account, nvidia_account
+    return bool(deepseek_account.api_key() or nvidia_account.api_key() or _gemini_key())
 
 
 def deepseek_ready() -> bool:
@@ -484,7 +496,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("MAYK'ın kod ajanı için beyin yok: DeepSeek ya da Gemini anahtarı gerekiyor.")
+        raise RuntimeError("MAYK kod ajanı için DeepSeek, NVIDIA veya Gemini API anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
     log(f"  MAYK ajanı: {brain.name}")

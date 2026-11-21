@@ -883,9 +883,10 @@ class ProvidersOverlay(_HudOverlay):
         head = self._label("🛠  KODLAMA", 9, C.PRI, bold=True)
         w, lay = self._box([head])
         lay.addWidget(self._label(
-            "MAYK kodlamada önce DeepSeek V4 Pro, ardından DeepSeek Flash kullanır; "
-            "DeepSeek bakiyesi veya sınırı dolarsa Gemini'ye geçer. "
-            "DeepSeek API anahtarını sağlayıcı ayarlarından kaydedebilirsiniz.",
+            "Otomatik kodlama: DeepSeek V4 Pro → DeepSeek Flash → "
+            "NVIDIA Build (GLM-5.3 Flash) → Gemini. NVIDIA anahtarınızı "
+            "girmek için aşağıdan NVIDIA'yı seçip API anahtarı kutusunu doldurun; "
+            "KAYDET VE UYGULA'ya basın. DeepSeek önceliği korunur.",
             7, C.TEXT_DIM))
 
         sid = self._coding
@@ -893,26 +894,30 @@ class ProvidersOverlay(_HudOverlay):
         def fmt(entry, _decl):
             mark = "🖥" if entry.get("local") else (
                 "☁" if entry.get("local") is False else "  ")
-            star = "   ★ ilk tercih" if entry.get("id") == "deepseek" else ""
+            tag = entry.get("id")
+            star = "   ★ ilk tercih" if tag == "deepseek" else (
+                "   ★ ikinci sağlayıcı" if tag == "nvidia" else "")
             return f"{mark}  {entry['label']} ile kodla{star}"
 
         self._coding_combo = self._service_combo(
-            "llm", ("Otomatik: DeepSeek V4 Pro → Flash → Gemini", ""), fmt)
-        # DeepSeek seçeneği ilk sırada; eski abonelik tabanlı CLI kod ajanları yok.
-        for i in range(self._coding_combo.count()):
-            if (self._coding_combo.itemData(i) or "").endswith("@deepseek"):
-                label = self._coding_combo.itemText(i)
-                value = self._coding_combo.itemData(i)
-                self._coding_combo.removeItem(i)
-                self._coding_combo.insertItem(1, label, value)
-                break
+            "llm", ("Otomatik: DeepSeek → NVIDIA → Gemini", ""), fmt)
+        # NVIDIA'yı DeepSeek'in hemen arkasında göster, CLI seçeneklerini ekleme.
+        for index, suffix in enumerate(("@deepseek", "@nvidia"), start=1):
+            for i in range(self._coding_combo.count()):
+                if (self._coding_combo.itemData(i) or "").endswith(suffix):
+                    label = self._coding_combo.itemText(i)
+                    value = self._coding_combo.itemData(i)
+                    self._coding_combo.removeItem(i)
+                    self._coding_combo.insertItem(index, label, value)
+                    break
         self._select(self._coding_combo, sid)
         self._coding_combo.currentIndexChanged.connect(self._coding_changed)
         lay.addWidget(self._coding_combo)
 
         if not sid:
             lay.addWidget(self._label(
-                "Kod, yukarıdaki arka plan isteklerini yanıtlayan modelle yazılır.",
+                "MAYK, mevcut DeepSeek ve NVIDIA anahtarlarını otomatik kullanır; "
+                "ikisi de kullanılamazsa Gemini'ye geçer.",
                 7, C.TEXT_DIM))
         elif sid == self._sidecar:
             lay.addWidget(self._label(
