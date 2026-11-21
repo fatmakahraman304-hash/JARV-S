@@ -167,7 +167,7 @@ class NvidiaRoutingTests(unittest.TestCase):
         from pathlib import Path
         panel = (Path(__file__).resolve().parents[1] / "gui/providers_panel.py").read_text(
             encoding="utf-8")
-        self.assertIn("NVIDIA anahtarınızı", panel)
+        self.assertIn("NVIDIA API anahtarınızı", panel)
         self.assertIn('endswith("@nvidia")', panel)
         self.assertIn("working_model", panel)
         self.assertIn("box.setCurrentIndex(index)", panel)
