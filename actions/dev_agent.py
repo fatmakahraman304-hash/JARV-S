@@ -322,7 +322,7 @@ def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
     except subprocess.TimeoutExpired:
         return "Dependency install timed out (non-fatal)."
     except Exception as e:
-        return f"Install error (non-fatal): {e}"
+        return f"Kurulum uyarısı (kritik değil): {e}"
 
 def _open_vscode(project_dir: Path) -> bool:
     vscode_candidates = [
@@ -372,11 +372,11 @@ def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
         return "\n\n".join(combined_parts) if combined_parts else "Ran with no output."
 
     except subprocess.TimeoutExpired:
-        return f"Timed out after {timeout}s — long-running app (server/GUI) is likely working."
+        return f"Süre sınırı doldu: {timeout}s — uygulama veya sunucu arka planda çalışıyor olabilir."
     except FileNotFoundError as e:
         return f"Command not found: {e}"
     except Exception as e:
-        return f"Run error: {e}"
+        return f"Çalıştırma hatası: {e}"
 
 def _try_auto_install(error_output: str, project_dir: Path) -> bool:
     """If there is a ModuleNotFoundError, tries to auto-install the missing package."""
@@ -509,24 +509,24 @@ def _build_project(
                 description, language, project_name, ag, player), player)
         except RuntimeError as e:
             done = None
-            log(f"Agent mode failed ({str(e)[:160]}); building the usual way.")
+            log(f"Ajan modu başarısız ({str(e)[:160]}); normal kodlama yöntemi deneniyor.")
         if done is not None:
             return done
     if provider in EXPLICIT_CODING_PROVIDERS:
-        log(f"Coding with {provider.partition('@')[2] or provider}.")
+        log(f"Kodlama modeli: {provider.partition('@')[2] or provider}.")
     else:
-        log(f"Coding with {provider.partition('@')[2] or provider}, Gemini as backup."
-            if provider else "Coding with the background-request models.")
+        log(f"Kodlama modeli: {provider.partition('@')[2] or provider}, yedek: Gemini."
+            if provider else "Kodlama modeli: the background-request models.")
     _update("planning")
-    log("Planning project structure...")
+    log("Proje yapısı planlanıyor…")
     try:
         plan = _plan_project(description, language)
     except RateLimitError:
-        msg = "Rate limit reached, sir. Please try again in a moment."
+        msg = "Kullanım sınırına ulaşıldı. Biraz sonra yeniden deneyin."
         if speak: speak(msg)
         return msg
     except ValueError as e:
-        msg = f"Planning failed: {e}"
+        msg = f"Planlama başarısız: {e}"
         if speak: speak(msg)
         return msg
 
@@ -540,7 +540,7 @@ def _build_project(
     run_command  = plan.get("run_command", f"python {entry_point}")
     dependencies = plan.get("dependencies", [])
 
-    log(f"Project: {proj_name} | Files: {len(files)} | Entry: {entry_point}")
+    log(f"Proje: {proj_name} | Dosyalar: {len(files)} | Giriş: {entry_point}")
     with _state_lock:
         if _JOB:
             _JOB["folder"] = proj_name
@@ -565,7 +565,7 @@ def _build_project(
             continue
 
         _update(file=file_path, file_state="writing")
-        log(f"Writing {file_path}...")
+        log(f"Yazılıyor: {file_path}...")
         for attempt in range(2):
             try:
                 code = _write_file(
@@ -582,18 +582,18 @@ def _build_project(
                 break
             except RateLimitError:
                 if attempt == 0:
-                    log("Rate limit — waiting 20s...")
+                    log("Kullanım sınırı — 20 saniye bekleniyor…")
                     time.sleep(20)
                 else:
                     _update(file=file_path, file_state="failed")
-                    log(f"Rate limit retry failed for {file_path}, skipping.")
+                    log(f"Kullanım sınırı tekrar denemesi başarısız: {file_path}, skipping.")
             except Exception as e:
                 _update(file=file_path, file_state="failed")
-                log(f"Failed to write {file_path}: {e}")
+                log(f"Dosya yazılamadı: {file_path}: {e}")
                 break
 
     if not file_codes:
-        msg = "I could not write any project files, sir."
+        msg = "Hiçbir proje dosyası yazılamadı."
         if speak: speak(msg)
         return msg
 
@@ -610,7 +610,7 @@ def _build_project(
 
     _update("testing")
     for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
-        log(f"Running project (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
+        log(f"Proje çalıştırılıyor (deneme {attempt}/{MAX_FIX_ATTEMPTS})...")
         last_output = _run_project(run_command, project_dir, timeout)
         log(f"Output preview: {last_output[:150]}")
 
@@ -652,22 +652,22 @@ def _build_project(
                 log(f"Fixed {fixed}")
             time.sleep(1)
         except RateLimitError:
-            msg = "Rate limit reached during fix. Project saved, check it manually in VSCode."
+            msg = "Düzeltme sırasında kullanım sınırına ulaşıldı. Proje kaydedildi, VS Code'da kontrol edin."
             if speak: speak(msg)
             return msg
         except Exception as e:
-            log(f"Fix step failed: {e}")
+            log(f"Düzeltme adımı başarısız: {e}")
 
     msg = (
         f"I couldn't fully fix '{proj_name}' after {MAX_FIX_ATTEMPTS} attempts, sir. "
         f"Project is saved at {project_dir} — open it in VSCode and check manually."
     )
     if speak: speak(msg)
-    return f"{msg}\n\nLast error:\n{last_output[:600]}"
+    return f"{msg}\n\nSon hata:\n{last_output[:600]}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Improving a folder that already exists
+#  Geliştiriliyor: a folder that already exists
 # ─────────────────────────────────────────────────────────────────────────────
 # Building from nothing is the easy half. What people actually have is a folder
 # that half works, and what they want is "add a settings page to this" or "fix
@@ -800,10 +800,10 @@ def _status_report() -> str:
             pend, done = [], []
         if pend or done:
             lines = [f"#{p['id']} {p['title']} — {p['status']}" for p in (pend or done)]
-            return ("No coding job is running right now. From the journal: " + "; ".join(lines)
+            return ("Şu anda çalışan kodlama görevi yok. Görev geçmişi: " + "; ".join(lines)
                     + (". Unfinished ones can be continued with mode='resume'." if pend else ".")
                     + " Tell the user briefly, in their language.")
-        return ("The coding agent has not worked on a folder in this session. "
+        return ("Kodlama ajanı bu oturumda henüz bir klasörde çalışmadı. "
                 "Tell the user that, in one sentence.")
     took = (j["finished"] or time.time()) - j["started"]
     files = "; ".join(f"{p} ({f.get('action', '?')}, {f.get('state', '?')}): "
@@ -839,13 +839,13 @@ def _refusal(folder: Path) -> str:
     """Why this folder must not be handed to a model to rewrite, or ''."""
     home = Path.home().resolve()
     if folder == home or folder.parent == folder:
-        return "That is your whole home folder or a drive — pick a project folder inside it, sir."
+        return "Bu bir kullanıcı dizini veya diskin tamamı. Lütfen içinden bir proje klasörü seçin."
     low = str(folder).lower().replace("\\", "/")
     for bad in ("/windows", "/program files", "/programdata", "/usr/", "/system/"):
         if bad in low + "/":
-            return "That is a system folder, sir — I will not let a model rewrite it."
+            return "Bu bir sistem klasörü. Güvenlik için modelin değiştirmesine izin verilmiyor."
     if folder in {(home / n).resolve() for n in ("Desktop", "Documents", "Downloads")}:
-        return "That is a whole personal folder, sir — pick the project folder inside it."
+        return "Bu kişisel klasörün tamamı. İçinden proje klasörü seçin."
     return ""
 
 
@@ -1026,7 +1026,7 @@ _PLACEHOLDER = re.compile(
 def _rejected(rel: str, old: str, new: str) -> str:
     """Why a new version of a file must not be saved, or ''."""
     if _looks_truncated(old, new):
-        return "the model returned an incomplete file"
+        return "model eksik bir dosya döndürdü"
     from core.code_checks import dropped_data
     lost = dropped_data(rel, old, new) if old else ""
     if lost:
@@ -1274,11 +1274,11 @@ def _project_brief(folder: Path, context: str, stack: dict, player=None) -> str:
     try:
         saved = json.loads(cache.read_text(encoding="utf-8"))
         if saved.get("fingerprint") == fp and saved.get("brief"):
-            _log(player, "Using what I learned about this project last time.")
+            _log(player, "Bu proje hakkında önce öğrendiklerimi kullanıyorum.")
             return saved["brief"]
     except (OSError, ValueError):
         pass
-    _log(player, "Studying how this project works…")
+    _log(player, "Projenin nasıl çalıştığı inceleniyor…")
     prompt = f"""You are a senior engineer joining this project. Study it and write the
 rules another engineer must follow to change it WITHOUT breaking it.
 
@@ -1299,7 +1299,7 @@ Markdown:"""
     try:
         brief = _strip_fences(_get_model(MODEL_PLANNER).generate_content(prompt).text)
     except Exception as e:
-        _log(player, f"Could not study the project: {str(e)[:150]}")
+        _log(player, f"Proje incelenemedi: {str(e)[:150]}")
         return ""
     brief = "## How this project works (studied from its code)\n\n" + brief.strip()
     try:
@@ -1361,7 +1361,7 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
                                        log=lambda m: _log(player, m)).items():
             problems[rel] = (problems.get(rel, "") + " " + p).strip()
         if stack.get("test_cmd") and not problems:
-            _log(player, f"Running the project's own tests ({stack['test_name']})…")
+            _log(player, f"Projenin kendi testleri çalıştırılıyor ({stack['test_name']})…")
             after = run_tests(folder, stack)
             broke = ("The project test command could not start." if after is None
                      else test_regressions(baseline, after))
@@ -1369,16 +1369,16 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
                 for rel in _blame(broke, written):
                     problems[rel] = (problems.get(rel, "") + " " + broke).strip()
             elif after["ok"]:
-                _log(player, "The project's tests passed.")
+                _log(player, "Projenin testleri başarılı.")
             else:
-                _log(player, "The project has pre-existing test failures. No new failures were detected.")
+                _log(player, "Projede önceden var olan test hataları var; yeni bir hata bulunmadı.")
         problems = {r: p for r, p in problems.items() if r in written}
         if not problems:
-            _log(player, "Checks found no new failures in the changed files.")
+            _log(player, "Değiştirilen dosyalarda yeni bir hata bulunmadı.")
             return {}
         for rel, p in problems.items():
             _update(file=rel, file_state="broken")
-            _log(player, f"Test failed — {rel}: {p[:220]}")
+            _log(player, f"Test başarısız — {rel}: {p[:220]}")
         if round_no == _TEST_ROUNDS:
             break
         for rel, p in problems.items():
@@ -1391,7 +1391,7 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
                 new = _write_change(c, plan, instruction, context, written[rel],
                                     error=p, written=written)
             except Exception as e:
-                _log(player, f"Fix failed for {rel}: {str(e)[:150]}")
+                _log(player, f"Düzeltme başarısız: {rel}: {str(e)[:150]}")
                 continue
             why = _rejected(rel, written[rel], new) or (
                 "it does not parse" if _syntax_error(rel, new) else "")
@@ -1413,16 +1413,16 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     agents = _agent_ladder()
     order = coding_router.ladder(provider)
     who = coding_router.name(order[0])
-    _log(player, f"Improving '{folder.name}' with {who} (then: "
+    _log(player, f"Geliştiriliyor: '{folder.name}' with {who} (then: "
                  f"{', '.join(coding_router.name(p) for p in order[1:]) or 'none'})…")
     resting = coding_router.status_line(provider)
     if resting:
-        _log(player, f"Resting after a limit: {resting}.")
+        _log(player, f"Kota nedeniyle bekleyen model: {resting}.")
 
     _update("reading")
     tree, texts, outlines = _scan(folder)
     if not texts:
-        return f"I found no readable source files in '{folder.name}', sir."
+        return f"Okunabilir kaynak dosya bulunamadı: '{folder.name}', sir."
     _log(player, f"Read {len(texts)} of {len(tree)} files"
                  + (f", outlined {len(outlines)} large ones." if outlines else "."))
     context = _context(tree, texts, _CONTEXT_CHARS, outlines)
@@ -1433,11 +1433,11 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         from core.code_checks import (describe_stack, detect_stack, project_guide,
                                       rules_file, run_tests)
         stack = detect_stack(folder)
-        _log(player, f"Project: {describe_stack(stack)}")
+        _log(player, f"Proje: {describe_stack(stack)}")
         guide = project_guide(folder, stack)
         rf = rules_file(folder)
         if rf is not None:
-            _log(player, f"Read the project's rules ({rf.name}).")
+            _log(player, f"Proje kuralları okundu: ({rf.name}).")
         elif not agents:                        # an agent studies the code itself
             brief = _project_brief(folder, context, stack, player)
             if brief:
@@ -1452,14 +1452,14 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
                              f"fail before any change; those will not be blamed on it.")
     except Exception as e:
         guide = ""
-        _log(player, f"Could not study the project: {str(e)[:150]}")
+        _log(player, f"Proje incelenemedi: {str(e)[:150]}")
     if agents:
         done = _with_agents(agents, lambda ag: _improve_with_agent(
             folder, instruction, guide, stack, baseline, texts, ag, player, started,
             open_editor), player)
         if done is not None:
             return done
-        _log(player, "No agent is available right now; coding the usual way.")
+        _log(player, "Şu anda kullanılabilir kod ajanı yok; normal yöntemle devam ediliyor.")
         try:
             from core.code_checks import rules_file
             if rules_file(folder) is None:
@@ -1475,7 +1475,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
                    f"{guide}\n\n{context}")
 
     _update("planning")
-    _log(player, "Planning the changes…")
+    _log(player, "Değişiklikler planlanıyor…")
     try:
         plan = _plan_changes(folder, instruction, context)
     except Exception as e:
@@ -1489,7 +1489,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
             continue
         rel = _safe_rel(folder, c.get("path", ""))
         if rel is None:
-            _log(player, f"Skipped a path outside the folder: {c.get('path')!r}")
+            _log(player, f"Klasör dışındaki yol atlandı: {c.get('path')!r}")
             continue
         why = protection.reason(rel)
         if why:
@@ -1499,14 +1499,14 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
             continue
         action = "edit" if (folder / rel).exists() else "create"
         if action == "edit" and rel not in texts:
-            _log(player, f"Skipped {rel}: not a text file I can edit safely.")
+            _log(player, f"Skipped {rel}: güvenle düzenlenebilir bir metin dosyası değil.")
             continue
         changes.append({**c, "path": rel, "action": action})
     changes = changes[:_MAX_CHANGES]
     plan["changes"] = changes
     summary = str(plan.get("summary") or "").strip()
     if not changes:
-        return summary or "I could not work out a change to make, sir."
+        return summary or "Uygulanabilecek bir değişiklik belirlenemedi."
     with _state_lock:
         if _JOB:                  # absent when called outside a background job
             _JOB["files"] = {c["path"]: {"action": c["action"],
@@ -1529,13 +1529,13 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         target = folder / rel
         current = texts.get(rel, "")
         _update(file=rel, file_state="writing")
-        _log(player, f"Writing {rel}…")
+        _log(player, f"Yazılıyor: {rel}…")
         try:
             new = _write_change(c, plan, instruction, context, current,
                                 written=written)
         except Exception as e:
             _update(file=rel, file_state="failed")
-            _log(player, f"Could not write {rel}: {str(e)[:150]}")
+            _log(player, f"Yazılamadı: {rel}: {str(e)[:150]}")
             continue
         why = _rejected(rel, current, new)
         if why:
@@ -1555,7 +1555,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         _update(file=rel, file_state="done")
 
     if not written:
-        return ("I planned the change but could not write any of it, sir. "
+        return ("Değişiklik planlandı ancak dosyalara uygulanamadı. "
                 "Nothing in the folder was touched.")
 
     # Check that the files fit each other, then that each one parses.
@@ -1565,7 +1565,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
         mismatched = _review_interfaces(instruction, written, texts, rules=guide)
     except Exception as e:
         mismatched = {}
-        _log(player, f"Cross-file review skipped: {str(e)[:150]}")
+        _log(player, f"Dosyalar arası kontrol atlandı: {str(e)[:150]}")
     for rel, problem in mismatched.items():
         _update(file=rel, file_state="fixing")
         _log(player, f"Fixing {rel}: {problem[:160]}")
@@ -1574,7 +1574,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
             new = _write_change(c, plan, instruction, context, written[rel],
                                 error=problem, written=written)
         except Exception as e:
-            _log(player, f"Fix failed for {rel}: {str(e)[:150]}")
+            _log(player, f"Düzeltme başarısız: {rel}: {str(e)[:150]}")
             continue
         why = _rejected(rel, written[rel], new)
         if why:
@@ -1599,7 +1599,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
                 new = _write_change(c, plan, instruction, context,
                                     written[rel], error=err, written=written)
             except Exception as e:
-                _log(player, f"Fix failed for {rel}: {str(e)[:150]}")
+                _log(player, f"Düzeltme başarısız: {rel}: {str(e)[:150]}")
                 continue
             why = _rejected(rel, written[rel], new)
             if why:
@@ -1654,12 +1654,12 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     if summary:
         msg += f" {summary}"
     if still_broken:
-        msg += f" These still have syntax errors: {', '.join(still_broken)}."
+        msg += f" Şu dosyalarda sözdizimi hatası var: {', '.join(still_broken)}."
     if failing:
-        msg += (" These still fail their test and need a look: "
+        msg += (" Şu testler hâlâ başarısız ve incelenmeli: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + ".")
     elif written:
-        msg += " Checks completed without a new test failure."
+        msg += " Kontrollerde yeni bir test hatası bulunmadı."
     if edited:
         msg += f" Originals are in {_BACKUP_DIR}/{stamp}; say 'undo' to restore them."
     else:
@@ -1741,7 +1741,7 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                                    log=lambda m: _log(player, m)).items():
         problems[rel] = (problems.get(rel, "") + " " + p).strip()
     if stack.get("test_cmd") and not problems:
-        _log(player, f"MAYK runs the project's tests itself ({stack['test_name']})…")
+        _log(player, f"MAYK projenin testlerini çalıştırıyor ({stack['test_name']})…")
         after = run_tests(folder, stack)
         broke = ("The project test command could not start." if after is None
                  else test_regressions(baseline, after))
@@ -1757,7 +1757,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     from core.code_checks import Protection
     who = "MAYK kod ajanı"
     _update("writing")
-    _log(player, f"{who} works inside the project as an agent: reading, editing, testing…")
+    _log(player, f"{who} proje klasöründe kod ajanı olarak çalışıyor: okuyor, düzenliyor, test ediyor…")
     before = agent_coding.snapshot(folder)
     extra, summary, problems = "", "", {}
     changed: list[str] = []
@@ -1772,7 +1772,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
                 after = agent_coding.snapshot(folder)
                 agent_coding.restore(folder, before, list(after))
                 raise RuntimeError(f"{who} çalışamadı: {e} Klasör olduğu gibi bırakıldı.") from e
-            _log(player, f"{who} could not finish the fix round: {str(e)[:160]}")
+            _log(player, f"{who} düzeltme turunu tamamlayamadı: {str(e)[:160]}")
             break
         after = agent_coding.snapshot(folder)
         changed, created, deleted = agent_coding.diff(before, after)
@@ -1794,10 +1794,10 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         if not written:
             break
         _update("testing")
-        _log(player, "Checking the agent's work with MAYK's own tests…")
+        _log(player, "Ajanın çalışması MAYK testleriyle doğrulanıyor…")
         problems = _agent_checks(folder, written, stack, texts, baseline, player)
         if not problems:
-            _log(player, "MAYK's checks found no new failures.")
+            _log(player, "MAYK kontrollerinde yeni hata bulunmadı.")
             break
         for rel, p in problems.items():
             _log(player, f"Problem — {rel}: {p[:220]}")
@@ -1837,7 +1837,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         msg += (" These still fail and need a look: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
     else:
-        msg += " MAYK's own checks passed."
+        msg += " MAYK'ın kendi testleri başarılı."
     msg += " Say 'undo' to put everything back."
     _log(player, msg)
     return msg
@@ -1874,7 +1874,7 @@ def _build_with_agent(description: str, language: str, project_name: str, provid
             _JOB["summary"] = summary[:400]
     _publish()
     if not files:
-        return f"{who} could not create any file for the project."
+        return f"{who} proje için dosya oluşturamadı."
     _open_vscode(project_dir)
     msg = f"Built '{project_dir.name}' with {who}: {len(files)} files. {summary.strip()[:700]}"
     _log(player, msg)
@@ -1892,17 +1892,17 @@ def _start_improve(folder_raw: str, instruction: str, speak=None, player=None) -
     global _job_name
     folder = _resolve_folder(folder_raw)
     if folder is None:
-        return ("I need a project folder for that, sir — drop one into the upload "
+        return ("Bunun için bir proje klasörü gerekiyor. Yükleme alanına bir klasör bırakın: "
                 "box, or tell me its path.")
     why = _refusal(folder)
     if why:
         return why
     if not _job_lock.acquire(blocking=False):
-        return f"I am still working on '{_job_name}', sir. One folder at a time."
+        return f"Üzerinde çalışmaya devam ediyorum: '{_job_name}', sir. Aynı anda tek klasör işlenebilir."
     _job_name = folder.name
 
     provider = _coding_provider()
-    who = provider.partition("@")[2] or provider or "the coding model"
+    who = provider.partition("@")[2] or provider or "kodlama modeli"
     _new_job(folder, who, instruction, player, kind="improve")
     pid = _journal_start("improve", folder.name, folder, instruction)
     return _run_job(lambda: _improve_folder(folder, instruction, player),
@@ -1985,11 +1985,11 @@ def _start_build(description: str, language: str, project_name: str,
     """A new project, built in the background like a folder job."""
     global _job_name
     if not _job_lock.acquire(blocking=False):
-        return f"I am still working on '{_job_name}', sir. One job at a time."
+        return f"Üzerinde çalışmaya devam ediyorum: '{_job_name}', sir. One job at a time."
     name = re.sub(r"[^\w\-]", "_", project_name) if project_name else "new project"
     _job_name = name
     provider = _coding_provider()
-    who = provider.partition("@")[2] or provider or "the coding model"
+    who = provider.partition("@")[2] or provider or "kodlama modeli"
     _new_job(PROJECTS_DIR / name, who, description, player, kind="build")
     pid = _journal_start("build", name, PROJECTS_DIR / name, description)
 
@@ -2132,10 +2132,10 @@ def _start_resume(target: str, speak=None, player=None) -> str:
     pick = next((p for p in pending if t and (str(p["id"]) == t or t in p["title"].casefold()
                                                or t in str(p["folder"]).casefold())), pending[0])
     if not _job_lock.acquire(blocking=False):
-        return f"I am still working on '{_job_name}', sir. One job at a time."
+        return f"Üzerinde çalışmaya devam ediyorum: '{_job_name}', sir. One job at a time."
     folder = Path(pick["folder"])
     _job_name = pick["title"]
-    who = _coding_provider() or "the coding model"
+    who = _coding_provider() or "kodlama modeli"
     _journal(pick["id"], status="çalışıyor")
     st = pick.get("stages") or {}
     if pick["kind"] == "build" and isinstance(st, dict) and st.get("plan") and folder.is_dir():
