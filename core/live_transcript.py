@@ -32,6 +32,13 @@ def merge_input_chunk(chunks: list[str], text: str) -> list[str]:
     current_words = _tokens(current)
     previous_words = _tokens(out[-1])
 
+    # "MAYK" gibi tek kelimelik bir kısmi dökümün ardından tüm cümle
+    # gelirse adı iki defa yazma. "evet, evet" gibi doğal tekrarları koru.
+    if (len(current_words) == 1 and len(incoming_words) > 1
+            and incoming_words[0] == current_words[0]
+            and current_words[0] not in {"evet", "hayir", "hayır", "tamam", "yok", "var"}):
+        return [incoming]
+
     # Servis önce tamamını, ardından düzeltilmiş/uzatılmış tamamını yayınladı.
     # Sadece kelime sınırında uzama kabul et; birbirine benzeyen tek kelimeleri
     # ("ev", "evet") yanlışlıkla birleştirme.
@@ -58,12 +65,12 @@ def merge_input_chunk(chunks: list[str], text: str) -> list[str]:
             break
         if len(previous_words) < 2 or len(incoming_words) < 2:
             break
-        # Kelime eşleşmesini kullan; noktalama ve orijinal Türkçe yazımı koru.
-        words_with_punctuation = incoming.split()
-        # Boşlukla ayrılmamış noktalama durumlarında güvenli ol: eklemeyi seç.
-        if len(words_with_punctuation) != len(incoming_words):
+        # Noktalama veya kesme işaretinden dolayı "Spotify'ı" iki
+        # sözlük tokenı olabilir. Sözcük sınırlarını orijinal yazıdan bul.
+        spans = list(re.finditer(r"[^\W_]+", incoming, re.UNICODE))
+        if len(spans) != len(incoming_words):
             break
-        tail = " ".join(words_with_punctuation[count:])
+        tail = incoming[spans[count - 1].end():].strip(" \t,.;:!?")
         if tail:
             out.append(tail)
         return out
