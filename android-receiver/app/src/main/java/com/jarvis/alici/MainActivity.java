@@ -1,6 +1,7 @@
 package com.jarvis.alici;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -69,17 +70,27 @@ public class MainActivity extends Activity {
             pairing = new LocalPairing(this::setup);
             try {
                 String url = pairing.start(this);
+                // A compact dialog keeps the QR visible even on low-resolution projectors.
+                LinearLayout panel = new LinearLayout(this);
+                panel.setOrientation(LinearLayout.VERTICAL);
+                panel.setPadding(12, 8, 12, 8);
+                int width = getResources().getDisplayMetrics().widthPixels;
+                int height = getResources().getDisplayMetrics().heightPixels;
+                int side = Math.max(160, Math.min(340, Math.min(width - 110, height - 150)));
                 ImageView image = new ImageView(this);
                 image.setImageBitmap(LocalPairing.qr(url));
-                image.setAdjustViewBounds(true);
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(460, 460);
-                root.addView(image, root.indexOfChild(qrButton) + 1, params);
+                image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                panel.addView(image, new LinearLayout.LayoutParams(side, side));
                 TextView hint = new TextView(this);
                 hint.setTextColor(Color.WHITE);
-                hint.setTextSize(17);
-                hint.setText("iPhone kamerasıyla kodu okut. Açılan sayfaya MAYK kurulum bağlantısını yapıştır.\\n" + url);
-                root.addView(hint, root.indexOfChild(image) + 1);
-                qrButton.setEnabled(false);
+                hint.setTextSize(15);
+                hint.setText("iPhone kamerasıyla QR kodu okut. Açılan sayfaya MAYK kurulum bağlantısını yapıştır.");
+                panel.addView(hint);
+                new AlertDialog.Builder(this)
+                        .setTitle("iPhone ile bağla")
+                        .setView(panel)
+                        .setNegativeButton("Kapat", (dialog, which) -> pairing.close())
+                        .show();
             } catch (Exception ex) {
                 status.setText("QR eşleştirme açılamadı: " + ex.getMessage());
             }
