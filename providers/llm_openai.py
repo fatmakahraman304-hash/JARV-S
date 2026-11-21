@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import time
 import contextlib
+import re
 from importlib.util import find_spec
 from typing import Any, AsyncIterator, Optional
 
@@ -658,13 +659,17 @@ class OpenAICompatLLM:
             return False, "Sunucu adresi girilmedi."
         if not self.model:
             return False, "Model seçilmedi."
-        import time
+        is_nvidia = self.base.rstrip("/") == PRESETS["NVIDIA"]
+        if is_nvidia and not self.key:
+            return False, "NVIDIA API anahtarı girilmedi. Anahtarı ekleyip yeniden deneyin."
         t0 = time.monotonic()
         try:
             text, _ = self.complete(
                 [{"role": "user", "content": "Reply with the single word: ok"}],
-                timeout=20.0)
+                timeout=45.0 if is_nvidia else 20.0)
         except Exception as e:
+            if is_nvidia:
+                return False, _nvidia_probe_message(e)
             msg = str(e)
             if "401" in msg or "403" in msg:
                 return False, "Sunucu API anahtarını reddetti."
@@ -698,6 +703,41 @@ def _with_address(exc: Exception, base: str) -> Exception:
     except Exception:
         # Some exception types will not take a plain message.
         return RuntimeError(f"{type(exc).__name__}: {text}")
+
+
+def _nvidia_probe_message(error: Exception) -> str:
+    """NVIDIA API testinde yerel sunucu hatası gibi görünen mesajları düzelt.
+
+    Sağlayıcının ham hata gövdesini ve kullanıcı anahtarını ekrana taşımayız.
+    HTTP kodunu, bağlantı/zaman aşımı ayrımını ve çözüm önerisini gösteririz.
+    """
+    raw = str(error or "")
+    lower = raw.casefold()
+    code = re.match(r"^([1-5][0-9]{2})(?:\\b|\\s)", raw)
+    status = int(code.group(1)) if code else None
+    if status in (401, 403):
+        return f"NVIDIA HTTP {status}: API anahtarı reddedildi veya modele erişim izni yok."
+    if status == 402:
+        return "NVIDIA HTTP 402: Ücretsiz kullanım hakkı veya kredi yetersiz."
+    if status == 429:
+        return "NVIDIA HTTP 429: İstek sınırına ulaşıldı. Sonra yeniden deneyin."
+    if status == 400:
+        return "NVIDIA HTTP 400: Model isteği kabul edilmedi. Başka bir model seçin."
+    if status == 404:
+        return "NVIDIA HTTP 404: Seçili model bulunamadı. YENİLE ile modeli değiştirin."
+    if status in (500, 502, 503, 504):
+        return f"NVIDIA HTTP {status}: Model sunucusu geçici olarak yanıt veremiyor. Başka model deneyin."
+    if ("timeout" in lower or "timed out" in lower
+            or "zaman aşımı" in lower):
+        return ("NVIDIA modeli zamanında yanıt vermedi. "
+                "Model yoğun olabilir; başka model veya daha sonra TEST ET deneyin.")
+    if any(x in lower for x in ("connect", "dns", "network", "ssl", "certificate",
+                                "proxy", "unreachable", "name resolution")):
+        return ("NVIDIA API bağlantısı kurulamadı. İnternet, VPN, güvenlik duvarı "
+                "ve ağ proxy ayarlarını kontrol edin.")
+    if status:
+        return f"NVIDIA HTTP {status}: API isteği başarısız oldu. Başka model deneyin."
+    return "NVIDIA modeli doğrulanamadı. İnternet bağlantısını ve model seçimini kontrol edin."
 
 
 def _terse(text: str, limit: int = 160) -> str:
