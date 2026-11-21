@@ -281,6 +281,9 @@ def restore_history(source):
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.stdout is not None and not sys.stdout.isatty():
+        sys.stdout.reconfigure(encoding="utf-8")
     import argparse
     parser = argparse.ArgumentParser(description="MAYK konuşma ve görev geçmişini yedekle veya geri yükle.")
     actions = parser.add_mutually_exclusive_group(required=True)
