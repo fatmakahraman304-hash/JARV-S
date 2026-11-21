@@ -1,6 +1,10 @@
 package com.jarvis.alici;
 
 import android.app.Activity;
+import android.app.DownloadManager;
+import android.content.Context;
+import android.database.Cursor;
+import android.os.Environment;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.view.accessibility.AccessibilityManager;
 import java.util.List;
@@ -30,6 +34,9 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private TextView status;
     private LocalPairing pairing;
+    private long updateDownloadId = -1;
+    private boolean updateInstallLaunched = false;
+    private static final String APK_URL = "https://github.com/fatmakahraman304-hash/JARV-S/releases/download/alici/jarvis-alici.apk";
     private final Handler ui = new Handler(Looper.getMainLooper());
 
     @Override
@@ -103,6 +110,10 @@ public class MainActivity extends Activity {
         web.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ReceiverService.WEB))));
         root.addView(web);
 
+        Button update = button("↻ MAYK Alıcı'yı güncelle");
+        update.setOnClickListener(v -> downloadUpdate());
+        root.addView(update);
+
         setContentView(root);
         handle(getIntent());
         a11y.requestFocus();
@@ -111,6 +122,70 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (pairing != null) pairing.close();
         super.onDestroy();
+    }
+
+    /** Downloads the published APK and asks Android to install it over this app.
+     * Android's package installer requires explicit user confirmation.
+     */
+    private void downloadUpdate() {
+        if (updateDownloadId != -1) {
+            new AlertDialog.Builder(this).setMessage("Güncelleme zaten indiriliyor.")
+                    .setPositiveButton("Tamam", null).show();
+            return;
+        }
+        try {
+            DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(APK_URL))
+                    .setTitle("MAYK Alıcı güncellemesi")
+                    .setDescription("Yeni sürüm indiriliyor")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "mayk-alici-update.apk");
+            updateDownloadId = manager.enqueue(request);
+            updateInstallLaunched = false;
+            new AlertDialog.Builder(this).setMessage("Güncelleme indiriliyor. İndirme bitince Android kurulum onayı açılacak.")
+                    .setPositiveButton("Tamam", null).show();
+            ui.postDelayed(this::checkUpdateDownload, 1200);
+        } catch (Exception e) {
+            updateDownloadId = -1;
+            new AlertDialog.Builder(this).setMessage("İndirme başlatılamadı: " + e.getMessage())
+                    .setPositiveButton("Tamam", null).show();
+        }
+    }
+
+    private void checkUpdateDownload() {
+        if (updateDownloadId == -1 || isFinishing() || updateInstallLaunched) return;
+        DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+        try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(updateDownloadId))) {
+            if (cursor == null || !cursor.moveToFirst()) {
+                updateDownloadId = -1;
+                return;
+            }
+            int state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+            if (state == DownloadManager.STATUS_SUCCESSFUL) {
+                Uri apk = manager.getUriForDownloadedFile(updateDownloadId);
+                updateDownloadId = -1;
+                if (apk == null) throw new IllegalStateException("İndirilen APK bulunamadı");
+                updateInstallLaunched = true;
+                Intent install = new Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(apk, "application/vnd.android.package-archive")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(install);
+                return;
+            }
+            if (state == DownloadManager.STATUS_FAILED) {
+                int reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
+                updateDownloadId = -1;
+                new AlertDialog.Builder(this).setMessage("Güncelleme indirilemedi (kod " + reason + "). İnternet bağlantısını kontrol et.")
+                        .setPositiveButton("Tamam", null).show();
+                return;
+            }
+        } catch (Exception e) {
+            updateDownloadId = -1;
+            new AlertDialog.Builder(this).setMessage("Güncelleme kurulumu açılamadı: " + e.getMessage())
+                    .setPositiveButton("Tamam", null).show();
+            return;
+        }
+        ui.postDelayed(this::checkUpdateDownload, 1200);
     }
 
     private Button button(String text) {
