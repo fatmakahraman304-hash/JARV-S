@@ -129,3 +129,18 @@ class PublishRecoveryTests(unittest.TestCase):
                                 for call in command.call_args_list))
             self.assertFalse(any("commit" in call.args[0] or "merge" in call.args[0]
                                  for call in command.call_args_list))
+
+
+class PublicationConsentTests(unittest.TestCase):
+    def test_external_actions_wait_for_hud_and_keep_requested_scope(self):
+        from unittest.mock import Mock
+        from core import confirm
+        for mode in ("publish", "merge", "self_release"):
+            params = {"mode": mode, "files": ["gui/window.py"], "instruction": "HUD"}
+            with self.subTest(mode=mode), patch.object(confirm, "request") as gate, patch.object(g, "_start") as start:
+                player = Mock()
+                g.run(params, player)
+                start.assert_not_called()
+                params["files"].append("other")
+                gate.call_args.args[-1]()
+                self.assertEqual(start.call_args.args[0]["files"], ["gui/window.py"])
