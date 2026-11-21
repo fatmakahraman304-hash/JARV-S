@@ -25,6 +25,21 @@ class MemorySafety(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
+    def test_desktop_edit_beats_an_older_phone_edit_on_same_day(self):
+        from core.sync_hub import merge_memory
+        mm.remember("shared", "desktop")
+        local = mm.load_memory()
+        stamp = local["notes"]["shared"]["updated"]
+        self.assertRegex(stamp, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        phone = {"notes": {"shared": {"value": "phone", "updated": stamp[:10]}}}
+        self.assertEqual(merge_memory(phone, local)["notes"]["shared"]["value"], "desktop")
+
+    def test_invalid_json_shape_cannot_replace_valid_backup(self):
+        mm.BACKUP_PATH.write_text('{"notes": {}}')
+        mm.MEMORY_PATH.write_text("[]")
+        mm.save_memory({"notes": {}})
+        self.assertEqual(json.loads(mm.BACKUP_PATH.read_text()), {"notes": {}})
+
     def test_broken_file_comes_back_from_the_last_good_copy(self):
         mm.update_memory({"identity": {"name": {"value": "Murat"}}})
         mm.update_memory({"preferences": {"drink": {"value": "çay"}}})       # second write: first is now the backup

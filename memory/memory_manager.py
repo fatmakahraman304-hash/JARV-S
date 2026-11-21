@@ -2,7 +2,7 @@ import json
 import time
 import shutil
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import RLock
 from pathlib import Path
 import sys
@@ -192,8 +192,9 @@ def _write_memory(memory: dict) -> None:
         )
         if MEMORY_PATH.exists():                      # the current good file becomes the backup
             try:
-                json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-                shutil.copyfile(MEMORY_PATH, BACKUP_PATH)
+                previous = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+                if isinstance(previous, dict):
+                    shutil.copyfile(MEMORY_PATH, BACKUP_PATH)
             except (OSError, ValueError):
                 pass                                   # never back up a broken file over a good backup
         os.replace(temporary, MEMORY_PATH)
@@ -243,7 +244,7 @@ def _recursive_update(target: dict, updates: dict) -> bool:
                 changed = True
         else:
             new_val  = _truncate_value(str(value["value"] if isinstance(value, dict) else value))
-            entry    = {"value": new_val, "updated": datetime.now().strftime("%Y-%m-%d")}
+            entry = {"value": new_val, "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
             existing = target.get(key, {})
             if not isinstance(existing, dict) or existing.get("value") != new_val:
                 target[key] = entry

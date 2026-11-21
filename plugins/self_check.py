@@ -36,15 +36,16 @@ OK, WARN, FAIL = "✅", "⚠️", "❌"
 
 
 def check_model():
-    from memory.config_manager import get_gemini_key
-    if not (get_gemini_key() or os.environ.get("GEMINI_API_KEY")):
-        return FAIL, "Yapay zekâ anahtarı yok", "Ayarlar → API anahtarı bölümüne Gemini anahtarını gir (aistudio.google.com)."
     from core import gemini
+    from memory.config_manager import get_gemini_key, get_sidecar_provider
+    key = get_gemini_key() or os.environ.get("GEMINI_API_KEY", "")
+    if not key and not get_sidecar_provider():
+        return FAIL, "Yapay zekâ anahtarı yok", "Ayarlar → API anahtarı bölümüne Gemini anahtarını gir (aistudio.google.com)."
     t0 = time.monotonic()
-    text = gemini.text("Reply with the single word: OK", tier=gemini.FAST)
-    if text and "ok" in text.lower():
+    text = gemini.text("Reply with the single word: OK", tier=gemini.FAST, key=key)
+    if text and text.strip().casefold() == "ok":
         return OK, f"Yapay zekâ yanıt veriyor ({(time.monotonic() - t0) * 1000:.0f} ms)", ""
-    return FAIL, "Yapay zekâ yanıt vermedi", "Anahtarın geçerli mi ve kotası dolmuş mu kontrol et; internet bağlantısına bak."
+    return FAIL, "Model kontrol yanıtı doğrulanamadı", "Ayarlarda seçili modelin bağlantısını, erişim bilgilerini ve kotasını kontrol et."
 
 
 def check_internet():
@@ -100,25 +101,20 @@ def check_memory():
             return OK, f"Hafıza sağlam: {n} bilgi, {backup}", ""
         return OK, "Hafıza henüz boş", ""
     except Exception as exc:
-        return WARN, f"Hafıza dosyası okunamadı ({str(exc)[:60]})", "Bir sonraki açılışta son sağlam kopyadan geri yüklenecek."
+        return WARN, f"Hafıza dosyası okunamadı ({str(exc)[:60]})", "Hafıza klasöründeki ana dosyayı ve varsa yedek kopyayı kontrol et."
 
 
-def check_plugins():
-    bad = []
-    files = [f for f in sorted((ROOT / "plugins").glob("*.py")) if not f.name.startswith("_")]
-    for f in files:
-        name = f"plugins.{f.stem}"
-        if name in sys.modules:
-            continue
-        try:
-            spec = importlib.util.find_spec(name)
-            if spec is None:
-                bad.append(f.stem)
-        except Exception:
-            bad.append(f.stem)
-    if bad:
-        return WARN, f"{len(files)} eklentiden {len(bad)} tanesi yüklenemedi: {', '.join(bad[:5])}", "Konsoldaki hata satırına bak."
-    return OK, f"{len(files)} eklentinin hepsi yerinde", ""
+def check_plugins(registry=None):
+    if registry is None:
+        count = sum(1 for f in (ROOT / "plugins").glob("*.py") if not f.name.startswith("_"))
+        return OK, f"{count} eklenti dosyası bulundu. Yükleme durumu masaüstü oturumunda denetlenir.", ""
+    records = registry()
+    invalid = [r for r in records if not r["valid"]]
+    if invalid:
+        names = ", ".join(r["file"] for r in invalid[:5])
+        return WARN, f"{len(invalid)} eklenti yüklenemedi: {names}", "Ayrıntılar için eklenti yöneticisini aç."
+    active = sum(1 for r in records if r["enabled"])
+    return OK, f"{len(records)} eklenti yüklendi, {active} tanesi etkin", ""
 
 
 def check_blender():
@@ -201,10 +197,10 @@ CHECKS = (("Yapay zekâ", check_model), ("İnternet", check_internet), ("Ses", c
           ("Hata kaydı", check_errors), ("Arka plan", check_watchers), ("Akıllı ev", check_home))
 
 
-def run_checks(timeout: float = 12.0) -> list[tuple[str, str, str, str]]:
+def run_checks(timeout: float = 12.0, registry=None) -> list[tuple[str, str, str, str]]:
     out = []
     pool = cf.ThreadPoolExecutor(max_workers=len(CHECKS))       # not a `with`: a hung check must not be waited for
-    futs = {pool.submit(fn): label for label, fn in CHECKS}
+    futs = {(pool.submit(fn, registry) if fn is check_plugins else pool.submit(fn)): label for label, fn in CHECKS}
     done, _pending = cf.wait(futs, timeout=timeout)
     for fut, label in futs.items():
         if fut in done:
@@ -236,13 +232,13 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             if player is not None and hasattr(player, "show_content"):
                 player.show_content("MAYK günlüğü — son hatalar", report)
             return report
-        rows = run_checks()
+        rows = run_checks(registry=getattr(player, "get_plugins", None))
         lines = [f"{mark} {label}: {text}" + (f"\n    → {fix}" if fix else "") for label, mark, text, fix in rows]
         bad = [r for r in rows if r[1] != OK]
-        head = "Her şey çalışıyor." if not bad else f"{len(bad)} konuda sorun var."
+        head = "Denetlenen bileşenlerde sorun bulunmadı." if not bad else f"{len(bad)} konuda sorun var."
         report = head + "\n" + "\n".join(lines)
         if player is not None and hasattr(player, "show_content"):
             player.show_content("MAYK öz-denetim", report)
-        return report + "\n(Kullanıcıya kısaca söyle: önce sorunları ve çözümlerini, sonra 'gerisi çalışıyor'.)"
+        return report + "\n(Kullanıcıya kısaca söyle: önce sorunları ve çözümlerini, sonra hangi kontrollerin başarılı olduğunu belirt.)"
     except Exception as exc:
         return f"Öz-denetim yapılamadı: {exc}"
