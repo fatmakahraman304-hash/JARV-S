@@ -4054,6 +4054,12 @@ def main():
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()
 
+    # os._exit below bypasses Python's usual wait for non-daemon threads.
+    # The Qt loop has ended, but the updater may still be replacing files.
+    worker = getattr(ui._win, "_update_worker", None)
+    if worker is not None:
+        worker.join()
+
     # The window is closed: write the session summary, stop the engines, go.
     mayk = holder.get("mayk")
     if mayk is not None:
