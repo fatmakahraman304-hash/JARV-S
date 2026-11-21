@@ -1992,7 +1992,23 @@
     const j = JSON.stringify({ g: '', t: S.tok || '', i: S.gist || '', n: S.name || '', d: devName() });
     const code = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     if (!S.tok || !S.gist) { $('f-status').textContent = 'Önce ortak hafıza (GitHub anahtarı) kurulu olmalı.'; return; }
-    location.href = 'jarvisalici://setup?s=' + code;
+    const link = 'jarvisalici://setup?s=' + code;
+    // Only Android devices with MAYK Alıcı installed can open this scheme.
+    // iOS Safari/PWA otherwise displays an unhelpful "invalid address" error.
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      const note = 'Bu bağlantı iPhone\'da açılmaz. Projeksiyondaki MAYK Alıcı uygulamasının 2. adımına yapıştırmak için bağlantıyı güvenli biçimde projeksiyona aktar. Bağlantı özel GitHub anahtarını içerir; herkese açık paylaşma.';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+          $('f-status').textContent = 'Alıcı kurulum bağlantısı kopyalandı. ' + note;
+        }).catch(() => {
+          prompt(note + '\\nKurulum bağlantısı:', link);
+        });
+      } else {
+        prompt(note + '\\nKurulum bağlantısı:', link);
+      }
+      return;
+    }
+    location.href = link;
   };
   $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
   // ── the computer panel: buttons straight to the computer's MAYK ───────
