@@ -179,7 +179,9 @@ def complete_text(prompt: str, *, model: str | None = None) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=180) as response:
+        # Kodlama yedeğinde sorunlu bir model tüm işi dakikalarca kilitlemesin.
+        model_timeout = 22 if chosen == "z-ai/glm-5.3-flash" else 90
+        with urllib.request.urlopen(request, timeout=model_timeout) as response:
             answer = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         explanation = {
