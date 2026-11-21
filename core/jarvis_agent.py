@@ -113,12 +113,12 @@ class Workspace:
         try:
             fn = getattr(self, "t_" + name, None)
             if fn is None:
-                return f"Unknown tool {name}."
+                return f"Bilinmeyen araç: {name}."
             return fn(**{k: v for k, v in (args or {}).items() if v is not None})
         except TypeError as exc:
-            return f"Wrong arguments for {name}: {exc}"
+            return f"{name} için geçersiz parametreler: {exc}"
         except Exception as exc:
-            return f"Error: {type(exc).__name__}: {exc}"
+            return f"Hata: {type(exc).__name__}: {exc}"
 
     def t_list_files(self, path=".", depth=2):
         base = self._path(path)
@@ -146,7 +146,7 @@ class Workspace:
     def t_read_file(self, path, start_line=1, end_line=None):
         p = self._path(path)
         if not p.is_file():
-            return f"No such file: {path}"
+            return f"Dosya bulunamadı: {path}"
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
         s = max(1, int(start_line or 1))
         e = min(len(lines), int(end_line or s + MAX_READ_LINES - 1), s + MAX_READ_LINES - 1)
@@ -174,32 +174,32 @@ class Workspace:
                         hits.append(f"{fp.relative_to(self.root).as_posix()}:{n}: {line.strip()[:200]}")
                         if len(hits) >= 80:
                             return "\n".join(hits) + "\n… (more hits)"
-        return "\n".join(hits) or "No matches."
+        return "\n".join(hits) or "Eşleşme bulunamadı."
 
     def t_write_file(self, path, content):
         p = self._path(path)
         if p.name.lower() in (".env", "api_keys.json", "credentials.json"):
-            return "Refused: that file holds secrets."
+            return "Reddedildi: bu dosyada gizli bilgiler var."
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(str(content), encoding="utf-8")
         self.changed.add(p.relative_to(self.root).as_posix())
         self.log(f"  Yazdı: {p.relative_to(self.root).as_posix()}")
-        return f"Wrote {path} ({len(str(content))} chars)."
+        return f"{path} yazıldı ({len(str(content))} karakter)."
 
     def t_edit_file(self, path, old, new, replace_all=False):
         p = self._path(path)
         if not p.is_file():
-            return f"No such file: {path}"
+            return f"Dosya bulunamadı: {path}"
         text = p.read_text(encoding="utf-8", errors="replace")
         n = text.count(old) if old else 0
         if n == 0:
-            return "The `old` text was not found. Read the file again and copy it exactly."
+            return "Eski metin bulunamadı. Dosyayı yeniden okuyup tam metni kullanın."
         if n > 1 and not replace_all:
             return f"`old` appears {n} times; add more surrounding text or set replace_all."
         p.write_text(text.replace(old, new) if replace_all else text.replace(old, new, 1), encoding="utf-8")
         self.changed.add(p.relative_to(self.root).as_posix())
         self.log(f"  Düzenledi: {p.relative_to(self.root).as_posix()}")
-        return f"Edited {path} ({n if replace_all else 1} replacement)."
+        return f"{path} düzenlendi ({n if replace_all else 1} değiştirme)."
 
     @staticmethod
     def allowed(command: str) -> bool:
@@ -214,7 +214,7 @@ class Workspace:
 
     def t_run(self, command, timeout=120):
         if not self.allowed(command):
-            return ("Refused: only building, running and testing commands are allowed "
+            return ( "Reddedildi: yalnızca derleme, çalıştırma ve test komutlarına izin verilir "
                     "(no deleting, no git commit/push, no downloads).")
         self.log(f"  Çalıştırıyor: {str(command)[:140]}")
         try:
@@ -229,11 +229,11 @@ class Workspace:
                 out = out[:MAX_OUTPUT // 2] + "\n… (cut) …\n" + out[-MAX_OUTPUT // 2:]
             return f"exit code {r.returncode}\n{out}"
         except subprocess.TimeoutExpired:
-            return "Timed out. If it is a server or a program that keeps running, do not start it; test it another way."
+            return "Süre sınırı doldu. Sürekli çalışan sunucu veya programsa yeniden açmayın; başka yöntemle test edin."
 
     def t_fetch_url(self, url):
         if not str(url).startswith(("http://", "https://")):
-            return "Only web addresses."
+            return "Yalnızca web adresleri kabul edilir."
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 MAYK"})
         with urllib.request.urlopen(req, timeout=20) as r:
             raw = r.read(600_000).decode("utf-8", errors="replace")
