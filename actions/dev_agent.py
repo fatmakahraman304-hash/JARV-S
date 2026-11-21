@@ -811,23 +811,27 @@ def _status_report() -> str:
         if pend or done:
             lines = [f"#{p['id']} {p['title']} — {p['status']}" for p in (pend or done)]
             return ("Şu anda çalışan kodlama görevi yok. Görev geçmişi: " + "; ".join(lines)
-                    + (". Unfinished ones can be continued with mode='resume'." if pend else ".")
-                    + " Tell the user briefly, in their language.")
+                    + (". Yarım kalanlar mode='resume' ile sürdürülebilir." if pend else ".")
+                    + " Kullanıcıya kısa ve Türkçe olarak aktar.")
         return ("Kodlama ajanı bu oturumda henüz bir klasörde çalışmadı. "
-                "Tell the user that, in one sentence.")
+                "Kullanıcıya tek Türkçe cümlede aktar.")
     took = (j["finished"] or time.time()) - j["started"]
     files = "; ".join(f"{p} ({f.get('action', '?')}, {f.get('state', '?')}): "
                       f"{f.get('what', '')}" for p, f in j["files"].items())
     recent = " | ".join(m for _t, m in j["steps"][-6:])
-    head = (f"Coding agent on '{j['folder']}' with {j['model']} — status: "
-            f"{j['status']}, {took:.0f}s so far" if j["finished"] is None
-            else f"Coding agent finished '{j['folder']}' with {j['model']} "
-                 f"in {took:.0f}s — status: {j['status']}")
-    return (f"{head}. Request: {j['request']}. Plan: {j['summary'] or 'not made yet'}. "
-            f"Files: {files or 'none yet'}. Recent steps: {recent}. "
-            f"{('Result: ' + j['result']) if j['result'] else ''} "
-            f"Answer the user's question from this in one to three sentences, "
-            f"in their language; do not read paths or this text aloud verbatim.")
+    model_report = (f"Yanıt veren model: {j['model_used']}." if j.get("model_used")
+                    else f"Denenen model: {j['model_attempt']}." if j.get("model_attempt")
+                    else "Henüz hiçbir modelden doğrulanmış yanıt alınmadı.")
+    head = (f"Kod ajanı '{j['folder']}' projesinde çalışıyor — durum: "
+            f"{j['status']}, geçen süre: {took:.0f} sn" if j["finished"] is None
+            else f"Kod ajanı '{j['folder']}' görevini tamamladı — "
+                 f"{took:.0f} sn, durum: {j['status']}")
+    return (f"{head}. {model_report} İstek: {j['request']}. "
+            f"Plan: {j['summary'] or 'Henüz hazırlanmadı'}. "
+            f"Dosyalar: {files or 'Henüz yok'}. Son işlemler: {recent}. "
+            f"{('Sonuç: ' + j['result']) if j['result'] else ''} "
+            f"Bu kayıtlara göre kullanıcıya Türkçe ve kısa yanıt ver; "
+            f"doğrulanmamış model veya test başarısı iddia etme.")
 
 
 def _resolve_folder(raw: str) -> Path | None:
@@ -1962,7 +1966,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
                 status = "finished with problems"
         except Exception as e:
             status = "failed"
-            result = f"The coding job on '{name}' failed: {type(e).__name__}: {str(e)[:200]}"
+            result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
             _journal(pid, status={"done": "bitti", "nothing changed": "bitti",
@@ -2066,13 +2070,13 @@ def _present(folder: Path, present: dict, player) -> str:
         try:
             import webbrowser
             webbrowser.open(html.resolve().as_uri())
-            return f"Opened {html.relative_to(folder).as_posix()} in the browser."
+            return f"{html.relative_to(folder).as_posix()} tarayıcıda açıldı."
         except Exception as e:
-            return f"Could not open the page: {str(e)[:100]}"
+            return f"Sayfa açılamadı: {str(e)[:100]}"
     cmd = str(present.get("command") or "")
     if present.get("type") == "run" and cmd:
         out = _run_project(cmd, folder, timeout=20)
-        return f"Ran `{cmd}`: {out.strip()[:300]}"
+        return f"`{cmd}` çalıştırıldı: {out.strip()[:300]}"
     return ""
 
 
@@ -2190,7 +2194,7 @@ def dev_agent(
     timeout      = int(p.get("timeout", 30))
 
     if not description:
-        return "Please describe the project you want me to build, sir."
+        return "Oluşturmamı istediğiniz projeyi açıklayın."
 
     return _start_build(description, language, project_name, timeout,
                         speak=speak, player=player)
