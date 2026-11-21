@@ -161,12 +161,23 @@ def _target(root, name):
     return path
 
 
+class _RecoveryRequired(RuntimeError):
+    """Keep the transaction marker until the saved copies can be restored."""
+
+
 def _replace_bytes(path, data):
     # A private sibling directory keeps the replacement on the same volume and
     # cannot collide with a user's files, even after an interrupted update.
     with tempfile.TemporaryDirectory(dir=path.parent) as staging:
         tmp = Path(staging) / path.name
         tmp.write_bytes(data)
+        if path.suffix == ".py" and path.is_file():
+            # CPython validates timestamp-based bytecode using whole seconds
+            # and file size. A same-size edit in one second can run old code.
+            old = path.stat()
+            current = tmp.stat()
+            if old.st_size == current.st_size and int(old.st_mtime) == int(current.st_mtime):
+                os.utime(tmp, (current.st_atime, int(old.st_mtime) + 1))
         os.replace(tmp, path)
 
 
@@ -197,18 +208,17 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
             existed.add(name)
-    old_state = state_path.read_bytes() if state_path.exists() else None
     touched = []
     try:
         progress('Yeni kod uygulanıyor…')
         for name in sorted(names):
             path = _target(root, name)
-            touched.append(name)
             if name in files:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 _replace_bytes(path, files[name])
             else:
                 path.unlink(missing_ok=True)
+            touched.append(name)
         state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
         progress('Kurulan dosyalar doğrulanıyor…')
         for name, digest in state['files'].items():
@@ -216,16 +226,19 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None):
                 raise RuntimeError(f'Yazılan dosya doğrulanamadı: {name}')
         _replace_bytes(state_path, json.dumps(state).encode('utf-8'))
     except Exception:
+        failed = []
         for name in reversed(touched):
             path = root / name
-            if name in existed:
-                shutil.copy2(backup / name, path)
-            else:
-                path.unlink(missing_ok=True)
-        if old_state is None:
-            state_path.unlink(missing_ok=True)
-        else:
-            state_path.write_bytes(old_state)
+            try:
+                if name in existed:
+                    shutil.copy2(backup / name, path)
+                else:
+                    path.unlink(missing_ok=True)
+            except OSError:
+                failed.append(name)
+        if failed:
+            raise _RecoveryRequired(f'Geri alma tamamlanamadı. Yedek: {backup}. Dosyalar: {", ".join(failed[:5])}')
+        # The old manifest remains intact until the final atomic replace.
         raise
     return backup
 
@@ -287,6 +300,7 @@ def _update_locked(root, progress):
             raise RuntimeError('Başka bir güncelleme veya yarım kalan kurulum var. '
                                'Güncelleme kilidi ve yedekler korunuyor. docs/guncelleme-tr.md dosyasına bakın.') from None
         progress('Kesilen kontrolün ardından yeniden deneniyor…')
+    release_marker = True
     try:
         is_git = (root / '.git').exists()
         state_file = root / '.jarvis-update.json'
@@ -359,8 +373,12 @@ def _update_locked(root, progress):
         else:
             _apply_zip(root, files, sha, branch, progress)
         return True, f'Güncellendi · {sha[:8]}. MAYK otomatik yeniden başlatılıyor.{note}'
+    except _RecoveryRequired:
+        release_marker = False
+        raise
     finally:
-        lock.unlink(missing_ok=True)
+        if release_marker:
+            lock.unlink(missing_ok=True)
 
 
 def check(root=ROOT) -> dict:
