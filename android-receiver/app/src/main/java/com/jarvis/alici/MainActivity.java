@@ -1,6 +1,9 @@
 package com.jarvis.alici;
 
 import android.app.Activity;
+import android.accessibilityservice.AccessibilityServiceInfo;
+import android.view.accessibility.AccessibilityManager;
+import java.util.List;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -140,12 +143,31 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+    private boolean accessibilityEnabled() {
+        AccessibilityManager manager = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (manager == null) return false;
+        List<AccessibilityServiceInfo> services = manager.getEnabledAccessibilityServiceList(
+                AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
+        for (AccessibilityServiceInfo service : services) {
+            if (service.getResolveInfo() != null
+                    && getPackageName().equals(service.getResolveInfo().serviceInfo.packageName)
+                    && RemoteAccessibility.class.getName().equals(service.getResolveInfo().serviceInfo.name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void refresh() {
         SharedPreferences p = ReceiverService.prefs(this);
         boolean linked = !p.getString("gist", "").isEmpty();
-        boolean a11y = RemoteAccessibility.instance != null;
+        boolean a11yPermission = accessibilityEnabled();
+        boolean a11yRunning = RemoteAccessibility.instance != null;
+        String a11yStatus = !a11yPermission
+                ? "kapalı — 1. adım (Ayarlar → Erişilebilirlik → MAYK Alıcı)"
+                : a11yRunning ? "açık ✓" : "izin açık, servis henüz çalışmıyor";
         status.setText("Bağlantı: " + (linked ? "kurulu" : "kurulmadı — 2. adım") + "\n"
-                + "Erişilebilirlik: " + (a11y ? "açık ✓" : "kapalı — 1. adım (Ayarlar → Erişilebilirlik → MAYK Alıcı)") + "\n"
+                + "Erişilebilirlik: " + a11yStatus + "\n"
                 + "Dinleme: " + ReceiverService.status + "\n\n"
                 + "Hazır olunca telefondaki MAYK'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
         ui.removeCallbacksAndMessages(null);
