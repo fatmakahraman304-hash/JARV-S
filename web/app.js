@@ -347,7 +347,7 @@
       const remSig = L => L.map(r => [r.id, +r.due, r.text, r.cancelled || ''].join('|')).join('\n');
       if (remSig(mergeReminders(cloudRem, [])) !== remSig(reminders)) writes['reminders.json'] = JSON.stringify(reminders);
       saveRem(); renderRem();
-      if (beatDirty || !lastBeat || Date.now() - lastBeat > (isActive() ? 20000 : 60000)) {
+      if (beatDirty || !lastBeat || Date.now() - lastBeat > (isActive() ? 120000 : 240000)) {
         lastBeat = Date.now(); beatDirty = false;
         writes['device-' + S.id + '.json'] = JSON.stringify(myBeat());
       }
@@ -364,7 +364,7 @@
   let lastBeat = 0, beatDirty = false, syncing = false;
   async function syncLoop() {
     if (!syncing) { syncing = true; try { await syncNow(); } finally { syncing = false; } }
-    setTimeout(syncLoop, document.visibilityState === 'visible' ? 8000 : 45000);
+    setTimeout(syncLoop, document.visibilityState === 'visible' ? 30000 : 120000);
   }
   setTimeout(syncLoop, 1500);
 
@@ -1392,7 +1392,7 @@
     box.push({ ...cmd, id, from: devName(), reply_to: S.id, ts: nowIso() });
     await Cloud.write({ [`inbox-${d.id}.json`]: JSON.stringify(box.slice(-10)) });
     for (let i = 0; i < 10; i++) {               // ~20 s
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 3000));
       try { const hit = J((await Cloud.read())[`outbox-${d.id}.json`], []).find(o => o.id === id); if (hit) return hit.reply; } catch {}
     }
     return `${d.controls || 'Projeksiyon'} yanıt vermedi. Hedef alıcı kimliği: ${d.id}. Alıcı uygulamasındaki cihaz kimliğiyle karşılaştır; farklıysa eski eşleştirme kaydı seçilmiş olabilir.`;
