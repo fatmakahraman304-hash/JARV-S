@@ -124,7 +124,7 @@ class BrainChoiceTest(unittest.TestCase):
         from core import nvidia_account
         reply = {"choices": [{"message": {"content": "", "tool_calls": [
             {"id": "t1", "type": "function", "function": {
-                "name": "list_files", "arguments": "{\\"path\\": \\".\\"}"}}]}}]}
+                "name": "list_files", "arguments": '{"path": "."}'}}]}}]}
         with mock.patch.object(ja, "_http_json", return_value=reply) as http:
             brain = ja.OpenAIBrain(nvidia_account.BASE_URL, "key",
                                    "nvidia/nemotron-3.5-lightning-30b-a3b", "NVIDIA")
