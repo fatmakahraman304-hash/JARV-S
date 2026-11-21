@@ -847,7 +847,7 @@ class AudioDeviceOverlay(_HudOverlay):
             if current and idx < 0:
                 # Saved device is not plugged in right now. Show it rather than
                 # silently resetting the user's choice to default.
-                box.addItem(f"{current}  (not connected)", current)
+                box.addItem(f"{current}  (bağlı değil)", current)
                 box.setCurrentIndex(box.count() - 1)
 
             # THE ONE CHECK THE STARTUP PROBE CANNOT MAKE.
@@ -864,7 +864,7 @@ class AudioDeviceOverlay(_HudOverlay):
             # `ses_testi.py` in the project root that nobody would ever find.
             btn_row = QHBoxLayout(); btn_row.setSpacing(6)
             btn_row.addWidget(box, 1)
-            test = QPushButton("TEST")
+            test = QPushButton("TEST ET")
             test.setFixedSize(64, 30)
             test.setFont(hud_font(8, QFont.Weight.Bold))
             test.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -906,10 +906,10 @@ class AudioDeviceOverlay(_HudOverlay):
         self._level_seen.connect(self._on_level)
         self._test_result.connect(self._on_result)
 
-        self._in_box  = _row("MICROPHONE — what MAYK hears you with",
+        self._in_box  = _row("MİKROFON — MAYK’ın sizi dinlediği cihaz",
                              "input", get_input_device())
         lay.addSpacing(4)
-        self._out_box = _row("SPEAKERS — what MAYK talks through",
+        self._out_box = _row("HOPARLÖR — MAYK’ın ses verdiği cihaz",
                              "output", get_output_device())
 
         # ── Output volume, beside the output device ──────────────────────────
@@ -1069,13 +1069,13 @@ class AudioDeviceOverlay(_HudOverlay):
                     res = audio_devices.measure_input(
                         name,
                         on_level=lambda f: self._level_seen.emit(int(f * 100)))
-                    text = f"peak {res['peak']}  —  {res['verdict']}"
+                    text = f"En yüksek seviye: {res['peak']}  —  {res['verdict']}"
                 else:
                     res = audio_devices.play_tone(name)
                     text = res["verdict"]
                 good = bool(res.get("ok", False))
             except Exception as e:
-                text, good = f"The test itself failed: {e}", False
+                text, good = f"Ses testi başarısız: {e}", False
             self._test_result.emit(text, good)
 
         threading.Thread(target=_work, daemon=True, name=f"audio-test-{kind}").start()
@@ -1586,7 +1586,7 @@ class PluginSettingsOverlay(QWidget):
         action = sec.get("action")
         if isinstance(action, dict) and callable(action.get("run")):
             form.addSpacing(2)
-            ab = QPushButton(str(action.get("label") or "TEST"))
+            ab = QPushButton(str(action.get("label") or "TEST ET"))
             ab.setFixedHeight(30)
             ab.setFont(hud_font(8, QFont.Weight.Bold))
             ab.setCursor(Qt.CursorShape.PointingHandCursor)
