@@ -878,9 +878,9 @@ def _status_report() -> str:
             pend, done = [], []
         if pend or done:
             lines = [f"#{p['id']} {p['title']} — {p['status']}" for p in (pend or done)]
-            return ("Şu anda çalışan kodlama görevi yok. Görev geçmişi: " + "; ".join(lines)
-                    + (". Yarım kalanlar mode='resume' ile sürdürülebilir." if pend else ".")
-                    + " Kullanıcıya kısa ve Türkçe olarak aktar.")
+            return (status_text() + " Diğer görev kayıtları: " + "; ".join(lines)
+                    + (". Yarım kalan bir iş varsa mode='resume' ile sürdürülebilir." if pend else ".")
+                    + " Kullanıcıya canlı iş ile geçmiş kaydı farkını doğru ve kısa aktar.")
         return status_text() + " Kullanıcıya kayıtlı sonucu doğru ve kısa biçimde aktar."
     took = (j["finished"] or time.time()) - j["started"]
     files = "; ".join(f"{p} ({f.get('action', '?')}, {f.get('state', '?')}): "
