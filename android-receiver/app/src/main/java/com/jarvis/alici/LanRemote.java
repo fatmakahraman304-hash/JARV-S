@@ -99,20 +99,30 @@ final class LanRemote {
             if (lines.length == 0) return;
             String[] first = lines[0].split(" ");
             if (first.length < 2) return;
-            String method = first[0], path = first[1];
+            String method = first[0], target = first[1];
+            int qmark = target.indexOf('?');
+            String path = qmark >= 0 ? target.substring(0, qmark) : target;
+            String query = qmark >= 0 ? target.substring(qmark + 1) : "";
             if (!path.equals("/" + secret) && !path.equals("/" + secret + "/cmd")) { respond(s, 404, "Bulunamadı"); return; }
             if ("GET".equals(method) && path.equals("/" + secret)) { respond(s, 200, page()); return; }
-            if (!"POST".equals(method) || !path.endsWith("/cmd")) { respond(s, 405, "İzin verilmiyor"); return; }
+            if (!path.endsWith("/cmd") || (!"GET".equals(method) && !"POST".equals(method))) { respond(s, 405, "İzin verilmiyor"); return; }
             int len = -1;
             for (String line : lines) {
                 String low = line.toLowerCase(Locale.US);
                 if (low.startsWith("content-length:")) len = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
             }
-            if (len < 1 || len > 2048) { respond(s, 400, "Geçersiz istek"); return; }
-            byte[] body = new byte[len]; int pos = 0;
-            while (pos < len) { int n = in.read(body, pos, len-pos); if (n < 0) return; pos += n; }
+            String encoded;
+            if ("GET".equals(method)) {
+                if (query.length() < 1 || query.length() > 2048) { respond(s, 400, "Geçersiz istek"); return; }
+                encoded = query;
+            } else {
+                if (len < 1 || len > 2048) { respond(s, 400, "Geçersiz istek"); return; }
+                byte[] body = new byte[len]; int pos = 0;
+                while (pos < len) { int n = in.read(body, pos, len-pos); if (n < 0) return; pos += n; }
+                encoded = new String(body, StandardCharsets.UTF_8);
+            }
             String op = "", arg = "", csrf = "";
-            for (String pair : new String(body, StandardCharsets.UTF_8).split("&")) {
+            for (String pair : encoded.split("&")) {
                 int eq = pair.indexOf('='); if (eq < 0) continue;
                 String k = URLDecoder.decode(pair.substring(0,eq), "UTF-8");
                 String v = URLDecoder.decode(pair.substring(eq+1), "UTF-8");
@@ -131,18 +141,17 @@ final class LanRemote {
     }
 
     private String page() {
-        StringBuilder h = new StringBuilder("<!doctype html><html lang='tr'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>MAYK Yerel Kumanda</title><style>body{background:#100d0a;color:#fff;font:18px sans-serif;padding:15px}button{background:#29221b;color:#fff;border:1px solid #ae783f;border-radius:12px;padding:16px;margin:5px;font-size:19px}input{padding:14px;font-size:18px;max-width:85%}h2{color:#ffa64b}</style><h2>MAYK · Wi-Fi Kumanda</h2><p>GitHub olmadan doğrudan projeksiyonu kontrol et.</p>");
+        StringBuilder h = new StringBuilder("<!doctype html><html lang='tr'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>MAYK Yerel Kumanda</title><style>body{background:#100d0a;color:#fff;font:18px sans-serif;padding:15px}button{background:#29221b;color:#fff;border:1px solid #ae783f;border-radius:12px;padding:16px;margin:5px;font-size:19px}input{padding:14px;font-size:18px;max-width:85%}h2{color:#ffa64b}</style><h2>MAYK · Wi-Fi Kumanda</h2><p>GitHub olmadan doğrudan projeksiyonu kontrol et. Sürüm 1.8</p><p id='result' role='status' aria-live='polite' style='color:#ffb86b;font-weight:bold'></p>");
         String[][] keys = {{"Ses +","volume_up"},{"Ses −","volume_down"},{"Sessiz","mute"},{"Ana ekran","home"},{"Geri","back"},{"Yukarı","up"},{"Aşağı","down"},{"Sol","left"},{"Sağ","right"},{"OK","enter"},{"Oynat / durdur","play_pause"}};
         for (String[] k : keys) h.append(form("key", k[1], k[0]));
         h.append("<h3>Uygulamalar</h3>").append(form("app","youtube","YouTube")).append(form("app","netflix","Netflix")).append(form("app","settings","Ayarlar"));
-        h.append("<h3>YouTube ara</h3><form method='post' action='/").append(secret).append("/cmd'><input type='hidden' name='csrf' value='").append(secret).append("'><input type='hidden' name='op' value='search'><input name='arg' placeholder='Aranacak video'><button>Ara</button></form>");
-        h.append("<p id='result' role='status' aria-live='polite'></p>");
+        h.append("<h3>YouTube ara</h3><form method='get' action='/").append(secret).append("/cmd'><input type='hidden' name='csrf' value='").append(secret).append("'><input type='hidden' name='op' value='search'><input name='arg' placeholder='Aranacak video'><button>Ara</button></form>");
         // Fetch sends the same authenticated POST without iOS's unsafe-form
         // navigation warning. Forms still work if JavaScript is disabled.
         h.append("<script>document.addEventListener('submit',async function(e){"
                 + "const f=e.target;if(!f.matches('form'))return;e.preventDefault();"
                 + "const out=document.getElementById('result');out.textContent='Gönderiliyor…';"
-                + "try{const r=await fetch(f.action,{method:'POST',body:new URLSearchParams(new FormData(f))});"
+                + "try{const r=await fetch(f.action+'?'+new URLSearchParams(new FormData(f)),{method:'GET',cache:'no-store'});"
                 + "const t=await r.text();const d=new DOMParser().parseFromString(t,'text/html');"
                 + "out.textContent=(r.ok?'':'Hata: ')+(d.body?d.body.textContent.trim():t);}"
                 + "catch(err){out.textContent='Bağlantı hatası: '+err.message;}"
@@ -151,7 +160,7 @@ final class LanRemote {
     }
 
     private String form(String op, String arg, String title) {
-        return "<form style='display:inline-block' method='post' action='/" + secret + "/cmd'><input type='hidden' name='csrf' value='" + secret + "'><input type='hidden' name='op' value='" + op + "'><input type='hidden' name='arg' value='" + arg + "'><button>" + title + "</button></form>";
+        return "<form style='display:inline-block' method='get' action='/" + secret + "/cmd'><input type='hidden' name='csrf' value='" + secret + "'><input type='hidden' name='op' value='" + op + "'><input type='hidden' name='arg' value='" + arg + "'><button>" + title + "</button></form>";
     }
     private static String escape(String s) { return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"); }
     private void respond(Socket s, int code, String html) throws IOException {
