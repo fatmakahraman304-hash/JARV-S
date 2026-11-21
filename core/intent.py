@@ -40,7 +40,11 @@ _HYPO = re.compile(r"\b(ileride|ilerde|bir gun|istesem|desem|dersem|yapsam|olsa|
                    r"yapabilir mi|yapar mi|becerebilir mi|mumkun mu|if i (asked|said|wanted)|"
                    r"would you be able|could you ever|is it possible)\b")
 _FEEDBACK = re.compile(r"\b(begenmedim|begendim|olmamis|olmus|guzel olmus|kotu olmus|yanlis olmus|harika olmus|"
-                       r"super olmus|tam istedigim|istedigim gibi degil|boyle olmaz|bu olmadi|i don'?t like|looks (good|bad))\b")
+                       r"super olmus|tam istedigim|istedigim gibi degil|boyle olmaz|bu olmadi|"
+                       r"yanlis anladin|beni yanlis anladin|yanlis duydun|oyle demedim|"
+                       r"bunu demedim|ben oyle demedim|beni anlamiyorsun|beni yanlis anliyorsun|"
+                       r"anlamadin|yanlis anliyorsun|"
+                       r"i don'?t like|you misunderstood|that's not what i said|looks (good|bad))\b")
 _CHAT = re.compile(r"^(selam|merhaba|naber|nasilsin|gunaydin|iyi aksamlar|iyi geceler|tesekkur(ler)?|sagol|"
                    r"eyvallah|tamam|peki|anladim|harika|super|evet|hayir|hi|hello|thanks|thank you|ok|okay)\b")
 _COMMAND_END = re.compile(r"\b(yap|kur|ac|kapat|sil|ekle|cikar|degistir|getir|goster|gonder|kaydet|indir|yukle|baslat|"
