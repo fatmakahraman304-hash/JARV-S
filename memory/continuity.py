@@ -230,3 +230,65 @@ def search(query, limit=8):
             with connect() as db:
                 rows = [item[-1] for item in heapq.nlargest(max(1, min(limit, 30)), candidates(db))]
     return "\n".join(f"{date[:16]} | {role}: {text[:800]}" for date, role, text in rows)
+
+
+def _copy_database(source, destination):
+    """Publish a validated SQLite snapshot without replacing another file."""
+    from contextlib import closing
+    import tempfile
+
+    source, destination = Path(source).resolve(), Path(destination).absolute()
+    if destination.exists() or destination.is_symlink():
+        raise FileExistsError(f"Hedef zaten var: {destination}")
+    if not source.is_file():
+        raise FileNotFoundError(f"Kaynak veritabanı bulunamadı: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=destination.parent) as staging:
+        snapshot = Path(staging) / "continuity.sqlite3"
+        with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=10)) as reader:
+            with closing(sqlite3.connect(snapshot)) as writer:
+                reader.backup(writer, pages=256)
+                writer.execute("PRAGMA journal_mode=DELETE")
+                writer.execute("PRAGMA trusted_schema=OFF")
+                if writer.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise ValueError("SQLite bütünlük denetimi başarısız.")
+                tables = {r[0] for r in writer.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                for table, columns in (
+                    ("events", "id,time,role,text"), ("applications", "name,status,detail,updated"),
+                    ("projects", "id,kind,title,folder,instruction,status,stage,stages,note,started,updated"),
+                ):
+                    if table not in tables:
+                        raise ValueError(f"MAYK tablosu eksik: {table}")
+                    writer.execute(f"SELECT {columns} FROM {table} LIMIT 0")
+        snapshot.chmod(0o600)
+        # Atomic no-clobber publish on NTFS and POSIX. A concurrent restore
+        # or first launch that created the destination keeps its own database.
+        os.link(snapshot, destination)
+    return destination
+
+
+def backup_history(destination):
+    """Include committed WAL pages even while MAYK is writing new events."""
+    return _copy_database(data_dir() / "continuity.sqlite3", destination)
+
+
+def restore_history(source):
+    """Restore into an empty data location while MAYK is closed."""
+    target = data_dir() / "continuity.sqlite3"
+    if any(Path(str(target) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
+        raise FileExistsError("Önceki SQLite işlem dosyaları korunuyor. Boş bir veri klasörü kullanın.")
+    return _copy_database(source, target)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="MAYK konuşma ve görev geçmişini yedekle veya geri yükle.")
+    actions = parser.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--backup", type=Path, metavar="HEDEF")
+    actions.add_argument("--restore", type=Path, metavar="YEDEK")
+    args = parser.parse_args()
+    try:
+        saved = backup_history(args.backup) if args.backup else restore_history(args.restore)
+        print(f"SQLite kopyası doğrulandı: {saved}")
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        parser.exit(1, f"İşlem tamamlanamadı: {exc}\n")
