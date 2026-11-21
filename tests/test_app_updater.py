@@ -164,6 +164,29 @@ class UpdaterTests(unittest.TestCase):
                 u.update(self.root)
         self.assertFalse((self.root / 'main.py').exists())
 
+    def test_interrupted_read_only_phase_retries(self):
+        (self.root / '.jarvis-update.lock').write_bytes(b'MAYK/1 checking')
+        with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):
+            self.assertTrue(u.update(self.root)[0])
+        self.assertFalse((self.root / '.jarvis-update.lock').exists())
+
+    def test_guard_blocks_a_second_process_and_releases_after_abrupt_exit(self):
+        import subprocess
+        import sys
+        child = subprocess.Popen([sys.executable, '-c',
+            "from core.app_updater import _update_guard; from pathlib import Path; import sys; "
+            "g=_update_guard(Path(sys.argv[1])); g.__enter__(); print('ready', flush=True); sys.stdin.read()",
+            str(self.root)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), 'ready')
+            with self.assertRaisesRegex(RuntimeError, 'kilidi'):
+                u.update(self.root)
+        finally:
+            child.kill()
+            child.communicate()
+        with u._update_guard(self.root):
+            pass
+
     def test_lock_prevents_concurrent_update(self):
         (self.root / '.jarvis-update.lock').touch()
         with self.assertRaisesRegex(RuntimeError, 'Başka bir güncelleme'):
