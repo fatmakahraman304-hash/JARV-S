@@ -666,8 +666,7 @@ class OpenAICompatLLM:
             if "404" in msg:
                 return False, f"Bu adreste '{self.model}' modeli bulunamadı."
             if "Connect" in msg or "connect" in msg or "timed out" in msg:
-                return False, ("Bu adresten yanıt alınamadı. 
-                               "Sunucu çalışıyor mu?")
+                return False, "Bu adresten yanıt alınamadı. Sunucu çalışıyor mu?"
             return False, _terse(msg, 90)
 
         took = time.monotonic() - t0
