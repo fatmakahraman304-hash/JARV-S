@@ -851,7 +851,7 @@
         if (!op) return 'Ne yapayım? (op gerekli)';
         await syncNow();
         const rx = receiver();
-        if (rx && online(rx)) {
+        if (rx) {
           const r = await sendToReceiver(rx, { op, arg, where: a.where || 'youtube', password: a.password || '', question: a.question || '', enter: true });
           if (op === 'look') { setTimeout(() => syncNow(), 2500); setTimeout(() => syncNow(), 6000); return r + ' Görüntü gelince ekranda açılacak; o zaman ne olduğunu anlat.'; }
           return r;
@@ -1401,13 +1401,13 @@
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil.';
     await syncNow();
     const rx = receiver();
-    if (rx && online(rx)) return await sendToReceiver(rx, { op: kind, arg, ...extra });
+    if (rx) return await sendToReceiver(rx, { op: kind, arg, ...extra });
     const pc = findPc('');
     if (pc && online(pc)) { const r = await sendToPc('', `adb:${kind}:${arg}`); return r.replace(/^[^:]+: /, ''); }
-    return rx ? 'Projeksiyondaki MAYK Alıcı şu an çevrimdışı (projeksiyon kapalı ya da internete bağlı değil).'
+    return rx ? 'Projeksiyon yanıt vermedi; MAYK Alıcı uygulamasının bağlantısını kontrol et.'
               : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona MAYK Alıcı uygulamasını kur ya da laptopu aç.';
   }
-  $('t-remote').onclick = () => { const pc = findPc(''); $('rm-note').textContent = pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}). İlk kez: laptoptaki MAYK'a "projeksiyonu kur" de.` : 'Bağlı bilgisayar yok: kumanda laptoptaki MAYK üzerinden çalışır.'; openSheet('s-remote'); };
+  $('t-remote').onclick = () => { const rx = receiver(); const pc = findPc(''); $('rm-note').textContent = rx ? `MAYK Alıcı: ${rx.name} · ${online(rx) ? 'çevrimiçi' : 'son durum eski; komut gönderilerek denenecek'}` : pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}).` : 'MAYK Alıcı kayıtlı değil; Ayarlar → Alıcıyı bağla.'; openSheet('s-remote'); };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
   $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
