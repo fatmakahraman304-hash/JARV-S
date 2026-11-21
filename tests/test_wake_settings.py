@@ -44,3 +44,25 @@ class WakeSettings(unittest.TestCase):
         MainWindow._on_wake_install_done(owner, ok, message)
         self.assertFalse(owner._wake_busy)
         self.assertEqual(owner._wake_feedback, message)
+
+
+class WakeAudioTests(unittest.TestCase):
+    def test_reset_discards_frames_already_in_flight(self):
+        import json
+        import numpy as np
+        from core.wake_word import WakeWordDetector
+        detected = Mock()
+        detector = WakeWordDetector(detected)
+        model = Mock()
+        detector._running = True
+        def recognize(_pcm):
+            detector.reset()
+            return True
+        model.AcceptWaveform.side_effect = recognize
+        model.Result.return_value = json.dumps({"result": [{"word": w, "conf": 1} for w in ("hey", "mike")]})
+        detector.feed(np.zeros(64, dtype=np.int16))
+        detector.feed(np.zeros(64, dtype=np.int16))
+        detector._queue.put_nowait(None)
+        detector._loop(detector._queue, model)
+        detected.assert_not_called()
+        model.AcceptWaveform.assert_called_once()
