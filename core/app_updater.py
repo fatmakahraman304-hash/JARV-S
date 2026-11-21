@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
@@ -159,6 +160,15 @@ def _target(root, name):
     return path
 
 
+def _replace_bytes(path, data):
+    # A private sibling directory keeps the replacement on the same volume and
+    # cannot collide with a user's files, even after an interrupted update.
+    with tempfile.TemporaryDirectory(dir=path.parent) as staging:
+        tmp = Path(staging) / path.name
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+
+
 def _apply_zip(root, files, sha, branch):
     """Back up before writing; restore every changed/deleted file on failure."""
     state_path = root / '.jarvis-update.json'
@@ -194,18 +204,14 @@ def _apply_zip(root, files, sha, branch):
             touched.append(name)
             if name in files:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                tmp = path.with_name(path.name + '.jarvis-new')
-                try:
-                    tmp.write_bytes(files[name])
-                    os.replace(tmp, path)
-                finally:
-                    tmp.unlink(missing_ok=True)
+                _replace_bytes(path, files[name])
             else:
                 path.unlink(missing_ok=True)
         state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
-        temp_state = state_path.with_suffix('.tmp')
-        temp_state.write_text(json.dumps(state), encoding='utf-8')
-        os.replace(temp_state, state_path)
+        for name, digest in state['files'].items():
+            if _hash(_target(root, name).read_bytes()) != digest:
+                raise RuntimeError(f'Yazılan dosya doğrulanamadı: {name}')
+        _replace_bytes(state_path, json.dumps(state).encode('utf-8'))
     except Exception:
         for name in reversed(touched):
             path = root / name
@@ -306,11 +312,10 @@ def update(root=ROOT, progress=lambda message: None):
                 label = _set_aside(root)
             try:
                 if eol_only:
-                    # Only CRLF/LF differences: nothing to keep. The target is a
-                    # descendant (checked above), so this is a fast-forward.
-                    _git(root, 'reset', '--hard', sha)
-                else:
-                    _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
+                    # Normalize tracked files before the fast-forward. Git merge
+                    # then checks for collisions with personal untracked files.
+                    _git(root, 'restore', '--source=HEAD', '--staged', '--worktree', '--', '.')
+                _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
             except RuntimeError:
                 if label:
                     _restore(root, label)
