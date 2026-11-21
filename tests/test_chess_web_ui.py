@@ -1,5 +1,4 @@
 """Regression checks for the iPhone web chess layout and piece rendering."""
-import re
 import unittest
 from pathlib import Path
 
