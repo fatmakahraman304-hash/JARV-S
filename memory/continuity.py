@@ -191,6 +191,7 @@ def recover_jobs():
 
 
 _RECALL_STOP = {"bir", "ile", "icin", "olan", "bana", "benim", "hani", "ne", "diye",
+                "hatirliyor", "hatirlar", "musun", "misin", "miydi", "neydi",
                 "the", "and", "for", "was", "about", "what"}
 
 
@@ -202,6 +203,18 @@ def memory_words(value):
 
 def recall_terms(query):
     return {word for word in memory_words(str(query)) if len(word) >= 2} - _RECALL_STOP
+
+
+# Folded Turkish case and possessive endings for a query such as
+# "projemin" against the stored word "proje". Exact matches rank first.
+_QUERY_ENDINGS = {"i", "u", "yi", "yu", "mi", "mu", "min", "mun", "nin", "nun",
+                  "in", "un", "im", "um", "da", "de", "ta", "te", "dan", "den",
+                  "tan", "ten", "daki", "deki", "lar", "ler", "lari", "leri"}
+
+
+def related_word(term, word):
+    return ((len(term) >= 4 and word.startswith(term)) or
+            (len(word) >= 4 and term.startswith(word) and term[len(word):] in _QUERY_ENDINGS))
 
 
 def search(query, limit=8):
@@ -222,7 +235,7 @@ def search(query, limit=8):
                     words = memory_words(text)
                     exact = wanted & words
                     # Handles common Turkish endings such as 'kanat' / 'kanatları'.
-                    partial = sum(any(len(w) >= 4 and other.startswith(w) for other in words)
+                    partial = sum(any(related_word(w, other) for other in words)
                                   for w in wanted - exact)
                     coverage = len(exact) + partial
                     if coverage and coverage * 2 >= len(wanted):
