@@ -1,10 +1,8 @@
 """
 dashboard/server.py — MAYK Local HTTP Dashboard
 
-HTTPS on port 8000 with a self-signed certificate generated on first run, plus
-a second layer inside it: commands are encrypted with AES-256-GCM under a key
-derived from the pairing code with PBKDF2. Both layers are required — the
-server refuses to start without TLS rather than quietly serving in clear.
+LAN dashboard with bearer sessions and optional HTTPS. An explicit HTTPS
+configuration must have a usable local certificate before serving controls.
 
 Install deps:  pip install fastapi "uvicorn[standard]" cryptography
 """
@@ -761,7 +759,7 @@ class DashboardServer:
         self._tokens: dict[str, float]    = {}
         self._token_keys: dict[str, str]  = {}   # auth_token → session_key
         self._aes_cache:  dict[str, bytes]= {}   # session_key → AES bytes
-        self._clients: set[WebSocket]     = set()
+        self._clients: dict[WebSocket, str] = {}
         self._history: list[dict]         = []
         self._command_queue               = asyncio.Queue()
         self._wake_callback               = None
@@ -890,19 +888,40 @@ class DashboardServer:
 
     # ── broadcast ────────────────────────────────────────────────────────
 
+    def _valid(self, tok: str) -> bool:
+        """Is this token live? Expired ones are dropped as they are found,
+        which keeps the sweep free and needs no background timer."""
+        if not tok:
+            return False
+        issued = self._tokens.get(tok)
+        if issued is None:
+            return False
+        if time.time() - issued > _TOKEN_TTL_SECONDS:
+            self._tokens.pop(tok, None)
+            self._token_keys.pop(tok, None)
+            return False
+        return True
+
     async def broadcast(self, msg: dict, history: bool = True) -> None:
         if history:
             self._history.append(msg)
             if len(self._history) > 300:
                 self._history = self._history[-300:]
         dead: set[WebSocket] = set()
-        for ws in list(self._clients):
+        for ws, token in list(self._clients.items()):
             try:
+                screen = self._screen_ws.get(ws)
+                if not screen and not self._valid(token):
+                    dead.add(ws)
+                    await ws.close(code=4001)
+                    continue
+                if screen and msg.get("type") == "screen" and msg.get("target") not in ("all", screen):
+                    continue
                 await ws.send_json(msg)
             except Exception:
                 dead.add(ws)
-        self._clients -= dead
         for ws in dead:
+            self._clients.pop(ws, None)
             self._screen_ws.pop(ws, None)
 
     # ── thread-safe hooks for the rest of the app ────────────────────────
@@ -965,22 +984,8 @@ class DashboardServer:
         except Exception:
             pass
 
-        def _valid(tok: str) -> bool:
-            """Is this token live? Expired ones are dropped as they are found,
-            which keeps the sweep free and needs no background timer."""
-            if not tok:
-                return False
-            issued = self._tokens.get(tok)
-            if issued is None:
-                return False
-            if time.time() - issued > _TOKEN_TTL_SECONDS:
-                self._tokens.pop(tok, None)
-                self._token_keys.pop(tok, None)
-                return False
-            return True
-
         def _auth(req: Request) -> bool:
-            return _valid(req.headers.get("authorization", "")
+            return self._valid(req.headers.get("authorization", "")
                           .removeprefix("Bearer ").strip())
 
         def _who(req: Request) -> str:
@@ -1374,7 +1379,7 @@ class DashboardServer:
         @app.websocket("/ws/phone-audio")
         async def phone_audio_ws(websocket: WebSocket, token: str = ""):
             tok = token.strip()
-            if not _valid(tok):
+            if not self._valid(tok):
                 await websocket.close(code=4001)
                 return
             await websocket.accept()
@@ -1384,6 +1389,9 @@ class DashboardServer:
             try:
                 while True:
                     data = await websocket.receive_bytes()
+                    if not self._valid(tok):
+                        await websocket.close(code=4001)
+                        break
                     try:
                         self._phone_audio_queue.put_nowait(
                             {"data": data, "mime_type": "audio/pcm"}
@@ -1477,7 +1485,7 @@ class DashboardServer:
         async def download_file(filename: str, token: str = ""):
             # Auth via query param — browser <a download> can't send custom headers
             tok = token.strip()
-            if not _valid(tok):
+            if not self._valid(tok):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
             safe = re.sub(r'[/\\]', '', filename)
             path = self._uploads_dir / safe
@@ -1489,13 +1497,13 @@ class DashboardServer:
         async def ws_ep(websocket: WebSocket, token: str = ""):
             tok = token.strip()
             screen_id = None
-            if not _valid(tok):
+            if not self._valid(tok):
                 screen_id = self._screens.screen_for_token(tok)
                 if not screen_id:
                     await websocket.close(code=4001)
                     return
             await websocket.accept()
-            self._clients.add(websocket)
+            self._clients[websocket] = tok
             if screen_id:
                 self._screen_ws[websocket] = screen_id
             try:
@@ -1504,6 +1512,8 @@ class DashboardServer:
             except Exception:
                 pass
             for entry in self._history[-50:]:
+                if screen_id and entry.get("type") == "screen" and entry.get("target") not in ("all", screen_id):
+                    continue
                 try:
                     await websocket.send_json(entry)
                 except Exception:
@@ -1513,6 +1523,9 @@ class DashboardServer:
                     data = await websocket.receive_json()
                     if screen_id:
                         continue                     # a screen only watches
+                    if not self._valid(tok):
+                        await websocket.close(code=4001)
+                        break
                     if data.get("type") == "command":
                         enc = data.get("enc", "")
                         t   = self._decrypt(tok, enc) if enc else (data.get("text") or "").strip()
@@ -1524,7 +1537,7 @@ class DashboardServer:
             except WebSocketDisconnect:
                 pass
             finally:
-                self._clients.discard(websocket)
+                self._clients.pop(websocket, None)
                 self._screen_ws.pop(websocket, None)
 
         return app
@@ -1582,34 +1595,20 @@ class DashboardServer:
         asyncio.get_running_loop().run_in_executor(
             None, report_network_access, PORT, SECURE_PORT)
 
-        # Only make a certificate if HTTPS was actually asked for. Generating
-        # one nobody uses just leaves a private key on disk.
+        import json
+        settings = BASE_DIR / "config" / "api_keys.json"
         try:
-            import json as _json
-            with open(BASE_DIR / "config" / "api_keys.json", "r",
-                      encoding="utf-8") as f:
-                if _json.load(f).get("dashboard_https"):
-                    _ensure_certs()
-        except Exception:
-            pass
+            config = json.loads(settings.read_text("utf-8")) if settings.exists() else {}
+            use_ssl = bool(config.get("dashboard_https"))
+            if use_ssl and not _ensure_certs():
+                raise ValueError("HTTPS sertifikası hazırlanamadı")
+        except (OSError, ValueError, AttributeError) as exc:
+            self._bind_error = f"Dashboard başlatılamadı: {type(exc).__name__}. HTTPS ve ayar dosyasını kontrol edin."
+            print(self._bind_error)
+            return
 
-        use_ssl  = self._ssl_enabled()
-        ssl_key  = BASE_DIR / "config" / "certs" / "jarvis.key"
+        ssl_key = BASE_DIR / "config" / "certs" / "jarvis.key"
         ssl_cert = BASE_DIR / "config" / "certs" / "jarvis.crt"
-
-        # TLS IS WANTED, BUT NOT AT THE COST OF NOT STARTING.
-        #
-        # An earlier version returned here when certificates could not be made,
-        # on the argument that serving a remote-control channel in clear is a
-        # different product. The argument is right and the behaviour was wrong:
-        # a dashboard that does not start is not more secure, it is absent, and
-        # the user is left with "refused to connect" and nothing to act on.
-        #
-        # So: HTTPS whenever it can be had — which is almost always, since the
-        # certificate is generated locally on first run — and plain HTTP with a
-        # loud, repeated warning when it cannot. The page keeps working either
-        # way; without a secure context it simply cannot encrypt, and it says
-        # so on screen rather than pretending.
         if use_ssl:
             asyncio.create_task(self._serve_redirector())
         else:
