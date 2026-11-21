@@ -46,11 +46,12 @@ public class ReceiverService extends Service {
     static final String WEB = "https://fatmakahraman304-hash.github.io/JARV-S/";
     static volatile String status = "kapalı";
     private volatile boolean running;
+    private LanRemote lanRemote;
+    static volatile String lanAddress = "";
     private final Set<String> done = new LinkedHashSet<>();
 
     static void start(Context ctx) {
         SharedPreferences p = prefs(ctx);
-        if (p.getString("tok", "").isEmpty() || p.getString("gist", "").isEmpty()) return;
         Intent i = new Intent(ctx, ReceiverService.class);
         if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
     }
@@ -79,13 +80,20 @@ public class ReceiverService extends Service {
             startForeground(1, n);
         }
         if (!running) {
+            try {
+                lanRemote = new LanRemote(this, (op, arg) -> {
+                    try { return run(new JSONObject().put("op", op).put("arg", arg), new HashMap<>(), new HashMap<>()); }
+                    catch (Exception e) { return "Komut hatası: " + e.getMessage(); }
+                });
+                lanRemote.start(); lanAddress = lanRemote.address();
+            } catch (Exception e) { lanAddress = "Yerel bağlantı hatası: " + e.getMessage(); }
             running = true;
             new Thread(this::loop, "alici").start();
         }
         return START_STICKY;
     }
 
-    @Override public void onDestroy() { running = false; status = "kapalı"; super.onDestroy(); }
+    @Override public void onDestroy() { running = false; if (lanRemote != null) lanRemote.stop(); lanAddress = ""; status = "kapalı"; super.onDestroy(); }
 
     private static String now() {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
