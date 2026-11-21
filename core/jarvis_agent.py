@@ -1,8 +1,8 @@
-"""MAYK'ın kendi kodlama ajanı: DeepSeek V4 Pro → Flash → Gemini.
+"""MAYK'ın kodlama ajanı: NVIDIA Build → Gemini.
 
 Dosyaları analiz eder, düzenler ve test eder. Kod değişiklikleri proje klasöründe
-kalır; API anahtarları aracıya, günlük dosyalarına veya model istemine verilmez.
-DeepSeek bakiyesi ya da kota sınırı dolarsa sıradaki uygun modele geçilir.
+kalır; API anahtarları günlük dosyalarına veya model istemine verilmez.
+NVIDIA kullanılamadığında otomatik olarak Gemini'ye geçilir.
 """
 
 from __future__ import annotations
@@ -327,7 +327,7 @@ class GeminiBrain:
 
 
 class OpenAIBrain:
-    """An OpenAI-compatible chat API with tools (DeepSeek)."""
+    """OpenAI uyumlu, araç çağrılı NVIDIA API bağlantısı."""
 
     def __init__(self, base_url: str, key: str, model: str, label: str):
         self.base, self.key, self.model = base_url.rstrip("/"), key, model
@@ -432,35 +432,11 @@ def gemini_models(key: str) -> list[str]:
     return _gemini_cache["models"]
 
 
-def deepseek_models() -> list[str]:
-    """Önce güçlü V4 Pro, ardından hızlı/ekonomik Flash.
-
-    Eski model takma adları yeni API'de kaldırıldığı için otomatik dönüştürülür.
-    """
-    cfg = _settings()
-    requested = cfg.get("deepseek_models")
-    if isinstance(requested, str):
-        requested = [requested]
-    aliases = {"deepseek-chat": "deepseek-flash",
-               "deepseek-reasoner": "deepseek-v4-pro",
-               "deepseek-v4-flash": "deepseek-flash"}
-    models = requested if isinstance(requested, (list, tuple)) and requested else [
-        "deepseek-v4-pro", "deepseek-flash"]
-    models = [aliases.get(str(m).strip(), str(m).strip()) for m in models]
-    return list(dict.fromkeys(m for m in models if m))
-
-
 def brains() -> list:
-    """Kodlamada DeepSeek → NVIDIA Build → Gemini model sırası."""
-    from core import deepseek_account, nvidia_account
+    """Kodlama modelleri: NVIDIA Build → Gemini."""
+    from core import nvidia_account
     cfg = _settings()
     out = []
-    key = deepseek_account.api_key()
-    if key:
-        info = deepseek_account.balance_status(key)
-        if info["available"] is not False:
-            out.extend(OpenAIBrain("https://api.deepseek.com", key, m, "DeepSeek")
-                       for m in deepseek_models())
     nvidia_key = nvidia_account.api_key()
     if nvidia_key:
         out.extend(OpenAIBrain(nvidia_account.BASE_URL, nvidia_key, model, "NVIDIA")
@@ -472,13 +448,8 @@ def brains() -> list:
 
 
 def available() -> bool:
-    from core import deepseek_account, nvidia_account
-    return bool(deepseek_account.api_key() or nvidia_account.api_key() or _gemini_key())
-
-
-def deepseek_ready() -> bool:
-    from core import deepseek_account
-    return bool(deepseek_account.api_key())
+    from core import nvidia_account
+    return bool(nvidia_account.api_key() or _gemini_key())
 
 
 # ── the loop ─────────────────────────────────────────────────────────────────
@@ -499,7 +470,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("MAYK kod ajanı için DeepSeek, NVIDIA veya Gemini API anahtarı gerekiyor.")
+        raise RuntimeError("MAYK kod ajanı için NVIDIA veya Gemini API anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
     log(f"  MAYK ajanı: {brain.name}")
@@ -510,11 +481,6 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
             text, calls, raw = brain.turn(history)
         except BrainError as e:
             err = str(e)
-            # 402 aynı hesap bakiyesidir; Flash denemek de işe yaramaz.
-            if (isinstance(brain, OpenAIBrain) and brain.name.startswith("DeepSeek")
-                    and ("402" in err or "insufficient balance" in err.casefold())):
-                pool = [b for b in pool if not (
-                    isinstance(b, OpenAIBrain) and b.name.startswith("DeepSeek"))]
             wait = _retry_after(err)
             if "429" in err and 0 < wait <= 60 and "limit: 0" not in err:
                 log(f"  {brain.name} dakikalık sınırda; {int(wait) + 1} sn bekliyor.")
