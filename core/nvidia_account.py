@@ -24,9 +24,12 @@ BASE_URL = "https://integrate.api.nvidia.com/v1"
 # çağrısı için uygun modeller. Gerçekte kullanılabilir modeller API'den
 # ayrıca kontrol edilir; bir hesapta bulunmayan model zorlanmaz.
 PREFERRED_MODELS = (
-    "z-ai/glm-5.3-flash",
+    # NVIDIA Build model kataloğunda daha küçük ve hızlı ajan modeli.
+    # GLM-5.3-Flash geçici 504/time-out sorunu yaşayabildiği için en son.
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
     "nvidia/nemotron-3.5-super-vl-120b-a12b",
     "stepfun-ai/step-5-preview",
+    "z-ai/glm-5.3-flash",
 )
 _CACHE_TTL = 30 * 60
 _LOCK = threading.Lock()
