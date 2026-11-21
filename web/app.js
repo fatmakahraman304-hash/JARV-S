@@ -763,7 +763,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki MAYK Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (MAYK\'ı projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki MAYK Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. Ses için projector aracını kullan: projeksiyonda sesi kıs → op=key, arg=volume_down; projeksiyonda sesi aç → op=key, arg=volume_up. computer_quick yalnızca bilgisayar içindir. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (MAYK\'ı projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -839,12 +839,20 @@
       case 'todo': return todoTool(a);
       case 'projector': {
         if (a.open) { $('t-remote').click(); if (!a.op) return 'Kumanda ekranı açıldı.'; }
-        const op = String(a.op || '').toLowerCase();
+        let op = String(a.op || '').trim().toLowerCase();
+        let arg = String(a.arg || '').trim();
+        const phrase = (op + ' ' + arg).toLocaleLowerCase('tr-TR');
+        if (/(ses|volume)/.test(phrase)) {
+          if (/(kıs|azalt|düşür|down|lower)/.test(phrase)) { op = 'key'; arg = 'volume_down'; }
+          else if (/(aç|artır|yükselt|up|raise)/.test(phrase)) { op = 'key'; arg = 'volume_up'; }
+          else if (/(sustur|sessiz|mute)/.test(phrase)) { op = 'key'; arg = 'mute'; }
+        }
+        if (['volume_up', 'volume_down', 'mute'].includes(op)) { arg = op; op = 'key'; }
         if (!op) return 'Ne yapayım? (op gerekli)';
         await syncNow();
         const rx = receiver();
         if (rx && online(rx)) {
-          const r = await sendToReceiver(rx, { op, arg: String(a.arg || ''), where: a.where || 'youtube', password: a.password || '', question: a.question || '', enter: true });
+          const r = await sendToReceiver(rx, { op, arg, where: a.where || 'youtube', password: a.password || '', question: a.question || '', enter: true });
           if (op === 'look') { setTimeout(() => syncNow(), 2500); setTimeout(() => syncNow(), 6000); return r + ' Görüntü gelince ekranda açılacak; o zaman ne olduğunu anlat.'; }
           return r;
         }
