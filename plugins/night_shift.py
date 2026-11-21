@@ -12,7 +12,7 @@ from memory.config_manager import CONFIG_DIR
 PLUGIN = {
     "name": "night_shift",
     "description": (
-        "Schedule JARVIS night work when the user asks for gece mesaisi. "
+        "Schedule Mayk night work when the user asks for gece mesaisi. "
         "Ask for research topic or Git project path, night time and morning time as needed. "
         "Reviews pending changes and searches for articles, then opens a short morning report. "
         "Use show for the latest report and off to disable both routines."
@@ -113,7 +113,7 @@ def run(parameters, player=None, session_memory=None):
             return show_report(player)
         routines = engine()
         if routines is None:
-            return "JARVIS’in görev zamanlayıcısı henüz hazır değil."
+            return "Mayk’ın görev zamanlayıcısı henüz hazır değil."
         if mode == "off":
             for name in ("night_review", "night_briefing"):
                 if existing := routines.find_builtin(name):
@@ -143,6 +143,6 @@ def run(parameters, player=None, session_memory=None):
             else:
                 routines.add(name=label, kind="builtin", builtin=name, trigger=trigger,
                              options=options, quiet=False, enabled=True)
-        return f"Gece mesaisi {night}, sabah brifingi {morning} için kuruldu. Bilgisayar ve JARVIS açık olmalı."
+        return f"Gece mesaisi {night}, sabah brifingi {morning} için kuruldu. Bilgisayar ve Mayk açık olmalı."
     except (ValueError, OSError) as exc:
         return f"Gece mesaisi ayarlanamadı: {exc}"

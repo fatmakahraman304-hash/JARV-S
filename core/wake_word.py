@@ -1,109 +1,55 @@
-"""
-Local wake-word detection for JARVIS ("Hey Jarvis").
-
-Design goals:
-  • ZERO cost when the feature is off — openwakeword is imported ONLY inside
-    start()/install helpers, never at module load. If the user never enables
-    wake word, none of this touches the app.
-  • ZERO latency on the audio path — the microphone callback only ever does a
-    cheap, non-blocking queue push (feed()); the actual model inference runs in
-    this module's own background thread, so the real-time audio thread and the
-    Gemini stream are never slowed.
-  • Fully local & offline — audio fed here never leaves the machine; there is no
-    network call except the one-time model download the user triggers from the UI.
-
-openwakeword ships small ONNX models (a few MB each) and runs comfortably on a
-CPU. The pretrained wake phrase used here is "Hey Jarvis".
-"""
+"""Offline 'Hey Mayk' detection on 16 kHz microphone frames."""
 from __future__ import annotations
 
+from importlib.util import find_spec
+import json
+import os
 import queue
-import subprocess
-import sys
 import threading
 from pathlib import Path
 from typing import Callable
 
-# Pretrained openwakeword model that listens for "Hey Jarvis".
-WAKE_MODEL = "hey_jarvis"
-# Score in [0,1]; above this counts as a detection. Tunable per environment.
-DEFAULT_THRESHOLD = 0.5
-# Mic frames arrive at 16 kHz int16; this is just the detector's input rate.
+MODEL_NAME = "vosk-model-small-en-us-0.15"
+# The English acoustic dictionary spells the sound of Mayk as "mike".
+KEYPHRASE = "hey mike"
+DEFAULT_THRESHOLD = 0.8
 SAMPLE_RATE = 16000
 
 
-def is_installed() -> bool:
-    """True if the openwakeword package is importable (no model check)."""
-    try:
-        import importlib.util
-        return importlib.util.find_spec("openwakeword") is not None
-    except Exception:
-        return False
+def _model_path():
+    # Match Vosk's search order without importing its native library on the UI thread.
+    for root in (os.getenv("VOSK_MODEL_PATH"), "/usr/share/vosk",
+                 Path.home() / "AppData/Local/vosk", Path.home() / ".cache/vosk"):
+        if root:
+            path = Path(root) / MODEL_NAME
+            if all((path / part).is_file() for part in ("am/final.mdl", "conf/model.conf", "graph/Gr.fst")):
+                return path
+    return None
 
 
 def is_ready() -> bool:
-    """True if openwakeword is installed AND its model files are present on disk.
-
-    This is a cheap, DETERMINISTIC file-existence check. It deliberately does NOT
-    construct a Model to probe readiness — doing that is slow and, worse, can clash
-    with the detector's own Model when it's already running, which intermittently
-    returned False and made the UI flicker to 'not downloaded'. Never raises.
-    """
-    if not is_installed():
-        return False
-    try:
-        import openwakeword
-        models_dir = Path(openwakeword.__file__).resolve().parent / "resources" / "models"
-        if not models_dir.is_dir():
-            return False
-        has_wake = (any(models_dir.glob(f"{WAKE_MODEL}*.onnx"))
-                    or any(models_dir.glob(f"{WAKE_MODEL}*.tflite")))
-        has_mel = (any(models_dir.glob("melspectrogram*.onnx"))
-                   or any(models_dir.glob("melspectrogram*.tflite")))
-        has_emb = (any(models_dir.glob("embedding_model*.onnx"))
-                   or any(models_dir.glob("embedding_model*.tflite")))
-        return bool(has_wake and has_mel and has_emb)
-    except Exception:
-        return False
+    return find_spec("vosk") is not None and _model_path() is not None
 
 
 def install_and_download(logger: Callable[[str], None] = print,
                          notify: Callable[[str], None] | None = None) -> tuple[bool, str]:
-    """
-    One-click setup for the UI button: pip-install openwakeword if missing, then
-    download the wake model. Returns (ok, message). Never raises — every failure
-    is reported through the returned message and the logger.
-    """
-    _tell = notify or (lambda _msg: None)
+    """Install Vosk and its small acoustic model on explicit setup."""
     try:
-        if not is_installed():
-            logger("Wake word: installing openwakeword (one-time)…")
-            _tell("Wake word: installing openwakeword (one-time)…")
-            r = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "openwakeword"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace",
-            )
-            if r.returncode != 0:
-                tail = (r.stderr or r.stdout or "").strip().splitlines()[-1:] or [""]
-                return False, f"pip install failed: {tail[0][:160]}"
-        # Download the pretrained melspectrogram/embedding + wake models.
-        logger("Wake word: downloading models…")
-        _tell("Wake word: downloading models…")
-        try:
-            import openwakeword.utils as _u
-            try:
-                _u.download_models([WAKE_MODEL])
-            except TypeError:
-                _u.download_models()   # older signature downloads the default set
-        except Exception as e:
-            return False, f"model download failed: {e}"
-
+        if find_spec("vosk") is None:
+            from core.installer import _pip
+            if not _pip("vosk", log=logger):
+                return False, "Çevrimdışı ses tanıyıcı kurulamadı."
+        from vosk import Model
+        message = "Hey Mayk için çevrimdışı ses modeli hazırlanıyor…"
+        logger(message)
+        if notify:
+            notify(message)
+        Model(model_name=MODEL_NAME)
         if not is_ready():
-            return False, "installed, but the wake model could not be loaded."
-        logger("Wake word: ready.")
-        return True, "Wake word installed and ready."
-    except Exception as e:
-        return False, f"setup error: {e}"
+            return False, "Ses modeli bulunamadı."
+        return True, "Hazır. Uyandırmak için ‘Hey Mayk’ de."
+    except (Exception, SystemExit) as exc:
+        return False, f"Ses modeli kurulamadı: {exc}"
 
 
 class WakeWordDetector:
@@ -136,8 +82,13 @@ class WakeWordDetector:
         if self._running:
             return True
         try:
-            from openwakeword.model import Model
-            self._model = Model(wakeword_models=[WAKE_MODEL], inference_framework="onnx")
+            from vosk import Model, KaldiRecognizer
+            model_path = _model_path()
+            if model_path is None:
+                raise FileNotFoundError(MODEL_NAME)
+            self._model = KaldiRecognizer(Model(str(model_path)), SAMPLE_RATE,
+                                          json.dumps([KEYPHRASE, "[unk]"]))
+            self._model.SetWords(True)
         except Exception as e:
             self._logger(f"Wake word: could not load model — {e}")
             self._notify("Wake word unavailable — use the WAKE NOW button.")
@@ -147,7 +98,7 @@ class WakeWordDetector:
         self._ready = True
         self._thread = threading.Thread(target=self._loop, daemon=True, name="WakeWordThread")
         self._thread.start()
-        self._logger("Wake word: listening for 'Hey Jarvis'.")
+        self._logger("Wake word: listening for 'Hey Mayk'.")
         return True
 
     def stop(self) -> None:
@@ -172,11 +123,11 @@ class WakeWordDetector:
 
     def _reset_model(self) -> None:
         # The model keeps its recent audio features and scores. Left alone, one
-        # "Hey Jarvis" fired a dozen times in a row (measured: 12), and audio
+        # "Hey Mayk" fired a dozen times in a row (measured: 12), and audio
         # from before the assistant woke was still in there when it went back
         # to sleep — so it could wake again on words said minutes earlier.
         try:
-            self._model.reset()
+            self._model.Reset()
         except Exception:
             pass
 
@@ -204,16 +155,15 @@ class WakeWordDetector:
                 if self._reset_pending:
                     self._reset_pending = False
                     self._reset_model()
-                scores = self._model.predict(np.asarray(frame, dtype=np.int16))
-                score = 0.0
-                if isinstance(scores, dict):
-                    # match the jarvis model regardless of exact key suffix
-                    for k, v in scores.items():
-                        if "jarvis" in k.lower():
-                            score = max(score, float(v))
-                    if score == 0.0 and scores:
-                        score = max(float(v) for v in scores.values())
-                if score >= self._threshold:
+                pcm = np.asarray(frame, dtype=np.int16).tobytes()
+                if not self._model.AcceptWaveform(pcm):
+                    continue
+                result = json.loads(self._model.Result())
+                # Vosk may retain preceding unknown speech across a pause. Match
+                # the last two tokens and their confidence, ignoring that prefix.
+                words = (result.get("result") or [])[-2:]
+                if ([word.get("word") for word in words] == KEYPHRASE.split()
+                        and all(word.get("conf", 0) >= self._threshold for word in words)):
                     # drain any backlog and clear the model, so one utterance is one wake
                     self._drain()
                     self._reset_model()

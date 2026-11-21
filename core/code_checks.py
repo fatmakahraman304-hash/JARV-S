@@ -32,7 +32,7 @@ WHY THIS EXISTS
                   changed plugin called the way the app calls it.
 
     PROFILES  Knowledge about one kind of project that cannot be read from
-              files alone. There is one, for JARVIS itself, because people
+              files alone. There is one, for Mayk itself, because people
               improve the assistant with the assistant; adding another means
               adding a class to _PROFILES.
 """
@@ -638,7 +638,7 @@ class _JarvisProfile:
             return ""
         lines = []
         for node in tree.body:
-            if not (isinstance(node, ast.ClassDef) and node.name == "JarvisUI"):
+            if not (isinstance(node, ast.ClassDef) and node.name == "MaykUI"):
                 continue
             for f in node.body:
                 if not isinstance(f, ast.FunctionDef) or f.name.startswith("_"):

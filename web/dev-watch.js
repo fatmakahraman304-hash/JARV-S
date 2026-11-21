@@ -1,14 +1,14 @@
-/* JARVIS on the smart watch.
+/* Mayk on the smart watch.
  *
  *  1. Round screens: everything stays inside the circle (detected, or ⚙ → Yuvarlak ekran).
  *  2. Tap anywhere on the face to talk — no small button to aim for.
  *  3. Glance: the time, the next reminder and the battery under the core.
- *  4. Short answers: on the watch JARVIS answers in a sentence or two.
+ *  4. Short answers: on the watch Mayk answers in a sentence or two.
  *  5. Haptics: a tap when it listens, a double tap when it answers, a long buzz for reminders.
  *  6. Saves the battery: the core draws at 15 fps and stops when nobody looks.
  *  7. Swipe left/right (or turn the crown / bezel) between screens: core · agenda · devices · actions.
  *  8. Actions screen: find my phone, 5-min timer, hush, my to-dos.
- *  9. One question, one answer: the mic closes itself a few seconds after JARVIS answers.
+ *  9. One question, one answer: the mic closes itself a few seconds after Mayk answers.
  * 10. Always-on dim: after 30 s the face goes dark for the OLED; a touch wakes it.
  */
 (() => {

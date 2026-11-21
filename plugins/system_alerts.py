@@ -1,5 +1,5 @@
 """Sistem uyarıları: işlemci uzun süre %90'ın üstünde, bellek dolmak üzere ya
-da disk bitmek üzereyse JARVIS kendiliğinden söyler (açılınca)."""
+da disk bitmek üzereyse Mayk kendiliğinden söyler (açılınca)."""
 from __future__ import annotations
 
 import threading

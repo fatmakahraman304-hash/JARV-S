@@ -1,5 +1,5 @@
 """
-core/image_studio.py — JARVIS draws and edits pictures itself.
+core/image_studio.py — Mayk draws and edits pictures itself.
 
 No extra app, no ComfyUI, no download: Gemini's own image models ("Nano
 Banana") make the picture from a description, and change an existing picture
@@ -8,7 +8,7 @@ The same key the voice already uses; the same models the web app calls on the
 phone and TV (web/app.js), so a picture can be made anywhere.
 
 Gemini's image models have NO free quota (Google answers "429 ... limit: 0"
-until billing is turned on for the key). So when they cannot draw, JARVIS
+until billing is turned on for the key). So when they cannot draw, Mayk
 still draws: Gemini's free text model turns the request into a detailed
 English picture description and a free, keyless image service (Pollinations,
 FLUX) paints it. An edit on that path re-paints the same scene from the same
@@ -50,7 +50,7 @@ ASPECTS = ("1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:
 def out_dir() -> Path:
     for base in (Path.home() / "Pictures", Path.home() / "Resimler", Path.home() / "Desktop", BASE_DIR):
         if base.exists():
-            d = base / "JARVIS"
+            d = base / "Mayk"
             try:
                 d.mkdir(parents=True, exist_ok=True)
                 return d

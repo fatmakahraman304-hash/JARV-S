@@ -5,7 +5,7 @@ PLUGIN = {
     "description": (
         "Use when the user explicitly says 'verileri aktar ve yansıt', "
         "'kamerayı tara', or asks to scan a physical object or QR code with "
-        "the desktop camera and show the result on JARVIS. Captures one frame."
+        "the desktop camera and show the result on Mayk. Captures one frame."
     ),
     "parameters": {"type": "OBJECT", "properties": {}},
 }
@@ -14,6 +14,6 @@ PLUGIN = {
 def run(parameters, player=None, session_memory=None):
     request = getattr(player, "scan_camera", None)
     if not callable(request):
-        return "Kamera taraması için JARVIS masaüstü arayüzü gerekli."
+        return "Kamera taraması için Mayk masaüstü arayüzü gerekli."
     request()
-    return "Kamera taraması istendi. Sonucu JARVIS ekranında göstereceğim."
+    return "Kamera taraması istendi. Sonucu Mayk ekranında göstereceğim."

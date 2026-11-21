@@ -57,7 +57,7 @@ def _development_workspace(parent):
 WORK = _development_workspace(Path.home() / "JarvisDevelopment")
 _LOCK = threading.Lock()
 PLUGIN = {'name':'github_develop','description':
-    'JARVIS GitHub development workflow. prepare clones the user JARVIS repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. self_edit is the entry point when the user asks JARVIS to change itself or add an extension: prepares the isolated repository if needed, then hands off to the code agent. Never use self_edit on other repositories. self_release prepares a benign JARVIS feature or evidenced bug fix, tests it, waits for GitHub checks, merges and updates. Use only for a concrete user request explicitly asking for code and automatic publication. Never use it for a missing third-party app, network error, security exploit, or offensive automation. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside JARVIS. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',
+    'Mayk GitHub development workflow. prepare clones the user Mayk repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. self_edit is the entry point when the user asks Mayk to change itself or add an extension: prepares the isolated repository if needed, then hands off to the code agent. Never use self_edit on other repositories. self_release prepares a benign Mayk feature or evidenced bug fix, tests it, waits for GitHub checks, merges and updates. Use only for a concrete user request explicitly asking for code and automatic publication. Never use it for a missing third-party app, network error, security exploit, or offensive automation. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside Mayk. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',
     'parameters':{'type':'OBJECT','properties':{
         'mode':{'type':'STRING','enum':['prepare','inspect','develop','self_edit','self_release','sync','test','publish','merge']},
         'instruction':{'type':'STRING'},
@@ -203,7 +203,7 @@ def _commit_selected(changed, scope, instruction):
     staged = _paths(["git", "diff", "--cached", "--name-only", "-z", "--no-renames"])
     if not staged or staged - scope:
         raise ValueError("Commit kapsamındaki dosyalar doğrulanamadı.")
-    command(["git", *identity, "commit", "-m", instruction or "JARVIS geliştirmesi"])
+    command(["git", *identity, "commit", "-m", instruction or "Mayk geliştirmesi"])
 
 
 def _paths(args):
@@ -243,7 +243,7 @@ def workflow(mode, instruction, files):
         from actions import dev_agent
         branch = command(["git", "branch", "--show-current"])
         if not branch.startswith("jarvis-dev/") or command(["git", "status", "--porcelain"]):
-            raise ValueError("Eşitlemek için temiz bir JARVIS geliştirme dalı gerekli.")
+            raise ValueError("Eşitlemek için temiz bir Mayk geliştirme dalı gerekli.")
         if dev_agent._job_lock.locked():
             raise ValueError("Kod geliştirme işi tamamlanınca tekrar deneyin.")
         command(["git", "fetch", "https://github.com/" + REPO + ".git", "refs/heads/main"])
@@ -289,7 +289,7 @@ def workflow(mode, instruction, files):
         command([*_GH_GIT, 'push', remote, f"{head}:refs/heads/{branch}"])
         prs=json.loads(command(['gh','pr','list','--repo',REPO,'--head',branch,'--base','main','--json','number']))
         if not prs:
-            command(['gh','pr','create','--repo',REPO,'--base','main','--head',branch,'--title',instruction[:120] or 'JARVIS geliştirmesi','--body','JARVIS geliştirme alanında hazırlanmış değişiklikler. Python testleri yerel olarak çalıştırıldı; GitHub kontrolleri birleştirmeden önce zorunludur.'])
+            command(['gh','pr','create','--repo',REPO,'--base','main','--head',branch,'--title',instruction[:120] or 'Mayk geliştirmesi','--body','Mayk geliştirme alanında hazırlanmış değişiklikler. Python testleri yerel olarak çalıştırıldı; GitHub kontrolleri birleştirmeden önce zorunludur.'])
         return _merge_checked(branch, head)
     raise ValueError('Geçersiz işlem.')
 
@@ -311,10 +311,10 @@ def self_release(instruction, player):
         if not dev_agent._job_lock.acquire(False):
             raise RuntimeError("Başka bir kod geliştirme işi sürüyor.")
         try:
-            dev_agent._new_job(folder, "JARVIS", instruction, player, kind="improve")
+            dev_agent._new_job(folder, "Mayk", instruction, player, kind="improve")
             result = dev_agent._improve_folder(
                 folder,
-                instruction + "\n\nModify only JARVIS source for the benign user request. "
+                instruction + "\n\nModify only Mayk source for the benign user request. "
                 "Follow AGENTS.md. Keep the release workflow, updater, secrets and CI gates intact. "
                 "Do not add offensive automation, exploits, or arbitrary command execution.",
                 player,
@@ -345,11 +345,11 @@ def self_release(instruction, player):
         command(["git", "diff", "--check"], cwd=folder)
         player.write_log("GELİŞTİRME: " + tests(folder))
         command(["git", "--literal-pathspecs", "add", "--", *files], cwd=folder)
-        command(["git", "commit", "-m", "JARVIS: kullanıcı geliştirme isteği"], cwd=folder)
+        command(["git", "commit", "-m", "Mayk: kullanıcı geliştirme isteği"], cwd=folder)
         head = command(["git", "rev-parse", "HEAD"], cwd=folder)
         command([*_GH_GIT, "push", remote, branch], cwd=folder)
         pr = command(["gh", "pr", "create", "--repo", REPO, "--base", "main",
-                      "--head", branch, "--title", "JARVIS geliştirmesi",
+                      "--head", branch, "--title", "Mayk geliştirmesi",
                       "--body", "Kullanıcı isteğiyle oluşturuldu. Yerel Python testleri geçti."],
                      cwd=folder)
         player.write_log("GELİŞTİRME: GitHub kontrolleri bekleniyor. " + pr)
@@ -368,7 +368,7 @@ def self_release(instruction, player):
                                     cwd=folder))
         if merged.get("state") != "MERGED":
             raise RuntimeError("Birleştirme henüz doğrulanamadı.")
-        player.write_log("GELİŞTİRME: Main’e alındı, JARVIS güncelleniyor. " + pr)
+        player.write_log("GELİŞTİRME: Main’e alındı, Mayk güncelleniyor. " + pr)
         player.request_app_update()
         return "GitHub birleştirmesi doğrulandı ve güncelleme isteği gönderildi."
 
@@ -378,9 +378,9 @@ def run(parameters, player=None, session_memory=None):
     instruction=str(parameters.get('instruction','')).strip()
     if mode == "self_edit":
         if not instruction:
-            return "JARVIS’te yapılacak kod değişikliğini tarif et."
+            return "Mayk’ta yapılacak kod değişikliğini tarif et."
         if not player:
-            return "Geliştirme ilerlemesi için JARVIS arayüzü gerekli."
+            return "Geliştirme ilerlemesi için Mayk arayüzü gerekli."
         if not _LOCK.acquire(False):
             return "Bir GitHub işlemi zaten çalışıyor."
 
@@ -391,15 +391,15 @@ def run(parameters, player=None, session_memory=None):
                 if dev_agent._job_lock.locked():
                     raise ValueError("Kod geliştirme işi tamamlanınca tekrar deneyin.")
                 if WORK.resolve() == Path(__file__).resolve().parents[1]:
-                    raise ValueError("JARVIS’i normal kurulumdan aç; bu klasör geliştirme kopyası.")
+                    raise ValueError("Mayk’ı normal kurulumdan aç; bu klasör geliştirme kopyası.")
                 if not (WORK / ".git").exists():
                     workflow("prepare", "", [])
                 branch = command(["git", "branch", "--show-current"])
                 if not branch.startswith("jarvis-dev/"):
-                    raise ValueError("JARVIS değişiklikleri geliştirme dalında hazırlanır.")
+                    raise ValueError("Mayk değişiklikleri geliştirme dalında hazırlanır.")
                 notes = (
                     "\n\nWork only in this development checkout. Follow AGENTS.md. "
-                    "For a new JARVIS tool, use the existing Python plugin contract; "
+                    "For a new Mayk tool, use the existing Python plugin contract; "
                     "add a JavaScript helper only if needed and use an explicit, narrow "
                     "Python entry point. Preserve user settings. Add focused tests for "
                     "new behavior. Do not publish or change the running installation."
@@ -419,18 +419,18 @@ def run(parameters, player=None, session_memory=None):
         except Exception:
             _LOCK.release()
             raise
-        return "JARVIS kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
+        return "Mayk kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
 
     if mode=='develop':
         if _LOCK.locked(): return 'GitHub işlemi bitene kadar kod düzenleme beklemeli.'
         if not (WORK/'.git').exists(): return 'Önce geliştirme alanını hazırlayın.'
         from actions.dev_agent import dev_agent
         return dev_agent({'mode':'improve','folder':str(WORK),'description':instruction},player=player)
-    if not player: return 'Geliştirme ilerlemesi için JARVIS arayüzü gerekli.'
+    if not player: return 'Geliştirme ilerlemesi için Mayk arayüzü gerekli.'
     if mode == "self_release" and (
         not instruction or not callable(getattr(player, "request_app_update", None))
     ):
-        return "Kod değişikliğini açıkça belirt ve JARVIS masaüstü arayüzünü kullan."
+        return "Kod değişikliğini açıkça belirt ve Mayk masaüstü arayüzünü kullan."
 
     if not _LOCK.acquire(False): return 'Bir GitHub işlemi zaten çalışıyor.'
     def work():

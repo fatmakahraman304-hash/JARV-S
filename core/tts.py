@@ -1,5 +1,5 @@
 """
-Text-to-Speech engines for JARVIS.
+Text-to-Speech engines for Mayk.
 
 EdgeTTS     – free Microsoft TTS (internet required, no API key)
 Kokoro      – fully offline neural TTS (~330 MB model)

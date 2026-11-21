@@ -284,8 +284,8 @@ def apply(step):
 
 
 def run_script(job, request):
-    """A bpy script JARVIS wrote: run it; a failure becomes a report with the traceback
-    (JARVIS reads it and fixes the script)."""
+    """A bpy script Mayk wrote: run it; a failure becomes a report with the traceback
+    (Mayk reads it and fixes the script)."""
     import traceback
     if request.get("empty"):
         for obj in list(bpy.context.scene.objects):
@@ -348,7 +348,7 @@ def geometry_issues(limit=40):
 
 
 def views(job, request):
-    """Quick Cycles previews from several sides — what JARVIS looks at to judge its own work."""
+    """Quick Cycles previews from several sides — what Mayk looks at to judge its own work."""
     import math
     from mathutils import Vector
     scene = bpy.context.scene

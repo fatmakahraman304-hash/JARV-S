@@ -1,8 +1,8 @@
-# JARVIS — Nihai Seviye Teknik Yol Haritası
+# Mayk — Nihai Seviye Teknik Yol Haritası
 
-> Arşiv. Güncel Dünya Haritası JARVIS’in Bağlantılar menüsünden açılır.
+> Arşiv. Güncel Dünya Haritası Mayk’ın Bağlantılar menüsünden açılır.
 
-**Proje:** Murat — J.A.R.V.I.S.
+**Proje:** Murat — Mayk.
 
 **Amaç:** Sesli, görsel, güvenli ve güvenilir kişisel asistan + OSIRIS Dünya
 Komuta Merkezi. Gerçek olmayan bilimkurgu yetenekleri sunulmayacak.
@@ -19,7 +19,7 @@ Komuta Merkezi. Gerçek olmayan bilimkurgu yetenekleri sunulmayacak.
 5. **Modülerlik:** Ses/LLM, OSIRIS, görev ajanları, hafıza ve UI ayrı modüllerdir.
 6. **Performans:** Konuşma ve mikrofon asla harita veya araştırma API'si için
    bloklanmaz; işe özel zaman ve çağrı bütçeleri tanımlanır.
-7. **Sahiplik/lisans:** Özgün JARVIS kodu CC BY-NC 4.0 altında kalır;
+7. **Sahiplik/lisans:** Özgün Mayk kodu CC BY-NC 4.0 altında kalır;
    OSIRIS MIT'dir. Kaynak ve atıflar korunur. Ticari yeniden lisanslama
    otomatik olarak mümkün değildir.
 
@@ -32,22 +32,22 @@ Komuta Merkezi. Gerçek olmayan bilimkurgu yetenekleri sunulmayacak.
 - [x] Açık kaynaklı OSIRIS istatistik/deprem API'lerini yalnızca okuma
 - [x] Veri kaynağı, zaman damgası ve veri kesinliği açıklaması
 - [x] İnternet bağımlılığı olmayan, mock'lanmış otomatik testler
-- [ ] JARVIS mikrofonu ve GUI'si üzerinde gerçek Windows uçtan uca test
+- [ ] Mayk mikrofonu ve GUI'si üzerinde gerçek Windows uçtan uca test
 - [ ] Testleri geçen, güvenli ana dal birleştirmesi
 
 **Aşama bitiş kriteri:** "Dünya haritasını aç / depremleri göster / son
-depremleri özetle" komutları Windows'ta çalışır; JARVIS konuşması çalışmaya
+depremleri özetle" komutları Windows'ta çalışır; Mayk konuşması çalışmaya
 devam eder. Her başarısızlık gözlemlenebilir ve kullanıcıyı yanıltmaz.
 
 ## Aşama 2 — Yerel OSIRIS servisi
 
-- OSIRIS kaynak kodunu ana JARVIS deposuna kopyalamadan ayrı paket/depo
+- OSIRIS kaynak kodunu ana Mayk deposuna kopyalamadan ayrı paket/depo
   olarak kur; sürümü sabitle, lisans ve güncelleme notlarını sakla.
 - Node sürümünü doğrula; tek tık/tek komut kurulum, yerel port/sürüm kontrolü,
   çökme sonrası temiz geri başlatma, isteğe bağlı otomatik açılış.
 - Sunucu loopback'e bağlansın; ağdan dışarı açılmasın. RECON tarama, SDK
   ingest ve diğer mutasyon uçları varsayılan olarak kapalı.
-- Sunucu kapanırsa JARVIS kapanmasın. Bağlantı ve yüklenme durumları
+- Sunucu kapanırsa Mayk kapanmasın. Bağlantı ve yüklenme durumları
   `bağlanıyor/hazır/veri gecikmeli/hata` olarak gösterilsin.
 - OSIRIS ile istemci arasında sürüm uyumu ve deprecation testleri.
 
@@ -60,9 +60,9 @@ OSIRIS arayüzü açılıyor, kapatılabiliyor ve güvenli güncelleniyor.
   rastgele web sayfası bu köprüye erişemez.
 - Katman aç/kapat, konum/ülke ara, yaklaştır, görünüm hazır ayarlarını uygula;
   bunları sayfayı yeniden yüklemeden yap (yerel OSIRIS entegrasyonu).
-- Görünen harita durumunun JARVIS'e güvenli özeti; açık data API'lerinden
+- Görünen harita durumunun Mayk'a güvenli özeti; açık data API'lerinden
   gelen olaylar için kaynak/capture timestamp ve uygun önbellek.
-- Kaynaklar eksikse veya eskiyse JARVIS canlıymış gibi konuşmasın.
+- Kaynaklar eksikse veya eskiyse Mayk canlıymış gibi konuşmasın.
 - Kamusal yayın kameraları için hak/sözleşme, erişim ve performans kontrolleri.
 - Kişi/özel kamera izlemesi, hassas hedef takibi veya askeri operasyonel
   yönlendirme sağlanmaz.
@@ -70,7 +70,7 @@ OSIRIS arayüzü açılıyor, kapatılabiliyor ve güvenli güncelleniyor.
 **Bitiş kriteri:** Sesli komutla aynı pencerede harita anında değişir, durum
 bildirimi ile hangi değişikliğin doğrulandığı anlaşılır.
 
-## Aşama 4 — Kişisel JARVIS'i güçlendirme
+## Aşama 4 — Kişisel Mayk'ı güçlendirme
 
 - Sesli konuşma: Türkçe, kesme/konuşmayı durdurma, yankı önleme, mikrofon testi,
   cihaz değiştirme, uzun görüşmeler, düşük gecikme.

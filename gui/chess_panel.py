@@ -274,7 +274,7 @@ class ChessPanel(QWidget):
     assistant_moved = pyqtSignal(str)
     _changed = pyqtSignal()
 
-    def __init__(self, assistant_name: str = "JARVIS", parent=None):
+    def __init__(self, assistant_name: str = "Mayk", parent=None):
         super().__init__(parent)
         self.game = get_game()
         self.name = assistant_name

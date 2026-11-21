@@ -1,4 +1,4 @@
-# JARVIS Güncelle düğmesi
+# Mayk Güncelle düğmesi
 
 Üst çubuktaki **GÜNCELLE** düğmesi GitHub’daki mevcut dalı kontrol eder,
 yeni kodu indirir ve uygular. İşlem arka planda çalışır. Sonuç hem bildirimde

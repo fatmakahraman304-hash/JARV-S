@@ -1,8 +1,8 @@
-"""core/composio.py — Jarvis's bridge to 1000+ apps through Composio.
+"""core/composio.py — Mayk's bridge to 1000+ apps through Composio.
 
 Composio's Tool Router gives one session per user that can search every app
 Composio supports, connect the user's account with Composio-managed login (no
-OAuth app of our own to register), and run the app's actions. Jarvis uses it
+OAuth app of our own to register), and run the app's actions. Mayk uses it
 through four calls:
 
     search(use_case)       which tools fit a task, their inputs, and whether the

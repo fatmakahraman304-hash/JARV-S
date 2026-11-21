@@ -11,8 +11,8 @@ PLUGIN = {
     "name": "day_report",
     "description": (
         "Gün sonu özeti: 'bugün nasıl geçti', 'günümü özetle', 'gün sonu raporu'. Ekran süresi, odak turları, "
-        "laptop pili, yapılacaklar ve sıradaki hatırlatıcılar, ve JARVIS'in o gün gerçekten yaptığı işler; ayrıntısı "
-        "ekranda açılır. period=week: 'bu hafta neler yaptık', 'haftalık rapor' — JARVIS'in iş günlüğünden son 7 gün."
+        "laptop pili, yapılacaklar ve sıradaki hatırlatıcılar, ve Mayk'ın o gün gerçekten yaptığı işler; ayrıntısı "
+        "ekranda açılır. period=week: 'bu hafta neler yaptık', 'haftalık rapor' — Mayk'ın iş günlüğünden son 7 gün."
     ),
     "parameters": {"type": "OBJECT", "properties": {
         "period": {"type": "STRING", "description": "today (default) | week"},
@@ -57,7 +57,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 player.show_content("HAFTALIK RAPOR", text)
             except Exception:
                 pass
-        return text + "\n(Report it like J.A.R.V.I.S.: two or three sentences, the numbers that matter.)"
+        return text + "\n(Report it like Mayk: two or three sentences, the numbers that matter.)"
     try:
         from plugins import screen_time, laptop_battery
         screen = screen_time.report_text(kit.load(screen_time.FILE), "today")
@@ -87,7 +87,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         work = journal.summary(date.today(), date.today())
         if not work.startswith("No work"):
             full += "\n\nJARVIS BUGÜN\n" + work
-            spoken += " JARVIS bugün: " + work.splitlines()[0]
+            spoken += " Mayk bugün: " + work.splitlines()[0]
         if player:
             try:
                 player.show_content("GÜN SONU", full)

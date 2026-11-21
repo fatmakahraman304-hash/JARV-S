@@ -1,12 +1,12 @@
-/* JARVIS on the tablet.
+/* Mayk on the tablet.
  *
  *  1. Landscape dashboard: clock, weather and agenda on the left, devices and the
  *     live conversation on the right, the core in the middle.
  *  2. Keyboard shortcuts (iPad keyboard, also on a computer's browser):
  *     ⌘/Ctrl+K or / → type · Esc → close · Alt+A ajanda · Alt+D cihazlar · Alt+C konuşma · Alt+R kumanda.
  *  3. Standby / photo frame: idle 3 min → big clock, next reminder, weather and the
- *     shared gallery as a slideshow. A touch brings JARVIS back.
- *  4. Drop or paste a picture: JARVIS looks at it.
+ *     shared gallery as a slideshow. A touch brings Mayk back.
+ *  4. Drop or paste a picture: Mayk looks at it.
  *  5. Full-screen button (wall-mounted tablet).
  *  6. Night dim: 22:00–07:00 the idle screen dims to a warm glow.
  *  7. Quick timers in the agenda: +1 / +5 / +10 / +15 min (every device).
@@ -57,7 +57,7 @@
     });
   }
 
-  // 4 ── drop or paste a picture: JARVIS looks at it (every device with a page) ──
+  // 4 ── drop or paste a picture: Mayk looks at it (every device with a page) ──
   async function lookAtFile(file) {
     if (!file || !/^image\//.test(file.type)) return false;
     const img = new Image(); const url = URL.createObjectURL(file);

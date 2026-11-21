@@ -672,14 +672,14 @@ def _build_project(
 #     mistake that is not cheap to undo, so the plan cannot ask for it.
 #   * Run the project. A folder somebody hands over may be a server, a GUI or a
 #     script that sends email. What IS run, in a separate process: changed
-#     modules are imported, and in a JARVIS project each changed plugin is
+#     modules are imported, and in a Mayk project each changed plugin is
 #     called the way the app calls it — unless its code can act on the world
 #     (send, delete, launch), in which case it is only loaded and validated.
 #     See core/code_checks.py.
 #
 # WHAT IT READS FIRST
 #   The project's own rules (AGENTS.md, CLAUDE.md or CONTRIBUTING.md) and, for
-#   JARVIS itself, the thread-safe `player` methods read out of ui.py. Without
+#   Mayk itself, the thread-safe `player` methods read out of ui.py. Without
 #   them a model writes code that is valid and wrong for this app — widgets
 #   built off the Qt thread, a separate window instead of the quiz board.
 #
@@ -1704,7 +1704,7 @@ def _with_agents(agents: list[str], job, player):
     return None
 
 
-_AGENT_ROUNDS = 2           # agent → JARVIS checks → agent fixes what failed
+_AGENT_ROUNDS = 2           # agent → Mayk checks → agent fixes what failed
 
 
 def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
@@ -1718,7 +1718,7 @@ def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
 
 def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                   originals: dict[str, str], baseline: dict | None, player) -> dict[str, str]:
-    """JARVIS's own verdict on what the agent wrote: syntax, safe imports,
+    """Mayk's own verdict on what the agent wrote: syntax, safe imports,
     project rules, and the project's tests against how they stood before."""
     try:
         from core.code_checks import (detect_stack, run_tests, runtime_problems,
@@ -1732,7 +1732,7 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                                    log=lambda m: _log(player, m)).items():
         problems[rel] = (problems.get(rel, "") + " " + p).strip()
     if stack.get("test_cmd") and not problems:
-        _log(player, f"JARVIS runs the project's tests itself ({stack['test_name']})…")
+        _log(player, f"Mayk runs the project's tests itself ({stack['test_name']})…")
         after = run_tests(folder, stack)
         broke = ("The project test command could not start." if after is None
                  else test_regressions(baseline, after))
@@ -1785,15 +1785,15 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         if not written:
             break
         _update("testing")
-        _log(player, "Checking the agent's work with JARVIS's own tests…")
+        _log(player, "Checking the agent's work with Mayk's own tests…")
         problems = _agent_checks(folder, written, stack, texts, baseline, player)
         if not problems:
-            _log(player, "JARVIS's checks found no new failures.")
+            _log(player, "Mayk's checks found no new failures.")
             break
         for rel, p in problems.items():
             _log(player, f"Problem — {rel}: {p[:220]}")
         if round_no + 1 < _AGENT_ROUNDS:
-            extra = ("JARVIS checked your previous round and these still fail. Fix them, "
+            extra = ("Mayk checked your previous round and these still fail. Fix them, "
                      "then run the tests again:\n" + "\n".join(f"- {r}: {p[:1500]}" for r, p in problems.items()))
             _update("writing")
 
@@ -1828,7 +1828,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         msg += (" These still fail and need a look: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
     else:
-        msg += " JARVIS's own checks passed."
+        msg += " Mayk's own checks passed."
     msg += " Say 'undo' to put everything back."
     _log(player, msg)
     return msg

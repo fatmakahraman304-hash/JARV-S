@@ -6,7 +6,7 @@ import threading
 from urllib.request import Request, urlopen
 from plugins.normal_map import search
 
-PLUGIN = {'name':'map_route', 'description':'Draw a driving route between two explicit places on the normal map INSIDE JARVIS. Ask for origin when missing; never use approximate IP location as a precise start. Not live traffic or turn-by-turn navigation. Use for rota oluştur/yol tarifi.', 'parameters':{'type':'OBJECT','properties':{'origin':{'type':'STRING'},'destination':{'type':'STRING'}},'required':['origin','destination']}}
+PLUGIN = {'name':'map_route', 'description':'Draw a driving route between two explicit places on the normal map INSIDE Mayk. Ask for origin when missing; never use approximate IP location as a precise start. Not live traffic or turn-by-turn navigation. Use for rota oluştur/yol tarifi.', 'parameters':{'type':'OBJECT','properties':{'origin':{'type':'STRING'},'destination':{'type':'STRING'}},'required':['origin','destination']}}
 
 
 def route(start, end):
@@ -36,7 +36,7 @@ def run(parameters, player=None, session_memory=None):
     if not origin or not destination or max(len(origin),len(destination))>500:
         return 'Başlangıç ve varış yerini şehir/ülke bilgisiyle söyleyin.'
     if not callable(getattr(player,'show_route_choices',None)):
-        return 'Rota için JARVIS arayüzü açık olmalı.'
+        return 'Rota için Mayk arayüzü açık olmalı.'
     def work():
         try:
             start,end=search(origin),search(destination)

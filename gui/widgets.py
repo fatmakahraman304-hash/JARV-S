@@ -144,7 +144,7 @@ class LogWidget(QTextEdit):
         self._pos     = 0
         self._tag     = "sys"
         self._fmt     = QTextCharFormat()
-        self._ai_name_lc = "jarvis"   # updated when assistant name changes
+        self._ai_name_lc = "mayk"   # updated when assistant name changes
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._sig.connect(self._enqueue)
@@ -368,14 +368,14 @@ class FileDropZone(QWidget):
         chosen = menu.exec(QCursor.pos())
         if chosen is pick_dir:
             path = QFileDialog.getExistingDirectory(
-                self, "Select a project folder for JARVIS", str(Path.home()))
+                self, "Select a project folder for Mayk", str(Path.home()))
             if path:
                 self._set_file(path)
             return
         if chosen is not pick_file:
             return
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select a file for JARVIS", str(Path.home()),
+            self, "Select a file for Mayk", str(Path.home()),
             "All Files (*.*);;"
             "Images (*.jpg *.jpeg *.png *.gif *.webp *.bmp *.svg);;"
             "Documents (*.pdf *.docx *.txt *.md *.pptx);;"
@@ -559,7 +559,7 @@ class _CameraPreview(QWidget):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  JARVIS interface building blocks
+#  Mayk interface building blocks
 # ═════════════════════════════════════════════════════════════════════════════
 # All painted rather than styled: a stylesheet cannot cut a corner or light an
 # edge, and painting reads the palette at paint time, so every one of these

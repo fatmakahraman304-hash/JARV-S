@@ -1,4 +1,4 @@
-"""The JARVIS HUD, split out of ui.py.
+"""The Mayk HUD, split out of ui.py.
 
 ui.py is still the entry point and still exports every name it always did,
 so main.py, plugins and anything written against older versions keep working.

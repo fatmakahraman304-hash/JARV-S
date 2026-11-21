@@ -17,7 +17,7 @@ def main() -> None:
     studio.ROOT = tmp / "Blender"
     binary = studio.executable()
     shots = []
-    # the toolkit, as a script JARVIS would write: a real table + a mug on it
+    # the toolkit, as a script Mayk would write: a real table + a mug on it
     table = """import bpy
 clear()
 W, D, H, T = 1.40, 0.80, 0.75, 0.035

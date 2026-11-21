@@ -55,7 +55,7 @@ def run(parameters, player=None, session_memory=None):
     if mode == "create" and (not isinstance(instruction, str) or not 1 <= len(instruction.strip()) <= 4000):
         return "Prototip türünü ve ne yapmasını istediğini belirt."
     if not player:
-        return "Prototip sonucunu göstermek için JARVIS arayüzü gerekli."
+        return "Prototip sonucunu göstermek için Mayk arayüzü gerekli."
     if not _LOCK.acquire(False):
         return "Önceki prototip işlemi devam ediyor."
 
@@ -117,4 +117,4 @@ def run(parameters, player=None, session_memory=None):
     except RuntimeError:
         _LOCK.release()
         return "Prototip işlemi başlatılamadı. Tekrar deneyebilirsiniz."
-    return "Prototip işlemi başladı. Sonuç JARVIS’te görünecek."
+    return "Prototip işlemi başladı. Sonuç Mayk’ta görünecek."

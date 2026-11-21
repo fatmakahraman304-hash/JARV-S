@@ -1,11 +1,11 @@
 """
-core/adb_control.py — JARVIS drives an Android projector or TV over Wi-Fi.
+core/adb_control.py — Mayk drives an Android projector or TV over Wi-Fi.
 
 The Magcubic HY320 (and any Android / Google TV box or projector) can be
 controlled from this computer with ADB, Android's own remote-control channel:
 open apps and web pages, type text, press the remote's keys, connect it to
-Wi-Fi, take a picture of its screen so JARVIS can see what is on it, and read
-what it is (model, Android version, installed apps) so JARVIS knows it.
+Wi-Fi, take a picture of its screen so Mayk can see what is on it, and read
+what it is (model, Android version, installed apps) so Mayk knows it.
 
 One-time setup on the projector: Settings → Other settings → Developer
 options → turn on USB debugging / ADB (on some models "Network ADB"). The
@@ -208,7 +208,7 @@ def learn(name: str, ip: str, kind: str = "projector") -> tuple[bool, str]:
                   f"ekran {info['screen']}, {len(info['apps'])} uygulama" + (f" (tanıdıklarım: {', '.join(known)})" if known else "") + ".")
 
 
-# ── what JARVIS does with it ─────────────────────────────────────────────────
+# ── what Mayk does with it ─────────────────────────────────────────────────
 
 def press(key: str, name: str = "", times: int = 1) -> tuple[bool, str]:
     k = KEY_WORDS.get(str(key).casefold().strip(), str(key).casefold().strip())

@@ -1,4 +1,4 @@
-/* JARVIS — the same assistant on every device.
+/* Mayk — the same assistant on every device.
  *
  * This page is the whole assistant for a phone, tablet, TV, projector or watch.
  * Its brain is Gemini Live, reached straight from the device, so it works when
@@ -15,11 +15,13 @@
 
   // ── settings ─────────────────────────────────────────────────────────────
   const S = (() => { try { return JSON.parse(localStorage.getItem('jarvis_web') || '{}'); } catch { return {}; } })();
+  const assistantName = value => /^(?:jarvis|j\.a\.r\.v\.i\.s\.?)$/i.test(String(value || "").trim()) ? "Mayk" : value;
+  S.name = assistantName(S.name);
   const save = () => localStorage.setItem('jarvis_web', JSON.stringify(S));
   if (!S.id) { S.id = 'w' + Math.random().toString(36).slice(2, 12); save(); }
   if (!S.voice) S.voice = 'Charon';
   // A setup link (…#s=<code>) carries the keys from one device to another —
-  // and from Safari to the home-screen JARVIS on an iPhone, which Apple keeps
+  // and from Safari to the home-screen Mayk on an iPhone, which Apple keeps
   // in separate storage.
   function importSetup(text) {
     const m = String(text || '').match(/(?:[#&?]s=|^)([A-Za-z0-9_-]{20,})\s*$/);
@@ -28,7 +30,7 @@
       const b = m[1].replace(/-/g, '+').replace(/_/g, '/');
       const j = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4)))));
       if (!j.g && !j.t) return false;
-      if (j.g) S.key = j.g; if (j.t) S.tok = j.t; if (j.i) S.gist = j.i; if (j.n) S.name = j.n;
+      if (j.g) S.key = j.g; if (j.t) S.tok = j.t; if (j.i) S.gist = j.i; if (j.n) S.name = assistantName(j.n);
       if (j.d && !S.devName) S.devName = j.d;
       save(); return true;
     } catch { return false; }
@@ -42,7 +44,7 @@
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (/[#&]s=/.test(location.hash)) {
     const ok = importSetup(location.hash);
-    setTimeout(() => toast(ok ? 'Kurulum tamam — JARVIS bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
+    setTimeout(() => toast(ok ? 'Kurulum tamam — Mayk bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
     history.replaceState(null, '', location.pathname);
   }
 
@@ -66,7 +68,7 @@
     document.body.classList.toggle('big', KIND === 'tv' || KIND === 'projector');
     document.body.classList.toggle('watch', KIND === 'watch');
     for (const k of Object.keys(KIND_NAMES)) document.body.classList.toggle('k-' + k, KIND === k);
-    $('brand-name').textContent = (S.name || 'JARVIS').toUpperCase();
+    $('brand-name').textContent = (S.name || 'Mayk').toUpperCase();
     $('brand-sub').textContent = 'AI OS · ' + (S.devName || KIND_NAMES[KIND]);
   }
   applyKind();
@@ -139,7 +141,7 @@
   function renderLog() {
     const L = transcript.slice(-60);
     $('log').innerHTML = L.map(t => `<div class="msg ${t.role === 'user' ? 'u' : t.role === 'sys' ? 's' : 'j'}">${esc(t.text)}</div>`).join('');
-    $('side-log').innerHTML = L.filter(t => t.role !== 'sys').slice(-10).map(t => `<div><b>${t.role === 'user' ? 'Sen' : 'Jarvis'}:</b> ${esc(t.text.slice(0, 160))}</div>`).join('');
+    $('side-log').innerHTML = L.filter(t => t.role !== 'sys').slice(-10).map(t => `<div><b>${t.role === 'user' ? 'Sen' : 'Mayk'}:</b> ${esc(t.text.slice(0, 160))}</div>`).join('');
     const lastJ = [...L].reverse().find(t => t.role === 'jarvis'), lastU = [...L].reverse().find(t => t.role === 'user');
     if (lastJ || lastU) {
       $('reply').hidden = false;
@@ -183,8 +185,8 @@
       return this.req('PATCH', '/gists/' + S.gist, body);
     },
     async create() {
-      const g = await this.req('POST', '/gists', { description: 'JARVIS — ortak hafıza (gizli, silme)', public: false,
-        files: { 'memory.json': { content: '{}' }, 'recent.json': { content: '[]' }, 'README.md': { content: 'JARVIS ortak hafıza. Silme.' } } });
+      const g = await this.req('POST', '/gists', { description: 'Mayk — ortak hafıza (gizli, silme)', public: false,
+        files: { 'memory.json': { content: '{}' }, 'recent.json': { content: '[]' }, 'README.md': { content: 'Mayk ortak hafıza. Silme.' } } });
       return g.id;
     },
   };
@@ -228,8 +230,8 @@
       const f = Cloud.cache || await Cloud.read();
       let id = J(f['archive.json'], {}).gist || '';
       if (!id) {
-        const g = await Cloud.req('POST', '/gists', { description: 'JARVIS — konuşma arşivi (gizli, silme)', public: false,
-          files: { 'README.md': { content: 'JARVIS konuşma arşivi: her ay bir dosya. Silme.' } } });
+        const g = await Cloud.req('POST', '/gists', { description: 'Mayk — konuşma arşivi (gizli, silme)', public: false,
+          files: { 'README.md': { content: 'Mayk konuşma arşivi: her ay bir dosya. Silme.' } } });
         id = g.id; await Cloud.write({ 'archive.json': JSON.stringify({ gist: id }) });
       }
       return id;
@@ -277,7 +279,7 @@
       const pick = new Set();
       for (const [, i] of hits.slice(0, 8)) { pick.add(i - 1); pick.add(i); pick.add(i + 1); }   // with the line around it
       const lines = [...pick].filter(i => all[i]).sort((a, b) => a - b).map(i => { const t = all[i];
-        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'JARVIS'}: ${t.text}`; });
+        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'Mayk'}: ${t.text}`; });
       return lines.length ? `Arşivden (${all.length} satır arandı):\n` + lines.join('\n').slice(0, 6000) : 'Arşivde bununla ilgili bir konuşma bulamadım.';
     },
   };
@@ -286,7 +288,7 @@
 
   // ── learning: every so often Gemini's free text model reads the latest
   // conversation and files lasting facts about the user into shared memory
-  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like JARVIS knowing Tony.
+  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like Mayk knowing Tony.
   const Learn = {
     buf: [], timer: null,
     turn(t) { this.buf.push(t); clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 90000); if (this.buf.filter(x => x.role === 'user').length >= 10) this.run(); },
@@ -298,7 +300,7 @@
         'Geçici şeyleri (bugünkü ruh hali, tek seferlik istekler), sağlık, din, siyaset, para bilgilerini ve zaten bilinenleri ALMA. Emin değilsen alma. ' +
         `Kategoriler: ${CATS.join(', ')}. Bilinen anahtarlar: ${known || '(yok)'}\n` +
         'Sadece JSON dizi döndür: [{"category":"...","key":"kısa_anahtar","value":"kısa değer"}] ya da [].\n\nKONUŞMA:\n' +
-        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'JARVIS'}: ${t.text}`).join('\n').slice(-6000);
+        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'Mayk'}: ${t.text}`).join('\n').slice(-6000);
       for (const model of TEXT_MODELS) {
         try {
           const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST',
@@ -590,8 +592,8 @@
     let n = 0;
     ringing = setInterval(() => { beep(); if (navigator.vibrate) navigator.vibrate([400, 100, 400]); if (++n > 20) stop(); }, 1500);
     document.addEventListener('pointerdown', stop, true);
-    toast(`📳 ${from || 'JARVIS'} bu cihazı arıyor — durdurmak için dokun`);
-    sys(`📳 ${from || 'JARVIS'} bu cihazı arıyor.`);
+    toast(`📳 ${from || 'Mayk'} bu cihazı arıyor — durdurmak için dokun`);
+    sys(`📳 ${from || 'Mayk'} bu cihazı arıyor.`);
   }
 
   // ── guard mode: this device's camera watches; on movement a photo goes to
@@ -678,7 +680,7 @@
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; bilgisayara ulaşamıyorum.';
     await syncNow();
     const pc = findPc(name);
-    if (!pc) return 'Bağlı bir bilgisayar yok. Bilgisayarda JARVIS açıkken "Jarvis\'i her cihaza kur" demen gerekiyor.';
+    if (!pc) return 'Bağlı bir bilgisayar yok. Bilgisayarda Mayk açıkken "Mayk\'ı her cihaza kur" demen gerekiyor.';
     if (!online(pc)) return `${pc.name} şu an kapalı ya da çevrimdışı görünüyor.`;
     const id = S.id + '-' + Date.now().toString(36);
     const f = await Cloud.read();
@@ -704,9 +706,9 @@
     { name: 'forget', description: 'Ortak hafızadan bir bilgiyi sil.',
       parameters: { type: 'OBJECT', properties: { category: { type: 'STRING' }, key: { type: 'STRING' } }, required: ['key'] } },
     { name: 'search_memory', description: 'Ortak hafızada ara.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-    { name: 'list_devices', description: 'JARVIS\'in çalıştığı cihazları ve hangisinin açık olduğunu listele.', parameters: { type: 'OBJECT', properties: {} } },
-    { name: 'computer_command', description: 'Bilgisayardaki/laptoptaki JARVIS\'e bir komut gönder ve yanıtını al: uygulama ya da dosya açmak, projede kod yazıp çalıştırmak, bilgisayarın ekranına bakmak, mesaj göndermek gibi yalnızca bilgisayarın yapabildiği her şey. Evdeki akıllı cihazlar da buradan (Home Assistant bilgisayara bağlı): "salonun ışığını kapat", "açık kalan ışıkları kapat", "klimayı 22 yap", "kapı kilitli mi" → command olarak aynen ilet. Bilgisayar kapalıysa bunu söyle.',
-      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'bilgisayarın adı ya da "laptop"; boşsa açık olan' }, command: { type: 'STRING', description: 'bilgisayardaki JARVIS\'e söylenecek komut, Türkçe' } }, required: ['command'] } },
+    { name: 'list_devices', description: 'Mayk\'ın çalıştığı cihazları ve hangisinin açık olduğunu listele.', parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'computer_command', description: 'Bilgisayardaki/laptoptaki Mayk\'a bir komut gönder ve yanıtını al: uygulama ya da dosya açmak, projede kod yazıp çalıştırmak, bilgisayarın ekranına bakmak, mesaj göndermek gibi yalnızca bilgisayarın yapabildiği her şey. Evdeki akıllı cihazlar da buradan (Home Assistant bilgisayara bağlı): "salonun ışığını kapat", "açık kalan ışıkları kapat", "klimayı 22 yap", "kapı kilitli mi" → command olarak aynen ilet. Bilgisayar kapalıysa bunu söyle.',
+      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'bilgisayarın adı ya da "laptop"; boşsa açık olan' }, command: { type: 'STRING', description: 'bilgisayardaki Mayk\'a söylenecek komut, Türkçe' } }, required: ['command'] } },
     { name: 'computer_quick', description: 'Bilgisayarda anında: volume_up, volume_down, mute, play_pause, next, prev, lock.',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, action: { type: 'STRING' } }, required: ['action'] } },
     { name: 'show_code', description: 'Yazdığın kodu bu cihazın ekranında göster (kopyalanabilir, indirilebilir) ve ortak hafızaya kaydet. Kod yazman istenince bunu kullan; kodu sesli okuma.',
@@ -730,7 +732,7 @@
     { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
-    { name: 'projects', description: 'Bilgisayarda JARVIS\'in yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
+    { name: 'projects', description: 'Bilgisayarda Mayk\'ın yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'protocol', description: 'Protokoller (Iron Man tarzı): tek komutla sırayla birçok iş. "çalışma protokolü", "film moduna geç", "uyku protokolü", "günaydın", "protokollerim neler", "yeni protokol kaydet". action: run | list | save | delete. run bir adım listesi döner: o adımları sırayla araçlarınla yap.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
@@ -738,7 +740,7 @@
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'guard', description: 'Güvenlik modu: bu cihazın (ya da device verilirse o cihazın) kamerası odayı izler; hareket olursa fotoğraf çekip bütün cihazlara gönderir ve sesli haber verir. "odayı izle", "güvenlik modunu aç/kapat", "tableti kamera yap".',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, device: { type: 'STRING', description: 'boşsa bu cihaz' } }, required: ['on'] } },
-    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (Jarvis sayfası açıksa). device: cihazın adı ya da türü.',
+    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (Mayk sayfası açıksa). device: cihazın adı ya da türü.',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' } }, required: ['device'] } },
     { name: 'gallery', description: 'Bütün cihazlarda çizilen resimlerin ortak galerisi: "galerimde ne var", "dünkü resmi göster", "laptopta çizdiğin logoyu aç", "ikinci resmi TV\'ye gönder". action: list | show | send. number: 1 = en yeni, ya da query: resimde ne vardı. send için device.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, number: { type: 'NUMBER' }, query: { type: 'STRING' }, device: { type: 'STRING' } }, required: ['action'] } },
@@ -760,7 +762,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki JARVIS Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (JARVIS\'i projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki Mayk Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (Mayk\'ı projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -822,7 +824,7 @@
       }
       case 'make_image': {
         // Drawing can take half a minute; the conversation goes on meanwhile and
-        // JARVIS says so when the picture is on screen.
+        // Mayk says so when the picture is on screen.
         const edit = String(a.mode || 'new') === 'edit';
         if (imgBusy) return 'Önceki resmi hâlâ çiziyorum; o bitince bunu yaparım.';
         if (edit && !lastImage) return 'Değiştirilecek resim yok; önce yeni bir resim çizeyim mi?';
@@ -847,7 +849,7 @@
         }
         const pc = findPc('');
         if (pc && online(pc)) return await sendToPc('', `Projeksiyon/TV (android_device aracı): ${op} ${a.arg || ''} ${a.where || ''} ${a.question || ''}`.trim());
-        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona JARVIS Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
+        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona Mayk Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
       }
       case 'chess': return chessTool(a);
       case 'coffee_fortune': {
@@ -897,7 +899,7 @@
         const d = findDevice(a.device);
         if (!d) return `"${a.device}" adında bir cihaz bulamadım.`;
         if (d.kind === 'pc') return await sendToPc(d.name, 'quick:volume_up');
-        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, Jarvis sayfası açık değilse çalamaz.');
+        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, Mayk sayfası açık değilse çalamaz.');
       }
       case 'guard': {
         if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'guard', on: !!a.on });
@@ -926,7 +928,7 @@
       case 'screen_share':
         if (!a.on) { stopVideo(); return 'Ekran paylaşımı kapandı.'; }
         if (!navigator.mediaDevices?.getDisplayMedia) return 'Bu cihaz ekran paylaşamıyor (telefonlar desteklemiyor). Kamerayı açabilirim.';
-        askUser('Ekranı göster', 'JARVIS ekranını görmek istiyor.', () => startVideo('screen'));
+        askUser('Ekranı göster', 'Mayk ekranını görmek istiyor.', () => startVideo('screen'));
         return 'Kullanıcıdan ekran paylaşımı onayı istendi.';
     }
     return 'Bilinmeyen araç.';
@@ -1074,9 +1076,9 @@
     a.download = 'jarvis-' + Date.now() + (lastImage.mime.includes('jpeg') ? '.jpg' : '.png'); a.click(); };
   $('img-share').onclick = async () => {
     if (!lastImage) return;
-    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'JARVIS' }); } catch { window.open(lastImage.url, '_blank'); } return; }
+    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'Mayk' }); } catch { window.open(lastImage.url, '_blank'); } return; }
     const file = new File([imageBlob()], 'jarvis.png', { type: lastImage.mime });
-    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'JARVIS' }); else $('img-dl').click(); } catch {}
+    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'Mayk' }); else $('img-dl').click(); } catch {}
   };
   $('img-full').onclick = () => { try { $('img-view').requestFullscreen(); } catch {} };
 
@@ -1249,7 +1251,7 @@
   function chessState(b = chessBoard()) {
     const out = b.outcome(), pgn = chess.sans.map((m, i) => (i % 2 ? '' : (i / 2 + 1) + '. ') + m).join(' ');
     const userTurn = b.white === chess.userWhite;
-    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'JARVIS düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
+    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'Mayk düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
     return { fen: b.fen(), moves: pgn || 'yok', status, user_color: chess.userWhite ? 'beyaz' : 'siyah', level: chess.level, teach: chess.teach };
   }
   function renderChess() {
@@ -1356,7 +1358,7 @@
 
   // ── projector / Android TV remote: the laptop drives it over ADB ────────
   // (core/adb_control.py); this page sends "adb:…" to the laptop's mailbox.
-  // The JARVIS Alıcı app on the projector (android-receiver/) works even when
+  // The Mayk Alıcı app on the projector (android-receiver/) works even when
   // the laptop is off; without it, the laptop drives the projector over ADB.
   const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
   async function sendToReceiver(d, cmd) {
@@ -1378,10 +1380,10 @@
     if (rx && online(rx)) return await sendToReceiver(rx, { op: kind, arg, ...extra });
     const pc = findPc('');
     if (pc && online(pc)) { const r = await sendToPc('', `adb:${kind}:${arg}`); return r.replace(/^[^:]+: /, ''); }
-    return rx ? 'Projeksiyondaki JARVIS Alıcı şu an çevrimdışı (projeksiyon kapalı ya da internete bağlı değil).'
-              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona JARVIS Alıcı uygulamasını kur ya da laptopu aç.';
+    return rx ? 'Projeksiyondaki Mayk Alıcı şu an çevrimdışı (projeksiyon kapalı ya da internete bağlı değil).'
+              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona Mayk Alıcı uygulamasını kur ya da laptopu aç.';
   }
-  $('t-remote').onclick = () => { const pc = findPc(''); $('rm-note').textContent = pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}). İlk kez: laptoptaki JARVIS'e "projeksiyonu kur" de.` : 'Bağlı bilgisayar yok: kumanda laptoptaki JARVIS üzerinden çalışır.'; openSheet('s-remote'); };
+  $('t-remote').onclick = () => { const pc = findPc(''); $('rm-note').textContent = pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}). İlk kez: laptoptaki Mayk'a "projeksiyonu kur" de.` : 'Bağlı bilgisayar yok: kumanda laptoptaki Mayk üzerinden çalışır.'; openSheet('s-remote'); };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
   $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
@@ -1471,7 +1473,7 @@
     const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).map(k => '- ' + k.slice(11));
     const proj = projectsText();
     return `CİHAZLAR:\n${devs.join('\n')}\n\nSIRADAKİ HATIRLATICILAR:\n${rem.join('\n') || '- yok'}\n\nYAPILACAKLAR (${todos.length}):\n${todos.slice(0, 6).join('\n') || '- yok'}` +
-      `\n\nPROJELER:\n${proj || '- yok'}\n\n(Kullanıcıya Iron Man'deki JARVIS gibi kısa, akıcı bir rapor olarak özetle; düşük pil ya da dolu disk varsa uyar.)`;
+      `\n\nPROJELER:\n${proj || '- yok'}\n\n(Kullanıcıya kısa, akıcı bir rapor olarak özetle; düşük pil ya da dolu disk varsa uyar.)`;
   }
 
   // ── reminders and timers, shared by every device ────────────────────────
@@ -1559,7 +1561,7 @@
       const late = now - r.due > 10 * 60000 ? ' (geç kaldı, sayfa kapalıydı)' : '';
       toast('⏰ ' + r.text + late);
       if (amOwner()) { beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }
-      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('JARVIS hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Mayk hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
       sys('⏰ Hatırlatma: ' + r.text + late);
       if (amOwner()) {
         const note = r.protocol ? `Zamanlanmış protokol zamanı: "${r.protocol}". Şimdi protocol aracıyla çalıştır.` : `Hatırlatma zamanı: ${r.text}.`;
@@ -1569,7 +1571,7 @@
     }
   }, 5000);
 
-  // ── keep the screen awake while JARVIS is listening or on a big screen ──
+  // ── keep the screen awake while Mayk is listening or on a big screen ──
   let wakeLock = null;
   async function keepAwake() {
     const want = micOn || !!guard || KIND === 'tv' || KIND === 'projector';
@@ -1603,9 +1605,9 @@
   const resumeHandle = () => (resume && Date.now() - resume.t < RESUME_MS ? resume.h : '');
   function setResume(h) { resume = h ? { h, t: Date.now() } : null; try { h ? sessionStorage.setItem('jarvis_resume', JSON.stringify(resume)) : sessionStorage.removeItem('jarvis_resume'); } catch {} }
   function systemText() {
-    const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'JARVIS'}: ${t.text}`).join('\n');
+    const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'Mayk'}: ${t.text}`).join('\n');
     const pcs = devices.filter(d => d.kind === 'pc').map(d => `${d.name} (${online(d) ? 'açık' : 'kapalı'})`).join(', ') || 'yok';
-    return `Sen ${S.name || 'JARVIS'}sın: kullanıcının kişisel asistanı. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
+    return `Adın ${S.name || 'Mayk'}. Kullanıcının kişisel asistanısın. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
       `aynı sen bilgisayarda, laptopta, telefonda, tablette, TV'de ve saatte de varsın ve hepsi aynı hafızayı paylaşır. ` +
       `Kısa, doğal ve sıcak konuş; kullanıcının dilinde yanıt ver (çoğunlukla Türkçe). ` +
       `Güncel bilgi için Google aramasını kullan. Kod istenince kodu show_code ile ekranda göster, sesli okuma. ` +
@@ -1837,7 +1839,7 @@
 
   // ── settings ─────────────────────────────────────────────────────────────
   function openSetup() {
-    // iPhone home-screen JARVIS starting empty: say why and offer the paste
+    // iPhone home-screen Mayk starting empty: say why and offer the paste
     $('f-ios').hidden = !(isIOS && standalone && !S.key);
     $('f-move').hidden = !(isIOS && !standalone && S.key);
     $('f-key').value = S.key || ''; $('f-tok').value = S.tok || ''; $('f-gist').value = S.gist || '';
@@ -1851,14 +1853,14 @@
     let text = '';
     try { text = await navigator.clipboard.readText(); } catch {}
     if (!importSetup(text)) text = prompt('Kurulum bağlantısını buraya yapıştır:') || '';
-    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir JARVIS kurulum bağlantısı değil.'; return; }
+    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir Mayk kurulum bağlantısı değil.'; return; }
     $('f-status').textContent = 'Kurulum geldi, hafıza yükleniyor…';
     openSetup(); lastBeat = 0; await syncNow(); setState(S.key ? 'idle' : 'setup');
     $('f-status').textContent = 'Tamam — hafızan ve ayarların bu uygulamada.'; setTimeout(closeSheets, 1200);
   }
   $('f-paste').onclick = pasteSetup; $('f-paste2').onclick = pasteSetup;
   $('f-copy').onclick = async () => {
-    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki JARVIS\'i açınca "Yapıştır"a bas.'; }
+    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki Mayk\'ı açınca "Yapıştır"a bas.'; }
     catch { prompt('Bu bağlantıyı kopyala:', setupLink()); }
   };
   $('f-save').onclick = async () => {
@@ -1874,7 +1876,7 @@
   };
   $('f-link').onclick = async () => {
     const link = setupLink();
-    try { if (navigator.share) await navigator.share({ title: 'JARVIS kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
+    try { if (navigator.share) await navigator.share({ title: 'Mayk kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
     catch { try { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı'); } catch { prompt('Bağlantı:', link); } }
   };
 
@@ -1952,20 +1954,20 @@
   const b64uBytes = t => { const b = atob(String(t).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(t).length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
   async function enablePush() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return /iPhone|iPad/.test(navigator.userAgent)
-      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile JARVIS\'i ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
+      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile Mayk\'ı ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
     if (!Cloud.ok()) return 'Önce ortak hafıza (GitHub anahtarı) kurulmalı.';
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return 'Bildirim izni verilmedi.';
     const f = await Cloud.read();
     const pub = J(f['push.json'], {}).publicKey;
-    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda JARVIS bir kez açılınca oluşur. Sonra tekrar dene.';
+    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda Mayk bir kez açılınca oluşur. Sonra tekrar dene.';
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (sub && J(localStorage.getItem('jarvis_push_key'), '') !== pub) { await sub.unsubscribe(); sub = null; }
     sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(pub) });
     localStorage.setItem('jarvis_push_key', JSON.stringify(pub));
     await Cloud.write({ [`push-sub-${S.id}.json`]: JSON.stringify(sub.toJSON()) });
-    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki JARVIS açıkken).';
+    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki Mayk açıkken).';
   }
   $('f-alici').onclick = () => { window.open(ALICI_APK, '_blank'); $('f-status').textContent = 'İndirilen jarvis-alici.apk\'yı aç ve kur (bilinmeyen kaynaklara izin ver). Sonra "Alıcıyı bağla"ya bas.'; };
   $('f-alici-link').onclick = () => {
@@ -1975,9 +1977,9 @@
     location.href = 'jarvisalici://setup?s=' + code;
   };
   $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
-  // ── the computer panel: buttons straight to the computer's JARVIS ───────
+  // ── the computer panel: buttons straight to the computer's Mayk ───────
   $('t-pc').onclick = () => {
-    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "Jarvis\'i her cihaza kur" de.';
+    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "Mayk\'ı her cihaza kur" de.';
     openSheet('s-pc');
   };
   document.querySelectorAll('#s-pc [data-q]').forEach(b => b.onclick = async () => {
@@ -1990,8 +1992,8 @@
     e.preventDefault(); const t = $('pc-inp').value.trim(); if (!t) return; $('pc-inp').value = '';
     toast('Bilgisayara gönderildi…'); const r = await sendToPc('', t); sys('💻 ' + r); toast(r.slice(0, 120));
   });
-  // Shared from another app (Android "Paylaş → JARVIS", manifest share_target):
-  // JARVIS asks what to do with it — open on the TV, send to the computer …
+  // Shared from another app (Android "Paylaş → Mayk", manifest share_target):
+  // Mayk asks what to do with it — open on the TV, send to the computer …
   (function sharedIn() {
     const q = new URLSearchParams(location.search);
     const parts = ['share_title', 'share_text', 'share_url'].map(k => (q.get(k) || '').trim()).filter(Boolean);
@@ -2001,7 +2003,7 @@
     closeTurns(); transcript.push({ role: 'user', text: '📎 ' + shared, open: false }); renderLog();
     claimHere();
     connect().then(() => { setState('thinking');
-      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu JARVIS'e paylaştı: ${shared}\n` +
+      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu Mayk'a paylaştı: ${shared}\n` +
         'Ne olduğunu tek cümleyle söyle ve ne yapmak istediğini sor: bir cihazda açmak (TV, bilgisayar…), özetlemek, kaydetmek, yapılacaklara eklemek gibi.' } }); })
       .catch(() => toast('Paylaşılan alındı; bağlanınca soracağım.'));
   })();

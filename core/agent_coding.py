@@ -2,12 +2,12 @@
 core/agent_coding.py — let Claude Code or Codex work INSIDE the project.
 
 Used as plain text models (core/claude_coding.py, core/codex_coding.py) they
-see only what JARVIS pastes into one prompt and answer with whole files. As
+see only what Mayk pastes into one prompt and answer with whole files. As
 agents they read any file they need, search the code, make small exact edits,
 run the project's tests and keep going until the tests pass — the way a person
 works, and far stronger on a real codebase.
 
-JARVIS stays in charge around them: it snapshots the folder before (for undo),
+Mayk stays in charge around them: it snapshots the folder before (for undo),
 works out afterwards which files really changed, runs its own checks on them
 and hands any failure back for one more round (actions/dev_agent.py).
 
@@ -71,7 +71,7 @@ def available(provider: str) -> bool:
         if provider == codex_coding.PROVIDER_ID:
             codex_coding._command()
             return True
-        if provider == jarvis_agent.PROVIDER_ID:       # JARVIS's own agent: needs only a free brain
+        if provider == jarvis_agent.PROVIDER_ID:       # Mayk's own agent: needs only a free brain
             return jarvis_agent.available()
     except Exception:
         return False
@@ -80,7 +80,7 @@ def available(provider: str) -> bool:
 
 def _brief(instruction: str, guide: str, extra: str) -> str:
     return (
-        "You are the coding agent of JARVIS, working directly in this project folder. Work like a "
+        "You are the coding agent of Mayk, working directly in this project folder. Work like a "
         "senior engineer who owns the result: the user asked by voice and will not review your diff, "
         "so what you hand back must simply work.\n\n"
         f"TASK (from the user, often in Turkish):\n{instruction}\n\n"
