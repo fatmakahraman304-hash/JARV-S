@@ -155,7 +155,7 @@ final class LanRemote {
         } catch (Exception e) { android.util.Log.w("MAYK-LAN", "request", e); }
     }
 
-    private String page() {
+    private String page() throws Exception {
         StringBuilder h = new StringBuilder("<!doctype html><html lang='tr'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>MAYK Yerel Kumanda</title><style>body{background:#100d0a;color:#fff;font:18px sans-serif;padding:15px}button{background:#29221b;color:#fff;border:1px solid #ae783f;border-radius:12px;padding:16px;margin:5px;font-size:19px}input{padding:14px;font-size:18px;max-width:85%}h2{color:#ffa64b}</style><h2>MAYK · Wi-Fi Kumanda</h2><p>GitHub olmadan doğrudan projeksiyonu kontrol et. Sürüm 1.9</p><p id='result' role='status' aria-live='polite' style='color:#ffb86b;font-weight:bold'></p>");
         // One-tap private handoff into the HTTPS MAYK frontend.
         // The URL is a fragment, so it is not sent to GitHub Pages servers.
