@@ -23,7 +23,7 @@ import psutil
 # Before any Qt import: Qt's video backend prints signed stream URLs otherwise.
 os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*=false")
 
-from PyQt6.QtCore import QCoreApplication, Qt
+from PyQt6.QtCore import QCoreApplication, Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from gui import hud as _gui_hud
@@ -132,6 +132,16 @@ class MaykUI:
                 self.write_log(f'SYS: WhatsApp Business açılamadı: {exc}')
         self.root = _RootShim(self._app)
         self._win.show()
+        receipt = os.environ.pop("MAYK_RESTART_RECEIPT", "")
+        if receipt:
+            def acknowledge():
+                try:
+                    if self._win.isVisible():
+                        with open(receipt, "xb"):
+                            pass
+                except OSError as exc:
+                    self.write_log(f"SYS: Yeniden açılış doğrulaması iletilemedi: {exc}")
+            QTimer.singleShot(0, acknowledge)
 
     @property
     def muted(self) -> bool:
