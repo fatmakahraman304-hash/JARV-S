@@ -14,6 +14,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.ImageView;
 
 import org.json.JSONObject;
 
@@ -24,6 +25,7 @@ import org.json.JSONObject;
  */
 public class MainActivity extends Activity {
     private TextView status;
+    private LocalPairing pairing;
     private final Handler ui = new Handler(Looper.getMainLooper());
 
     @Override
@@ -60,6 +62,29 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> setup(link.getText().toString()));
         root.addView(save);
 
+        Button qrButton = button("2) iPhone ile QR kodla bağla (aynı Wi-Fi)");
+        root.addView(qrButton);
+        qrButton.setOnClickListener(v -> {
+            if (pairing != null) pairing.close();
+            pairing = new LocalPairing(this::setup);
+            try {
+                String url = pairing.start(this);
+                ImageView image = new ImageView(this);
+                image.setImageBitmap(LocalPairing.qr(url));
+                image.setAdjustViewBounds(true);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(460, 460);
+                root.addView(image, root.indexOfChild(qrButton) + 1, params);
+                TextView hint = new TextView(this);
+                hint.setTextColor(Color.WHITE);
+                hint.setTextSize(17);
+                hint.setText("iPhone kamerasıyla kodu okut. Açılan sayfaya MAYK kurulum bağlantısını yapıştır.\\n" + url);
+                root.addView(hint, root.indexOfChild(image) + 1);
+                qrButton.setEnabled(false);
+            } catch (Exception ex) {
+                status.setText("QR eşleştirme açılamadı: " + ex.getMessage());
+            }
+        });
+
         Button web = button("Projeksiyonda MAYK'ı aç");
         web.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ReceiverService.WEB))));
         root.addView(web);
@@ -67,6 +92,11 @@ public class MainActivity extends Activity {
         setContentView(root);
         handle(getIntent());
         a11y.requestFocus();
+    }
+
+    @Override protected void onDestroy() {
+        if (pairing != null) pairing.close();
+        super.onDestroy();
     }
 
     private Button button(String text) {
