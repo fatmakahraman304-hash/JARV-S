@@ -2440,6 +2440,11 @@ class MainWindow(QMainWindow):
             }}
         """ + scroll_css())
         w.body.addWidget(self._content_display)
+        # Yalnızca süreyi yenilemek için çalışan yerel sayaç; API'ye istek yapmaz.
+        self._code_job_snapshot = None
+        self._code_job_clock = QTimer(self)
+        self._code_job_clock.setInterval(1000)
+        self._code_job_clock.timeout.connect(self._refresh_code_job_clock)
         return w
 
     def _reveal_below_hud(self, panel: QWidget, want: int) -> None:
@@ -2491,12 +2496,38 @@ class MainWindow(QMainWindow):
         "broken": ("RED", "!"),
     }
     _JOB_PHASES = ("reading", "planning", "writing", "checking", "testing")
+    _JOB_PHASE_NAMES = {
+        "reading": "OKUMA", "planning": "PLANLAMA", "writing": "YAZMA",
+        "checking": "KONTROL", "testing": "TEST",
+    }
+    _JOB_STATUS_NAMES = {
+        "starting": "BAŞLIYOR", "done": "BİTTİ", "failed": "BAŞARISIZ",
+        "nothing changed": "DEĞİŞİKLİK YOK",
+        "finished with problems": "SORUNLU BİTTİ",
+    }
+
+    def _refresh_code_job_clock(self) -> None:
+        """API yanıtı gelmese de saniyeleri yenile; başka paneli ezme."""
+        job = self._code_job_snapshot
+        if not job or job.get("finished"):
+            self._code_job_clock.stop()
+            return
+        if (self._content_panel.isVisible()
+                and self._content_title_lbl.text().startswith("KOD AJANI — ")):
+            self._show_code_job(job)
+        else:
+            self._code_job_clock.stop()
 
     def _show_code_job(self, job: dict):
         """Slot — Qt main thread. Draws the coding agent's progress."""
         import time as _time
         if not job:
             return
+        self._code_job_snapshot = dict(job)
+        if job.get("finished"):
+            self._code_job_clock.stop()
+        elif not self._code_job_clock.isActive():
+            self._code_job_clock.start()
         e = self._esc
         col = lambda name: getattr(C, name, C.TEXT)
         status = job.get("status", "")
@@ -2513,10 +2544,10 @@ class MainWindow(QMainWindow):
             if i == here:
                 c = C.RED if status == "failed" else C.GREEN if finished and status == "done" else C.PRI
             mark = "●" if i <= here else "○"
-            strip.append(f'<span style="color:{c};">{mark} {ph.upper()}</span>')
+            strip.append(f'<span style="color:{c};">{mark} {self._JOB_PHASE_NAMES.get(ph, ph.upper())}</span>')
         if finished:
             fin = C.GREEN if status == "done" else (C.RED if status == "failed" else C.ACC2)
-            strip.append(f'<span style="color:{fin};"><b>● {e(status.upper())}</b></span>')
+            strip.append(f'<span style="color:{fin};"><b>● {e(self._JOB_STATUS_NAMES.get(status, status.upper()))}</b></span>')
 
         parts = [f'<div style="color:{C.TEXT}; font-family:Courier New;">',
                  f'<div style="color:{C.TEXT_DIM};">{"  ".join(strip)}'
@@ -2524,17 +2555,23 @@ class MainWindow(QMainWindow):
         if finished and job.get("result"):
             parts.append(f'<div style="margin-top:6px;">{e(job["result"])}</div>')
         parts.append(f'<div style="margin-top:6px;"><span style="color:{C.TEXT_DIM};">'
-                     f'REQUEST&nbsp;</span>{e(job.get("request", ""))}</div>')
+                     f'İSTEK&nbsp;</span>{e(job.get("request", ""))}</div>')
+        if job.get("model_attempt"):
+            parts.append(f'<div><span style="color:{C.TEXT_DIM};">'
+                         f'DENENEN MODEL&nbsp;</span>{e(job["model_attempt"])}</div>')
+        if job.get("model_used"):
+            parts.append(f'<div><span style="color:{C.TEXT_DIM};">'
+                         f'YANIT VEREN MODEL&nbsp;</span>{e(job["model_used"])}</div>')
         if job.get("summary"):
             parts.append(
                 f'<div style="color:{C.WHITE}; border-left:2px solid {C.PRI};'
                 f' padding-left:8px; margin:8px 0;">{e(job["summary"])}</div>')
         files = job.get("files") or {}
         if files:
-            parts.append(f'<div style="color:{C.TEXT_DIM}; margin-top:4px;">FILES</div>')
+            parts.append(f'<div style="color:{C.TEXT_DIM}; margin-top:4px;">DOSYALAR</div>')
             for path, f in files.items():
                 cname, mark = self._JOB_STATES.get(f.get("state", ""), ("TEXT_DIM", "·"))
-                verb = "new " if f.get("action") == "create" else ""
+                verb = "yeni " if f.get("action") == "create" else ""
                 parts.append(
                     f'<div><span style="color:{col(cname)};">{mark}</span>&nbsp;'
                     f'<span style="color:{C.WHITE};">{e(path)}</span>&nbsp;'
@@ -2545,7 +2582,7 @@ class MainWindow(QMainWindow):
         steps = job.get("steps") or []
         if steps:
             parts.append(f'<div style="color:{C.TEXT_DIM}; margin-top:8px;">'
-                         f'STEPS — newest first</div>')
+                         f'İŞLEMLER — en yeni üstte</div>')
             for t, msg in reversed(steps[-14:]):
                 parts.append(f'<div><span style="color:{C.TEXT_DIM};">{float(t):6.1f}s'
                              f'</span>&nbsp;{e(msg)}</div>')
@@ -2553,7 +2590,7 @@ class MainWindow(QMainWindow):
 
         # Only the app's own label is upper-cased — the folder name after the
         # dash is the user's, in their language (see _show_content).
-        title = (f"CODE AGENT — {job.get('folder', '')} · {job.get('model', '')}")[:48]
+        title = (f"KOD AJANI — {job.get('folder', '')}")[:48]
         first = self._content_title_lbl.text() != title
         self._content_title_lbl.setText(title)
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))

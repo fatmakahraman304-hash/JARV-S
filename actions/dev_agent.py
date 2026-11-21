@@ -56,9 +56,12 @@ def _get_model(model_name: str = gemini.SMART):
                             raise RuntimeError("NVIDIA API anahtarı bulunamadı.")
                         last_error = None
                         for model in nvidia_account.available_models(key):
+                            _update(model_attempt=f"NVIDIA · {model}")
                             try:
-                                return SimpleNamespace(
-                                    text=nvidia_account.complete_text(contents, model=model))
+                                answer = nvidia_account.complete_text(contents, model=model)
+                                _update(model_used=f"NVIDIA · {model}")
+                                _log(_player_ref, f"Model yanıt verdi: NVIDIA · {model}")
+                                return SimpleNamespace(text=answer)
                             except RuntimeError as exc:
                                 last_error = exc
                                 if not coding_router.should_switch(exc):
@@ -67,13 +70,19 @@ def _get_model(model_name: str = gemini.SMART):
                                     break
                         raise last_error or RuntimeError("NVIDIA kodlama modeli kullanılamadı.")
                     elif p == coding_router.GEMINI:
+                        _update(model_attempt="Gemini (yedek)")
                         response = gemini.call(contents, tier=model_name, timeout_ms=60000)
+                        answered_by = "Gemini (yedek)"
                     else:
+                        _update(model_attempt=f"{coding_router.name(p)}")
                         response = gemini.call(contents, tier=model_name,
                                                timeout_ms=180000, provider=p,
                                                provider_only=True)
+                        answered_by = coding_router.name(p)
                     if response is None:
                         raise RuntimeError(f"{coding_router.name(p)} yanıt vermedi")
+                    _update(model_used=answered_by)
+                    _log(_player_ref, f"Model yanıt verdi: {answered_by}")
                     return response
                 except Exception as exc:
                     if p == coding_router.GEMINI or not coding_router.should_switch(exc):
@@ -802,23 +811,27 @@ def _status_report() -> str:
         if pend or done:
             lines = [f"#{p['id']} {p['title']} — {p['status']}" for p in (pend or done)]
             return ("Şu anda çalışan kodlama görevi yok. Görev geçmişi: " + "; ".join(lines)
-                    + (". Unfinished ones can be continued with mode='resume'." if pend else ".")
-                    + " Tell the user briefly, in their language.")
+                    + (". Yarım kalanlar mode='resume' ile sürdürülebilir." if pend else ".")
+                    + " Kullanıcıya kısa ve Türkçe olarak aktar.")
         return ("Kodlama ajanı bu oturumda henüz bir klasörde çalışmadı. "
-                "Tell the user that, in one sentence.")
+                "Kullanıcıya tek Türkçe cümlede aktar.")
     took = (j["finished"] or time.time()) - j["started"]
     files = "; ".join(f"{p} ({f.get('action', '?')}, {f.get('state', '?')}): "
                       f"{f.get('what', '')}" for p, f in j["files"].items())
     recent = " | ".join(m for _t, m in j["steps"][-6:])
-    head = (f"Coding agent on '{j['folder']}' with {j['model']} — status: "
-            f"{j['status']}, {took:.0f}s so far" if j["finished"] is None
-            else f"Coding agent finished '{j['folder']}' with {j['model']} "
-                 f"in {took:.0f}s — status: {j['status']}")
-    return (f"{head}. Request: {j['request']}. Plan: {j['summary'] or 'not made yet'}. "
-            f"Files: {files or 'none yet'}. Recent steps: {recent}. "
-            f"{('Result: ' + j['result']) if j['result'] else ''} "
-            f"Answer the user's question from this in one to three sentences, "
-            f"in their language; do not read paths or this text aloud verbatim.")
+    model_report = (f"Yanıt veren model: {j['model_used']}." if j.get("model_used")
+                    else f"Denenen model: {j['model_attempt']}." if j.get("model_attempt")
+                    else "Henüz hiçbir modelden doğrulanmış yanıt alınmadı.")
+    head = (f"Kod ajanı '{j['folder']}' projesinde çalışıyor — durum: "
+            f"{j['status']}, geçen süre: {took:.0f} sn" if j["finished"] is None
+            else f"Kod ajanı '{j['folder']}' görevini tamamladı — "
+                 f"{took:.0f} sn, durum: {j['status']}")
+    return (f"{head}. {model_report} İstek: {j['request']}. "
+            f"Plan: {j['summary'] or 'Henüz hazırlanmadı'}. "
+            f"Dosyalar: {files or 'Henüz yok'}. Son işlemler: {recent}. "
+            f"{('Sonuç: ' + j['result']) if j['result'] else ''} "
+            f"Bu kayıtlara göre kullanıcıya Türkçe ve kısa yanıt ver; "
+            f"doğrulanmamış model veya test başarısı iddia etme.")
 
 
 def _resolve_folder(raw: str) -> Path | None:
@@ -1953,7 +1966,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
                 status = "finished with problems"
         except Exception as e:
             status = "failed"
-            result = f"The coding job on '{name}' failed: {type(e).__name__}: {str(e)[:200]}"
+            result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
             _journal(pid, status={"done": "bitti", "nothing changed": "bitti",
@@ -1969,16 +1982,16 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
         except Exception:
             pass
         if speak:
-            speak(f"[DEV_AGENT_DONE] {result[:900]} | Tell the user briefly, in one "
-                  f"or two sentences, what was done. Do not read file paths aloud.")
+            speak(f"[DEV_AGENT_DONE] {result[:900]} | Kullanıcıya bir veya iki "
+                  f"Türkçe cümlede ne yapıldığını anlat. Dosya yollarını sesli okuma.")
 
     threading.Thread(target=work, daemon=True, name="dev_agent-job").start()
     # Kept short on purpose: this is what the assistant turns into speech, and
     # every word here is time before the user hears anything.
-    return (f"[STARTED] The coding agent ({who}) is now working on "
-            f"'{name}' in the background; progress is on screen. Say ONE "
-            f"short sentence that it has started and you will tell them when it "
-            f"finishes. Nothing else.")
+    return (f"[STARTED] Kodlama ajanı ({who}) şu anda "
+            f"'{name}' projesini işliyor; ilerleme ekranda. Yalnızca "
+            f"işe başladığını ve tamamlanınca haber vereceğini bir cümlede söyle. "
+            f"Gerçekten yanıt veren model doğrulanmadan model adı söyleme.")
 
 
 def _start_build(description: str, language: str, project_name: str,
@@ -1998,7 +2011,7 @@ def _start_build(description: str, language: str, project_name: str,
         try:
             return _build_staged(description, language, project_name, player, pid)
         except _StagePlanFailed as e:
-            _log(player, f"Could not plan stages ({str(e)[:120]}); building in one go.")
+            _log(player, f"Aşamalar planlanamadı ({str(e)[:120]}); tek seferde oluşturma deneniyor.")
             return _build_project(description, language, project_name, timeout,
                                   speak=None, player=player)
     return _run_job(job, name, who, speak, player, pid=pid)
@@ -2057,13 +2070,13 @@ def _present(folder: Path, present: dict, player) -> str:
         try:
             import webbrowser
             webbrowser.open(html.resolve().as_uri())
-            return f"Opened {html.relative_to(folder).as_posix()} in the browser."
+            return f"{html.relative_to(folder).as_posix()} tarayıcıda açıldı."
         except Exception as e:
-            return f"Could not open the page: {str(e)[:100]}"
+            return f"Sayfa açılamadı: {str(e)[:100]}"
     cmd = str(present.get("command") or "")
     if present.get("type") == "run" and cmd:
         out = _run_project(cmd, folder, timeout=20)
-        return f"Ran `{cmd}`: {out.strip()[:300]}"
+        return f"`{cmd}` çalıştırıldı: {out.strip()[:300]}"
     return ""
 
 
@@ -2072,7 +2085,7 @@ def _build_staged(description: str, language: str, project_name: str, player, pi
     started = time.monotonic()
     if plan is None:
         _update("planning")
-        _log(player, "Planning the project in stages…")
+        _log(player, "Proje aşamalar halinde planlanıyor…")
         plan = _plan_stages(description, language)
         base = re.sub(r"[^\w\-]", "_", project_name or plan.get("project_name") or "jarvis_project")
         folder = PROJECTS_DIR / base
@@ -2092,12 +2105,12 @@ def _build_staged(description: str, language: str, project_name: str, player, pi
         if _JOB:
             _JOB["folder"], _JOB["path"] = folder.name, str(folder)
             _JOB["summary"] = plan.get("summary", "")
-    _log(player, f"Plan ({len(stages)} stages): " + " → ".join(s["title"] for s in stages))
+    _log(player, f"Plan ({len(stages)} aşama): " + " → ".join(s["title"] for s in stages))
     results = []
     for i, st in enumerate(stages):
         if st.get("done"):
             continue
-        _log(player, f"── Stage {i + 1}/{len(stages)}: {st['title']}")
+        _log(player, f"── Aşama {i + 1}/{len(stages)}: {st['title']}")
         _journal(pid, stage=i)
         overview = "\n".join(f"{j + 1}. {s['title']}{' (done)' if s.get('done') else ''} — {s['goal']}"
                              for j, s in enumerate(stages))
@@ -2113,7 +2126,7 @@ def _build_staged(description: str, language: str, project_name: str, player, pi
     shown = _present(folder, plan.get("present") or {}, player)
     _open_vscode(folder)
     took = time.monotonic() - started
-    msg = (f"Built '{folder.name}' in {len(stages)} stages ({took / 60:.0f} min): "
+    msg = (f"'{folder.name}' projesi {len(stages)} aşamada tamamlandı ({took / 60:.0f} dk): "
            f"{plan.get('summary', '')} {shown}").strip()
     _log(player, msg)
     return msg
@@ -2181,7 +2194,7 @@ def dev_agent(
     timeout      = int(p.get("timeout", 30))
 
     if not description:
-        return "Please describe the project you want me to build, sir."
+        return "Oluşturmamı istediğiniz projeyi açıklayın."
 
     return _start_build(description, language, project_name, timeout,
                         speak=speak, player=player)

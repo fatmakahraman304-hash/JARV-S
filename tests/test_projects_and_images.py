@@ -52,7 +52,7 @@ class StagedBuildTest(unittest.TestCase):
                 self.assertIn("STAGE 1/2: Yapı", ran[0])
                 self.assertIn("STAGE 2/2: Sayfalar", ran[1])
                 self.assertTrue((Path(d) / "site" / "README.md").exists())
-                self.assertIn("2 stages", msg)
+                self.assertIn("2 aşamada", msg)
                 # resume after stage 1: only stage 2 runs
                 ran.clear()
                 half = json.loads(json.dumps(plan))
