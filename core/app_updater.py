@@ -181,7 +181,66 @@ def _replace_bytes(path, data):
         os.replace(tmp, path)
 
 
-def _apply_zip(root, files, sha, branch, progress=lambda message: None):
+_ZIP_MARKER = b'MAYK/2 zip\n'
+
+
+def _file_digest(path):
+    return _hash(path.read_bytes()) if path.exists() else None
+
+
+def _recover_zip(root, lock, raw, progress):
+    """Resolve a stopped ZIP transaction offline. Leave conflicts and backups intact."""
+    journal = json.loads(raw[len(_ZIP_MARKER):])
+    name = journal["backup"]
+    if not re.fullmatch(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9]+", name):
+        raise _RecoveryRequired("ZIP yedek kaydı geçersiz.")
+    backup = _target(root, ".jarvis-backups/" + name)
+    if backup.parent.is_symlink() or not backup.is_dir():
+        raise _RecoveryRequired("ZIP yedek klasörü doğrulanamadı.")
+    manifest = _file_digest(_target(root, ".jarvis-update.json"))
+    committed = manifest == journal["new_manifest"]
+    if not committed and manifest != journal["old_manifest"]:
+        raise _RecoveryRequired("Yerel sürüm kaydı değişmiş. Kurtarma durduruldu.")
+    before, after = journal["before"], journal["after"]
+    restore = []
+    for rel in sorted(before.keys() | after.keys()):
+        path_name = PurePosixPath(rel)
+        if (not path_name.parts or str(path_name) != rel or path_name.is_absolute()
+                or ".." in path_name.parts or ":" in rel or chr(92) in rel or _protected(rel)):
+            raise _RecoveryRequired("ZIP kurtarma kaydında geçersiz yol.")
+        target = _target(root, rel)
+        if target.resolve() != root.resolve() / rel:
+            raise _RecoveryRequired(f"Kurtarma yolu değişmiş: {rel}")
+        current = _file_digest(target)
+        expected = after.get(rel) if committed else before.get(rel)
+        if current == expected:
+            continue
+        if committed or current != after.get(rel):
+            raise _RecoveryRequired(f"Dosya beklenmeyen biçimde değişmiş: {rel}. Yerel içerik korunuyor.")
+        if expected is not None and _file_digest(_target(backup, rel)) != expected:
+            raise _RecoveryRequired(f"Yedek doğrulanamadı: {rel}")
+        restore.append((rel, expected))
+    progress("Kesilen ZIP güncellemesi doğrulanıyor…" if committed else "Önceki ZIP kurulumu geri yükleniyor…")
+    for rel, digest in restore:
+        target = _target(root, rel)
+        if _file_digest(target) != after.get(rel):
+            raise _RecoveryRequired(f"Kurtarma sırasında dosya değişti: {rel}")
+        if digest is None:
+            target.unlink()
+        else:
+            data = _target(backup, rel).read_bytes()
+            if _hash(data) != digest:
+                raise _RecoveryRequired(f"Yedek değişti: {rel}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _replace_bytes(target, data)
+        if _file_digest(target) != digest:
+            raise _RecoveryRequired(f"Geri yüklenen dosya doğrulanamadı: {rel}")
+    lock.unlink()
+    return (True, "Kurulan ZIP sürümü doğrulandı. MAYK yeniden başlatılacak." if committed
+            else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. MAYK yeniden başlatılacak.")
+
+
+def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marker=None):
     """Back up before writing; restore every changed/deleted file on failure."""
     state_path = root / '.jarvis-update.json'
     old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
@@ -208,6 +267,13 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
             existed.add(name)
+    state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
+    state_bytes = json.dumps(state).encode('utf-8')
+    if marker is not None:
+        journal = {"backup": backup.name, "before": {n: _file_digest(backup / n) for n in existed},
+                   "after": state["files"], "old_manifest": _file_digest(state_path),
+                   "new_manifest": _hash(state_bytes)}
+        _replace_bytes(marker, _ZIP_MARKER + json.dumps(journal).encode("utf-8"))
     touched = []
     try:
         progress('Yeni kod uygulanıyor…')
@@ -219,12 +285,11 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None):
             else:
                 path.unlink(missing_ok=True)
             touched.append(name)
-        state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
         progress('Kurulan dosyalar doğrulanıyor…')
         for name, digest in state['files'].items():
             if _hash(_target(root, name).read_bytes()) != digest:
                 raise RuntimeError(f'Yazılan dosya doğrulanamadı: {name}')
-        _replace_bytes(state_path, json.dumps(state).encode('utf-8'))
+        _replace_bytes(state_path, state_bytes)
     except Exception:
         failed = []
         for name in reversed(touched):
@@ -296,7 +361,10 @@ def _update_locked(root, progress):
         with lock.open('xb') as marker:
             marker.write(checking)
     except FileExistsError:
-        if lock.read_bytes() != checking:
+        raw = lock.read_bytes()
+        if raw.startswith(_ZIP_MARKER):
+            return _recover_zip(root, lock, raw, progress)
+        if raw != checking:
             raise RuntimeError('Başka bir güncelleme veya yarım kalan kurulum var. '
                                'Güncelleme kilidi ve yedekler korunuyor. docs/guncelleme-tr.md dosyasına bakın.') from None
         progress('Kesilen kontrolün ardından yeniden deneniyor…')
@@ -340,7 +408,8 @@ def _update_locked(root, progress):
         old_req = (root / 'requirements.txt').read_text('utf-8')
         if _needs_dependency_install(old_req, new_req):
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. MAYK’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
-        _replace_bytes(lock, b'MAYK/1 applying')
+        if is_git:
+            _replace_bytes(lock, b'MAYK/1 applying')
         progress('Yedek alınıyor…')
         note = ''
         if is_git:
@@ -371,7 +440,7 @@ def _update_locked(root, progress):
             if label:
                 note = _restore(root, label)
         else:
-            _apply_zip(root, files, sha, branch, progress)
+            _apply_zip(root, files, sha, branch, progress, marker=lock)
         return True, f'Güncellendi · {sha[:8]}. MAYK otomatik yeniden başlatılıyor.{note}'
     except _RecoveryRequired:
         release_marker = False
@@ -405,3 +474,22 @@ def check(root=ROOT) -> dict:
     return {"newer": sha != state.get('sha'), "sha": sha, "current": state.get('sha') or "",
             "changes": str(commit.get('commit', {}).get('message', '')).splitlines()[:1] if sha != state.get('sha') else [],
             "branch": branch}
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Kesilen MAYK ZIP güncellemesini çevrimdışı kurtar.")
+    parser.add_argument("--recover", action="store_true", required=True)
+    parser.parse_args()
+    try:
+        with _update_guard(ROOT):
+            marker = ROOT / ".jarvis-update.lock"
+            raw = marker.read_bytes() if marker.exists() else b""
+            if raw.startswith(_ZIP_MARKER):
+                _recover_zip(ROOT, marker, raw, print)
+                print("Kurtarma doğrulandı. MAYK'ı açabilirsiniz.")
+            elif marker.exists():
+                sys.exit("Bu kilit otomatik ZIP kurtarmasına uygun değil. Güncelleme kılavuzuna bakın.")
+            else:
+                print("Bekleyen ZIP kurtarması yok.")
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+        sys.exit(f"Kurtarma tamamlanamadı: {exc}")
