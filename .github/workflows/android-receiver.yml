@@ -8,6 +8,11 @@ on:
     paths: ["android-receiver/**", ".github/workflows/android-receiver.yml"]
   workflow_dispatch:
 
+# Only the newest APK build may publish the stable download asset.
+concurrency:
+  group: mayk-alici-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
