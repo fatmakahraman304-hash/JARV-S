@@ -3104,7 +3104,7 @@ class MainWindow(QMainWindow):
                               else "🎚  BASILI TUT KONUŞ: KAPALI")
         self._ptt_btn.setStyleSheet(btn_css("on" if ptt else "off"))
         self._ptt_btn.setToolTip(
-            ""Tuşu basılı tutana kadar mikrofon kapalı kalır; siz basılı "
+            "Tuşu basılı tutana kadar mikrofon kapalı kalır; siz basılı "
             "tutmazken ses gönderilmez." if ptt
             else "Mikrofonu sürekli dinletmek yerine konuşmak için tuşu basılı tutun.")
 
@@ -3117,10 +3117,10 @@ class MainWindow(QMainWindow):
                               else "◉  GÖRÜNÜM: REAKTÖR")
         self._hud_btn.setStyleSheet(btn_css("choice"))
         self._hud_btn.setToolTip(
-            ""MAYK’ın konuşmasına ve durumuna göre hareket eden "
+            "MAYK’ın konuşmasına ve durumuna göre hareket eden "
             "bir yüz. Reaktöre geçmek için tıklayın."
             if face else
-            ""Duruma ve sesinize göre hareket eden 3B reaktör. "
+            "Duruma ve sesinize göre hareket eden 3B reaktör. "
             "Hareketli yüze geçmek için tıklayın.")
 
     def _toggle_hud_style(self):
