@@ -1,6 +1,7 @@
 """User-triggered, pinned GitHub updates. No Qt or credentials in this module."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import io
 import json
@@ -169,7 +170,7 @@ def _replace_bytes(path, data):
         os.replace(tmp, path)
 
 
-def _apply_zip(root, files, sha, branch):
+def _apply_zip(root, files, sha, branch, progress=lambda message: None):
     """Back up before writing; restore every changed/deleted file on failure."""
     state_path = root / '.jarvis-update.json'
     old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
@@ -199,6 +200,7 @@ def _apply_zip(root, files, sha, branch):
     old_state = state_path.read_bytes() if state_path.exists() else None
     touched = []
     try:
+        progress('Yeni kod uygulanıyor…')
         for name in sorted(names):
             path = _target(root, name)
             touched.append(name)
@@ -208,6 +210,7 @@ def _apply_zip(root, files, sha, branch):
             else:
                 path.unlink(missing_ok=True)
         state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
+        progress('Kurulan dosyalar doğrulanıyor…')
         for name, digest in state['files'].items():
             if _hash(_target(root, name).read_bytes()) != digest:
                 raise RuntimeError(f'Yazılan dosya doğrulanamadı: {name}')
@@ -248,16 +251,42 @@ def _needs_dependency_install(old, new):
     return not set(after).issubset(before)
 
 
+@contextmanager
+def _update_guard(root):
+    """The kernel releases this lock even if Windows terminates the process."""
+    with (root / '.jarvis-update.guard').open('a+b') as handle:
+        handle.seek(0)
+        try:
+            if os.name == 'nt':
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise RuntimeError('Başka bir güncelleme çalışıyor veya güncelleme kilidi alınamadı.') from exc
+        yield
+
+
 def update(root=ROOT, progress=lambda message: None):
     root = Path(root)
     if getattr(sys, 'frozen', False):
         raise RuntimeError('Bu paketli sürüm için kurulum paketi gerekir; kaynak güncellemesi uygulanmadı.')
+    with _update_guard(root):
+        return _update_locked(root, progress)
+
+
+def _update_locked(root, progress):
     lock = root / '.jarvis-update.lock'
+    checking = b'MAYK/1 checking'
     try:
-        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        with lock.open('xb') as marker:
+            marker.write(checking)
     except FileExistsError:
-        raise RuntimeError('Başka bir güncelleme çalışıyor. Önceki işlem kesildiyse .jarvis-update.lock dosyasını kaldırın.') from None
-    os.close(fd)
+        if lock.read_bytes() != checking:
+            raise RuntimeError('Başka bir güncelleme veya yarım kalan kurulum var. '
+                               'Güncelleme kilidi ve yedekler korunuyor. docs/guncelleme-tr.md dosyasına bakın.') from None
+        progress('Kesilen kontrolün ardından yeniden deneniyor…')
     try:
         is_git = (root / '.git').exists()
         state_file = root / '.jarvis-update.json'
@@ -297,7 +326,8 @@ def update(root=ROOT, progress=lambda message: None):
         old_req = (root / 'requirements.txt').read_text('utf-8')
         if _needs_dependency_install(old_req, new_req):
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. MAYK’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
-        progress('Yedek alınıyor ve güncelleme uygulanıyor…')
+        _replace_bytes(lock, b'MAYK/1 applying')
+        progress('Yedek alınıyor…')
         note = ''
         if is_git:
             if (_git(root, 'symbolic-ref', '--short', 'HEAD') != branch
@@ -310,6 +340,7 @@ def update(root=ROOT, progress=lambda message: None):
                 shown = ', '.join(real_changes[:5]) + (' …' if len(real_changes) > 5 else '')
                 progress(f'Yerel değişiklikler kenara alınıyor: {shown}')
                 label = _set_aside(root)
+            progress('Yeni kod uygulanıyor…')
             try:
                 if eol_only:
                     # Normalize tracked files before the fast-forward. Git merge
@@ -320,12 +351,13 @@ def update(root=ROOT, progress=lambda message: None):
                 if label:
                     _restore(root, label)
                 raise
+            progress('Kurulan commit doğrulanıyor…')
             if _git(root, 'rev-parse', 'HEAD') != sha:
                 raise RuntimeError('Güncelleme sonucu doğrulanamadı.')
             if label:
                 note = _restore(root, label)
         else:
-            _apply_zip(root, files, sha, branch)
+            _apply_zip(root, files, sha, branch, progress)
         return True, f'Güncellendi · {sha[:8]}. MAYK otomatik yeniden başlatılıyor.{note}'
     finally:
         lock.unlink(missing_ok=True)
