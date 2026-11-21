@@ -40,17 +40,23 @@ jobs:
           $process = Start-Process -PassThru -FilePath ".\.venv\Scripts\pythonw.exe" -ArgumentList "main.py" -RedirectStandardError "$env:RUNNER_TEMP/mayk-error.log"
           try {
             $deadline = [DateTime]::UtcNow.AddSeconds(90)
+            $windowOwner = $null
             do {
               Start-Sleep -Milliseconds 250
               $process.Refresh()
               if ($process.HasExited) { throw "MAYK exited before displaying a window ($($process.ExitCode))" }
-            } until ($process.MainWindowHandle -ne [IntPtr]::Zero -or [DateTime]::UtcNow -gt $deadline)
-            if ($process.MainWindowHandle -eq [IntPtr]::Zero) { throw "No native desktop window" }
-            if (-not $process.CloseMainWindow()) { throw "MAYK did not accept a window close" }
+              # A Windows venv launcher can host the interpreter in a child.
+              $processIds = @($process.Id) + @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | Select-Object -ExpandProperty ProcessId)
+              $windowOwner = Get-Process -Id $processIds -ErrorAction SilentlyContinue |
+                Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle -like 'M.A.Y.K*' } |
+                Select-Object -First 1
+            } until ($windowOwner -or [DateTime]::UtcNow -gt $deadline)
+            if (-not $windowOwner) { throw "No native desktop window" }
+            if (-not $windowOwner.CloseMainWindow()) { throw "MAYK did not accept a window close" }
             if (-not $process.WaitForExit(30000)) { throw "MAYK remained alive after window close" }
             if ($process.ExitCode -ne 0) { throw "MAYK exited with $($process.ExitCode)" }
           } finally {
-            if (-not $process.HasExited) { $process.Kill() }
+            if (-not $process.HasExited) { $process.Kill($true) }
             Get-Content "$env:RUNNER_TEMP/mayk-error.log" -Tail 30
           }
       - name: Verify the installed browser engines
