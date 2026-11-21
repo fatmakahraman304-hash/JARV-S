@@ -157,7 +157,7 @@ CATALOG = (
     {"id": "nvidia",     "label": "NVIDIA Build (ücretsiz API)",
      "note": "bulut · deneme API anahtarı gerekir · kullanım sınırı vardır", "local": False,
      "values": {"base_url": PRESETS["NVIDIA"], **_CLOUD,
-                "model": "z-ai/glm-5.3-flash"}},
+                "model": "nvidia/nemotron-3.5-lightning-30b-a3b"}},
     {"id": "mistral",    "label": "Mistral",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Mistral"], **_CLOUD}},
@@ -649,6 +649,18 @@ class OpenAICompatLLM:
                 pass
         return seen
 
+    @staticmethod
+    def _try_another_nvidia_model(error: Exception) -> bool:
+        """Yalnızca modele özgü sorunlarda alternatif NVIDIA modeli dene."""
+        message = str(error).casefold()
+        match = re.match(r"^([1-5][0-9]{2})\\b", message)
+        if match:
+            return int(match.group(1)) in (404, 500, 502, 503, 504)
+        return any(hint in message for hint in (
+            "timed out", "timeout", "zaman aşımı", "readtimeout",
+            "remoteprotocolerror",
+        ))
+
     def probe(self, check_vision: bool = True) -> tuple[bool, str]:
         """Reachable and usable? Returns (ok, one line to show the user).
 
@@ -663,12 +675,40 @@ class OpenAICompatLLM:
         if is_nvidia and not self.key:
             return False, "NVIDIA API anahtarı girilmedi. Anahtarı ekleyip yeniden deneyin."
         t0 = time.monotonic()
+        original_model = self.model
         try:
             text, _ = self.complete(
                 [{"role": "user", "content": "Reply with the single word: ok"}],
-                timeout=45.0 if is_nvidia else 20.0)
+                timeout=(18.0 if self.model == "z-ai/glm-5.3-flash" else 30.0)
+                        if is_nvidia else 20.0)
         except Exception as e:
             if is_nvidia:
+                if self._try_another_nvidia_model(e):
+                    from core import nvidia_account
+                    try:
+                        alternatives = [model for model in nvidia_account.available_models(self.key)
+                                        if model != original_model][:2]
+                    except Exception:
+                        alternatives = []
+                    last = e
+                    for model in alternatives:
+                        self.model = model
+                        try:
+                            text, _ = self.complete(
+                                [{"role": "user", "content": "Reply with the single word: ok"}],
+                                timeout=25.0)
+                            self._vision_known = ""
+                            self.caps["vision"] = False
+                            return True, (
+                                f"{original_model} yanıt vermedi. {model} modeli çalışıyor; "
+                                "KAYDET VE UYGULA ile bu modeli kaydedin.")
+                        except Exception as alt_error:
+                            last = alt_error
+                            if not self._try_another_nvidia_model(alt_error):
+                                break
+                    self.model = original_model
+                    return False, (_nvidia_probe_message(last) +
+                                   " Alternatif NVIDIA modelleri de denenmiş olabilir.")
                 return False, _nvidia_probe_message(e)
             msg = str(e)
             if "401" in msg or "403" in msg:
