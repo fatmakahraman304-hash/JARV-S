@@ -71,7 +71,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 parts.append("EV:\n" + smart_home.home_summary())
         except Exception:
             pass
-        parts.append("(Kullanıcıya Iron Man'deki Mayk gibi kısa, akıcı bir rapor olarak özetle; "
+        parts.append("(Kullanıcıya kısa, akıcı bir rapor olarak özetle; "
                      "düşük pil ya da dolu disk varsa uyar.)")
         return "\n\n".join(parts)
     except Exception as exc:

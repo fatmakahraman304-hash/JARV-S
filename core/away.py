@@ -170,7 +170,7 @@ def welcome_instruction(items: list[dict], away_for: float = 0.0) -> str:
     gone = f" They were away for about {_ago(away_for).replace(' ago', '')}." if away_for >= 60 else ""
     return ("[AWAY_DIGEST] The user is back." + gone + " These came up while they were away and "
             "have not been told yet:\n" + describe(items) + "\n"
-            "Welcome them back the way Mayk does in the films and tell them what happened, "
+            "Welcome them back warmly and tell them what happened, "
             "most important first, in at most three short sentences: merge related items, drop "
             "progress notes a later item makes stale, give the outcome rather than the steps. "
             "If they have just asked something, answer that first. Offer details only if there is "
@@ -215,7 +215,7 @@ def greeting_instruction(away_for: float, hour: int) -> str:
     part = ("morning" if 5 <= hour < 12 else "afternoon" if hour < 18 else "evening" if hour < 23 else "night")
     return ("[WELCOME_BACK] The user has just come back to the computer after about "
             f"{_ago(away_for).replace(' ago', '')} away; it is {part} now. Nothing happened while they were "
-            "away. Greet them the way Mayk greets Tony coming home — one short, warm sentence "
+            "away. Greet them in your usual style — one short, warm sentence "
             "('Tekrar hoş geldiniz, efendim.' / 'İyi akşamlar, efendim; her şey yolunda.'), adding at most "
             "that all is in order. Do not ask a question, do not list anything, do not call any tool.")
 

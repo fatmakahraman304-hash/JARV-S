@@ -143,7 +143,7 @@ class SleepTests(unittest.TestCase):
         from core.snap_wake import is_sleep_command
         for text in ['uyu', 'FRIDAY uyu', 'Mayk uyu', 'Mayk uyku moduna geç']:
             self.assertTrue(is_sleep_command(text), text)
-        for text in ['uyuma', 'jarvis uyu deme', 'bilgisayarı uyut', 'uyu dedim ama şimdi konuş']:
+        for text in ['uyuma', 'mayk uyu deme', 'bilgisayarı uyut', 'uyu dedim ama şimdi konuş']:
             self.assertFalse(is_sleep_command(text), text)
 
     def test_snap_across_chunks_and_sustained_noise(self):

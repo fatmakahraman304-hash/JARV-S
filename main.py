@@ -366,7 +366,7 @@ def _load_system_prompt() -> str:
         return PROMPT_PATH.read_text(encoding="utf-8")
     except Exception:
         return (
-            "You are Mayk, Tony Stark's AI assistant. "
+            "You are Mayk, the user's personal AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool."
         )
@@ -3170,7 +3170,7 @@ class MaykLive:
             )
 
         p1 = (
-            f"Greet the user the way Mayk greets Tony Stark in the films — calm, polite, faintly dry "
+            f"Greet the user in your usual style: calm, polite, faintly dry "
             f"(e.g. the feel of 'Günaydın, efendim'), mention it is {time_str}"
             f"{', and say you are fetching the news now' if want_news else ''}.{session_clause} "
             f"Keep it to 2 short sentences max. Do not call any tools.{lang_clause}{name_clause}"

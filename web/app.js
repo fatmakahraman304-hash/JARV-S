@@ -1473,7 +1473,7 @@
     const todos = Object.keys(memory.notes || {}).filter(k => k.startsWith('yapılacak: ')).map(k => '- ' + k.slice(11));
     const proj = projectsText();
     return `CİHAZLAR:\n${devs.join('\n')}\n\nSIRADAKİ HATIRLATICILAR:\n${rem.join('\n') || '- yok'}\n\nYAPILACAKLAR (${todos.length}):\n${todos.slice(0, 6).join('\n') || '- yok'}` +
-      `\n\nPROJELER:\n${proj || '- yok'}\n\n(Kullanıcıya Iron Man'deki Mayk gibi kısa, akıcı bir rapor olarak özetle; düşük pil ya da dolu disk varsa uyar.)`;
+      `\n\nPROJELER:\n${proj || '- yok'}\n\n(Kullanıcıya kısa, akıcı bir rapor olarak özetle; düşük pil ya da dolu disk varsa uyar.)`;
   }
 
   // ── reminders and timers, shared by every device ────────────────────────
@@ -1607,7 +1607,7 @@
   function systemText() {
     const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'Mayk'}: ${t.text}`).join('\n');
     const pcs = devices.filter(d => d.kind === 'pc').map(d => `${d.name} (${online(d) ? 'açık' : 'kapalı'})`).join(', ') || 'yok';
-    return `Sen ${S.name || 'Mayk'}sın: kullanıcının kişisel asistanı. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
+    return `Adın ${S.name || 'Mayk'}. Kullanıcının kişisel asistanısın. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
       `aynı sen bilgisayarda, laptopta, telefonda, tablette, TV'de ve saatte de varsın ve hepsi aynı hafızayı paylaşır. ` +
       `Kısa, doğal ve sıcak konuş; kullanıcının dilinde yanıt ver (çoğunlukla Türkçe). ` +
       `Güncel bilgi için Google aramasını kullan. Kod istenince kodu show_code ile ekranda göster, sesli okuma. ` +

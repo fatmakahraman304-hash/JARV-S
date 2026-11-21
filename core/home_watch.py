@@ -116,7 +116,7 @@ def instruction(notes: list[tuple[str, str]]) -> str:
     alarm = any(sev == "alarm" for sev, _ in notes)
     text = " ".join(t for _, t in notes)
     if any(sev == "arrive" for sev, _ in notes) and not alarm:
-        return ("[WELCOME_HOME] " + text + " Greet them the way Mayk greets Tony coming home — one "
+        return ("[WELCOME_HOME] " + text + " Greet them in your usual style — one "
                 "short, warm sentence ('Eve hoş geldiniz, efendim.'); add one useful thing at most (something "
                 "waiting, or the house's state). Do not call any tool.")
     if alarm:
