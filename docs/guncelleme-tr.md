@@ -24,7 +24,15 @@ py -3.13 -m venv .venv
 
 Bu sürümle başlayan bir güncelleme, kontrol veya indirme sırasında kesildiyse **GÜNCELLE** yeniden denenebilir. İşletim sistemi canlı güncelleyicinin kilidini tutar ve süreç kapanınca bırakır.
 
-Dosya uygulama sırasında kesinti, geri almada hata veya önceki sürümden kalan belirsiz bir kilit bildirilirse MAYK’ı kapatın. Kurulum klasörünü, gizli yedekleri ve kullanıcı verilerini ayrı bir konuma kopyalayın. Windows’ta kalıcı hafıza ve devamlılık kayıtları için `%LOCALAPPDATA%\JarvisMurat` klasörünü de koruyun. Güncelleme kilidini tek başına kaldırmak yarım işlemi onarmaz.
+Bu sürümle başlatılan ZIP güncellemesi dosya yazarken kesilirse tekrar **GÜNCELLE** düğmesine basın. Kurtarma çevrimdışı çalışır. Sürüm kaydı henüz yazılmamışsa önceki sürüm geri yüklenir. Kayıt tamamlanmışsa yeni sürümün dosyaları doğrulanır. Kesintiden sonra sizin düzenlediğiniz bir dosya veya bozuk yedek tespit edilirse kurtarma durur ve yedekler saklanır.
+
+HUD açılmıyorsa MAYK kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa MAYK’ı normal şekilde açın.
+
+```powershell
+.\.venv\Scripts\python.exe -m core.app_updater --recover
+```
+
+Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya önceki sürümden kalan belirsiz bir kilit bildirilirse MAYK’ı kapatın. Kurulum klasörünü, gizli yedekleri ve kullanıcı verilerini ayrı bir konuma kopyalayın. Windows’ta kalıcı hafıza ve devamlılık kayıtları için `%LOCALAPPDATA%\JarvisMurat` klasörünü de koruyun. Güncelleme kilidini tek başına kaldırmak yarım işlemi onarmaz.
 
 - Git için `git status --short`, `git branch --list "jarvis-backup/*"`, `git stash list` ve `git rev-parse HEAD` ile durumu kaydedin. Önceki sürümü denemek için yedek dalı ayrı bir çalışma klasöründe açabilirsiniz.
 - ZIP için güncelleme günlüğündeki yedek konumunu ve `.jarvis-update.json` dosyasını saklayın. Yedek klasörü işlem öncesinde var olan dosyaları içerir. Yeni eklenmiş dosyalar veya yarıda kalmış işlem nedeniyle klasörün tek başına eksiksiz bir kurulum olduğu varsayılamaz. Bilinen çalışan sürümü ayrı klasörde açıp kişiselleştirme ve hafızayı doğrulayın.
