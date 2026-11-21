@@ -182,26 +182,37 @@ def _replace_bytes(path, data):
 
 
 _ZIP_MARKER = b'MAYK/2 zip\n'
+_ROLLBACK_MARKER = b'MAYK/2 rollback\n'
 
 
 def _file_digest(path):
     return _hash(path.read_bytes()) if path.exists() else None
 
 
-def _recover_zip(root, lock, raw, progress):
-    """Resolve a stopped ZIP transaction offline. Leave conflicts and backups intact."""
-    journal = json.loads(raw[len(_ZIP_MARKER):])
-    name = journal["backup"]
+def _backup_directory(root, name):
     if not re.fullmatch(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9]+", name):
         raise _RecoveryRequired("ZIP yedek kaydı geçersiz.")
     backup = _target(root, ".jarvis-backups/" + name)
     if backup.parent.is_symlink() or not backup.is_dir():
         raise _RecoveryRequired("ZIP yedek klasörü doğrulanamadı.")
+    return backup
+
+
+def _recover_zip(root, lock, raw, progress):
+    """Resolve a stopped ZIP transaction offline. Leave conflicts and backups intact."""
+    journal = json.loads(raw.split(b"\n", 1)[1])
+    backup = _backup_directory(root, journal["backup"])
+    rollback = raw.startswith(_ROLLBACK_MARKER)
     manifest = _file_digest(_target(root, ".jarvis-update.json"))
-    committed = manifest == journal["new_manifest"]
-    if not committed and manifest != journal["old_manifest"]:
+    committed = not rollback and manifest == journal["new_manifest"]
+    if manifest not in (journal["old_manifest"], journal["new_manifest"]):
         raise _RecoveryRequired("Yerel sürüm kaydı değişmiş. Kurtarma durduruldu.")
     before, after = journal["before"], journal["after"]
+    previous_manifest = None
+    if rollback and journal["old_manifest"] is not None:
+        previous_manifest = _target(backup, ".previous-manifest").read_bytes()
+        if _hash(previous_manifest) != journal["old_manifest"]:
+            raise _RecoveryRequired("Önceki sürüm kaydının yedeği doğrulanamadı.")
     restore = []
     for rel in sorted(before.keys() | after.keys()):
         path_name = PurePosixPath(rel)
@@ -235,9 +246,47 @@ def _recover_zip(root, lock, raw, progress):
             _replace_bytes(target, data)
         if _file_digest(target) != digest:
             raise _RecoveryRequired(f"Geri yüklenen dosya doğrulanamadı: {rel}")
+    if rollback:
+        state_path = _target(root, ".jarvis-update.json")
+        if previous_manifest is None:
+            state_path.unlink(missing_ok=True)
+        else:
+            _replace_bytes(state_path, previous_manifest)
+        if _file_digest(state_path) != journal["old_manifest"]:
+            raise _RecoveryRequired("Önceki sürüm kaydı geri yüklenemedi.")
     lock.unlink()
     return (True, "Kurulan ZIP sürümü doğrulandı. MAYK yeniden başlatılacak." if committed
             else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. MAYK yeniden başlatılacak.")
+
+
+def rollback_zip(root=ROOT, progress=print):
+    """Explicit offline downgrade of the last intact ZIP update, with the app closed."""
+    root = Path(root)
+    with _update_guard(root):
+        marker = _target(root, ".jarvis-update.lock")
+        if (root / ".git").exists() or marker.exists():
+            raise _RecoveryRequired("ZIP geri dönüşü için kurulumu ve bekleyen kurtarmayı kontrol edin.")
+        state_path = _target(root, ".jarvis-update.json")
+        state = json.loads(state_path.read_bytes())
+        if not state.get("backup"):
+            raise _RecoveryRequired("Bu sürüm doğrulanabilir geri dönüş kaydı içermiyor.")
+        backup = _backup_directory(root, state["backup"])
+        raw = _target(backup, ".rollback.json").read_bytes()
+        journal = json.loads(raw)
+        if journal.get("backup") != state["backup"] or _hash(state_path.read_bytes()) != journal.get("new_manifest"):
+            raise _RecoveryRequired("Geri dönüş kaydı kurulu sürümle eşleşmiyor.")
+        originals = json.dumps(journal["before"], sort_keys=True).encode("utf-8")
+        if (_hash(originals) != state.get("originals_digest") or journal["after"] != state["files"]
+                or journal["old_manifest"] != state.get("old_manifest")):
+            raise _RecoveryRequired("Geri dönüş dosya listesi kurulu sürümle eşleşmiyor.")
+        if "main.py" not in journal["before"]:
+            raise _RecoveryRequired("Yedekte önceki MAYK başlangıç dosyası yok.")
+        for rel in journal["before"].keys() | journal["after"].keys():
+            if _file_digest(_target(root, rel)) != journal["after"].get(rel):
+                raise _RecoveryRequired(f"Yerel değişiklik korunuyor: {rel}")
+        transaction = _ROLLBACK_MARKER + raw
+        _replace_bytes(marker, transaction)
+        return _recover_zip(root, marker, transaction, progress)
 
 
 def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marker=None):
@@ -268,12 +317,21 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marke
             shutil.copy2(path, target)
             existed.add(name)
     state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
+    if marker is not None:
+        originals = {n: _file_digest(backup / n) for n in existed}
+        state["backup"] = backup.name
+        state["originals_digest"] = _hash(json.dumps(originals, sort_keys=True).encode("utf-8"))
+        state["old_manifest"] = _file_digest(state_path)
     state_bytes = json.dumps(state).encode('utf-8')
     if marker is not None:
-        journal = {"backup": backup.name, "before": {n: _file_digest(backup / n) for n in existed},
-                   "after": state["files"], "old_manifest": _file_digest(state_path),
+        journal = {"backup": backup.name, "before": originals,
+                   "after": state["files"], "old_manifest": state["old_manifest"],
                    "new_manifest": _hash(state_bytes)}
-        _replace_bytes(marker, _ZIP_MARKER + json.dumps(journal).encode("utf-8"))
+        raw = json.dumps(journal).encode("utf-8")
+        if state_path.exists():
+            _replace_bytes(backup / ".previous-manifest", state_path.read_bytes())
+        _replace_bytes(backup / ".rollback.json", raw)
+        _replace_bytes(marker, _ZIP_MARKER + raw)
     touched = []
     try:
         progress('Yeni kod uygulanıyor…')
@@ -362,7 +420,7 @@ def _update_locked(root, progress):
             marker.write(checking)
     except FileExistsError:
         raw = lock.read_bytes()
-        if raw.startswith(_ZIP_MARKER):
+        if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
             return _recover_zip(root, lock, raw, progress)
         if raw != checking:
             raise RuntimeError('Başka bir güncelleme veya yarım kalan kurulum var. '
@@ -478,13 +536,19 @@ def check(root=ROOT) -> dict:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Kesilen MAYK ZIP güncellemesini çevrimdışı kurtar.")
-    parser.add_argument("--recover", action="store_true", required=True)
-    parser.parse_args()
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--recover", action="store_true")
+    action.add_argument("--rollback", action="store_true")
+    args = parser.parse_args()
     try:
+        if args.rollback:
+            rollback_zip()
+            print("Önceki ZIP sürümü geri yüklendi ve doğrulandı.")
+            sys.exit(0)
         with _update_guard(ROOT):
             marker = ROOT / ".jarvis-update.lock"
             raw = marker.read_bytes() if marker.exists() else b""
-            if raw.startswith(_ZIP_MARKER):
+            if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
                 _recover_zip(ROOT, marker, raw, print)
                 print("Kurtarma doğrulandı. MAYK'ı açabilirsiniz.")
             elif marker.exists():
