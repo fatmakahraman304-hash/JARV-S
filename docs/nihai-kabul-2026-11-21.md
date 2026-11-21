@@ -1,0 +1,31 @@
+# MAYK kabul kaydı · 21 Kasım 2026
+
+Başlangıç ve inceleme anındaki `main` sürümü `d797ec8b1dd070ba981e173c38a79c3bbb14eb95`. Değişiklikler ayrı geliştirme dalında. Yayın kararı **KISMEN HAZIR**. Dosya bazında farklar ve son commit’in Windows/Linux iş sonuçları [PR 145](https://github.com/fatmakahraman304-hash/JARV-S/pull/145) üzerinde izlenebilir.
+
+| Aşama | Uygulama ve sınama | Açık kabul konusu |
+|---|---|---|
+| A · Denetim | AGENTS.md, README ve arşiv yol haritası, 7 iş akışı, kaynak ağacı ve test envanteri incelendi. Başlangıç sürümünde Linux/Python 3.13 ortamında 601 testin 599’u geçti, 2’si atlandı. İlk Python 3.12 ortamında PyQt6 eksikliğiyle 6 hata ve 2 başarısızlık görüldü. | Her modülün ve her yürütme yolunun satır satır güvenlik incelemesi tamamlanmadı. |
+| B · Güvenilirlik | Git güncellemesinde CRLF ve izlenmeyen dosya çakışması, ZIP geçici ad çakışması, kilitli dosyadan önce yazılan dosyanın geri alınamaması yeniden üretildi. Güncelleyici aynı birimde özel geçici klasör kullanır, ZIP çıktılarını ve Git commit’ini doğrular. Süreçler arası kilit ve kesintiden sonraki kontrol yeniden denemesi sınandı. Hızlı yeniden öğrenme ve tekrar silme, bozuk veya kayıp ana hafıza ve bulut silme kaydı için testler var. | Dosya uygulaması sırasında makinenin gücünü kesme ve otomatik önceki sürüme dönüş açık. Eski kilit veya yarım uygulamada yedek korunur ve işlem durur. Tüm bulut yazıcıları arasında atomik çakışma çözümü ve tam SQLite geri yükleme kabulü açık. |
+| C · Ses ve modeller | Vosk işlenirken uykuya geçilirse eski ses karesi uyandırma üretmez. Çevrimdışı NVIDIA model listesi model seçimini doğrulamak için kullanılamaz. Oturumun son 256 tek istekli model denemesi için süre, hata oranı ve neden `coding_setup` aracının `metrics` işlemiyle okunur. Ortak anahtar reddinde aynı anahtar kullanan sonraki modele istek gitmediği test edildi. | Gerçek “Hey MAYK”, yankı, söz kesme, mikrofon değişimi, uzun Türkçe konuşma, kullanıcı hesabıyla model kimlikleri ve hizmet gecikmeleri DOĞRULANMADI. |
+| D · Ajan ve otomasyon | Masaüstü mesaj gönderimi ve GitHub yayın araçları HUD onayı ister. Mesajın tamamı düz metin ve kaydırılabilir görünür. Eski onay başka işleme uygulanamaz. Kod ajanı korunan dosya silinmesini de denetler, proje testlerinin mevcut başarısızlığını ve test komutunun bulunmadığını bildirir. Ajanın kendi başarı özeti test raporunun yerine gösterilmez. | Gerçek ödeme, dosya silme, kamera, WhatsApp teslimi ve genel ekran/tarayıcı araçlarının bütün giriş yollarında yetki denetimi açık. |
+| E · Entegrasyon | Android ve web Gist okumasında doğrulama tamamlanmadan ETag ilerlemez. Eksik indirme masaüstünde boş bulut verisi olarak yazılmaz. Dashboard komut ve ses soketlerinde oturum geçerliliği yeniden kontrol edilir. Ekranlara hedeflenmiş içerik sunucuda süzülür. HTTPS istenmişse sertifika oluşturma hatasında kontrol sunucusu durur. | Fiziksel Android, Home Assistant, Telegram, telefon ağı ve gerçek ekranlar DOĞRULANMADI. Dashboard varsayılan yerel HTTP modu sürüyor. |
+| F · Kurulum ve doğrulama | Gerçek ZIP kurulumunda önce kasıtlı yazma hatasıyla geri alma, ardından başarılı güncelleme denendi. Her iki kurulumun kendi kaynaklarından ayrı Python sürecinde gerçek Qt HUD açılır, asistan adı ve onay penceresi sınanır. Windows runner için Qt’nin Windows platform eklentisi kullanılır. Kurulum ve kurtarma adımları güncellendi. | Sıfır fiziksel Windows kurulumu, imzalı EXE, donanım ve uzun süreli kaynak tüketimi kabulü açık. |
+
+## README ve arşivdeki iddiaların kapsamı
+
+- Güncel Dünya Haritası yolu `gui/location_map.py` ve `plugins/normal_map.py` üzerinden çalışır. OSIRIS köprüsünün eski test sonuçları bu sürümün kanıtı değildir. Arşivdeki küre zoom testi açıkça başarısızdır. Fiziksel Windows/QtWebEngine/WebGL, şehir ve zoom sonucu **DOĞRULANMADI**.
+- README’deki geçmiş model süreleri ve ilk sesli yanıt ölçümleri bu kullanıcının hesabı veya bilgisayarı için yenilenmedi. Sahte sağlayıcı ve HTTP yanıtları canlı model erişimini sınamaz.
+- Yerel ses, farklı dillerde konuşma, telefondan kontrol ve çevrimdışı çalışma; seçili motor, kurulu model ve cihaz üzerinde uçtan uca kabul gerektirir. Her platform veya kişi için teslim, kamera ve tarayıcı eylemlerinin başarısı teyit edilmedi.
+- SpacePlanner için bu dalda doğrulanmış özel kontrol entegrasyonu bulunmadı. Önceden kaldırılmış modüller ve iframe geri eklenmedi.
+
+## Ölçüm
+
+Python 3.13.5/Linux üzerinde ayrı süreçte Qt içe aktarma, gerçek MainWindow oluşturma, pencereyi gösterme ve ilk olay işleme süresi ölçüldü. Başlangıç sürümüyle geliştirme kopyası sırayla beşer kez açıldı. Medyanlar **1,626 sn** ve **0,761 sn** oldu. Başlangıç aralığı 0,665–3,748 sn, geliştirme aralığı 0,641–0,816 sn. Paylaşımlı makinede aynı anda arka plan işleri vardı ve Qt offscreen, OpenGL bağlamı yerine yazılım görünümünü kullandı. Bu ölçüm bir Windows açılış iyileşmesi veya ses gecikmesi hedefi kanıtlamaz.
+
+## İmzalama ve gizlilik
+
+`keytool -list` depodaki `jarvis-alici.jks` içinde bir **PrivateKeyEntry** bulunduğunu doğruladı. Gradle debug ve release için aynı anahtarı seçiyor. APK iş akışı release derlemesi yapıyor. Anahtar içeriği ve parolalar bu rapora alınmadı. Üretim sertifikasına geçişten önce kurulu APK sertifika parmak izini karşılaştırın. Ayrı debug anahtarı ve depo dışında üretilen release anahtarı hazırlayın. CI imzalama girdilerini korumalı release ortamında tutun. Desteklenen Android sürümlerinde imza geçişini ve mevcut kurulumdan veri koruyarak yükseltmeyi bir test cihazında doğrulayın. Doğrudan üzerine kurulum desteklenmiyorsa yedekli yeniden eşleştirme ve kurulum planlayın. Anahtar rotasyonu, eski anahtarın kaldırılması ve geçmiş değişiklikleri kullanıcı kararı gerektirir.
+
+İzlenen dosyalarda GitHub, Gemini, NVIDIA anahtar biçimleri ve PEM özel anahtar başlıkları için yapılan sınırlı tarama eşleşme vermedi. İkili imzalama anahtarı bu taramanın kapsamı dışında ve ayrı olarak doğrulandı. Yerel ayarlar ve kişisel hafıza commit kapsamına alınmadı. Proje lisansı CC BY-NC 4.0 ve mevcut atıflar korundu. Tam geçişli bağımlılık ve ikili dağıtım lisans incelemesi tamamlanmadı.
+
+[Windows kurulum ve kurtarma](guncelleme-tr.md) · [Android imzalama belgesi](https://developer.android.com/studio/publish/app-signing)
