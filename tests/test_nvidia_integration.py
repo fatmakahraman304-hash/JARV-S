@@ -333,3 +333,22 @@ class NvidiaProbeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModelAttemptTests(unittest.TestCase):
+    def test_refused_key_skips_shared_credentials_but_keeps_provider(self):
+        from core import gemini
+        client = mock.Mock()
+        client.models.generate_content.side_effect = RuntimeError("401 UNAUTHENTICATED")
+        provider = gemini.PROVIDER_PREFIX + "fallback"
+        with mock.patch.dict(gemini._LADDERS, {gemini.FAST: ("one", "two")}), mock.patch.object(
+                gemini, "_provider_rungs", return_value=(provider,)), mock.patch.object(
+                gemini, "_provider_first", return_value=False), mock.patch.object(
+                gemini, "client", return_value=client), mock.patch.object(
+                gemini, "_provider_call", return_value="ok"), mock.patch.object(gemini, "_recent_attempts", []):
+            self.assertEqual(gemini.call("selam", key="test"), "ok")
+            stats = gemini.model_report()
+        client.models.generate_content.assert_called_once()
+        self.assertEqual(stats["one"]["last_error"], "auth")
+        self.assertEqual(stats[provider]["errors"], 0)
+        self.assertNotIn("two", stats)
