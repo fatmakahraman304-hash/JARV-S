@@ -48,6 +48,33 @@
     history.replaceState(null, '', location.pathname);
   }
 
+  // Private device pairing: the capability URL is saved only on this iPhone.
+  // Do not sync its secret to the public repository or the shared gist.
+  function parseLanUrl(value) {
+    try {
+      const u = new URL(String(value || '').trim());
+      const ip = u.hostname.split('.').map(Number);
+      const local = ip.length === 4 && ip.every(x => Number.isInteger(x) && x >= 0 && x <= 255) &&
+        (ip[0] === 10 || (ip[0] === 172 && ip[1] >= 16 && ip[1] <= 31) || (ip[0] === 192 && ip[1] === 168));
+      if (u.protocol !== 'http:' || u.port !== '18765' || !local || u.username || u.password || u.search || u.hash) return '';
+      const match = u.pathname.match(/^\/([a-f0-9]{32,64})\/?$/i);
+      return match ? u.origin + '/' + match[1].toLowerCase() : '';
+    } catch { return ''; }
+  }
+  if (S.lanRemote && !parseLanUrl(S.lanRemote)) { delete S.lanRemote; save(); }
+  let lanResult = '';
+  if (location.hash.startsWith('#lan=')) {
+    let link = '';
+    try { link = parseLanUrl(decodeURIComponent(location.hash.slice(5))); } catch {}
+    if (link) { S.lanRemote = link; save(); setTimeout(() => toast('Yerel projeksiyon kumandası bağlandı'), 600); }
+    else setTimeout(() => toast('Yerel kumanda bağlantısı geçersiz'), 600);
+    history.replaceState(null, '', location.pathname + location.search);
+  } else if (location.hash.startsWith('#lan-result=')) {
+    try { lanResult = decodeURIComponent(location.hash.slice(12)).slice(0, 500); }
+    catch { lanResult = 'Yanıt okunamadı'; }
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
   function detectKind() {
     if (S.kind && S.kind !== 'auto') return S.kind;
     const ua = navigator.userAgent;
@@ -763,7 +790,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki MAYK Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. Ses için projector aracını kullan: projeksiyonda sesi kıs → op=key, arg=volume_down; projeksiyonda sesi aç → op=key, arg=volume_up. computer_quick yalnızca bilgisayar içindir. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (MAYK\'ı projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Kaydedilmiş yerel Wi-Fi kumandası varsa GitHub yerine bunu kullan. Projeksiyonda YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; arama → op=search arg=aranacak metin. Sesli işlem sırasında tarayıcı yerel adrese gidip MAYK sayfasına geri döner; mikrofonun yeniden açılması gerekebilir. Desteklenen yerel komutlar: app, key, search, url. Desteklenmeyen look/type/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -849,6 +876,7 @@
         }
         if (['volume_up', 'volume_down', 'mute'].includes(op)) { arg = op; op = 'key'; }
         if (!op) return 'Ne yapayım? (op gerekli)';
+        if (S.lanRemote) return await remote(op, arg, { where: a.where || 'youtube' });
         await syncNow();
         const rx = receiver();
         if (rx) {
@@ -1385,6 +1413,26 @@
   // The MAYK Alıcı app on the projector (android-receiver/) works even when
   // the laptop is off; without it, the laptop drives the projector over ADB.
   const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
+  function sendLanCommand(kind, arg) {
+    const link = parseLanUrl(S.lanRemote);
+    if (!link) return 'Yerel projeksiyon bağlantısı yok. Kumanda ekranına adresi kaydet.';
+    // HTTPS MAYK cannot fetch a local HTTP IP because Safari blocks mixed
+    // active content. Navigate to the receiver, then let it redirect to MAYK.
+    if (!['key', 'app', 'search', 'url'].includes(kind))
+      return 'Yerel Wi-Fi kumandası bu işlemi desteklemiyor: ses, yön tuşları, uygulama açma ve arama kullanılabilir.';
+    const token = new URL(link).pathname.slice(1);
+    const command = new URL(link + '/cmd');
+    command.search = new URLSearchParams({
+      op: kind, arg: String(arg || '').slice(0, 600), csrf: token, back: 'mayk'
+    }).toString();
+    try {
+      sessionStorage.setItem('jarvis_lan_restore', $('s-remote').hidden ? '' : 'remote');
+      sessionStorage.setItem('jarvis_lan_was_mic', micOn ? '1' : '0');
+    } catch {}
+    // Never report success before the receiver replies.
+    location.assign(command.href);
+    return 'Yerel komut gönderiliyor; sonuç MAYK ekranında görünecek.';
+  }
   async function sendToReceiver(d, cmd) {
     const id = S.id + '-r' + Date.now().toString(36);
     const f = await Cloud.read();
@@ -1398,6 +1446,7 @@
     return `${d.controls || 'Projeksiyon'} yanıt vermedi. Hedef alıcı kimliği: ${d.id}. Alıcı uygulamasındaki cihaz kimliğiyle karşılaştır; farklıysa eski eşleştirme kaydı seçilmiş olabilir.`;
   }
   async function remote(kind, arg, extra = {}) {
+    if (S.lanRemote) return sendLanCommand(kind, arg);
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil.';
     await syncNow();
     const rx = receiver();
@@ -1407,7 +1456,33 @@
     return rx ? 'Projeksiyon yanıt vermedi; MAYK Alıcı uygulamasının bağlantısını kontrol et.'
               : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona MAYK Alıcı uygulamasını kur ya da laptopu aç.';
   }
-  $('t-remote').onclick = () => { const rx = receiver(); const pc = findPc(''); $('rm-note').textContent = rx ? `MAYK Alıcı: ${rx.name} · ${online(rx) ? 'çevrimiçi' : 'son durum eski; komut gönderilerek denenecek'}` : pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}).` : 'MAYK Alıcı kayıtlı değil; Ayarlar → Alıcıyı bağla.'; openSheet('s-remote'); };
+  function renderLanSettings() {
+    const link = parseLanUrl(S.lanRemote);
+    $('rm-lan-url').value = link;
+    $('rm-lan-state').textContent = link
+      ? 'Yerel Wi-Fi bağlantısı kayıtlı. Komutlar GitHub kullanmaz; iPhone tarayıcısı her komuttan sonra MAYK ekranına döner.'
+      : 'Projeksiyondaki MAYK Alıcı adresini bir kez buraya kaydet veya yerel kumandadan “MAYK’a bağla” bağlantısını aç.';
+    $('rm-lan-open').disabled = !link;
+  }
+  $('rm-lan-save').onclick = () => {
+    const raw = $('rm-lan-url').value.trim();
+    if (!raw) { delete S.lanRemote; save(); renderLanSettings(); toast('Yerel bağlantı kaldırıldı'); return; }
+    const link = parseLanUrl(raw);
+    if (!link) { toast('Tam adresi yapıştır: http://192.168...:18765/uzun-kod'); return; }
+    S.lanRemote = link; save(); renderLanSettings(); toast('Wi-Fi kumandası MAYK’a bağlandı');
+  };
+  $('rm-lan-open').onclick = () => {
+    const link = parseLanUrl(S.lanRemote);
+    if (link) window.open(link, '_blank', 'noopener');
+  };
+  $('t-remote').onclick = () => {
+    const rx = receiver(), pc = findPc('');
+    $('rm-note').textContent = S.lanRemote
+      ? 'Yerel Wi-Fi bağlantısı kayıtlı · GitHub kotası kullanılmaz. Hızlı yön tuşları için yerel kumandayı aç.'
+      : rx ? 'MAYK Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
+      : pc ? pc.name + ' üzerinden kumanda' : 'Projeksiyonun yerel Wi-Fi kumanda adresini aşağıya kaydet.';
+    renderLanSettings(); openSheet('s-remote');
+  };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
   $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
@@ -2075,6 +2150,7 @@
     startMic() { if (!micOn) { claimHere(); return startMic(); } }, stopMic() { if (micOn) { resumeMic = false; stopMic(); } },
     hush() { stopPlayback(); if (state === 'speaking') setState(micOn ? 'listening' : 'idle'); },
     core, beep, ringHere, remote, sendToDevice, runTool, reminderTool, todoTool, pendingRem, remTime, online, findDevice, syncNow,
+    get lanRemote() { return parseLanUrl(S.lanRemote); },
     get devices() { return devices.slice(); }, get memory() { return memory; }, get gallery() { return gallery.slice(); },
     get battery() { return { ...battery }; }, get weather() { return hudWeather; }, get owner() { return amOwner(); },
     get transcript() { return transcript.slice(); }, get receiver() { return receiver(); }, findPc, renderHud, refreshHudWeather,
@@ -2087,6 +2163,20 @@
   setState(S.key ? 'idle' : 'setup');
   if (!S.key) setTimeout(openSetup, 400);
   renderDevices(); renderLog();
+  if (lanResult) {
+    let wasMic = false, restore = '';
+    try {
+      wasMic = sessionStorage.getItem('jarvis_lan_was_mic') === '1';
+      restore = sessionStorage.getItem('jarvis_lan_restore') || '';
+      sessionStorage.removeItem('jarvis_lan_restore');
+      sessionStorage.removeItem('jarvis_lan_was_mic');
+    } catch {}
+    setTimeout(() => {
+      sys('📽️ Projeksiyon: ' + lanResult + (wasMic ? ' Konuşmak için mikrofona yeniden dokun.' : ''));
+      toast('📽️ ' + lanResult);
+      if (restore === 'remote') $('t-remote').click();
+    }, 350);
+  }
   if (Cloud.ok()) syncNow();
   if (KIND === 'tv' || KIND === 'projector') $('mic').focus();
 })();
