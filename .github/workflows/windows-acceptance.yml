@@ -1,0 +1,77 @@
+name: MAYK Windows installation and HUD acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "setup.py"
+      - "requirements.txt"
+      - "main.py"
+      - "ui.py"
+      - "core/app_updater.py"
+      - "core/restart_manager.py"
+      - "gui/window.py"
+      - "tests/test_updated_hud.py"
+      - ".github/workflows/windows-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install from the documented source entry point
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe setup.py
+      - name: Open the first-run desktop window and close it normally
+        shell: pwsh
+        run: |
+          $process = Start-Process -PassThru -FilePath ".\.venv\Scripts\pythonw.exe" -ArgumentList "main.py" -RedirectStandardError "$env:RUNNER_TEMP/mayk-error.log"
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(90)
+            do {
+              Start-Sleep -Milliseconds 250
+              $process.Refresh()
+              if ($process.HasExited) { throw "MAYK exited before displaying a window ($($process.ExitCode))" }
+            } until ($process.MainWindowHandle -ne [IntPtr]::Zero -or [DateTime]::UtcNow -gt $deadline)
+            if ($process.MainWindowHandle -eq [IntPtr]::Zero) { throw "No native desktop window" }
+            if (-not $process.CloseMainWindow()) { throw "MAYK did not accept a window close" }
+            if (-not $process.WaitForExit(30000)) { throw "MAYK remained alive after window close" }
+            if ($process.ExitCode -ne 0) { throw "MAYK exited with $($process.ExitCode)" }
+          } finally {
+            if (-not $process.HasExited) { $process.Kill() }
+            Get-Content "$env:RUNNER_TEMP/mayk-error.log" -Tail 30
+          }
+      - name: Verify the installed browser engines
+        shell: python
+        run: |
+          import subprocess
+          script = '''
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as browser_api:
+              for engine in (browser_api.chromium, browser_api.firefox):
+                  browser = engine.launch()
+                  page = browser.new_page()
+                  page.set_content("<title>MAYK acceptance</title>")
+                  assert page.title() == "MAYK acceptance"
+                  browser.close()
+          '''
+          subprocess.run([r".venv\Scripts\python.exe", "-c", script], check=True)
+      - name: Reinstall and check dependency consistency
+        run: |
+          .\.venv\Scripts\python.exe setup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\.venv\Scripts\python.exe -m pip check
+      - name: Verify update, rollback and reopened HUD
+        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_updated_hud tests.test_restart_app
