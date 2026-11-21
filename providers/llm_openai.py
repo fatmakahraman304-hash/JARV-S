@@ -4,7 +4,7 @@ One file, every OpenAI-compatible endpoint — local servers and hosted APIs ali
 WHY ONE FILE COVERS SO MANY
     Ollama, LM Studio, llama.cpp's server, vLLM, LocalAI, KoboldCpp, Jan and
     text-generation-webui all serve `/v1/chat/completions`, and so do OpenAI,
-    Groq, DeepSeek, Mistral, xAI, OpenRouter, Together, Fireworks, Perplexity,
+    Groq, Mistral, xAI, OpenRouter, Together, Fireworks, Perplexity,
     Cerebras and DashScope. The difference between "a local model" and "somebody
     else's API" is a base URL and whether a key is sent.
 
@@ -61,7 +61,6 @@ PRESETS: dict[str, str] = {
     "Jan":                  "http://127.0.0.1:1337/v1",
     "OpenAI":               "https://api.openai.com/v1",
     "Groq":                 "https://api.groq.com/openai/v1",
-    "DeepSeek":             "https://api.deepseek.com/v1",
     "NVIDIA":               "https://integrate.api.nvidia.com/v1",
     "Mistral":              "https://api.mistral.ai/v1",
     "xAI":                  "https://api.x.ai/v1",
@@ -150,10 +149,6 @@ CATALOG = (
     {"id": "anthropic",  "label": "Claude (Anthropic)",
      "note": "bulut · Anthropic API anahtarı gerekir", "local": False,
      "values": {"base_url": "https://api.anthropic.com/v1", **_CLOUD}},
-    {"id": "deepseek",   "label": "DeepSeek",
-     "note": "bulut · API anahtarı gerekir", "local": False,
-     "values": {"base_url": PRESETS["DeepSeek"], **_CLOUD,
-                "model": "deepseek-v4-pro"}},
     {"id": "nvidia",     "label": "NVIDIA Build (ücretsiz API)",
      "note": "bulut · deneme API anahtarı gerekir · kullanım sınırı vardır", "local": False,
      "values": {"base_url": PRESETS["NVIDIA"], **_CLOUD,
@@ -812,7 +807,7 @@ PROVIDER = {
     "id": "openai_compat",
     "kind": "llm",
     "label": "OpenAI-compatible",
-    "hint": "Ollama · LM Studio · llama.cpp · vLLM · Groq · DeepSeek · OpenRouter · OpenAI · MiniMax",
+    "hint": "Ollama · LM Studio · llama.cpp · vLLM · Groq · NVIDIA · OpenRouter · OpenAI · MiniMax",
     # httpx ships with google-genai, so this is always true — checked anyway,
     # because a provider must never raise during discovery.
     "requires": ("httpx",),
