@@ -637,7 +637,7 @@ def _ensure_certs() -> bool:
         from cryptography.hazmat.primitives.asymmetric import rsa
         from cryptography.x509.oid import NameOID
     except ImportError:
-        print("[Dashboard] cryptography not installed — serving over plain HTTP.")
+        print("[Dashboard] cryptography not installed — HTTPS unavailable.")
         print("[Dashboard] For HTTPS run:  pip install cryptography")
         return False
 
@@ -693,7 +693,7 @@ def _ensure_certs() -> bool:
         print(f"[Dashboard] Generated a self-signed certificate for this machine: {certs}")
         return True
     except Exception as e:
-        print(f"[Dashboard] Certificate generation failed ({e}) — serving over plain HTTP.")
+        print(f"[Dashboard] Certificate generation failed ({e}) — HTTPS unavailable.")
         return False
 
 
