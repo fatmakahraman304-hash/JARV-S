@@ -70,7 +70,7 @@ class ToolSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ws = ja.Workspace(Path(d), log=lambda m: None)
             self.assertIn("dışına", ws.call("write_file", {"path": "../kacak.txt", "content": "x"}))
-            self.assertIn("Refused", ws.call("write_file", {"path": ".env", "content": "KEY=1"}))
+            self.assertIn("Reddedildi", ws.call("write_file", {"path": ".env", "content": "KEY=1"}))
 
     def test_only_build_and_test_commands(self):
         ok = ja.Workspace.allowed
@@ -84,8 +84,8 @@ class ToolSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ws = ja.Workspace(Path(d), log=lambda m: None)
             (Path(d) / "f.txt").write_text("a\na\n")
-            self.assertIn("2 times", ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b"}))
-            self.assertIn("not found", ws.call("edit_file", {"path": "f.txt", "old": "zzz", "new": "b"}))
+            self.assertIn("2 kez", ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b"}))
+            self.assertIn("bulunamadı", ws.call("edit_file", {"path": "f.txt", "old": "zzz", "new": "b"}))
             ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b", "replace_all": True})
             self.assertEqual((Path(d) / "f.txt").read_text(), "b\nb\n")
 
