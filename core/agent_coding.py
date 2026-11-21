@@ -1,4 +1,4 @@
-"""MAYK kodlama ajanı: DeepSeek öncelikli yerleşik kod ajanı.
+"""MAYK kodlama ajanı: NVIDIA öncelikli yerleşik kod ajanı.
 
 Eski Claude Code ve Codex CLI kodlama ajanı olarak seçilemez veya çalıştırılamaz.
 Dosya yedeği, değişiklik denetimi ve geri alma işlemleri korunur.

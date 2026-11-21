@@ -444,7 +444,10 @@ def get_plugin_config(namespace: str) -> dict:
     """All stored values for a namespace (empty dict if none set yet)."""
     cfg = load_api_keys().get("plugin_config")
     val = cfg.get(namespace) if isinstance(cfg, dict) else None
-    return dict(val) if isinstance(val, dict) else {}
+    values = dict(val) if isinstance(val, dict) else {}
+    if namespace == "coding":
+        return {k: v for k, v in values.items() if not str(k).casefold().startswith("deepseek")}
+    return values
 
 
 def get_plugin_setting(namespace: str, key: str, default=None):
@@ -464,6 +467,11 @@ def save_plugin_config(namespace: str, values: dict) -> None:
     cur = pc.get(namespace)
     if not isinstance(cur, dict):
         cur = {}
+    if namespace == "coding":
+        cur = {k: v for k, v in cur.items()
+               if not str(k).casefold().startswith("deepseek")}
+        values = {k: v for k, v in (values or {}).items()
+                  if not str(k).casefold().startswith("deepseek")}
     cur.update(values)
     pc[namespace] = cur
     data["plugin_config"] = pc
@@ -538,10 +546,102 @@ def _upgrade_ids(block: dict) -> dict:
     return block
 
 
+def _without_deepseek(block: dict) -> dict:
+    """Eski DeepSeek ayarları hiçbir aktif sağlayıcıya yönlenmesin.
+
+    Yalnızca DeepSeek servislerini, bağlantılarını ve seçili model id'lerini
+    ayıklar. Diğer sağlayıcıların gizli anahtarlarını ve tercihlerini korur.
+    Kayda yazma işlemleri sırasında da bu filtre uygulanır.
+    """
+    block = dict(block or {})
+    creds = block.get("creds")
+    if not isinstance(creds, dict):
+        creds = {}
+
+    def old_service(pid, settings=None) -> bool:
+        pid = str(pid or "").casefold()
+        if "deepseek" in pid:
+            return True
+        if not isinstance(settings, dict):
+            return False
+        return (str(settings.get("catalog") or "").casefold() == "deepseek"
+                or "api.deepseek.com" in str(settings.get("base_url") or "").casefold())
+
+    removed = {pid for pid, values in creds.items() if old_service(pid, values)}
+    block["creds"] = {pid: values for pid, values in creds.items() if pid not in removed}
+    for key in ("sidecar", "coding"):
+        if block.get(key) in removed or old_service(block.get(key)):
+            block[key] = ""
+    pipe = block.get("pipeline")
+    if isinstance(pipe, dict):
+        updated = dict(pipe)
+        for slot, value in updated.items():
+            if value in removed or old_service(value):
+                updated[slot] = ""
+                if slot == "llm":
+                    block["mode"] = PROVIDER_MODE_GEMINI
+        block["pipeline"] = updated
+    return block
+
+
+
+def _purged_deepseek_data(data: dict) -> dict:
+    """Yalnızca kaldırılan sağlayıcının anahtar/ayarlarını temizle."""
+    data = dict(data or {})
+    data.pop("deepseek_api_key", None)
+    data.pop("deepseek_key", None)
+    pc = data.get("plugin_config")
+    if isinstance(pc, dict):
+        pc = dict(pc)
+        pc.pop("deepseek", None)
+        coding = pc.get("coding")
+        if isinstance(coding, dict):
+            pc["coding"] = {
+                key: value for key, value in coding.items()
+                if not str(key).casefold().startswith("deepseek")
+            }
+        data["plugin_config"] = pc
+    providers = data.get("providers")
+    if isinstance(providers, dict):
+        data["providers"] = _without_deepseek(_upgrade_ids(dict(providers)))
+    return data
+
+
+@_locked
+def purge_deepseek_settings() -> bool:
+    """MAYK'ın kaldırılan DeepSeek ayarlarını bir kez yerel dosyadan temizle.
+
+    Başka modellerin anahtarlarına veya uygulama ayarlarına dokunmaz.
+    Kullanıcının eski yedek dosyasında da kaldırılan anahtar kalmamasını sağlar.
+    """
+    if not CONFIG_FILE.exists():
+        return False
+    data = _read_for_write()
+    cleaned = _purged_deepseek_data(data)
+    changed = cleaned != data
+    if changed:
+        _write_config(cleaned)
+    backup = _backup_file()
+    if backup.exists():
+        try:
+            original = json.loads(backup.read_text(encoding="utf-8"))
+            if isinstance(original, dict):
+                safe = _purged_deepseek_data(original)
+                if safe != original:
+                    tmp = backup.with_name(backup.name + ".tmp")
+                    tmp.write_text(json.dumps(safe, indent=4), encoding="utf-8")
+                    os.replace(tmp, backup)
+        except (OSError, ValueError, TypeError):
+            pass  # Hatalı yedek dosyayı silmeyelim.
+    return changed
+
+
 def get_providers() -> dict:
-    """The whole providers block, or an empty dict."""
+    """Aktif sağlayıcılar (kaldırılan DeepSeek ayarları hariç)."""
     val = load_api_keys().get("providers")
-    return _upgrade_ids(dict(val)) if isinstance(val, dict) else {}
+    if not isinstance(val, dict):
+        return {}
+    return _without_deepseek(_upgrade_ids(dict(val)))
 
 
 def get_provider_mode() -> str:
@@ -583,7 +683,7 @@ def get_sidecar_provider() -> str:
 def _patch_providers(**fields) -> None:
     p = get_providers()
     p.update(fields)
-    _patch_config(providers=p)
+    _patch_config(providers=_without_deepseek(p))
 
 
 def save_provider_mode(mode: str) -> None:
@@ -705,5 +805,5 @@ def save_providers(mode: str = None, pipeline: dict = None, creds: dict = None,
     if coding is not None:
         block["coding"] = str(coding or "").strip()
 
-    data["providers"] = block
+    data["providers"] = _without_deepseek(block)
     _write_config(data)

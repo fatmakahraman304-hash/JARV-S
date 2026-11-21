@@ -121,31 +121,35 @@ class BrainChoiceTest(unittest.TestCase):
         self.assertIn("functionResponse", sent["body"]["contents"][2]["parts"][0])
 
     def test_openai_compatible_reply(self):
+        from core import nvidia_account
         reply = {"choices": [{"message": {"content": "", "tool_calls": [
-            {"id": "t1", "type": "function", "function": {"name": "list_files", "arguments": "{\"path\": \".\"}"}}]}}]}
-        with mock.patch.object(ja, "_http_json", return_value=reply) as h:
-            b = ja.OpenAIBrain("https://api.deepseek.com/v1", "k", "deepseek-chat", "DeepSeek")
-            _, calls, _ = b.turn([{"role": "user", "text": "x"}])
-        self.assertEqual(calls, [{"id": "t1", "name": "list_files", "args": {"path": "."}}])
-        self.assertEqual(h.call_args[0][1]["tools"][0]["type"], "function")
+            {"id": "t1", "type": "function", "function": {
+                "name": "list_files", "arguments": '{"path": "."}'}}]}}]}
+        with mock.patch.object(ja, "_http_json", return_value=reply) as http:
+            brain = ja.OpenAIBrain(nvidia_account.BASE_URL, "key",
+                                   "nvidia/nemotron-3.5-lightning-30b-a3b", "NVIDIA")
+            _, calls, _ = brain.turn([{"role": "user", "text": "dosyaları listele"}])
+        self.assertEqual(calls[0]["name"], "list_files")
+        self.assertEqual(calls[0]["args"], {"path": "."})
+        self.assertEqual(http.call_args.args[1]["tools"][0]["type"], "function")
 
-    def test_deepseek_first_when_added(self):
-        from core import deepseek_account
+    def test_nvidia_first_when_available(self):
+        from core import nvidia_account
         with mock.patch.object(ja, "_settings", return_value={}), \
-             mock.patch.object(deepseek_account, "api_key", return_value="sk-x"), \
-             mock.patch.object(deepseek_account, "balance_status", return_value={"available": True}), \
+             mock.patch.object(nvidia_account, "api_key", return_value="nvapi-secret"), \
+             mock.patch.object(nvidia_account, "available_models",
+                               return_value=["nvidia/nemotron-3.5-lightning-30b-a3b"]), \
              mock.patch.object(ja, "_gemini_key", return_value="g"), \
              mock.patch.object(ja, "gemini_models", return_value=["gemini-3.6-flash"]):
             names = [b.name for b in ja.brains()]
         self.assertEqual(names, [
-            "DeepSeek (deepseek-v4-pro)", "DeepSeek (deepseek-flash)",
-            "Gemini (gemini-3.6-flash)"
+            "NVIDIA (nvidia/nemotron-3.5-lightning-30b-a3b)",
+            "Gemini (gemini-3.6-flash)",
         ])
 
-    def test_deepseek_leads_the_coding_ladder(self):
+    def test_nvidia_leads_the_coding_ladder(self):
         from core import coding_router
-        with mock.patch.object(ja, "deepseek_ready", return_value=True), \
-             mock.patch.object(coding_router, "resting", return_value=0.0):
+        with mock.patch.object(coding_router, "resting", return_value=0.0):
             self.assertEqual(coding_router.ladder("", lambda p: True)[0], ja.PROVIDER_ID)
 
     def test_in_the_coding_ladder(self):

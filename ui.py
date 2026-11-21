@@ -100,6 +100,13 @@ def _apply_ui_scale() -> None:
 
 class MaykUI:
     def __init__(self, face_path: str, size=None):
+        # Kullanıcının isteğiyle kaldırılan DeepSeek anahtarı ve eski seçimi
+        # yerel config dosyasından temizlenir; NVIDIA/Gemini ayarları korunur.
+        try:
+            from memory.config_manager import purge_deepseek_settings
+            purge_deepseek_settings()
+        except (OSError, ValueError, TypeError):
+            pass
         _apply_ui_scale()
         if QApplication.instance() is None:
             QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)

@@ -1,4 +1,4 @@
-"""MAYK kodlama sırası: DeepSeek → NVIDIA Build → Gemini.
+"""MAYK kodlama sırası: NVIDIA Build → Gemini.
 
 Eski Claude Code ve Codex CLI kodlama rotasında bulunmaz.
 Kota veya bağlantı hatasında sıradaki model devralır; dinlenme süreleri
@@ -21,7 +21,7 @@ DOWN_REST = 15 * 60            # signed out / not installed / would not start
 GEMINI = ""                    # the Gemini ladder (never rests)
 
 AGENTS = (jarvis_agent.PROVIDER_ID,)
-NAMES = {jarvis_agent.PROVIDER_ID: "MAYK kod ajanı (DeepSeek → NVIDIA)",
+NAMES = {jarvis_agent.PROVIDER_ID: "MAYK kod ajanı (NVIDIA → Gemini)",
          GEMINI: "Gemini"}
 
 _lock = threading.Lock()
@@ -94,14 +94,14 @@ def rest(provider: str, err) -> float:
 
 
 def ladder(chosen: str = "", installed=None) -> list[str]:
-    """DeepSeek'li MAYK kod ajanı daima ilk sırada; eski CLI ajanları yok."""
+    """NVIDIA destekli MAYK kod ajanı ilk sırada; eski CLI ajanları yok."""
     if installed is None:
         from core import agent_coding
         installed = agent_coding.available
     order = [p for p in AGENTS if installed(p) and not resting(p)]
     # Kullanıcı alternatif bir API modeli seçmişse yedek olarak kullanılabilir,
     # ancak kaldırılan eski abonelik/CLI kod ajanları geri yüklenmez.
-    old_agents = {"claude_code", "codex_cli"}
+    old_agents = {"claude_code", "codex_cli", "openai_compat@deepseek"}
     if chosen and chosen not in old_agents and chosen not in AGENTS and chosen != "auto":
         if chosen not in order and not resting(chosen):
             order.append(chosen)
@@ -112,7 +112,7 @@ def status_line(chosen: str = "") -> str:
     """Model bekleme süreleri; kalan API bakiyesi gizli tutulur."""
     parts = []
     for p in list(AGENTS) + ([chosen] if chosen and chosen not in AGENTS else []):
-        if p in {"claude_code", "codex_cli"}:
+        if p in {"claude_code", "codex_cli", "openai_compat@deepseek"}:
             continue
         left = resting(p)
         if left:

@@ -1,22 +1,22 @@
-"""MAYK kodlama kurulumu: DeepSeek durumu, bakiye ve model önceliği."""
+"""MAYK kodlama model kontrolü: NVIDIA Build → Gemini."""
 
-from core import coding_router, jarvis_agent
+from core import coding_router
 
 PLUGIN = {
     "name": "coding_setup",
     "description": (
-        "Kodlama ajanını Türkçe yönet. DeepSeek V4 Pro ilk tercih, "
-        "DeepSeek Flash ikinci, NVIDIA Build üçüncü, Gemini son yedektir. "
-        "'Kodlama durumunu kontrol et', 'DeepSeek bakiyemi kontrol et', "
-        "'NVIDIA API durumunu kontrol et', 'kodlama sırasını göster' komutları. "
-        "action: status | balance | nvidia | model. DeepSeek modeli V4 Pro veya Flash olabilir. "
-        "API anahtarını sesli komutla isteme veya çıktıda gösterme; anahtar gizli ayarlarda saklanır."
+        "MAYK kodlama modellerini Türkçe kontrol et. Öncelik NVIDIA Build'dir, "
+        "NVIDIA kullanılamazsa Gemini'ye geçilir. "
+        "'Kodlama durumunu kontrol et', 'NVIDIA API durumunu kontrol et', "
+        "'kodlama sırasını göster', 'NVIDIA modelini değiştir' komutları. "
+        "action: status | nvidia | model. API anahtarını isteme veya gösterme; "
+        "anahtar yalnızca yerel güvenli ayarlarda saklanır."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "action": {"type": "STRING", "description": "status | balance | nvidia | model"},
-            "name": {"type": "STRING", "description": "İsteğe bağlı model: deepseek-v4-pro | deepseek-flash"},
+            "action": {"type": "STRING", "description": "status | nvidia | model"},
+            "name": {"type": "STRING", "description": "İsteğe bağlı NVIDIA model kimliği"},
         },
         "required": ["action"],
     },
@@ -24,35 +24,30 @@ PLUGIN = {
 
 
 def status() -> str:
-    from core import deepseek_account, nvidia_account
-    info = deepseek_account.status_text()
-    nvidia_info = nvidia_account.status_text()
-    models = " → ".join(jarvis_agent.deepseek_models())
+    from core import nvidia_account
+    info = nvidia_account.status_text()
     resting = coding_router.status_line()
-    suffix = f" Geçici sınır: {resting}." if resting else ""
-    return (info + " " + nvidia_info + " Kodlama sırası: " + models +
-            " → NVIDIA Build → kullanılabilir Gemini modelleri." + suffix)
+    suffix = f" Bekleyen model: {resting}." if resting else ""
+    return info + " Kodlama sırası: NVIDIA Build → Gemini." + suffix
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
+        from core import nvidia_account
         action = str((parameters or {}).get("action") or "status").strip().lower()
-        if action in {"status", "balance", "limit", "deepseek", "login", "install"}:
+        if action in {"status", "nvidia", "nvidia_status", "limit"}:
             return status()
-        if action in {"nvidia", "nvidia_status"}:
-            from core import nvidia_account
-            return nvidia_account.status_text()
         if action == "model":
-            val = str((parameters or {}).get("name") or "").strip().lower()
-            names = {"pro": "deepseek-v4-pro", "v4-pro": "deepseek-v4-pro",
-                     "flash": "deepseek-flash"}
-            val = names.get(val, val)
-            if val not in {"deepseek-v4-pro", "deepseek-flash"}:
-                return "Kodlama için DeepSeek V4 Pro veya DeepSeek Flash seçebilirsiniz."
+            model = str((parameters or {}).get("name") or "").strip()
+            if not model:
+                return "NVIDIA model kimliğini belirtin."
+            models = nvidia_account.available_models()
+            if model not in models:
+                return ("Model, NVIDIA hesabınızda doğrulanamadı. "
+                        "MOTOR VE SAĞLAYICILAR içinden YENİLE'yi kullanın.")
             from memory.config_manager import save_plugin_config
-            ordered = [val, "deepseek-flash" if val == "deepseek-v4-pro" else "deepseek-v4-pro"]
-            save_plugin_config("coding", {"deepseek_models": ordered})
-            return f"Kodlamada önce {val}, sınırda diğer DeepSeek modeli, ardından NVIDIA ve Gemini kullanılacak."
+            save_plugin_config("coding", {"nvidia_models": [model]})
+            return f"Kodlamada önce {model}, ardından diğer NVIDIA modelleri ve Gemini denenir."
         return status()
     except Exception:
-        return "Kodlama durumuna ulaşılamadı. Yerel API ayarlarını ve internet bağlantısını kontrol edin."
+        return "Kodlama durumuna ulaşılamadı. NVIDIA ayarlarını ve interneti kontrol edin."

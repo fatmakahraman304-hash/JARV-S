@@ -104,12 +104,8 @@ class NvidiaAccountTests(unittest.TestCase):
 
 
 class NvidiaRoutingTests(unittest.TestCase):
-    def test_deepseek_then_nvidia_then_gemini(self):
-        from core import deepseek_account
-        with mock.patch.object(deepseek_account, "api_key", return_value="deepseek"), \
-             mock.patch.object(deepseek_account, "balance_status",
-                               return_value={"available": True}), \
-             mock.patch.object(nvidia, "api_key", return_value="nvapi-secret"), \
+    def test_nvidia_then_gemini(self):
+        with mock.patch.object(nvidia, "api_key", return_value="nvapi-secret"), \
              mock.patch.object(nvidia, "available_models",
                                return_value=["z-ai/glm-5.3-flash"]), \
              mock.patch.object(jarvis_agent, "_settings", return_value={}), \
@@ -118,7 +114,6 @@ class NvidiaRoutingTests(unittest.TestCase):
                                return_value=["gemini-2.5-pro"]):
             names = [model.name for model in jarvis_agent.brains()]
         self.assertEqual(names, [
-            "DeepSeek (deepseek-v4-pro)", "DeepSeek (deepseek-flash)",
             "NVIDIA (z-ai/glm-5.3-flash)", "Gemini (gemini-2.5-pro)"])
 
     def test_nvidia_agent_tool_call_keeps_tools(self):
@@ -133,14 +128,11 @@ class NvidiaRoutingTests(unittest.TestCase):
                          "https://integrate.api.nvidia.com/v1/chat/completions")
         self.assertIn("tools", request.call_args.args[1])
 
-    def test_plain_code_uses_nvidia_after_deepseek_limit(self):
+    def test_plain_code_uses_nvidia_first(self):
         from actions import dev_agent
-        from core import deepseek_account, coding_router
+        from core import coding_router
         with mock.patch.object(coding_router, "ladder",
                                return_value=[jarvis_agent.PROVIDER_ID, ""]), \
-             mock.patch.object(deepseek_account, "api_key", return_value="deepseek"), \
-             mock.patch.object(deepseek_account, "balance_status",
-                               return_value={"available": False}), \
              mock.patch.object(nvidia, "api_key", return_value="nvidia"), \
              mock.patch.object(nvidia, "available_models",
                                return_value=["z-ai/glm-5.3-flash"]), \
@@ -153,11 +145,10 @@ class NvidiaRoutingTests(unittest.TestCase):
 
     def test_plain_code_uses_gemini_after_nvidia_429(self):
         from actions import dev_agent
-        from core import coding_router, deepseek_account
+        from core import coding_router
         with mock.patch.object(coding_router, "ladder",
                                return_value=[jarvis_agent.PROVIDER_ID, ""]), \
              mock.patch.object(coding_router, "rest", return_value=3600), \
-             mock.patch.object(deepseek_account, "api_key", return_value=""), \
              mock.patch.object(nvidia, "api_key", return_value="nvidia"), \
              mock.patch.object(nvidia, "available_models",
                                return_value=["z-ai/glm-5.3-flash"]), \
@@ -176,8 +167,8 @@ class NvidiaRoutingTests(unittest.TestCase):
         from pathlib import Path
         panel = (Path(__file__).resolve().parents[1] / "gui/providers_panel.py").read_text(
             encoding="utf-8")
-        self.assertIn("NVIDIA anahtarınızı", panel)
-        self.assertIn('("@deepseek", "@nvidia")', panel)
+        self.assertIn("NVIDIA API anahtarınızı", panel)
+        self.assertIn('endswith("@nvidia")', panel)
         self.assertIn("working_model", panel)
         self.assertIn("box.setCurrentIndex(index)", panel)
 
@@ -198,7 +189,7 @@ class NvidiaRoutingTests(unittest.TestCase):
         self.assertIn("API anahtarınızı buraya yapıştırın", panel)
         self.assertIn("Önce Gemini — seçilen model yedek", panel)
         self.assertIn("Önce seçilen model — Gemini yedek", panel)
-        self.assertIn("kodlama ajanının DeepSeek → NVIDIA → Gemini sırasından ayrıdır", panel)
+        self.assertIn("kodlama ajanının NVIDIA → Gemini sırasından ayrıdır", panel)
         self.assertNotIn('hint=f"Needed — create one', panel)
         self.assertNotIn('f"{f.label}   (optional)"', panel)
 
