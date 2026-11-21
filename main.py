@@ -899,16 +899,17 @@ class MaykLive:
 
     def _ui_wake_toggle(self, enable: bool) -> str:
         """Enable/disable wake word from the settings UI. Returns a status token:
-        'enabled' | 'disabled' | 'need_download'."""
+        'enabled' | 'disabled' | 'need_download' | 'failed'."""
         if enable:
             if not wake_is_ready():
                 return "need_download"
-            self._wake_enabled = True
-            save_wake_word_enabled(True)
             if not self._ensure_wake_detector():
-                self.ui.write_log("SYS: Wake word is on, but the detector could not start — "
-                                  "listening normally.")
-                return "enabled"
+                self._wake_enabled = False
+                save_wake_word_enabled(False)
+                self.ui.write_log("SYS: Hey MAYK algılayıcısı başlatılamadı. Uyandırma kapalı.")
+                return "failed"
+            save_wake_word_enabled(True)
+            self._wake_enabled = True
             self.sleep(reason="wake word enabled")
             return "enabled"
         else:
