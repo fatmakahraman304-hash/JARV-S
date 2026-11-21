@@ -516,7 +516,7 @@ def _build_project(
         log(f"Kodlama modeli: {provider.partition('@')[2] or provider}.")
     else:
         log(f"Kodlama modeli: {provider.partition('@')[2] or provider}, yedek: Gemini."
-            if provider else "Kodlama modeli: the background-request models.")
+            if provider else "Kodlama için arka plan modelleri kullanılıyor.")
     _update("planning")
     log("Proje yapısı planlanıyor…")
     try:
