@@ -173,6 +173,8 @@ class MainWindow(QMainWindow):
         self._confirm_overlay  = None   # live ConfirmBanner, if one is on screen
         self.get_plugins       = None   # callable: () -> list[dict], set by MaykLive
         self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by MaykLive
+        self._wake_busy = False
+        self._wake_feedback = ""
         self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by MaykLive
         self.on_wake_manual    = None   # callable: () -> None — manual sleep/wake
         self.on_push_to_talk   = None   # callable: (enable: bool) -> str scope
@@ -3068,6 +3070,10 @@ class MainWindow(QMainWindow):
     def _refresh_wake_btns(self):
         if not hasattr(self, '_wake_btn'):
             return
+        if self._wake_busy:
+            self._wake_btn.setEnabled(False)
+            self._wake_btn.setText(self._wake_feedback)
+            return
         st = self._wake_state()
         _on, _off = btn_css("on"), btn_css("off")
         self._wake_btn.setEnabled(True)
@@ -3194,36 +3200,39 @@ class MainWindow(QMainWindow):
                 pass
 
     def _toggle_wake_word(self):
-        st = self._wake_state()
-        if not st["ready"]:
-            # First time: download Vosk and the model in a worker thread.
-            self._wake_btn.setText("⬇  DOWNLOADING… (one-time)")
-            self._wake_btn.setEnabled(False)
-            def _work():
-                try:
-                    from core.wake_word import install_and_download
-                    ok, msg = install_and_download(
-                        logger=lambda m: self._log_sig.emit(f"SYS: {m}"))
-                except Exception as e:
-                    ok, msg = False, str(e)
-                if ok and self.on_wake_toggle:
-                    try:
-                        self.on_wake_toggle(True)   # auto-enable after a successful download
-                    except Exception:
-                        pass
-                self._wake_dl_sig.emit(ok, msg)
-            threading.Thread(target=_work, daemon=True).start()
+        if self._wake_busy:
             return
-        # Already downloaded → just flip enabled/disabled through MaykLive.
-        if self.on_wake_toggle:
-            try:
-                self.on_wake_toggle(not st["enabled"])
-            except Exception:
-                pass
+        st = self._wake_state()
+        enable = not st["enabled"]
+        install = enable and not st["ready"]
+        self._wake_busy = True
+        self._wake_feedback = ("Ses modeli kuruluyor…" if install else
+                               "Algılayıcı açılıyor…" if enable else "Kapatılıyor…")
         self._refresh_wake_btns()
 
+        def work():
+            try:
+                if install:
+                    from core.wake_word import install_and_download
+                    ok, msg = install_and_download(logger=lambda m: self._log_sig.emit(f"SYS: {m}"))
+                    if not ok:
+                        self._wake_dl_sig.emit(False, msg)
+                        return
+                if self.on_wake_toggle is None:
+                    raise RuntimeError("Ses oturumu henüz hazır değil.")
+                status = self.on_wake_toggle(enable)
+                if status != ("enabled" if enable else "disabled"):
+                    raise RuntimeError("Uyandırma ayarı uygulanamadı. Ses modelini kontrol edip tekrar deneyin.")
+                self._wake_dl_sig.emit(True, "Hey MAYK açık." if enable else "Hey MAYK kapalı.")
+            except Exception as exc:
+                self._wake_dl_sig.emit(False, str(exc))
+
+        threading.Thread(target=work, daemon=True).start()
+
     def _on_wake_install_done(self, ok: bool, msg: str):
-        self._log_sig.emit(f"SYS: {'Wake word ready.' if ok else 'Wake word setup failed: ' + msg}")
+        self._wake_busy = False
+        self._wake_feedback = "" if ok else msg
+        self._log_sig.emit(f"SYS: {msg}")
         self._refresh_wake_btns()
 
     def _tap_wake_manual(self):
