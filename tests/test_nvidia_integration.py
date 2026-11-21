@@ -78,6 +78,14 @@ class NvidiaAccountTests(unittest.TestCase):
         self.assertIn("nvidia/nemotron-3.5-lightning-30b-a3b", available)
         self.assertEqual(nvidia._CACHE["reason"], "unavailable")
 
+    def test_offline_catalog_is_briefly_cached_and_cannot_confirm_a_selection(self):
+        with mock.patch.object(nvidia.urllib.request, "urlopen", side_effect=OSError("offline")) as req:
+            self.assertTrue(nvidia.available_models("test"))
+            self.assertEqual(nvidia.available_models("test", verified_only=True), [])
+            req.assert_called_once()
+            nvidia.available_models("test", refresh=True)
+            self.assertEqual(req.call_count, 2)
+
     def test_complete_request_and_secret_never_in_error(self):
         models = ["z-ai/glm-5.3-flash"]
         with mock.patch.object(nvidia, "api_key", return_value="private-key"), \
