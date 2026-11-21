@@ -170,7 +170,7 @@ def welcome_instruction(items: list[dict], away_for: float = 0.0) -> str:
     gone = f" They were away for about {_ago(away_for).replace(' ago', '')}." if away_for >= 60 else ""
     return ("[AWAY_DIGEST] The user is back." + gone + " These came up while they were away and "
             "have not been told yet:\n" + describe(items) + "\n"
-            "Welcome them back warmly and tell them what happened, "
+            "As Mayk, welcome them back warmly and tell them what happened, "
             "most important first, in at most three short sentences: merge related items, drop "
             "progress notes a later item makes stale, give the outcome rather than the steps. "
             "If they have just asked something, answer that first. Offer details only if there is "
