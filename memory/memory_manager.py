@@ -551,8 +551,14 @@ def forget(key: str, category: str = "notes") -> str:
         cat    = memory.get(category, {})
         archived = _load_archive().get(category, {})
         if key in cat or (isinstance(archived, dict) and key in archived):
-            cat.pop(key, None)
-            memory.setdefault("_deleted", {})[f"{category}/{key}"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            entry = cat.pop(key, None)
+            deleted = memory.setdefault("_deleted", {})
+            path = f"{category}/{key}"
+            timestamps = [datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), str(deleted.get(path, ""))]
+            for version in (entry, archived.get(key) if isinstance(archived, dict) else None):
+                if isinstance(version, dict):
+                    timestamps.append(str(version.get("updated", "")))
+            deleted[path] = max(timestamps)
             memory[category] = cat
             save_memory(memory)
             return f"Forgotten: {category}/{key}"
