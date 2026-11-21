@@ -106,7 +106,7 @@ def available_models(key: str | None = None, *, refresh: bool = False) -> list[s
     configured = str(get_provider_config("openai_compat@nvidia").get("model") or "").strip()
     preferred = list(dict.fromkeys(
         [m for m in chosen + ([configured] if configured else []) + list(PREFERRED_MODELS)
-         if re.fullmatch(r"[A-Za-z0-9_.:/+-]{3,120}", m)
+         if re.fullmatch(r"[A-Za-z0-9_.:/+-]{3,120}", m)]
     ))
     listing, reason = _get_models(key, refresh=refresh)
     if listing is not None:
