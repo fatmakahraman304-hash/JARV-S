@@ -37,6 +37,21 @@ class MemorySafety(unittest.TestCase):
         self.assertIn("notes/secret", mm.load_memory()["_deleted"])
         self.assertFalse(any(r["category"] == "_deleted" for r in mm.all_entries_for_ui()))
 
+    def test_damaged_or_missing_primary_cannot_restore_forgotten_fact(self):
+        mm.remember("keep", "retained")
+        mm.remember("forgotten", "private")
+        mm.forget("forgotten")
+        for damage in ("missing", "corrupt"):
+            with self.subTest(damage=damage):
+                if damage == "missing":
+                    mm.MEMORY_PATH.unlink()
+                else:
+                    mm.MEMORY_PATH.write_text("{")
+                restored = mm.load_memory()
+                self.assertNotIn("forgotten", restored["notes"])
+                self.assertIn("notes/forgotten", restored["_deleted"])
+                self.assertEqual(restored["notes"]["keep"]["value"], "retained")
+
     def test_forgetting_an_archived_fact_hides_it_from_recall(self):
         mm.ARCHIVE_PATH.write_text(json.dumps({"notes": {"old": {"value": "private avocado"}}}))
         mm.forget("old")
