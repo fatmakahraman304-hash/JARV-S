@@ -41,4 +41,6 @@ def restart(pid, project):
 
 
 if __name__ == '__main__':
+    if sys.stdout is not None and not sys.stdout.isatty():
+        sys.stdout.reconfigure(encoding="utf-8")
     sys.exit(restart(int(sys.argv[1]), sys.argv[2]))
