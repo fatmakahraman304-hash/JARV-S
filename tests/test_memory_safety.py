@@ -43,6 +43,18 @@ class MemorySafety(unittest.TestCase):
         with patch("memory.continuity.search", return_value=""):
             self.assertNotIn("private avocado", mm.search_memory("avocado"))
 
+    def test_second_forget_beats_fast_relearning_on_another_device(self):
+        from datetime import datetime, timezone
+        from core.sync_hub import merge_memory
+        with patch.object(mm, "datetime", wraps=datetime) as clock:
+            clock.now.return_value = datetime(2026, 11, 21, tzinfo=timezone.utc)
+            mm.remember("item", "first")
+            mm.forget("item")
+            mm.remember("item", "second")
+            other_device = mm.load_memory()
+            mm.forget("item")
+        self.assertNotIn("item", merge_memory(mm.load_memory(), other_device)["notes"])
+
     def test_remembering_again_clears_local_deletion(self):
         mm.remember("item", "first")
         mm.forget("item")
