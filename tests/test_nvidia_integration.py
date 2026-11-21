@@ -1,0 +1,184 @@
+"""MAYK NVIDIA Build API: anahtar gizliliği, model seçimi ve otomatik yedekler."""
+import json
+import unittest
+import urllib.error
+from unittest import mock
+
+from core import nvidia_account as nvidia
+from core import jarvis_agent
+
+
+class _Reply:
+    def __init__(self, body):
+        self.body = json.dumps(body).encode("utf-8")
+    def __enter__(self):
+        return self
+    def __exit__(self, *_):
+        return False
+    def read(self, *_):
+        return self.body
+
+
+class NvidiaAccountTests(unittest.TestCase):
+    def setUp(self):
+        nvidia._CACHE.update(key=None, at=0., models=None, reason=None)
+
+    def test_key_from_local_provider_only_not_other_provider(self):
+        creds = {"creds": {
+            "openai_compat@openai": {"api_key": "wrong-key"},
+            "openai_compat@nvidia": {"api_key": "nvidia-private-key"},
+        }}
+        with mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch("memory.config_manager.get_providers", return_value=creds):
+            self.assertEqual(nvidia.api_key(), "nvidia-private-key")
+        with mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch("memory.config_manager.get_providers", return_value={
+                 "creds": {"openai_compat@openai": {"api_key": "wrong-key"}}}), \
+             mock.patch.dict("os.environ", {"NVIDIA_API_KEY": ""}):
+            self.assertEqual(nvidia.api_key(), "")
+
+    def test_key_can_be_loaded_from_environment(self):
+        with mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch("memory.config_manager.get_providers", return_value={}), \
+             mock.patch.dict("os.environ", {"NVIDIA_API_KEY": "nvapi-secret"}):
+            self.assertEqual(nvidia.api_key(), "nvapi-secret")
+
+    def test_catalog_models_filtered_to_available_ids(self):
+        result = {"data": [{"id": "z-ai/glm-5.3-flash"},
+                           {"id": "nvidia/nemotron-3.5-super-vl-120b-a12b"},
+                           {"id": "other/unknown"}]}
+        with mock.patch.object(nvidia.urllib.request, "urlopen", return_value=_Reply(result)) as req, \
+             mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch("memory.config_manager.get_provider_config", return_value={}):
+            models = nvidia.available_models("private", refresh=True)
+        self.assertEqual(models[:2], ["z-ai/glm-5.3-flash",
+                                     "nvidia/nemotron-3.5-super-vl-120b-a12b"])
+        request = req.call_args.args[0]
+        self.assertEqual(request.full_url, "https://integrate.api.nvidia.com/v1/models")
+        self.assertNotIn("private", repr(models))
+        self.assertEqual(request.headers.get("Authorization"), "Bearer private")
+
+    def test_free_limit_is_not_assumed_unlimited(self):
+        err = urllib.error.HTTPError("https://integrate.api.nvidia.com/v1/models",
+                                     429, "rate limit", {}, None)
+        with mock.patch.object(nvidia.urllib.request, "urlopen", side_effect=err):
+            self.assertEqual(nvidia.available_models("rate-key", refresh=True), [])
+        self.assertEqual(nvidia._CACHE["reason"], "limit")
+        with mock.patch.object(nvidia, "api_key", return_value="rate-key"), \
+             mock.patch.object(nvidia.urllib.request, "urlopen", side_effect=err):
+            text = nvidia.status_text()
+        self.assertIn("429", text)
+        self.assertNotIn("rate-key", text)
+
+    def test_network_error_is_not_claimed_as_zero_quota(self):
+        with mock.patch.object(nvidia.urllib.request, "urlopen", side_effect=OSError("offline")), \
+             mock.patch("memory.config_manager.get_plugin_config", return_value={}), \
+             mock.patch("memory.config_manager.get_provider_config", return_value={}):
+            available = nvidia.available_models("test-key", refresh=True)
+        self.assertIn("z-ai/glm-5.3-flash", available)
+        self.assertEqual(nvidia._CACHE["reason"], "unavailable")
+
+    def test_complete_request_and_secret_never_in_error(self):
+        models = ["z-ai/glm-5.3-flash"]
+        with mock.patch.object(nvidia, "api_key", return_value="private-key"), \
+             mock.patch.object(nvidia, "available_models", return_value=models), \
+             mock.patch.object(nvidia.urllib.request, "urlopen",
+                               return_value=_Reply({"choices": [
+                                   {"message": {"content": "Kod hazır."}}]})) as req:
+            self.assertEqual(nvidia.complete_text("kod yaz"), "Kod hazır.")
+        request = req.call_args.args[0]
+        self.assertEqual(request.full_url,
+                         "https://integrate.api.nvidia.com/v1/chat/completions")
+        sent = json.loads(request.data)
+        self.assertEqual(sent["model"], "z-ai/glm-5.3-flash")
+        self.assertEqual(request.headers.get("Authorization"), "Bearer private-key")
+        self.assertNotIn("private-key", repr(sent))
+        err = urllib.error.HTTPError(request.full_url, 429, "rate limited", {},
+                                     None)
+        with mock.patch.object(nvidia, "api_key", return_value="private-key"), \
+             mock.patch.object(nvidia, "available_models", return_value=models), \
+             mock.patch.object(nvidia.urllib.request, "urlopen", side_effect=err):
+            with self.assertRaisesRegex(RuntimeError, "NVIDIA 429") as failure:
+                nvidia.complete_text("iş")
+        self.assertNotIn("private-key", str(failure.exception))
+
+
+class NvidiaRoutingTests(unittest.TestCase):
+    def test_deepseek_then_nvidia_then_gemini(self):
+        from core import deepseek_account
+        with mock.patch.object(deepseek_account, "api_key", return_value="deepseek"), \
+             mock.patch.object(deepseek_account, "balance_status",
+                               return_value={"available": True}), \
+             mock.patch.object(nvidia, "api_key", return_value="nvapi-secret"), \
+             mock.patch.object(nvidia, "available_models",
+                               return_value=["z-ai/glm-5.3-flash"]), \
+             mock.patch.object(jarvis_agent, "_settings", return_value={}), \
+             mock.patch.object(jarvis_agent, "_gemini_key", return_value="gemini"), \
+             mock.patch.object(jarvis_agent, "gemini_models",
+                               return_value=["gemini-2.5-pro"]):
+            names = [model.name for model in jarvis_agent.brains()]
+        self.assertEqual(names, [
+            "DeepSeek (deepseek-v4-pro)", "DeepSeek (deepseek-flash)",
+            "NVIDIA (z-ai/glm-5.3-flash)", "Gemini (gemini-2.5-pro)"])
+
+    def test_nvidia_agent_tool_call_keeps_tools(self):
+        response = {"choices": [{"message": {"tool_calls": [
+            {"id": "a", "function": {"name": "read_file",
+                                     "arguments": '{"path":"main.py"}'}}]}}]}
+        brain = jarvis_agent.OpenAIBrain(nvidia.BASE_URL, "secret", "z-ai/glm-5.3-flash", "NVIDIA")
+        with mock.patch.object(jarvis_agent, "_http_json", return_value=response) as request:
+            _, calls, _ = brain.turn([{"role": "user", "text": "dosyayı oku"}])
+        self.assertEqual(calls[0]["name"], "read_file")
+        self.assertEqual(request.call_args.args[0],
+                         "https://integrate.api.nvidia.com/v1/chat/completions")
+        self.assertIn("tools", request.call_args.args[1])
+
+    def test_plain_code_uses_nvidia_after_deepseek_limit(self):
+        from actions import dev_agent
+        from core import deepseek_account, coding_router
+        with mock.patch.object(coding_router, "ladder",
+                               return_value=[jarvis_agent.PROVIDER_ID, ""]), \
+             mock.patch.object(deepseek_account, "api_key", return_value="deepseek"), \
+             mock.patch.object(deepseek_account, "balance_status",
+                               return_value={"available": False}), \
+             mock.patch.object(nvidia, "api_key", return_value="nvidia"), \
+             mock.patch.object(nvidia, "available_models",
+                               return_value=["z-ai/glm-5.3-flash"]), \
+             mock.patch.object(nvidia, "complete_text", return_value="NVIDIA yaptı") as run, \
+             mock.patch.object(dev_agent.gemini, "call") as gem:
+            self.assertEqual(dev_agent._get_model().generate_content("kod").text,
+                             "NVIDIA yaptı")
+        run.assert_called_once()
+        gem.assert_not_called()
+
+    def test_plain_code_uses_gemini_after_nvidia_429(self):
+        from actions import dev_agent
+        from core import coding_router, deepseek_account
+        with mock.patch.object(coding_router, "ladder",
+                               return_value=[jarvis_agent.PROVIDER_ID, ""]), \
+             mock.patch.object(coding_router, "rest", return_value=3600), \
+             mock.patch.object(deepseek_account, "api_key", return_value=""), \
+             mock.patch.object(nvidia, "api_key", return_value="nvidia"), \
+             mock.patch.object(nvidia, "available_models",
+                               return_value=["z-ai/glm-5.3-flash"]), \
+             mock.patch.object(nvidia, "complete_text", side_effect=RuntimeError("NVIDIA 429")), \
+             mock.patch.object(dev_agent.gemini, "call",
+                               return_value=mock.Mock(text="Gemini devam etti")) as gem:
+            self.assertEqual(dev_agent._get_model().generate_content("kod").text,
+                             "Gemini devam etti")
+        gem.assert_called_once()
+
+    def test_nvidia_ui_is_registered(self):
+        from providers.llm_openai import PRESETS, CATALOG
+        self.assertEqual(PRESETS["NVIDIA"], nvidia.BASE_URL)
+        self.assertEqual(next(p for p in CATALOG if p["id"] == "nvidia")["values"]["model"],
+                         "z-ai/glm-5.3-flash")
+        from pathlib import Path
+        panel = (Path(__file__).resolve().parents[1] / "gui/providers_panel.py").read_text(
+            encoding="utf-8")
+        self.assertIn("NVIDIA anahtarınızı", panel)
+        self.assertIn('("@deepseek", "@nvidia")', panel)
+
+
+if __name__ == "__main__":
+    unittest.main()
