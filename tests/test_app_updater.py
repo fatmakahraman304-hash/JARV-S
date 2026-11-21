@@ -115,6 +115,13 @@ class UpdaterTests(unittest.TestCase):
         self.assertFalse((self.root / 'obsolete.py').exists())
         self.assertTrue((self.root / 'custom.py').exists())
 
+    def test_zip_preserves_existing_temporary_names(self):
+        for name in ("main.py.jarvis-new", ".jarvis-update.tmp"):
+            (self.root / name).write_bytes(b"local")
+        u._apply_zip(self.root, self.files, self.sha, "main")
+        for name in ("main.py.jarvis-new", ".jarvis-update.tmp"):
+            self.assertEqual((self.root / name).read_bytes(), b"local")
+
     def test_write_failure_rolls_back(self):
         (self.root / 'main.py').write_bytes(b'original')
         real = u.os.replace
@@ -253,3 +260,18 @@ class GitLocalChangesTests(unittest.TestCase):
         self.assertIn('jarvis-update', self.git('stash', 'list'))
         self.assertIn('MY VERSION', self.git('stash', 'show', '-p', 'stash@{0}'))
         self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')
+
+    def test_eol_update_preserves_untracked_collision(self):
+        self.git('reset', '--hard', self.new)
+        personal = self.root / 'local.txt'
+        personal.write_bytes(b'upstream')
+        self.git('add', 'local.txt')
+        self.git('commit', '-qm', 'add file')
+        self.new = self.git('rev-parse', 'HEAD')
+        self.git('reset', '--hard', self.old)
+        personal.write_bytes(b'personal')
+        (self.root / 'notes.py').write_bytes(b'a = 1\r\n')
+        with self.assertRaises(RuntimeError):
+            u.update(self.root)
+        self.assertEqual(personal.read_bytes(), b'personal')
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.old)
