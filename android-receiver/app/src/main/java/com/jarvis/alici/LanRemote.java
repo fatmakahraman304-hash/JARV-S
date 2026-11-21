@@ -2,15 +2,18 @@ package com.jarvis.alici;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.net.wifi.WifiManager;
-import android.text.format.Formatter;
-import org.json.JSONObject;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.LinkAddress;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.Locale;
 
-/** Same-Wi-Fi HTTP remote. Runs independently of GitHub and never exposes GitHub credentials. */
+/** Same-Wi-Fi HTTP remote. Binds all interfaces and advertises the active Wi-Fi address. */
 final class LanRemote {
     interface Handler { String command(String op, String arg); }
     private final Context context;
@@ -24,31 +27,62 @@ final class LanRemote {
 
     String address() { return address; }
 
+    private String activeWifiIpv4() throws IOException {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null) {
+            Network active = cm.getActiveNetwork();
+            NetworkCapabilities caps = active == null ? null : cm.getNetworkCapabilities(active);
+            if (active != null && caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                LinkProperties links = cm.getLinkProperties(active);
+                if (links != null) {
+                    for (LinkAddress link : links.getLinkAddresses()) {
+                        InetAddress ip = link.getAddress();
+                        if (ip instanceof Inet4Address && !ip.isLoopbackAddress() && !ip.isLinkLocalAddress()) {
+                            return ip.getHostAddress();
+                        }
+                    }
+                }
+            }
+        }
+        throw new IOException("Etkin Wi-Fi IPv4 adresi bulunamadı. Projeksiyonun Android erişim noktasına bağlı olduğunu kontrol et.");
+    }
+
     void start() throws Exception {
         SharedPreferences p = ReceiverService.prefs(context);
         secret = p.getString("lan_secret", "");
         if (secret.length() < 32) {
             byte[] b = new byte[24]; new SecureRandom().nextBytes(b);
             StringBuilder hex = new StringBuilder();
-            for (byte v : b) hex.append(String.format(java.util.Locale.US, "%02x", v & 255));
+            for (byte v : b) hex.append(String.format(Locale.US, "%02x", v & 255));
             secret = hex.toString();
             p.edit().putString("lan_secret", secret).apply();
         }
-        WifiManager wifi = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        String ip = wifi == null ? "" : Formatter.formatIpAddress(wifi.getConnectionInfo().getIpAddress());
-        if (ip.isEmpty() || "0.0.0.0".equals(ip)) throw new IOException("Wi-Fi IP bulunamadı");
-        server = new ServerSocket(18765, 8, InetAddress.getByName(ip));
+
+        // Do not bind to WifiManager.getConnectionInfo(): on TV boxes it can
+        // return a stale/secondary interface address. Listen on all interfaces,
+        // but publish only the current Wi-Fi network's IPv4 address.
+        String ip = activeWifiIpv4();
+        server = new ServerSocket(18765, 16, InetAddress.getByName("0.0.0.0"));
+        server.setReuseAddress(true);
         address = "http://" + ip + ":18765/" + secret;
         running = true;
         new Thread(() -> {
             while (running) {
-                try { Socket socket = server.accept(); new Thread(() -> handle(socket), "lan-client").start(); }
-                catch (Exception e) { if (running) android.util.Log.w("MAYK-LAN", "accept", e); }
+                try {
+                    Socket socket = server.accept();
+                    new Thread(() -> handle(socket), "lan-client").start();
+                } catch (Exception e) {
+                    if (running) android.util.Log.w("MAYK-LAN", "accept", e);
+                }
             }
         }, "mayk-lan").start();
     }
 
-    void stop() { running = false; try { if (server != null) server.close(); } catch (Exception ignored) {} }
+    void stop() {
+        running = false;
+        try { if (server != null) server.close(); } catch (Exception ignored) {}
+        address = "";
+    }
 
     private void handle(Socket socket) {
         try (Socket s = socket) {
@@ -71,7 +105,7 @@ final class LanRemote {
             if (!"POST".equals(method) || !path.endsWith("/cmd")) { respond(s, 405, "İzin verilmiyor"); return; }
             int len = -1; String origin = "", host = "";
             for (String line : lines) {
-                String low = line.toLowerCase(java.util.Locale.US);
+                String low = line.toLowerCase(Locale.US);
                 if (low.startsWith("content-length:")) len = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
                 if (low.startsWith("origin:")) origin = line.substring(line.indexOf(':') + 1).trim();
                 if (low.startsWith("host:")) host = line.substring(line.indexOf(':') + 1).trim();
@@ -101,13 +135,23 @@ final class LanRemote {
         h.append("<h3>YouTube ara</h3><form method='post' action='/").append(secret).append("/cmd'><input type='hidden' name='op' value='search'><input name='arg' placeholder='Aranacak video'><button>Ara</button></form>");
         h.append("</html>"); return h.toString();
     }
+
     private String form(String op, String arg, String title) {
         return "<form style='display:inline-block' method='post' action='/" + secret + "/cmd'><input type='hidden' name='op' value='" + op + "'><input type='hidden' name='arg' value='" + arg + "'><button>" + title + "</button></form>";
     }
     private static String escape(String s) { return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"); }
     private void respond(Socket s, int code, String html) throws IOException {
         byte[] b = html.getBytes(StandardCharsets.UTF_8);
-        s.getOutputStream().write(("HTTP/1.1 " + code + " OK\\r\\nContent-Type: text/html; charset=utf-8\\r\\nContent-Length: " + b.length + "\\r\\nCache-Control: no-store\\r\\nX-Content-Type-Options: nosniff\\r\\nReferrer-Policy: no-referrer\\r\\nConnection: close\\r\\n\\r\\n").replace("\\r","\r").replace("\\n","\n").getBytes(StandardCharsets.UTF_8));
-        s.getOutputStream().write(b); s.getOutputStream().flush();
+        String reason = code == 200 ? "OK" : code == 400 ? "Bad Request" : code == 403 ? "Forbidden" : code == 404 ? "Not Found" : "Method Not Allowed";
+        String head = "HTTP/1.1 " + code + " " + reason + "\r\n"
+                + "Content-Type: text/html; charset=utf-8\r\n"
+                + "Content-Length: " + b.length + "\r\n"
+                + "Cache-Control: no-store\r\n"
+                + "X-Content-Type-Options: nosniff\r\n"
+                + "Referrer-Policy: no-referrer\r\n"
+                + "Connection: close\r\n\r\n";
+        s.getOutputStream().write(head.getBytes(StandardCharsets.US_ASCII));
+        s.getOutputStream().write(b);
+        s.getOutputStream().flush();
     }
 }
