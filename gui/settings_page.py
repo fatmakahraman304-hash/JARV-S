@@ -169,6 +169,10 @@ class SettingsPage(QDialog):
                 value = bool(getter())
                 control.setChecked(value)
                 busy, message = feedback() if feedback else (False, "")
+                # A missing or not-yet-initialised feedback field must not make
+                # settings crash while the wake-word controls are being built.
+                busy = busy if isinstance(busy, bool) else False
+                message = message if isinstance(message, str) else ""
                 control.setEnabled(not busy)
                 state.setWordWrap(bool(message))
                 state.setText(message or ('Açık' if value else 'Kapalı'))
