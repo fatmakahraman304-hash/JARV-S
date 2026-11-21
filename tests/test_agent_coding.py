@@ -160,7 +160,7 @@ class RouterTest(unittest.TestCase):
     def test_order_and_rest(self):
         both = lambda p: True
         self.assertEqual(self.r.ladder("openai_compat@deepseek", both),
-                         ["jarvis_agent", "openai_compat@deepseek", ""])
+                         ["jarvis_agent", ""])  # Eski kayıt yeniden etkinleşmez
         self.assertEqual(self.r.ladder("claude_code", both), ["jarvis_agent", ""])
         self.assertEqual(self.r.ladder("codex_cli", both), ["jarvis_agent", ""])
         self.assertEqual(self.r.ladder("", lambda p: p == "codex_cli"), [""])
@@ -169,7 +169,7 @@ class RouterTest(unittest.TestCase):
         self.assertEqual(self.r.ladder("", both), [""])
         with mock.patch.object(self.r.time, "time", return_value=time.time() + self.r.LIMIT_REST + 5):
             self.assertEqual(self.r.ladder("", both), ["jarvis_agent", ""])
-        self.assertEqual(self.r.rest("openai_compat@deepseek", RuntimeError("401")),
+        self.assertEqual(self.r.rest("openai_compat@nvidia", RuntimeError("401")),
                          self.r.DOWN_REST)
 
     def test_what_counts_as_switchable(self):
@@ -177,15 +177,15 @@ class RouterTest(unittest.TestCase):
         self.assertTrue(self.r.should_switch(RuntimeError("Claude Code oturumu kapalı.")))
         self.assertFalse(self.r.should_switch(RuntimeError("SyntaxError in your request")))
 
-    def test_dev_agent_switches_to_gemini_when_deepseek_balance_is_empty(self):
+    def test_dev_agent_uses_gemini_when_nvidia_unavailable(self):
         from actions import dev_agent
-        from core import deepseek_account, jarvis_agent
+        from core import nvidia_account
         model = mock.Mock(text="Gemini yanıtı")
         with mock.patch.object(self.r, "ladder", return_value=["jarvis_agent", ""]), \
-             mock.patch.object(deepseek_account, "api_key", return_value="private-key"), \
-             mock.patch.object(deepseek_account, "balance_status", return_value={"available": False}), \
+             mock.patch.object(nvidia_account, "api_key", return_value=""), \
              mock.patch.object(dev_agent.gemini, "call", return_value=model) as gem:
-            self.assertEqual(dev_agent._get_model().generate_content("kod").text, "Gemini yanıtı")
+            self.assertEqual(dev_agent._get_model().generate_content("kod").text,
+                             "Gemini yanıtı")
         gem.assert_called_once()
 
     def test_agents_switch_on_limit(self):
@@ -236,15 +236,19 @@ class OpusFirstTest(unittest.TestCase):
         self.assertIn("No placeholders", b)
         self.assertIn("think hard", b)
 
-    def test_setup_plugin_reports_and_saves_model(self):
+    def test_setup_plugin_reports_and_saves_nvidia_model(self):
         from plugins import coding_setup
-        from core import deepseek_account
-        with mock.patch.object(deepseek_account, "status_text", return_value="DeepSeek kullanılabilir."), \
-             mock.patch.object(deepseek_account, "api_key", return_value="key"), \
-             mock.patch.object(deepseek_account, "balance_status", return_value={"available": True}):
-            self.assertIn("DeepSeek kullanılabilir.", coding_setup.run({"action": "status"}))
+        from core import nvidia_account
+        with mock.patch.object(nvidia_account, "status_text",
+                               return_value="NVIDIA erişimi doğrulandı."):
+            self.assertIn("NVIDIA erişimi doğrulandı.",
+                          coding_setup.run({"action": "status"}))
         saved = {}
-        with mock.patch("memory.config_manager.save_plugin_config",
+        with mock.patch.object(nvidia_account, "available_models",
+                               return_value=["nvidia/nemotron-3.5-lightning-30b-a3b"]), \
+             mock.patch("memory.config_manager.save_plugin_config",
                         side_effect=lambda ns, v: saved.update({ns: v})):
-            coding_setup.run({"action": "model", "name": "pro"})
-        self.assertEqual(saved["coding"]["deepseek_models"][0], "deepseek-v4-pro")
+            coding_setup.run({
+                "action": "model", "name": "nvidia/nemotron-3.5-lightning-30b-a3b"})
+        self.assertEqual(saved["coding"]["nvidia_models"],
+                         ["nvidia/nemotron-3.5-lightning-30b-a3b"])
