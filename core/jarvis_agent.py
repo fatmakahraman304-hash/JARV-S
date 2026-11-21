@@ -195,7 +195,7 @@ class Workspace:
         if n == 0:
             return "Eski metin bulunamadı. Dosyayı yeniden okuyup tam metni kullanın."
         if n > 1 and not replace_all:
-            return f"`old` appears {n} times; add more surrounding text or set replace_all."
+            return f"`old` metni {n} kez geçiyor; daha uzun bağlam belirtin veya replace_all kullanın."
         p.write_text(text.replace(old, new) if replace_all else text.replace(old, new, 1), encoding="utf-8")
         self.changed.add(p.relative_to(self.root).as_posix())
         self.log(f"  Düzenledi: {p.relative_to(self.root).as_posix()}")
@@ -215,7 +215,7 @@ class Workspace:
     def t_run(self, command, timeout=120):
         if not self.allowed(command):
             return ( "Reddedildi: yalnızca derleme, çalıştırma ve test komutlarına izin verilir "
-                    "(no deleting, no git commit/push, no downloads).")
+                    "(silme, git commit/push veya indirme işlemleri yasaktır).")
         self.log(f"  Çalıştırıyor: {str(command)[:140]}")
         try:
             r = subprocess.run(command, shell=True, cwd=self.root, capture_output=True, text=True,
