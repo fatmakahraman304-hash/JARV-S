@@ -1111,7 +1111,7 @@ class MaykLive:
                 return
             memory = load_memory()
             lang_e = memory.get("identity", {}).get("language", {})
-            lang   = (lang_e.get("value", "") if isinstance(lang_e, dict) else str(lang_e)).strip() or "English"
+            lang   = (lang_e.get("value", "") if isinstance(lang_e, dict) else str(lang_e)).strip() or "Turkish"
             for alert in alerts:
                 if not self.session:
                     return
