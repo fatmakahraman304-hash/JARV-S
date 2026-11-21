@@ -122,6 +122,41 @@ class UpdaterTests(unittest.TestCase):
         for name in ("main.py.jarvis-new", ".jarvis-update.tmp"):
             self.assertEqual((self.root / name).read_bytes(), b"local")
 
+    def test_same_second_same_size_python_update_runs_new_code(self):
+        import os
+        import py_compile
+        import subprocess
+        import sys
+        import time
+        module = self.root / "answer.py"
+        module.write_bytes(b"result=1")
+        # Exercise all common same-second write times without relying on
+        # whether the test happened to start near a clock boundary.
+        os.utime(module, (time.time(), int(time.time())))
+        py_compile.compile(str(module), doraise=True)
+        u._replace_bytes(module, b"result=2")
+        out = subprocess.check_output([sys.executable, "-c", "from answer import result; print(result)"],
+                                      cwd=self.root, text=True)
+        self.assertEqual(out.strip(), "2")
+
+    def test_locked_destination_does_not_block_rollback_of_earlier_files(self):
+        (self.root / "main.py").write_bytes(b"old")
+        original_replace = u.os.replace
+        original_copy = u.shutil.copy2
+        def replace(src, dst):
+            if dst == self.root / "main.py":
+                raise PermissionError("file locked")
+            return original_replace(src, dst)
+        def copy(src, dst):
+            if dst == self.root / "main.py":
+                raise PermissionError("file still locked")
+            return original_copy(src, dst)
+        with patch.object(u.os, "replace", side_effect=replace), patch.object(u.shutil, "copy2", side_effect=copy):
+            with self.assertRaises(PermissionError):
+                u._apply_zip(self.root, self.files, self.sha, "main")
+        self.assertFalse((self.root / "gui/window.py").exists())
+        self.assertEqual((self.root / "main.py").read_bytes(), b"old")
+
     def test_write_failure_rolls_back(self):
         (self.root / 'main.py').write_bytes(b'original')
         real = u.os.replace
