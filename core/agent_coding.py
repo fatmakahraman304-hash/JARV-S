@@ -1,23 +1,7 @@
-"""
-core/agent_coding.py — let Claude Code or Codex work INSIDE the project.
+"""MAYK kodlama ajanı: DeepSeek öncelikli yerleşik kod ajanı.
 
-Used as plain text models (core/claude_coding.py, core/codex_coding.py) they
-see only what MAYK pastes into one prompt and answer with whole files. As
-agents they read any file they need, search the code, make small exact edits,
-run the project's tests and keep going until the tests pass — the way a person
-works, and far stronger on a real codebase.
-
-MAYK stays in charge around them: it snapshots the folder before (for undo),
-works out afterwards which files really changed, runs its own checks on them
-and hands any failure back for one more round (actions/dev_agent.py).
-
-Limits:
-  Claude Code  edits are accepted inside the folder; shell commands are limited
-               to running and testing code (python, pytest, npm, node, …).
-  Codex        runs in its workspace-write sandbox: it can only write inside the
-               folder, with no network.
-
-No Qt here; nothing raises except RuntimeError with a sentence for the user.
+Eski Claude Code ve Codex CLI kodlama ajanı olarak seçilemez veya çalıştırılamaz.
+Dosya yedeği, değişiklik denetimi ve geri alma işlemleri korunur.
 """
 
 from __future__ import annotations
@@ -59,23 +43,15 @@ _CLAUDE_TOOLS = ["Read", "Edit", "MultiEdit", "Write", "Glob", "Grep", "LS", "To
                  "WebSearch", "WebFetch", "NotebookEdit"] + \
     [f"Bash({c}:*)" for c in _CLAUDE_BASH]
 
-AGENT_PROVIDERS = {claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID, jarvis_agent.PROVIDER_ID}
+AGENT_PROVIDERS = {jarvis_agent.PROVIDER_ID}
 
 
 def available(provider: str) -> bool:
     """Is this provider one that can work as an agent, and is it installed?"""
     try:
-        if provider == claude_coding.PROVIDER_ID:
-            claude_coding._executable()
-            return True
-        if provider == codex_coding.PROVIDER_ID:
-            codex_coding._command()
-            return True
-        if provider == jarvis_agent.PROVIDER_ID:       # MAYK's own agent: needs only a free brain
-            return jarvis_agent.available()
+        return provider == jarvis_agent.PROVIDER_ID and jarvis_agent.available()
     except Exception:
         return False
-    return False
 
 
 def _brief(instruction: str, guide: str, extra: str) -> str:
@@ -309,10 +285,6 @@ def run(provider: str, folder: Path, instruction: str, guide: str = "", extra: s
         log=print) -> str:
     """One agent round in `folder`. Returns the agent's own summary."""
     prompt = _brief(instruction, guide, extra)
-    if provider == claude_coding.PROVIDER_ID:
-        return _run_claude(folder, prompt, log)
-    if provider == codex_coding.PROVIDER_ID:
-        return _run_codex(folder, prompt, log)
     if provider == jarvis_agent.PROVIDER_ID:
         return jarvis_agent.run(folder, prompt, log)
     raise RuntimeError("Bu model ajan olarak çalışamıyor.")
