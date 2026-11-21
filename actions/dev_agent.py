@@ -1427,7 +1427,7 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
                                       static_problems, test_regressions)
     except Exception as e:
         _log(player, f"Testing unavailable: {str(e)[:120]}")
-        return {}
+        return {"(tests)": "Proje kontrolleri yüklenemedi."}
     stack = stack or detect_stack(folder)
     originals = originals or {}
     _update("testing")
@@ -1447,12 +1447,15 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
             broke = ("The project test command could not start." if after is None
                      else test_regressions(baseline, after))
             if broke:
-                for rel in _blame(broke, written):
+                targets = _blame(broke, written)
+                if not targets or after is None:
+                    return {"(tests)": broke}
+                for rel in targets:
                     problems[rel] = (problems.get(rel, "") + " " + broke).strip()
             elif after["ok"]:
                 _log(player, "Projenin testleri başarılı.")
             else:
-                _log(player, "Projede önceden var olan test hataları var; yeni bir hata bulunmadı.")
+                return {"(tests)": "Önceden başarısız olan proje testleri hâlâ başarısız."}
         problems = {r: p for r, p in problems.items() if r in written}
         if not problems:
             _log(player, "Değiştirilen dosyalarda yeni bir hata bulunmadı.")
@@ -1587,7 +1590,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     plan["changes"] = changes
     summary = str(plan.get("summary") or "").strip()
     if not changes:
-        return summary or "Uygulanabilecek bir değişiklik belirlenemedi."
+        return "Uygulanabilecek bir değişiklik belirlenemedi."
     with _state_lock:
         if _JOB:                  # absent when called outside a background job
             _JOB["files"] = {c["path"]: {"action": c["action"],
@@ -1689,14 +1692,14 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
                 (folder / rel).write_text(new, encoding="utf-8", newline="")
                 written[rel] = new
             _update(file=rel, file_state="done")
-    still_broken = [rel for rel, text in written.items() if _syntax_error(rel, text)]
-    for rel in still_broken:
-        _update(file=rel, file_state="broken")
-
     # Test the result the way the app will use it, and fix what fails.
     failing = _test_and_fix(folder, written, changes, plan, instruction,
                             context, player, stack=stack, originals=texts,
                             baseline=baseline)
+
+    still_broken = [rel for rel, text in written.items() if _syntax_error(rel, text)]
+    for rel in still_broken:
+        _update(file=rel, file_state="broken")
 
     def restore() -> str:
         for rel in edited:
@@ -1727,24 +1730,26 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     took = time.monotonic() - started
     parts = []
     if edited:
-        parts.append(f"changed {len(edited)} file{'s' if len(edited) != 1 else ''} "
-                     f"({', '.join(edited)})")
+        parts.append(f"{len(edited)} dosya değiştirildi ({', '.join(edited)})")
     if created:
-        parts.append(f"created {len(created)} ({', '.join(created)})")
-    msg = f"Done with '{folder.name}' in {took:.0f}s: {' and '.join(parts)}."
-    if summary:
-        msg += f" {summary}"
+        parts.append(f"{len(created)} dosya oluşturuldu ({', '.join(created)})")
+    msg = f"'{folder.name}' için {took:.0f} saniyede " + ", ".join(parts) + "."
+    verification = "unverified"
     if still_broken:
-        msg += f" Şu dosyalarda sözdizimi hatası var: {', '.join(still_broken)}."
+        msg += f" Sözdizimi denetimi başarısız: {', '.join(still_broken)}."
     if failing:
-        msg += (" Şu testler hâlâ başarısız ve incelenmeli: "
-                + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + ".")
-    elif written:
-        msg += " Kontrollerde yeni bir test hatası bulunmadı."
-    if edited:
-        msg += f" Originals are in {_BACKUP_DIR}/{stamp}; say 'undo' to restore them."
+        msg += " Başarısız kontroller: " + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + "."
+    if failing or still_broken:
+        verification = "failed"
+    elif written and stack and stack.get("test_cmd"):
+        verification = "done"
+        msg += " Proje testleri geçti."
     else:
-        msg += " Say 'undo' to remove the new files."
+        msg += " Proje testleriyle doğrulanamadı."
+    with _state_lock:
+        if _JOB:
+            _JOB["verification"] = verification
+    msg += " Geri almak için 'geri al' diyebilirsiniz."
     _log(player, msg)
     return msg
 
