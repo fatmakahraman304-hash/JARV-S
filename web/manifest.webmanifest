@@ -1,7 +1,7 @@
 {
-  "name": "JARVIS",
-  "short_name": "JARVIS",
-  "description": "JARVIS her cihazda — telefon, tablet, TV, projeksiyon, saat.",
+  "name": "Mayk",
+  "short_name": "Mayk",
+  "description": "Mayk her cihazda — telefon, tablet, TV, projeksiyon, saat.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,8 +1,8 @@
 """
-core/sync_hub.py — one JARVIS on every device: the shared memory and the
+core/sync_hub.py — one Mayk on every device: the shared memory and the
 mailbox, kept in a private GitHub gist.
 
-The web JARVIS (web/, served from GitHub Pages over HTTPS) runs on the phone,
+The web Mayk (web/, served from GitHub Pages over HTTPS) runs on the phone,
 tablet, TV, projector or watch on its own — its brain is Gemini, reached
 directly from the device — so it keeps working when this computer is off. What
 the devices share lives in one secret gist of the user's own GitHub account:
@@ -48,7 +48,7 @@ CLAIM_SECONDS = 300.0                  # "I'm talking to THIS device" lasts this
 # microphone, typed into it), which wins for a few minutes.
 VOICE_PRIORITY = {"phone": 1, "pc": 2, "tablet": 3, "tv": 4, "projector": 4, "watch": 5}
 RECENT_MAX = 40
-REPLY_WAIT = 90.0                      # how long a command waits for Jarvis's answer
+REPLY_WAIT = 90.0                      # how long a command waits for Mayk's answer
 
 _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": [],
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
@@ -149,10 +149,10 @@ def _req(method: str, path: str, token: str, body: dict | None = None,
 
 def create_gist(token: str) -> tuple[str, str]:
     """A new secret gist for this user. Returns (gist_id, error)."""
-    body = {"description": "JARVIS — ortak hafıza (gizli, silme)", "public": False,
+    body = {"description": "Mayk — ortak hafıza (gizli, silme)", "public": False,
             "files": {"memory.json": {"content": json.dumps(_empty_memory(), ensure_ascii=False)},
                       "recent.json": {"content": "[]"},
-                      "README.md": {"content": "JARVIS'in cihazlar arası ortak hafızası. Silme."}}}
+                      "README.md": {"content": "Mayk'ın cihazlar arası ortak hafızası. Silme."}}}
     st, js, _ = _req("POST", "/gists", token, body)
     if st == 201 and js and js.get("id"):
         return js["id"], ""
@@ -275,7 +275,7 @@ def note_turn(role: str, text: str) -> None:
 
 
 def note_reply(text: str) -> None:
-    """Jarvis just answered: the oldest waiting remote command gets this answer."""
+    """Mayk just answered: the oldest waiting remote command gets this answer."""
     if not text:
         return
     with _state["lock"]:
@@ -465,7 +465,7 @@ def send_to_device(name: str, cmd: dict) -> tuple[bool, str]:
     sync cycle (a few seconds)."""
     s = settings()
     if not (s.get("github_token") and s.get("gist_id")):
-        return False, "Cihazlar bağlı değil; önce 'Jarvis'i her cihaza kur' de."
+        return False, "Cihazlar bağlı değil; önce 'Mayk'ı her cihaza kur' de."
     d = find_device(name)
     if not d:
         names = ", ".join(x.get("name", "?") for x in devices()) or "yok"
@@ -500,7 +500,7 @@ def _deliver_out(files: dict, writes: dict) -> None:
 
 # ── this computer's projects, readable on every device ──────────────────────
 def projects_summary(limit: int = 8) -> list[dict]:
-    """Short status of the projects JARVIS builds on this computer
+    """Short status of the projects Mayk builds on this computer
     (memory/continuity.py), for projects-<id>.json in the shared gist."""
     try:
         from memory import continuity
@@ -533,7 +533,7 @@ def recent_context(limit: int = 12, max_age_hours: float = 12.0) -> str:
     for t in _state.get("recent") or []:
         if str(t.get("device", "")) == me or _ts(str(t.get("ts", ""))) < cutoff:
             continue
-        who = "Kullanıcı" if t.get("role") == "user" else "JARVIS"
+        who = "Kullanıcı" if t.get("role") == "user" else "Mayk"
         lines.append(f"[{t.get('device', '?')}] {who}: {str(t.get('text', ''))[:300]}")
     if not lines:
         return ""
@@ -588,7 +588,7 @@ def status_report() -> str:
     rem_lines = [f"- {datetime.fromtimestamp(r['due'] / 1000).strftime('%d.%m %H:%M')}: {r.get('text', '')}" for r in rem]
     linked = bool(settings().get("gist_id"))
     return ("CİHAZLAR:\n" + "\n".join(lines)
-            + ("" if linked else "\n(Diğer cihazlar bağlı değil: 'Jarvis'i her cihaza kur' denmeli.)")
+            + ("" if linked else "\n(Diğer cihazlar bağlı değil: 'Mayk'ı her cihaza kur' denmeli.)")
             + "\n\nSIRADAKİ ORTAK HATIRLATICILAR:\n" + ("\n".join(rem_lines) or "- yok"))
 
 
@@ -687,9 +687,9 @@ def _archive_id(token: str, files: dict | None = None, create: bool = True) -> s
         if not err and got:
             return _archive_id(token, got, create)
     if not aid and create:
-        st, js, _ = _req("POST", "/gists", token, {"description": "JARVIS — konuşma arşivi (gizli, silme)",
+        st, js, _ = _req("POST", "/gists", token, {"description": "Mayk — konuşma arşivi (gizli, silme)",
                                                     "public": False,
-                                                    "files": {"README.md": {"content": "JARVIS konuşma arşivi. Silme."}}})
+                                                    "files": {"README.md": {"content": "Mayk konuşma arşivi. Silme."}}})
         if st == 201 and js and js.get("id"):
             aid = js["id"]
             write_files(token, settings().get("gist_id", ""), {"archive.json": json.dumps({"gist": aid})})
@@ -762,11 +762,11 @@ def search_archive(query: str, days: float = 0) -> str:
     if not pick:
         return "Arşivde bununla ilgili bir konuşma bulamadım."
     lines = [f"{str(rows[j].get('ts', ''))[:16].replace('T', ' ')} [{rows[j].get('device', '?')}] "
-             f"{'Kullanıcı' if rows[j].get('role') == 'user' else 'JARVIS'}: {rows[j].get('text', '')}" for j in pick]
+             f"{'Kullanıcı' if rows[j].get('role') == 'user' else 'Mayk'}: {rows[j].get('text', '')}" for j in pick]
     return f"Arşivden ({len(rows)} satır arandı):\n" + "\n".join(lines)[:6000]
 
 
-# ── notifications to devices whose JARVIS page is closed (core/webpush) ─────
+# ── notifications to devices whose Mayk page is closed (core/webpush) ─────
 def _push_setup(files: dict, writes: dict) -> None:
     """The VAPID keys are shared in push.json (made by the first computer);
     each device that turned notifications on has push-sub-<id>.json."""
@@ -850,7 +850,7 @@ def _push_inboxes(files: dict, now: float) -> None:
         if fresh and not first:
             it = fresh[-1]
             alarm = it.get("kind") == "image" and "hareket" in str(it.get("title", "")).lower()
-            push_to(dev, ("🚨 " if alarm else "") + f"{it.get('from') or 'JARVIS'} {_WHAT.get(it.get('kind'), 'bir şey gönderdi')}",
+            push_to(dev, ("🚨 " if alarm else "") + f"{it.get('from') or 'Mayk'} {_WHAT.get(it.get('kind'), 'bir şey gönderdi')}",
                     str(it.get("title") or it.get("text") or "Açınca görürsün.")[:300],
                     tag="alarm" if alarm else "inbox")
     _state["inbox_primed"] = True
@@ -864,7 +864,7 @@ def _push_due_reminders(merged: list[dict], now: float) -> None:
             continue
         if now * 1000 - 600_000 <= r["due"] <= now * 1000:
             pushed.add(r["id"])
-            title = "⚡ Protokol zamanı" if r.get("protocol") else "⏰ JARVIS hatırlatıyor"
+            title = "⚡ Protokol zamanı" if r.get("protocol") else "⏰ Mayk hatırlatıyor"
             for dev in _offline_subscribers(now):
                 push_to(dev, title, str(r.get("text") or ""), tag=f"rem-{r['id']}")
 
@@ -1301,7 +1301,7 @@ def _run_command(cid: str, text: str, sender: str) -> None:
         return
     if text.startswith("update:"):
         cb = _state.get("on_update")
-        reply = "Güncelleme başladı; JARVIS kendini yeniden açacak." if cb else "Güncelleme burada başlatılamıyor."
+        reply = "Güncelleme başladı; Mayk kendini yeniden açacak." if cb else "Güncelleme burada başlatılamıyor."
         with _state["lock"]:
             _state["pending"].append({"id": cid, "at": time.time(), "reply": reply})
         if cb:
@@ -1354,7 +1354,7 @@ WEB_URL = "https://fatmakahraman304-hash.github.io/JARV-S/"
 
 
 def setup_link(gemini_key: str) -> str:
-    """The link that sets up the web JARVIS on another device in one tap."""
+    """The link that sets up the web Mayk on another device in one tap."""
     import base64
     s = settings()
     payload = {"g": gemini_key or "", "t": s.get("github_token", ""), "i": s.get("gist_id", ""),
@@ -1366,6 +1366,6 @@ def setup_link(gemini_key: str) -> str:
 def _assistant_name() -> str:
     try:
         from memory.config_manager import get_assistant_name
-        return get_assistant_name() or "JARVIS"
+        return get_assistant_name() or "Mayk"
     except Exception:
-        return "JARVIS"
+        return "Mayk"

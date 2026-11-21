@@ -1,9 +1,9 @@
-"""Habits: what the user has JARVIS do again and again, at about the same time.
+"""Habits: what the user has Mayk do again and again, at about the same time.
 
 Every successful tool call the user asked for is noted (tool, its short
 arguments, the time) in a small file that survives restarts. `suggestions()`
 looks at the last three weeks: the same command on at least four different days
-within the same 90-minute window of the day is a habit, and JARVIS may offer —
+within the same 90-minute window of the day is a habit, and Mayk may offer —
 once — to make it a routine ("Her akşam 21:00 civarı Spotify'ı açtırıyorsun;
 rutin yapayım mı?"). Nothing is ever set up without the user's yes.
 """
@@ -23,7 +23,7 @@ MIN_DAYS = 4
 SPREAD_MIN = 45            # minutes either side of the usual time
 KEEP_LINES = 5000
 
-# tools that are not habits: looking things up about JARVIS itself, memory, control of JARVIS's own jobs
+# tools that are not habits: looking things up about Mayk itself, memory, control of Mayk's own jobs
 SKIP = {"save_memory", "recall_memory", "undo", "routines", "job_control", "work_status", "self_check",
         "self_update", "status_report", "background_tasks", "screen_process", "close_camera"}
 _lock = threading.Lock()

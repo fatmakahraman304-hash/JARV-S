@@ -1,4 +1,4 @@
-name: JARVIS left-controls and restart tests
+name: Mayk left-controls and restart tests
 
 on:
   push:

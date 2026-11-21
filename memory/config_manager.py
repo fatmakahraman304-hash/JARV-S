@@ -121,13 +121,26 @@ def save_api_keys(gemini_api_key: str) -> None:
         data.pop("local_only", None)     # a key given is a choice to use Gemini again
     _write_config(data)
 
+def normalized_assistant_name(value):
+    name = str(value or "").strip()
+    if not name or name.replace(".", "").casefold() in {"jarvis", "jarvi̇s"}:
+        return "Mayk"
+    return name
+
+
+def _normalize_identity(data):
+    if isinstance(data, dict) and "assistant_name" in data:
+        data["assistant_name"] = normalized_assistant_name(data["assistant_name"])
+    return data if isinstance(data, dict) else {}
+
+
 def load_api_keys() -> dict:
     if not CONFIG_FILE.exists():
         return {}
     for attempt in range(3):
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
+            return _normalize_identity(data)
         except Exception as e:
             if attempt == 2:
                 # Plain text: an emoji here raised UnicodeEncodeError on a
@@ -136,7 +149,7 @@ def load_api_keys() -> dict:
                 good = _from_backup()            # the key and settings from the last good copy
                 if good is not None:
                     print("[Config] Using the last good copy of the settings")
-                    return good
+                    return _normalize_identity(good)
                 return {}
             time.sleep(0.05)
     return {}
@@ -150,8 +163,8 @@ def is_configured() -> bool:
 
 
 def get_assistant_name() -> str:
-    """Return the configured assistant name, or 'JARVIS' if not set."""
-    return load_api_keys().get("assistant_name", "JARVIS") or "JARVIS"
+    """Return the configured assistant name, or 'Mayk' if not set."""
+    return load_api_keys().get("assistant_name", "Mayk") or "Mayk"
 
 
 def get_user_name() -> str:
@@ -164,7 +177,7 @@ def save_assistant_config(assistant_name: str, user_name: str) -> None:
     """Persist assistant name and user name to config."""
     ensure_config_dir()
     data = _read_for_write()
-    data["assistant_name"] = assistant_name.strip() or "JARVIS"
+    data["assistant_name"] = normalized_assistant_name(assistant_name)
     data["user_name"] = user_name.strip()
     _write_config(data)
 

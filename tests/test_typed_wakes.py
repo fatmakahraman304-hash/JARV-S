@@ -1,4 +1,4 @@
-"""A typed command wakes JARVIS instead of being refused while it sleeps."""
+"""A typed command wakes Mayk instead of being refused while it sleeps."""
 import unittest
 from pathlib import Path
 

@@ -22,6 +22,14 @@ class ConfigSafety(unittest.TestCase):
         self.p2.stop()
         self.tmp.cleanup()
 
+    def test_legacy_assistant_name_becomes_mayk(self):
+        for old in ("JARVIS", "J.A.R.V.I.S.", "Jarvis"):
+            self.file.write_text(json.dumps({"assistant_name": old, "user_name": "Ada"}))
+            self.assertEqual(cm.get_assistant_name(), "Mayk")
+            self.assertEqual(cm.get_user_name(), "Ada")
+        self.file.write_text(json.dumps({"assistant_name": "Friday"}))
+        self.assertEqual(cm.get_assistant_name(), "Friday")
+
     def test_key_survives_a_broken_file(self):
         cm.save_api_keys("AIza-test-key-1234")
         cm.save_wake_word_enabled(True)                     # second write: the first becomes the backup

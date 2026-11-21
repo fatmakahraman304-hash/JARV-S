@@ -1,7 +1,7 @@
 """
-Ambient awareness — J.A.R.V.I.S. notices what changes around the user.
+Ambient awareness — Mayk notices what changes around the user.
 
-In the films J.A.R.V.I.S. mentions things as they happen: a device connected,
+In the films Mayk mentions things as they happen: a device connected,
 power lost, a transfer done. Here the computer is watched for the few changes
 worth a sentence, each compared against what was there a moment ago:
 
@@ -293,6 +293,6 @@ class Sentinel:
 
 
 def instruction(notes: list[str]) -> str:
-    return ("[ENVIRONMENT] " + " ".join(notes) + " Mention it the way J.A.R.V.I.S. would — one short "
+    return ("[ENVIRONMENT] " + " ".join(notes) + " Mention it the way Mayk would — one short "
             "sentence, the useful detail only (e.g. 'USB bellek takıldı, efendim: KINGSTON, 64 GB.'), "
             "offering the obvious next step at most once. Do not call any tool.")

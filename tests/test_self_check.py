@@ -1,4 +1,4 @@
-"""JARVIS's self check: every check runs, problems come with a fix, a hung check cannot hold it up."""
+"""Mayk's self check: every check runs, problems come with a fix, a hung check cannot hold it up."""
 import time
 import unittest
 from unittest.mock import patch
@@ -51,7 +51,7 @@ class Logbook(unittest.TestCase):
                 sys.path.insert(0, {str(root)!r})
                 from core import logbook
                 logbook.install({d!r})
-                print("[JARVIS] normal bir satır")
+                print("[Mayk] normal bir satır")
                 print("[Blender] Error: bağlantı koptu")
                 t = threading.Thread(target=lambda: 1 / 0, name="arka-is"); t.start(); t.join()
                 raise RuntimeError("ana iş çöktü")

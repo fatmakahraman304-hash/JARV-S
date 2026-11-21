@@ -1,4 +1,4 @@
-name: JARVIS regression tests
+name: Mayk regression tests
 on:
   push:
     branches: [main, feature/osiris-world-command]

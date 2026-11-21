@@ -1,5 +1,5 @@
 """
-Speech-to-Text engines for JARVIS.
+Speech-to-Text engines for Mayk.
 
 Whisper  – offline transcription via faster-whisper (VAD-buffered)
 Vosk     – offline streaming transcription (lighter)

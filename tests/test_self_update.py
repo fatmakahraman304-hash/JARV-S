@@ -1,4 +1,4 @@
-"""JARVIS notices a newer version on GitHub and says what changed; updating uses the safe updater."""
+"""Mayk notices a newer version on GitHub and says what changed; updating uses the safe updater."""
 import subprocess
 import tempfile
 import unittest

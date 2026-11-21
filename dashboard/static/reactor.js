@@ -1,4 +1,4 @@
-/* JARVIS reactor core — the same orange energy sphere as the desktop
+/* Mayk reactor core — the same orange energy sphere as the desktop
  * (gui/reactor.py), drawn on a <canvas> for the phone, tablet, TV and watch
  * pages. A white-hot core inside a geodesic wireframe sphere, 3-D light rays,
  * thick orbiting arcs and swirling particle bands, all projected through a
@@ -7,7 +7,7 @@
  *
  *   const core = JarvisReactor(canvas);
  *   core.state = 'thinking';   // idle | thinking | speaking | sleeping | offline
- *   core.level = 0.6;          // 0..1, Jarvis's voice
+ *   core.level = 0.6;          // 0..1, Mayk's voice
  */
 (function () {
   'use strict';

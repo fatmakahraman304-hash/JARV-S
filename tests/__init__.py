@@ -1,1 +1,1 @@
-"""JARVIS test suite."""
+"""Mayk test suite."""

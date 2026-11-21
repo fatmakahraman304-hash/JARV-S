@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#050403">
-  <title>JARVIS · AI OS</title>
+  <title>Mayk · AI OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -182,7 +182,7 @@
     <button type="button" id="fortune-open">☕ Kahve falı</button>
     <button type="button" id="m-tv">📺 Televizyona gönder</button>
     <button type="button" id="m-shot">🖼️ Ekran görüntüsü al</button>
-    <button type="button" id="wake">⚡ Jarvis'i uyandır</button>
+    <button type="button" id="wake">⚡ Mayk'ı uyandır</button>
     <button type="button" id="m-refresh">🔄 Cihazları yenile</button>
     <button type="button" id="m-update">⬆ Bilgisayarı güncelle</button>
     <div class="enc">Bağlantı: <b id="enc">…</b><br><span>__IP__:__PORT__</span></div>
@@ -191,14 +191,14 @@
   <div class="wrap">
     <header class="top">
       <button class="icon-btn" id="menu-btn" type="button" aria-label="Menü">☰</button>
-      <div class="brand"><b>JARVIS</b><small>AI OS</small></div>
+      <div class="brand"><b>Mayk</b><small>AI OS</small></div>
       <div class="top-r">
         <button class="icon-btn off" id="spk" type="button" aria-label="Yanıtları telefonda seslendir">🔈</button>
         <div class="avatar" id="avatar" title="Kontrol edilen cihaz">J</div>
       </div>
     </header>
 
-    <div class="reactor" id="reactor"><canvas id="core" aria-label="JARVIS çekirdeği"></canvas></div>
+    <div class="reactor" id="reactor"><canvas id="core" aria-label="Mayk çekirdeği"></canvas></div>
 
     <section class="status" aria-live="polite">
       <div id="st-title">Bağlanıyor…</div>
@@ -208,13 +208,13 @@
     </section>
 
     <div class="reply" id="reply" hidden>
-      <div class="lbl"><span>JARVIS</span><a href="#" id="reply-all">TÜMÜ ›</a></div>
+      <div class="lbl"><span>Mayk</span><a href="#" id="reply-all">TÜMÜ ›</a></div>
       <div id="reply-text"></div>
     </div>
 
     <form class="ask" id="ask" autocomplete="off">
       <button class="round" id="mic-btn" type="button" title="Sesli komut">🎙️</button>
-      <input id="inp" placeholder="Jarvis'e bir şey sor…" enterkeyhint="send">
+      <input id="inp" placeholder="Mayk'a bir şey sor…" enterkeyhint="send">
       <button class="round" id="send-btn" type="submit" title="Gönder">➤</button>
     </form>
     <input type="file" id="file-inp" multiple accept="*/*" hidden>
@@ -269,7 +269,7 @@
       <select id="tv-target"></select>
       <input type="text" id="tv-value" placeholder="Video adı ya da YouTube linki">
       <button class="btn btn-send" type="submit">Televizyonda aç</button>
-      <div class="tabs"><button class="btn" type="button" id="tv-home">🏠 Jarvis ekranı</button>
+      <div class="tabs"><button class="btn" type="button" id="tv-home">🏠 Mayk ekranı</button>
         <button class="btn" type="button" id="tv-clear">✕ Kapat</button></div>
       <p id="tv-status" role="status"></p>
     </form>
@@ -282,7 +282,7 @@
 
   <dialog class="dlg" id="scan-dialog" aria-labelledby="scan-title">
     <div class="dlg-h"><h2 id="scan-title">Kamera Taraması</h2><button class="btn" type="button" id="scan-close">Kapat</button></div>
-    <p>Fotoğraf çek ya da seç; JARVIS tarayıp sonucu bilgisayarda gösterir.</p>
+    <p>Fotoğraf çek ya da seç; Mayk tarayıp sonucu bilgisayarda gösterir.</p>
     <form id="scan-form">
       <button class="btn" type="button" id="scan-camera" hidden>Kamerayı aç</button>
       <video id="scan-video" hidden playsinline muted autoplay></video>
@@ -310,7 +310,7 @@
   <script>
     // ── Devices and auth ─────────────────────────────────────────────────────
     // The phone can command several computers: this one (same origin) and the
-    // other JARVIS computers on the network, each with a token it issued.
+    // other Mayk computers on the network, each with a token it issued.
     let selfToken = sessionStorage.getItem('jarvis_token');
     const _sessionKey = sessionStorage.getItem('jarvis_key');
     if (!selfToken) location.replace('/login');
@@ -389,7 +389,7 @@
     function append(speaker, text) {
       const d = document.createElement('div');
       if (speaker === 'jarvis') {
-        d.className = 'msg msg-j'; d.innerHTML = `<div class="lbl">Jarvis</div>${esc(text)}`;
+        d.className = 'msg msg-j'; d.innerHTML = `<div class="lbl">Mayk</div>${esc(text)}`;
         replyText.textContent = text; replyBox.hidden = false; replyBox.scrollTop = 0;
         speak(text);
       } else {
@@ -509,7 +509,7 @@
       for (const p of devState.peers || []) {
         const paired = !!peers[p.id];
         if (paired && peers[p.id].url !== p.url) { peers[p.id].url = p.url; _savePeers(); }
-        rows.push({ key: p.id, name: p.name, sub: (p.os || 'JARVIS') + (paired ? '' : ' · eşlenmedi'),
+        rows.push({ key: p.id, name: p.name, sub: (p.os || 'Mayk') + (paired ? '' : ' · eşlenmedi'),
                     kind: p.kind, online: p.online, type: 'pc', paired, url: p.url });
       }
       for (const id of Object.keys(peers)) {
@@ -577,7 +577,7 @@
         const p = (devState.peers || []).find(x => x.id === key);
         document.getElementById('pair-title').textContent = `${p ? p.name : 'Bilgisayar'} — eşle`;
         document.getElementById('pair-help').innerHTML =
-          `O bilgisayarda JARVIS'te <b>Uzaktan Kontrol</b>'e bas ve çıkan <b>8 haneli kodu</b> buraya yaz. Bir kez yeter.`;
+          `O bilgisayarda Mayk'ta <b>Uzaktan Kontrol</b>'e bas ve çıkan <b>8 haneli kodu</b> buraya yaz. Bir kez yeter.`;
         code.placeholder = 'KOD'; code.inputMode = 'text'; name.hidden = true;
       }
       pairDlg.showModal();
@@ -800,12 +800,12 @@
           scanStatus.textContent = data.error || 'Tarama tamamlanamadı.';
           return;
         }
-        scanStatus.textContent = 'Sonuç JARVIS’e gönderildi.';
+        scanStatus.textContent = 'Sonuç Mayk’a gönderildi.';
         scanResult.textContent = [data.summary, ...data.details,
           ...(data.qr.length ? ['Okunan QR', ...data.qr] : []), data.notice]
           .filter(Boolean).join('\n\n');
       } catch {
-        if (session === scanSession) scanStatus.textContent = 'Bağlantı kesildi. JARVIS açıkken tekrar dene.';
+        if (session === scanSession) scanStatus.textContent = 'Bağlantı kesildi. Mayk açıkken tekrar dene.';
       } finally {
         scanSending = false;
         scanCamera.disabled = scanInput.disabled = false;
@@ -869,7 +869,7 @@
         fortuneStatus.textContent = '';
         fortuneResult.textContent = result.reading;
       } catch {
-        fortuneStatus.textContent = 'Bağlantı kesildi. JARVIS açıkken tekrar dene.';
+        fortuneStatus.textContent = 'Bağlantı kesildi. Mayk açıkken tekrar dene.';
       } finally {
         fortuneSubmit.disabled = false;
         fortunePhoto.disabled = false;
@@ -1154,7 +1154,7 @@
           src.connect(sp); sp.connect(ctx.destination); _audioNd = sp;
         }
         micBtn.textContent = '⏹'; micBtn.title = 'Durdurmak için dokun'; micBtn.classList.add('recording');
-        stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, Jarvis seni duyuyor.';
+        stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, Mayk seni duyuyor.';
         toast('🎙️ Canlı');
       };
       ws2.onclose = () => { _stopVoice(); };

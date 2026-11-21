@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
  * What only an accessibility service may do on Android: press the remote's
  * keys for the user, write into the box that has focus (Turkish letters too)
  * and take a picture of the screen. Turned on once by the user in Settings →
- * Accessibility → JARVIS Alıcı.
+ * Accessibility → Mayk Alıcı.
  */
 public class RemoteAccessibility extends AccessibilityService {
     static volatile RemoteAccessibility instance;

@@ -1,4 +1,4 @@
-"""JARVIS's Blender toolkit — loaded inside Blender before every script JARVIS
+"""Mayk's Blender toolkit — loaded inside Blender before every script Mayk
 writes, so a script can say `wood("Ceviz")` or `place_on(leg, floor)` instead of
 fighting node trees and bounding boxes. Everything here uses real metres.
 

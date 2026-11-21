@@ -1,4 +1,4 @@
-"""Ambient awareness switches: which changes around the computer JARVIS mentions by itself.
+"""Ambient awareness switches: which changes around the computer Mayk mentions by itself.
 
 The watching is core/sentinel.py; this only holds the user's choice per kind.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 PLUGIN = {
     "name": "awareness",
     "description": (
-        "Which changes around the computer JARVIS mentions by itself: a USB drive plugged in/out (usb), the "
+        "Which changes around the computer Mayk mentions by itself: a USB drive plugged in/out (usb), the "
         "charger plugged/unplugged (power), the internet back after an outage (network), a download finished "
         "(downloads). Turn a kind off ('USB takınca söyleme', 'indirmeleri bildirme'), on, or ask what is on. "
         "action: on | off | status. kind: usb | power | network | downloads | all. "

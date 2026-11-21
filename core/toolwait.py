@@ -2,7 +2,7 @@
 
 `await run(name, fn, wait, on_late)` returns the tool's result if it finishes
 within `wait` seconds. Otherwise the tool keeps running in its thread, a
-STILL RUNNING note is returned at once (so JARVIS can speak and listen again),
+STILL RUNNING note is returned at once (so Mayk can speak and listen again),
 and `on_late(name, result_text)` is called when it does finish.
 """
 from __future__ import annotations

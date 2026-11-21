@@ -1,4 +1,4 @@
-"""Web JARVIS device modules (web/devkit.js, web/dev-*.js).
+"""Web Mayk device modules (web/devkit.js, web/dev-*.js).
 
 devkit.js is pure, so its helpers run under Node here; the device modules are
 checked for syntax and wiring. Skipped where Node is not installed.

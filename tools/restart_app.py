@@ -12,7 +12,7 @@ def restart(pid, project):
     except psutil.NoSuchProcess:
         pass
     except psutil.TimeoutExpired:
-        print('Restart cancelled: original JARVIS did not exit.', flush=True)
+        print('Restart cancelled: original Mayk did not exit.', flush=True)
         return 1
     subprocess.Popen([sys.executable, str(Path(project) / 'main.py')], cwd=project,
                      stdout=sys.stdout, stderr=sys.stderr)

@@ -63,7 +63,7 @@ class AwayTest(unittest.TestCase):
         self.assertTrue(text.startswith("[AWAY_DIGEST]"))
         self.assertIn("render done", text)
         self.assertIn("1 h 1 min", text)
-        self.assertIn("J.A.R.V.I.S.", text)
+        self.assertIn("Mayk", text)
 
     def test_plugin(self):
         from plugins import while_away
@@ -89,14 +89,14 @@ class HoldTest(unittest.TestCase):
         main = load_main()
         added = []
         fake = types.SimpleNamespace(_awake=False, _last_user_speech=time.monotonic(),
-                                     ui=mock.Mock(), _AWAY_KINDS=main.JarvisLive._AWAY_KINDS,
-                                     _AWAY_DROP=main.JarvisLive._AWAY_DROP)
-        fake._user_away = lambda: main.JarvisLive._user_away(fake)
+                                     ui=mock.Mock(), _AWAY_KINDS=main.MaykLive._AWAY_KINDS,
+                                     _AWAY_DROP=main.MaykLive._AWAY_DROP)
+        fake._user_away = lambda: main.MaykLive._user_away(fake)
         fake._push_if_gone = lambda text, kind: None
         with mock.patch.object(away, "add", lambda t, kind, key: added.append((kind, key))):
-            self.assertTrue(main.JarvisLive._hold_for_later(fake, "[TOOL_LATE_RESULT] x"))
+            self.assertTrue(main.MaykLive._hold_for_later(fake, "[TOOL_LATE_RESULT] x"))
             fake._awake = True
-            self.assertFalse(main.JarvisLive._hold_for_later(fake, "[TOOL_LATE_RESULT] y"))
+            self.assertFalse(main.MaykLive._hold_for_later(fake, "[TOOL_LATE_RESULT] y"))
         self.assertEqual(added, [("result", "")])
 
     def test_care_note_dropped_not_kept(self):
@@ -105,11 +105,11 @@ class HoldTest(unittest.TestCase):
         main = load_main()
         added = []
         fake = types.SimpleNamespace(_awake=False, _last_user_speech=time.monotonic(), ui=mock.Mock(),
-                                     _AWAY_KINDS=main.JarvisLive._AWAY_KINDS, _AWAY_DROP=main.JarvisLive._AWAY_DROP)
+                                     _AWAY_KINDS=main.MaykLive._AWAY_KINDS, _AWAY_DROP=main.MaykLive._AWAY_DROP)
         fake._user_away = lambda: True
         fake._push_if_gone = lambda text, kind: None
         with mock.patch.object(away, "add", lambda t, kind, key: added.append(kind)):
-            self.assertTrue(main.JarvisLive._hold_for_later(fake, "[CARE_NOTE] 3 h"))
+            self.assertTrue(main.MaykLive._hold_for_later(fake, "[CARE_NOTE] 3 h"))
         self.assertEqual(added, [])
 
 
@@ -147,7 +147,7 @@ class PushTest(unittest.TestCase):
     def test_phone_note(self):
         t, b = away.phone_note("[TOOL_LATE_RESULT] The 'blender_studio' tool you started earlier has just "
                                "finished. Tell the user... Result: Render saved to Desktop.", "result")
-        self.assertEqual(t, "JARVIS — blender studio tamamlandı")
+        self.assertEqual(t, "Mayk — blender studio tamamlandı")
         self.assertEqual(b, "Render saved to Desktop.")
         self.assertEqual(away.phone_note("[SYSTEM_ALERT] CPU 95%", "system")[1], "CPU 95%")
         self.assertIsNone(away.phone_note("x", "update"))
@@ -155,7 +155,7 @@ class PushTest(unittest.TestCase):
     def test_should_push(self):
         with mock.patch.object(away, "push_enabled", lambda: True):
             self.assertTrue(away.should_push("result", 3600, now=100))
-            self.assertFalse(away.should_push("result", 30, now=100))     # at the desk, JARVIS just asleep
+            self.assertFalse(away.should_push("result", 30, now=100))     # at the desk, Mayk just asleep
             self.assertFalse(away.should_push("result", None, now=100))
             self.assertFalse(away.should_push("reminder", 3600, now=100)) # reminders push on their own
             away._last_push["at"] = 100

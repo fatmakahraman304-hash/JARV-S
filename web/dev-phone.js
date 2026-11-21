@@ -1,4 +1,4 @@
-/* JARVIS on the phone (iPhone 14 Pro Max first, any phone works).
+/* Mayk on the phone (iPhone 14 Pro Max first, any phone works).
  *
  *  1. Hold the mic to talk, let go to stop (a short tap still toggles).
  *  2. Swipe up on the core: conversation · swipe down: agenda · swipe a sheet down: close.
@@ -9,7 +9,7 @@
  *  7. The mic closes itself after 45 s of silence, so a forgotten mic doesn't drain the battery.
  *  8. Landscape layout: core on the left, answer and controls on the right.
  *  9. Tool chips in one swipeable row — more room for the core.
- * 10. Shake the phone while JARVIS is talking: it stops.
+ * 10. Shake the phone while Mayk is talking: it stops.
  */
 (() => {
   'use strict';
@@ -131,7 +131,7 @@
     }, 1000);
   }
 
-  // 10 ── shake to stop JARVIS talking ──────────────────────────────────────
+  // 10 ── shake to stop Mayk talking ──────────────────────────────────────
   let motionAsked = false; const jolts = [];
   function askMotion() {
     if (motionAsked) return; motionAsked = true;

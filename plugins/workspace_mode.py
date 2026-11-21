@@ -92,7 +92,7 @@ def run(parameters, player=None, session_memory=None):
     ):
         return "Taşınacak veya kapatılacak uygulamaların adlarını belirt."
     if player is None:
-        return "Pencere işlemleri için JARVIS arayüzü gerekli."
+        return "Pencere işlemleri için Mayk arayüzü gerekli."
 
     def work():
         try:

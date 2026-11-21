@@ -1,4 +1,4 @@
-"""The live link: a real Blender runs the add-on; JARVIS reads the selection
+"""The live link: a real Blender runs the add-on; Mayk reads the selection
 and changes the open scene in place ("bunu kırmızı yap")."""
 import os
 import shutil
