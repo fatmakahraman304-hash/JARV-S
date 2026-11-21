@@ -49,7 +49,8 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(12, 8, 5));
 
         TextView title = new TextView(this);
-        title.setText("MAYK ALICI");
+        try { title.setText("MAYK ALICI · v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+        catch (Exception ignored) { title.setText("MAYK ALICI"); }
         title.setTextColor(Color.rgb(255, 160, 60));
         title.setTextSize(30);
         root.addView(title);
