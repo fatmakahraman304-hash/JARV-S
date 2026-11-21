@@ -1692,7 +1692,7 @@ class MainWindow(QMainWindow):
         try:
             from memory.config_manager import get_provider_mode, get_voice
             mode = str(get_provider_mode() or "gemini")
-            engine = "GEMINI LIVE" if mode == "gemini" else f"LOCAL {mode.upper()}"
+            engine = "GEMINI LIVE" if mode == "gemini" else f"YEREL {mode.upper()}"
             voice = str(get_voice() or "--").upper()
         except Exception:
             engine, voice = "GEMINI LIVE", "--"
@@ -1705,11 +1705,11 @@ class MainWindow(QMainWindow):
     def _refresh_status_strip(self) -> None:
         if not hasattr(self, "_status_strip"):
             return
-        mic = ("MIC · MUTED", "MUTED_C") if self._muted else ("MIC · LIVE", "GREEN")
+        mic = ("MİKROFON · KAPALI", "MUTED_C") if self._muted else ("MİKROFON · AÇIK", "GREEN")
         self._status_strip.set_items([
-            (f"ENGINE · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "GREEN"),
+            (f"MOTOR · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "GREEN"),
             mic,
-            (f"PROTOCOL · {APP_PROTOCOL}", "PRI"),
+            (f"PROTOKOL · {APP_PROTOCOL}", "PRI"),
         ])
 
     def _build_left_panel(self) -> QWidget:
@@ -2054,7 +2054,7 @@ class MainWindow(QMainWindow):
     def _build_quick_drawer(self) -> QWidget:
         """Floating panel under the gear: the things you set once."""
         self._BTN_PRI, self._BTN_DIM = btn_css("primary"), btn_css("dim")
-        w = HoloPanel("SETUP", "", parent=self.centralWidget())
+        w = HoloPanel("KURULUM", "", parent=self.centralWidget())
         w.setObjectName("QuickDrawer")
         w.hide()
         lay = w.body
@@ -2663,7 +2663,7 @@ class MainWindow(QMainWindow):
         return b
 
     def _build_quiz_panel(self) -> QWidget:
-        w = HoloPanel("QUIZ", "")
+        w = HoloPanel("SINAV", "")
         w.setObjectName("QuizPanel")
         w.hide()
         self._quiz_title_lbl = PanelText(w, "title")
@@ -3500,9 +3500,9 @@ class MainWindow(QMainWindow):
 
     def _style_mute_btn(self):
         if self._muted:
-            self._mute_btn.set_look("mic_off", "MIC MUTED", "MUTED_C")
+            self._mute_btn.set_look("mic_off", "MİKROFON KAPALI", "MUTED_C")
         else:
-            self._mute_btn.set_look("mic", "MIC ACTIVE", "GREEN")
+            self._mute_btn.set_look("mic", "MİKROFON AÇIK", "GREEN")
         self._refresh_status_strip()
 
     def _send(self):
