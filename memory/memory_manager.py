@@ -2,7 +2,7 @@ import json
 import time
 import shutil
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from threading import RLock
 from pathlib import Path
 import sys
@@ -130,7 +130,7 @@ def _recover(error) -> dict:
 def _all_entries(memory: dict) -> list[tuple]:
     entries = []
     for cat, items in memory.items():
-        if not isinstance(items, dict):
+        if cat.startswith("_") or not isinstance(items, dict):
             continue
         for key, entry in items.items():
             if isinstance(entry, dict) and "value" in entry:
@@ -258,6 +258,21 @@ def update_memory(memory_update: dict) -> dict:
     with _lock:
         memory = load_memory()
         if _recursive_update(memory, memory_update):
+            tomb = memory.get("_deleted", {})
+            for category, items in memory_update.items():
+                if isinstance(items, dict):
+                    for key in items:
+                        entry = memory.get(category, {}).get(key)
+                        if isinstance(entry, dict) and entry.get("value"):
+                            deleted = tomb.pop(f"{category}/{key}", None)
+                            if deleted and str(deleted) >= entry["updated"]:
+                                # Relearning immediately after deletion must also
+                                # beat the deletion already stored on another device.
+                                try:
+                                    when = datetime.fromisoformat(str(deleted).replace("Z", "+00:00"))
+                                    entry["updated"] = (when + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
+                                except ValueError:
+                                    pass
             save_memory(memory)
             _log(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
         return memory
@@ -461,16 +476,17 @@ def search_memory(query: str, limit: int = 8) -> str:
     rows: list[tuple[int, int, str, str, str]] = []
     if (query or "").strip():                       # archived facts count too, ranked a little lower
         for cat, items in _load_archive().items():
-            if not isinstance(items, dict):
+            if cat.startswith("_") or not isinstance(items, dict):
                 continue
             for key, entry in items.items():
                 val = _entry_value(entry)
-                if val and not (isinstance(memory.get(cat), dict) and key in memory[cat]):
+                if (val and f"{cat}/{key}" not in memory.get("_deleted", {})
+                        and not (isinstance(memory.get(cat), dict) and key in memory[cat])):
                     coverage, weight = _score(words, cat, key, val)
                     if coverage:
                         rows.append((coverage, weight - 1, cat, key, val + " (arşivden)"))
     for cat, items in memory.items():
-        if not isinstance(items, dict):
+        if cat.startswith("_") or not isinstance(items, dict):
             continue                     # skip 'sessions', which is a list
         for key, entry in items.items():
             val = _entry_value(entry)
@@ -506,7 +522,7 @@ def all_entries_for_ui() -> list[dict]:
     memory = load_memory()
     rows = []
     for cat, items in memory.items():
-        if not isinstance(items, dict):
+        if cat.startswith("_") or not isinstance(items, dict):
             continue
         for key, entry in items.items():
             val = _entry_value(entry)
@@ -533,8 +549,10 @@ def forget(key: str, category: str = "notes") -> str:
     with _lock:
         memory = load_memory()
         cat    = memory.get(category, {})
-        if key in cat:
-            del cat[key]
+        archived = _load_archive().get(category, {})
+        if key in cat or (isinstance(archived, dict) and key in archived):
+            cat.pop(key, None)
+            memory.setdefault("_deleted", {})[f"{category}/{key}"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             memory[category] = cat
             save_memory(memory)
             return f"Forgotten: {category}/{key}"

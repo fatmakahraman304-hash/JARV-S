@@ -25,6 +25,33 @@ class MemorySafety(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
+    def test_forgetting_survives_restart_and_cloud_merge(self):
+        from core import sync_hub
+        mm.remember("secret", "old detail")
+        cloud = mm.load_memory()
+        mm.forget("secret")
+        local = sync_hub._local_memory_categories()
+        merged = sync_hub.merge_memory(local, cloud)
+        self.assertNotIn("secret", merged["notes"])
+        sync_hub._save_local_categories(merged)
+        self.assertIn("notes/secret", mm.load_memory()["_deleted"])
+        self.assertFalse(any(r["category"] == "_deleted" for r in mm.all_entries_for_ui()))
+
+    def test_forgetting_an_archived_fact_hides_it_from_recall(self):
+        mm.ARCHIVE_PATH.write_text(json.dumps({"notes": {"old": {"value": "private avocado"}}}))
+        mm.forget("old")
+        with patch("memory.continuity.search", return_value=""):
+            self.assertNotIn("private avocado", mm.search_memory("avocado"))
+
+    def test_remembering_again_clears_local_deletion(self):
+        mm.remember("item", "first")
+        mm.forget("item")
+        deleted = mm.load_memory()
+        mm.remember("item", "second")
+        self.assertNotIn("notes/item", mm.load_memory()["_deleted"])
+        from core.sync_hub import merge_memory
+        self.assertEqual(merge_memory(deleted, mm.load_memory())["notes"]["item"]["value"], "second")
+
     def test_desktop_edit_beats_an_older_phone_edit_on_same_day(self):
         from core.sync_hub import merge_memory
         mm.remember("shared", "desktop")

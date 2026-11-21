@@ -243,14 +243,14 @@ def merge_memory(a: dict, b: dict) -> dict:
 def _local_memory_categories() -> dict:
     from memory.memory_manager import load_memory
     mem = load_memory()
-    return {c: mem.get(c, {}) for c in _CATS if isinstance(mem.get(c, {}), dict)}
+    return {c: mem.get(c, {}) for c in (*_CATS, "_deleted") if isinstance(mem.get(c, {}), dict)}
 
 
 def _save_local_categories(cats: dict) -> None:
     from memory import memory_manager as mm
     with mm._lock:
         mem = mm.load_memory()
-        for c in _CATS:
+        for c in (*_CATS, "_deleted"):
             if c in cats:
                 mem[c] = cats[c]
         mm.save_memory(mem)
@@ -1092,7 +1092,7 @@ def _cycle() -> None:
         if prev is not None:
             gone = prev - keys_now
             if gone:
-                local["_deleted"] = {k: _now() for k in gone}
+                local.setdefault("_deleted", {}).update({k: _now() for k in gone})
             # added here since the last sync: a re-add beats an older deletion
             # (desktop entries carry only a date, so the timestamps can't tell)
             fresh = keys_now - prev
@@ -1101,7 +1101,8 @@ def _cycle() -> None:
         _state["local_keys"] = keys_now
         merged = merge_memory(local, cloud)
         local_norm = {c: {k: _entry(v) for k, v in local.get(c, {}).items()} for c in _CATS}
-        if any(merged.get(c, {}) != local_norm[c] for c in _CATS):
+        if (any(merged.get(c, {}) != local_norm[c] for c in _CATS)
+                or merged.get("_deleted", {}) != local.get("_deleted", {})):
             _save_local_categories(merged)
             _state["local_keys"] = {f"{c}/{k}" for c in _CATS for k in merged.get(c, {})}
         if merged != cloud:
