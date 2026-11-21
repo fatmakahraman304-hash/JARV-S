@@ -113,8 +113,10 @@ class UpdatedHudTests(unittest.TestCase):
             self.assertEqual(restart.returncode, 1, restart.stderr)
             self.assertIn("kod 23", restart.stdout)
             rollback = subprocess.run([sys.executable, "-m", "core.app_updater", "--rollback"],
-                                      cwd=root, capture_output=True, timeout=30)
+                                      cwd=root, capture_output=True, timeout=30,
+                                      env=dict(os.environ, PYTHONIOENCODING="cp1252:strict"))
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
+            self.assertIn("doğrulandı", rollback.stdout.decode("utf-8"))
             launch(2)
             app_updater.rollback_zip(root)
             launch(1)
