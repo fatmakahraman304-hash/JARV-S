@@ -747,14 +747,15 @@ _PHASES = {"improve": ["reading", "planning", "writing", "checking", "testing"],
 
 
 def _new_job(folder: Path, model: str, instruction: str, player,
-             kind: str = "improve") -> None:
+             kind: str = "improve", journal_id=None) -> None:
     global _JOB, _player_ref
+    now = time.time()
     with _state_lock:
         _JOB = {"folder": folder.name, "path": str(folder), "model": model,
                 "kind": kind, "phases": _PHASES[kind],
                 "request": instruction, "status": "starting",
-                "started": time.time(), "finished": None, "summary": "",
-                "files": {}, "steps": [], "result": ""}
+                "started": now, "updated": now, "finished": None, "summary": "",
+                "journal_id": journal_id, "files": {}, "steps": [], "result": ""}
     _player_ref = player
     _publish()
 
@@ -781,6 +782,7 @@ def _update(status: str | None = None, file: str | None = None,
     with _state_lock:
         if not _JOB:
             return
+        _JOB["updated"] = time.time()
         if status:
             _JOB["status"] = status
             if status in _JOB["phases"]:
@@ -788,6 +790,12 @@ def _update(status: str | None = None, file: str | None = None,
         if file and file_state:
             _JOB["files"].setdefault(file, {})["state"] = file_state
         _JOB.update(fields)
+        pid = _JOB.get("journal_id")
+        detail = _JOB["steps"][-1][1] if _JOB["steps"] else ""
+        phase = _JOB.get("phase") or status or _JOB["status"]
+    # Never hold the UI state lock while performing SQLite I/O.
+    if pid and status and not fields.get("finished"):
+        _journal(pid, status="çalışıyor", note=(f"{phase}: {detail}" if detail else phase))
     _publish()
 
 
@@ -798,8 +806,19 @@ def _log(player, msg: str) -> None:
         pass
     with _state_lock:
         if _JOB and _JOB.get("finished") is None:
-            _JOB["steps"].append([round(time.time() - _JOB["started"], 1), msg])
+            now = time.time()
+            _JOB["updated"] = now
+            _JOB["steps"].append([round(now - _JOB["started"], 1), msg])
             del _JOB["steps"][:-60]
+            pid = _JOB.get("journal_id")
+            # Persist progress at most once every 15s; do not write every log.
+            persist = bool(pid and now - _JOB.get("_last_journal_at", 0) >= 15)
+            if persist:
+                _JOB["_last_journal_at"] = now
+        else:
+            persist, pid = False, None
+    if persist:
+        _journal(pid, note=msg)
     _publish()
     if player:
         try:
@@ -1930,8 +1949,8 @@ def _start_improve(folder_raw: str, instruction: str, speak=None, player=None) -
 
     provider = _coding_provider()
     who = provider.partition("@")[2] or provider or "kodlama modeli"
-    _new_job(folder, who, instruction, player, kind="improve")
     pid = _journal_start("improve", folder.name, folder, instruction)
+    _new_job(folder, who, instruction, player, kind="improve", journal_id=pid)
     return _run_job(lambda: _improve_folder(folder, instruction, player),
                     folder.name, who, speak, player, pid=pid)
 
@@ -2017,8 +2036,8 @@ def _start_build(description: str, language: str, project_name: str,
     _job_name = name
     provider = _coding_provider()
     who = provider.partition("@")[2] or provider or "kodlama modeli"
-    _new_job(PROJECTS_DIR / name, who, description, player, kind="build")
     pid = _journal_start("build", name, PROJECTS_DIR / name, description)
+    _new_job(PROJECTS_DIR / name, who, description, player, kind="build", journal_id=pid)
 
     def job():
         try:
@@ -2166,7 +2185,7 @@ def _start_resume(target: str, speak=None, player=None) -> str:
     _journal(pick["id"], status="çalışıyor")
     st = pick.get("stages") or {}
     if pick["kind"] == "build" and isinstance(st, dict) and st.get("plan") and folder.is_dir():
-        _new_job(folder, who, pick["instruction"], player, kind="build")
+        _new_job(folder, who, pick["instruction"], player, kind="build", journal_id=pick["id"])
         done = sum(1 for s in st["plan"]["stages"] if s.get("done"))
         _log(player, f"Resuming '{pick['title']}' at stage {done + 1}/{len(st['plan']['stages'])}.")
         return _run_job(lambda: _build_staged(pick["instruction"], st.get("language", "python"), "",
@@ -2176,7 +2195,7 @@ def _start_resume(target: str, speak=None, player=None) -> str:
         _job_lock.release()
         _journal(pick["id"], status="iptal", note="folder no longer exists")
         return f"The folder of '{pick['title']}' no longer exists, so it cannot be resumed."
-    _new_job(folder, who, pick["instruction"], player, kind="improve")
+    _new_job(folder, who, pick["instruction"], player, kind="improve", journal_id=pick["id"])
     instruction = (pick["instruction"] + "\n\n(This job was interrupted before it finished. Look at the "
                    "folder as it is now, keep what is already done, and complete the rest.)")
     return _run_job(lambda: _improve_folder(folder, instruction, player),
