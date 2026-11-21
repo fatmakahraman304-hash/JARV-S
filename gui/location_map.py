@@ -224,7 +224,7 @@ class LocationPanel(QWidget):
         self.status.setFont(px_font(10))
         self.status.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         layout.addWidget(self.status)
-        attribution = QLabel(f'<a style="color: {C.TEXT_MED};" href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>')
+        attribution = QLabel(f'<a style="color: {C.TEXT_MED};" href="https://www.openstreetmap.org/copyright">© OpenStreetMap katkıcıları</a>')
         attribution.setOpenExternalLinks(True)
         attribution.setFont(px_font(9))
         attribution.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
