@@ -1,24 +1,8 @@
-"""
-core/coding_router.py — which coding model works on the next job.
+"""MAYK kodlama sırası: DeepSeek (V4 Pro → Flash) ve ardından Gemini.
 
-The best one first, always; when it hits its usage limit (or is signed out),
-the next one takes over, and the best one is tried again once its limit has
-had time to reset. The order, best first:
-
-    1. Claude Code        (agent in the project folder, subscription)
-    2. Codex CLI          (agent in the project folder, subscription)
-    3. MAYK's own agent (core/jarvis_agent.py: same way of working; thinks with
-                           DeepSeek, Gemini as backup). With a DeepSeek key
-                           it comes FIRST — the user chose DeepSeek to code.
-    4. the coding API chosen under ENGINE & PROVIDERS → CODING, if it is an API
-    5. Gemini's own ladder (always there, the last resort)
-
-Only what is installed and signed in takes part. A model that hit its limit
-rests for an hour, one that would not start (signed out, not found) for fifteen
-minutes; the rests are kept in config/coding_cooldown.json so a restart does not
-send the next job straight back into a wall.
-
-No Qt; nothing here raises.
+Eski Claude Code ve Codex CLI kodlama rotasında bulunmaz.
+Kota veya bağlantı hatasında sıradaki model devralır; dinlenme süreleri
+geçtiğinde ilk tercih tekrar denenebilir. Teknik sağlayıcı kimlikleri korunur.
 """
 
 from __future__ import annotations
@@ -28,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import claude_coding, codex_coding, jarvis_agent
+from core import jarvis_agent
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _COOL_FILE = BASE_DIR / "config" / "coding_cooldown.json"
@@ -36,9 +20,9 @@ LIMIT_REST = 60 * 60           # usage limit: try the best again after an hour
 DOWN_REST = 15 * 60            # signed out / not installed / would not start
 GEMINI = ""                    # the Gemini ladder (never rests)
 
-AGENTS = (claude_coding.PROVIDER_ID, codex_coding.PROVIDER_ID, jarvis_agent.PROVIDER_ID)
-NAMES = {claude_coding.PROVIDER_ID: "Claude Code", codex_coding.PROVIDER_ID: "Codex",
-         jarvis_agent.PROVIDER_ID: "MAYK ajanı", GEMINI: "Gemini"}
+AGENTS = (jarvis_agent.PROVIDER_ID,)
+NAMES = {jarvis_agent.PROVIDER_ID: "MAYK kod ajanı (DeepSeek öncelikli)",
+         GEMINI: "Gemini"}
 
 _lock = threading.Lock()
 
@@ -77,6 +61,7 @@ def is_limit(err) -> bool:
     s = str(err).casefold()
     return any(w in s for w in ("kullanım sınır", "usage limit", "rate limit", "429", "quota",
                                 "resource_exhausted", "too many requests", "limit reached",
+                                "insufficient balance", "402", "bakiye yetersiz",
                                 "limitine", "sınırına ulaş"))
 
 
@@ -85,6 +70,7 @@ def is_unavailable(err) -> bool:
     return any(w in s for w in ("oturum", "not logged in", "login", "401", "bulunamadı",
                                 "başlatılamadı", "not found", "unauthorized", "sürümü eski",
                                 "desteklemiyor", "zaman aşımı", "süre sınırını", "timeout",
+                                "404", "403", "503", "server overloaded", "network",
                                 "yanıt vermedi", "every model on the ladder failed"))
 
 
@@ -106,30 +92,27 @@ def rest(provider: str, err) -> float:
 
 
 def ladder(chosen: str = "", installed=None) -> list[str]:
-    """Every provider to try, best first, minus the ones resting. Never empty:
-    Gemini is always last. `chosen` is the API picked in the CODING setting;
-    `installed(provider)` says whether an agent CLI is present."""
+    """DeepSeek'li MAYK kod ajanı daima ilk sırada; eski CLI ajanları yok."""
     if installed is None:
         from core import agent_coding
         installed = agent_coding.available
-    order = list(AGENTS)
-    try:                         # the user chose DeepSeek as the coder: MAYK's agent leads
-        if jarvis_agent.deepseek_ready():
-            order = [jarvis_agent.PROVIDER_ID] + [p for p in order if p != jarvis_agent.PROVIDER_ID]
-    except Exception:
-        pass
-    out = [p for p in order if installed(p)]
-    if chosen and chosen not in AGENTS and chosen not in ("auto",):
-        out.append(chosen)
-    out = [p for p in out if not resting(p)]
-    return out + [GEMINI]
+    order = [p for p in AGENTS if installed(p) and not resting(p)]
+    # Kullanıcı alternatif bir API modeli seçmişse yedek olarak kullanılabilir,
+    # ancak kaldırılan eski abonelik/CLI kod ajanları geri yüklenmez.
+    old_agents = {"claude_code", "codex_cli"}
+    if chosen and chosen not in old_agents and chosen not in AGENTS and chosen != "auto":
+        if chosen not in order and not resting(chosen):
+            order.append(chosen)
+    return order + [GEMINI]
 
 
 def status_line(chosen: str = "") -> str:
-    """For the job panel: the order this job will try."""
+    """Model bekleme süreleri; kalan API bakiyesi gizli tutulur."""
     parts = []
     for p in list(AGENTS) + ([chosen] if chosen and chosen not in AGENTS else []):
+        if p in {"claude_code", "codex_cli"}:
+            continue
         left = resting(p)
         if left:
-            parts.append(f"{name(p)} (limitte, {int(left // 60) + 1} dk)")
+            parts.append(f"{name(p)} (sınır nedeniyle {int(left // 60) + 1} dk beklemede)")
     return ", ".join(parts)
