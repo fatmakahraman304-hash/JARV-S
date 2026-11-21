@@ -3,7 +3,7 @@ A heads-up before what is coming — "Efendim, toplantınıza on beş dakika var
 
 Reminders fire at their time. For an appointment that is too late: you need the
 quarter of an hour before it. For reminders that read like an appointment (a
-meeting, a call, a flight, the doctor …) Mayk gives one heads-up LEAD minutes
+meeting, a call, a flight, the doctor …) MAYK gives one heads-up LEAD minutes
 before — once, and only if the reminder was set well before that.
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def due_soon(reminders: list[dict], told: set, now: float | None = None, lead_mi
 def instruction(r: dict, now: float | None = None) -> str:
     now = time.time() if now is None else now
     mins = max(1, round((float(r["due"]) / 1000.0 - now) / 60))
-    return (f"[HEADS_UP] In {mins} minutes: {r.get('text', '')}. Give the user a heads-up the way Mayk "
+    return (f"[HEADS_UP] In {mins} minutes: {r.get('text', '')}. Give the user a heads-up the way MAYK "
             f"would — one sentence ('Efendim, toplantınıza {mins} dakika var.'), offering the obvious help at "
             "most once (opening the meeting link, the route). Do not call any tool unless they ask.")
 

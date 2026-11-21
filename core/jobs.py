@@ -1,4 +1,4 @@
-"""Long jobs Mayk is running right now — and how to stop each one.
+"""Long jobs MAYK is running right now — and how to stop each one.
 
 A job registers itself when it starts (`with jobs.running("Blender: apartman", cancel=fn): ...`)
 and disappears when it ends. "dur", "iptal et", "vazgeçtim" go through `cancel()`:

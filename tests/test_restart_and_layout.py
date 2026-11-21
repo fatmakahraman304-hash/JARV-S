@@ -1,4 +1,4 @@
-"""No-GUI restart scheduling tests. Never launch a real Mayk process."""
+"""No-GUI restart scheduling tests. Never launch a real MAYK process."""
 import os
 from pathlib import Path
 import sys
@@ -13,7 +13,7 @@ class RestartManagerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "Mayk"
+        self.root = Path(self.tmp.name) / "MAYK"
         self.root.mkdir()
         (self.root / "tools").mkdir()
         self.helper = self.root / "tools" / "restart_app.py"

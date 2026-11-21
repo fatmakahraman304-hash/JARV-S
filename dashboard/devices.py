@@ -1,8 +1,8 @@
 """
 dashboard/devices.py — who is on the network: this computer, the other
-computers running Mayk, and the screens (TVs) paired to it.
+computers running MAYK, and the screens (TVs) paired to it.
 
-Every Mayk announces itself on the local network once every few seconds with
+Every MAYK announces itself on the local network once every few seconds with
 a small UDP broadcast, and listens for the others. That is all the phone needs
 to show one "BAĞLI CİHAZLAR" list and command the laptop as easily as the
 desktop: it talks to each computer's own dashboard directly, with a token that
@@ -134,7 +134,7 @@ def decode_announce(data: bytes, sender_ip: str = "") -> dict | None:
             return None
         url = f"{scheme}://{sender_ip}:{port}"
     kind = msg.get("kind") if msg.get("kind") in ("desktop", "laptop") else "desktop"
-    return {"id": did, "name": str(msg.get("name") or "Mayk")[:40],
+    return {"id": did, "name": str(msg.get("name") or "MAYK")[:40],
             "os": str(msg.get("os") or "")[:40], "kind": kind, "url": url}
 
 
@@ -210,7 +210,7 @@ class Discovery:
 # ── paired screens (TVs) ──────────────────────────────────────────────────────
 
 class ScreenRegistry:
-    """TVs and other big screens that show the Mayk screen page.
+    """TVs and other big screens that show the MAYK screen page.
 
     A TV cannot scan a QR code and typing on a TV remote is miserable, so the
     pairing goes the other way round, as with streaming apps: the TV page asks

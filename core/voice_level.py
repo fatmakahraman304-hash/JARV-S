@@ -1,8 +1,8 @@
 """
-How loud Mayk's own voice is — and softer at night.
+How loud MAYK's own voice is — and softer at night.
 
-Mayk does not boom through the house at 2 a.m. The voice's loudness is
-a gain applied to Mayk's speech only (the computer's volume and every other
+MAYK does not boom through the house at 2 a.m. The voice's loudness is
+a gain applied to MAYK's speech only (the computer's volume and every other
 program stay as they are): the user's chosen level, and between NIGHT_FROM and
 NIGHT_TO a softer one, unless they turned the night setting off.
 """
@@ -35,7 +35,7 @@ def is_night(hour: int, start: int, end: int) -> bool:
 
 
 def gain(now: datetime | None = None, cfg: dict | None = None) -> float:
-    """The factor Mayk's speech is multiplied by now (1.0 = as generated)."""
+    """The factor MAYK's speech is multiplied by now (1.0 = as generated)."""
     cfg = cfg or settings()
     hour = (now or datetime.now()).hour
     level = cfg["level"]

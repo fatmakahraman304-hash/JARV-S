@@ -1,18 +1,18 @@
 """
-While you were away — what Mayk had to say when nobody was there to hear it.
+While you were away — what MAYK had to say when nobody was there to hear it.
 
-In the films Mayk never reports to an empty room: Tony walks back in and
+In the films MAYK never reports to an empty room: Tony walks back in and
 hears "Welcome home, sir" and then what happened. Here, before this module, a
-result that arrived while Mayk was asleep (wake-word mode) was spoken by the
+result that arrived while MAYK was asleep (wake-word mode) was spoken by the
 model and its audio thrown away, and one that arrived while the user had simply
 left the desk was said to no one. Both were lost.
 
 Now every announcement passes through `should_hold()`. When the user is away it
 goes into the digest instead (kept on disk, so a restart does not lose it), and
-when they come back — they wake Mayk, speak, or touch the mouse or keyboard —
+when they come back — they wake MAYK, speak, or touch the mouse or keyboard —
 `take()` hands the whole digest over once, to be told in one short welcome.
 
-Away means: Mayk is asleep (nothing it says is heard), or nobody has spoken to
+Away means: MAYK is asleep (nothing it says is heard), or nobody has spoken to
 it AND nobody has touched the computer for AWAY_AFTER seconds. When the system
 cannot report input idleness, silence alone counts, over a longer window.
 """
@@ -60,7 +60,7 @@ def input_idle_seconds() -> float | None:
 
 
 def is_away(awake: bool, speech_quiet: float, input_idle: float | None) -> bool:
-    """The user would not hear Mayk now."""
+    """The user would not hear MAYK now."""
     if not awake:
         return True
     if input_idle is None:
@@ -170,7 +170,7 @@ def welcome_instruction(items: list[dict], away_for: float = 0.0) -> str:
     gone = f" They were away for about {_ago(away_for).replace(' ago', '')}." if away_for >= 60 else ""
     return ("[AWAY_DIGEST] The user is back." + gone + " These came up while they were away and "
             "have not been told yet:\n" + describe(items) + "\n"
-            "As Mayk, welcome them back warmly and tell them what happened, "
+            "As MAYK, welcome them back warmly and tell them what happened, "
             "most important first, in at most three short sentences: merge related items, drop "
             "progress notes a later item makes stale, give the outcome rather than the steps. "
             "If they have just asked something, answer that first. Offer details only if there is "
@@ -190,9 +190,9 @@ def ready_to_tell(awake: bool, speaking: bool, busy: bool, speech_quiet: float,
 
 
 # ── welcome home ──────────────────────────────────────────────────────────────
-# "Welcome home, sir." After a long absence Mayk greets the user even when
+# "Welcome home, sir." After a long absence MAYK greets the user even when
 # nothing happened — but only when they came back to the desk on their own (not
-# when they woke Mayk with a command: that command comes first), and only when
+# when they woke MAYK with a command: that command comes first), and only when
 # the user has not turned it off.
 
 WELCOME_AFTER = 2 * 3600        # away at least this long (after the 15-minute threshold)
@@ -221,8 +221,8 @@ def greeting_instruction(away_for: float, hour: int) -> str:
 
 
 # ── word to the phone ─────────────────────────────────────────────────────────
-# Mayk reaches Tony wherever he is. When the user has left the desk (not
-# merely Mayk asleep with them sitting there) and a job they started finishes,
+# MAYK reaches Tony wherever he is. When the user has left the desk (not
+# merely MAYK asleep with them sitting there) and a job they started finishes,
 # or the computer raises an alarm, their phone gets a notification too — the
 # same Web Push the phone app already uses for reminders. Reminders are not
 # repeated here: they push on their own.
@@ -248,13 +248,13 @@ def phone_note(instruction: str, kind: str) -> tuple[str, str] | None:
         tool = (m.group(1) if m else "").replace("_", " ")
         r = re.search(r"Result:\s*(.*)", text, re.S)
         body = (r.group(1) if r else text).strip()
-        return (f"Mayk — {tool} tamamlandı" if tool else "Mayk — iş tamamlandı"), body[:300]
+        return (f"MAYK — {tool} tamamlandı" if tool else "MAYK — iş tamamlandı"), body[:300]
     if kind == "heads_up":
         m = re.search(r"In (\d+) minutes: (.*?)\. Give", text, re.S)
-        return ("Mayk — yaklaşan", f"{m.group(2)} — {m.group(1)} dakika sonra." if m else text[:200])
+        return ("MAYK — yaklaşan", f"{m.group(2)} — {m.group(1)} dakika sonra." if m else text[:200])
     if kind == "system":
         body = re.sub(r"^\[[A-Z_]+\]\s*", "", text)
-        return "Mayk — sistem uyarısı", body[:300]
+        return "MAYK — sistem uyarısı", body[:300]
     return None
 
 
@@ -285,7 +285,7 @@ def push_to_phones(title: str, body: str) -> int:
 
 
 # ── good morning ──────────────────────────────────────────────────────────────
-# The opening briefing runs when Mayk starts. A computer left on overnight
+# The opening briefing runs when MAYK starts. A computer left on overnight
 # never starts again, so the user would never get one: the first return of a new
 # morning stands in for the start — "Günaydın, efendim" and the briefing, with
 # whatever came up overnight folded in.

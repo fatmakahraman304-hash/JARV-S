@@ -1,5 +1,5 @@
 """
-Screen & webcam capture for Mayk vision.
+Screen & webcam capture for MAYK vision.
 
 Provides the two capture entry points main.py uses — `_capture_screen()` and
 `_capture_camera()` — plus their helpers (compression, camera auto-detection,

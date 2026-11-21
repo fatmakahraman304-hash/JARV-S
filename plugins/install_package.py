@@ -1,6 +1,6 @@
-"""Install a library Mayk needs, after the user agreed ('evet kur').
+"""Install a library MAYK needs, after the user agreed ('evet kur').
 
-Only packages from Mayk's own dependency lists can be installed — the request
+Only packages from MAYK's own dependency lists can be installed — the request
 comes from a tool's error text, which must never choose an arbitrary package.
 """
 from __future__ import annotations
@@ -8,8 +8,8 @@ from __future__ import annotations
 PLUGIN = {
     "name": "install_package",
     "description": (
-        "Install a missing Python package that one of Mayk's own tools needs (offered after a tool failed with "
-        "[MISSING_PACKAGE]). Call only after the user agreed. Only Mayk's own dependencies can be installed."
+        "Install a missing Python package that one of MAYK's own tools needs (offered after a tool failed with "
+        "[MISSING_PACKAGE]). Call only after the user agreed. Only MAYK's own dependencies can be installed."
     ),
     "parameters": {"type": "OBJECT", "properties": {
         "package": {"type": "STRING", "description": "The package named in [MISSING_PACKAGE]"},
@@ -26,7 +26,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         log = (lambda m: player.write_log(m)) if player is not None and hasattr(player, "write_log") else None
         ok, msg = installer.install(pkg, log)
         if ok:
-            return (msg + " Şimdi kullanıcının az önceki isteğini tekrar dene. Yine aynı hata çıkarsa Mayk'ın yeniden "
+            return (msg + " Şimdi kullanıcının az önceki isteğini tekrar dene. Yine aynı hata çıkarsa MAYK'ın yeniden "
                     "başlatılması gerekiyor; bunu kullanıcıya söyle.")
         return msg
     except Exception as exc:

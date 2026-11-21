@@ -134,7 +134,7 @@ def processes(op: str, name: str) -> str:
         if not n:
             return "Hangi program?"
         if n in _PROTECTED or n + ".exe" in _PROTECTED:
-            return f"{name} sistemin ya da Mayk'ın bir parçası; kapatmıyorum."
+            return f"{name} sistemin ya da MAYK'ın bir parçası; kapatmıyorum."
         killed = 0
         for p in psutil.process_iter(["name"]):
             pn = str(p.info.get("name") or "").casefold()

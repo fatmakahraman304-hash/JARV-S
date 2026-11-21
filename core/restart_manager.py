@@ -1,6 +1,6 @@
-"""Start a reliable post-update Mayk relaunch without Qt imports.
+"""Start a reliable post-update MAYK relaunch without Qt imports.
 
-When Mayk was started by a supervisor, return control to
+When MAYK was started by a supervisor, return control to
 that supervisor (which restarts on main.py's exit code 75). Otherwise launch
 a detached helper that waits for the running process to release audio/Qt
 resources before opening the updated main.py.
@@ -21,7 +21,7 @@ def schedule_restart(project_root: Path, current_pid: int,
     application quit only after this function has returned successfully.
     """
     if not isinstance(current_pid, int) or current_pid <= 0:
-        raise ValueError("Mayk yeniden başlatma PID değeri geçersiz.")
+        raise ValueError("MAYK yeniden başlatma PID değeri geçersiz.")
 
     if os.environ.get("JARVIS_MANAGED_RESTART") == "1":
         # A supervisor from a previous installation restarts on exit code 75.
@@ -36,7 +36,7 @@ def schedule_restart(project_root: Path, current_pid: int,
     python = str(executable or sys.executable)
     if not Path(python).is_file():
         raise FileNotFoundError(
-            f"Mayk Python yürütülebilir dosyası bulunamadı: {python}"
+            f"MAYK Python yürütülebilir dosyası bulunamadı: {python}"
         )
 
     log_root = Path(os.environ.get("LOCALAPPDATA")

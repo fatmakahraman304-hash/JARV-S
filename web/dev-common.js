@@ -1,4 +1,4 @@
-/* Mayk — what every device module (dev-*.js) shares: a place for its own
+/* MAYK — what every device module (dev-*.js) shares: a place for its own
  * settings in ⚙, a style sheet, a vibration that never throws.
  * The modules reach the app only through window.JARVIS (end of app.js).
  */

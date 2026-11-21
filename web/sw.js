@@ -1,4 +1,4 @@
-/* Mayk web — app shell cache. Network first, so an update reaches every
+/* MAYK web — app shell cache. Network first, so an update reaches every
  * device on its next open; the cache only answers when offline. */
 const CACHE = 'jarvis-web-v5';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png'];
@@ -18,7 +18,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Mayk', {
+  e.waitUntil(self.registration.showNotification(d.title || 'MAYK', {
     body: d.body || '', tag: d.tag || 'jarvis', renotify: true, icon: 'icon-192.png', badge: 'icon-192.png',
     vibrate: d.tag === 'alarm' ? [500, 200, 500, 200, 500] : [200, 100, 200], data: { url: './' } }));
 });

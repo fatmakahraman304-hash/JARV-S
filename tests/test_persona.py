@@ -1,4 +1,4 @@
-"""Mayk speaks like the films: 'efendim', the 'siz' forms, dry wit, calm reports — overridable by the user."""
+"""MAYK speaks like the films: 'efendim', the 'siz' forms, dry wit, calm reports — overridable by the user."""
 import unittest
 from pathlib import Path
 

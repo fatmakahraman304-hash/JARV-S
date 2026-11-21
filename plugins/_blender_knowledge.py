@@ -1,11 +1,11 @@
-"""Everything Mayk knows about Blender, kept on this PC:
+"""Everything MAYK knows about Blender, kept on this PC:
 
 * api   — read from the user's own Blender (every operator and its options, every
           data type, every node and its sockets): exact for that version.
 * manual — the official Blender manual, downloaded once, kept as searchable text.
 
 search() finds what a request needs; prompt() turns it into a block that goes
-into every Blender script / plan / answer, so Mayk writes correct names and
+into every Blender script / plan / answer, so MAYK writes correct names and
 knows how a feature is meant to be used.
 """
 from __future__ import annotations

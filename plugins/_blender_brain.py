@@ -1,7 +1,7 @@
-"""What Mayk knows and learns about Blender.
+"""What MAYK knows and learns about Blender.
 
 * KNOWLEDGE — the Blender 4.x Python facts models most often get wrong.
-* Lessons — a small file Mayk keeps (memory/blender_lessons.json):
+* Lessons — a small file MAYK keeps (memory/blender_lessons.json):
   recipes that worked (request -> steps or script), errors and the code that
   fixed them, and tips the user taught. The closest ones go into every new
   Blender prompt, so a mistake made once is not made again.
@@ -57,7 +57,7 @@ KNOWLEDGE = """Blender 4.x Python (bpy) facts — follow them exactly:
 - Text: bpy.data.curves.new(n, 'FONT'); curve.body = "..."; bpy.data.objects.new(n, curve).
 """
 
-KIT_DOC = """Mayk toolkit — these functions ALREADY EXIST in the script (no import needed); metres everywhere:
+KIT_DOC = """MAYK toolkit — these functions ALREADY EXIST in the script (no import needed); metres everywhere:
 clear()  — empty the scene (only for a brand-new scene)
 box(name, size=(x,y,z), loc=(x,y,z), bevel=0.004, rot=(deg,deg,deg))  — size is the FULL extent, loc is the centre
 cylinder(name, radius, depth, loc, bevel=0.002, rot=(deg,deg,deg), verts=64)  — axis along z before rot
@@ -169,7 +169,7 @@ def lessons_prompt(request: str, kinds=("recipe", "script", "fix", "tip"), k: in
             out.append(f"- Earlier error «{it['error'][:300]}» was fixed with:\n{body}")
         else:
             out.append(f"- A similar request that worked («{it['request'][:160]}»):\n{body}")
-    return ("Lessons Mayk learned before (reuse what fits):\n" + "\n".join(out)) if out else ""
+    return ("Lessons MAYK learned before (reuse what fits):\n" + "\n".join(out)) if out else ""
 
 
 def summary() -> str:
@@ -265,7 +265,7 @@ def is_building(request: str) -> bool:
     return True
 
 
-PLAN_DOC = """Describe the building as JSON for Mayk's architecture engine (metres; footprint centred on the origin,
+PLAN_DOC = """Describe the building as JSON for MAYK's architecture engine (metres; footprint centred on the origin,
 x = width left→right, y = depth, FRONT facade faces -y; rects are [x0, y0, x1, y1] inside the outer walls):
 {"name": "...", "width": W, "depth": D, "floors": N, "floor_height": 2.9–3.2, "wall": 0.25, "inner_wall": 0.12, "slab": 0.2,
  "rooms": [{"name": "Salon", "rect": [...]}, ...],          # the plan repeated on every floor
@@ -413,7 +413,7 @@ def fix_extra(plan: dict, name: str, error: str) -> dict:
     return plan
 
 
-LOOK = """You are Mayk's eye, checking its own Blender work. The image shows the scene from up to four sides
+LOOK = """You are MAYK's eye, checking its own Blender work. The image shows the scene from up to four sides
 (scene camera / front / three-quarter / side / top). The user asked for: {request}
 Measured geometry problems: {issues}
 The user's own decisions (they are the designer — never contradict them, never suggest features they did not ask

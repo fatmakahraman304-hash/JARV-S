@@ -1,4 +1,4 @@
-"""Mayk learns from its own mistakes with any tool.
+"""MAYK learns from its own mistakes with any tool.
 
 A tool call fails; a few minutes later the same tool succeeds with different
 arguments (the app's real name, the right folder, another platform). That pair

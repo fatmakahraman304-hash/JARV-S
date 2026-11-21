@@ -1,15 +1,15 @@
-"""Mayk live link — runs INSIDE the user's open Blender.
+"""MAYK live link — runs INSIDE the user's open Blender.
 
-Mayk copies this file into Blender's scripts/startup folder, so every Blender
-the user opens listens on 127.0.0.1 for Mayk (with a token only Mayk knows).
-Mayk can then read what the user has selected and change the open scene in
+MAYK copies this file into Blender's scripts/startup folder, so every Blender
+the user opens listens on 127.0.0.1 for MAYK (with a token only MAYK knows).
+MAYK can then read what the user has selected and change the open scene in
 place: "şunu kırmızı yap" means the selected object, the result appears in the
 window at once, and Ctrl+Z (or "geri al") undoes it like any other edit.
 
 Everything runs on Blender's main thread from a timer; one request at a time.
 Requests and replies are one JSON object per connection:
     {"token": ..., "op": "state"}                 -> scene, selection, file
-    {"token": ..., "op": "exec", "code": "..."}   -> runs code with Mayk's toolkit; error = traceback
+    {"token": ..., "op": "exec", "code": "..."}   -> runs code with MAYK's toolkit; error = traceback
     {"token": ..., "op": "undo"} / {"op": "redo"}
     {"token": ..., "op": "issues"}                -> floating / disconnected parts
 """
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import bpy
 
-# filled in by Mayk when it installs the file
+# filled in by MAYK when it installs the file
 JARVIS_DIR = r"__JARVIS_DIR__"
 PORT = 47863
 
@@ -62,7 +62,7 @@ def _state():
 
 
 def _snapshot():
-    """What every object looks like now — to tell afterwards exactly what Mayk changed."""
+    """What every object looks like now — to tell afterwards exactly what MAYK changed."""
     snap = {}
     for o in bpy.context.scene.objects:
         mw = o.matrix_world
@@ -131,7 +131,7 @@ def handle(req: dict) -> dict:
         if op == "exec":
             env = _kit_env()
             try:
-                _in_window(lambda: bpy.ops.ed.undo_push(message="Mayk öncesi"))
+                _in_window(lambda: bpy.ops.ed.undo_push(message="MAYK öncesi"))
             except Exception:
                 pass
             before = _snapshot()
@@ -147,7 +147,7 @@ def handle(req: dict) -> dict:
                     tb += f"\nFailing line {hit[-1]}: {lines[hit[-1] - 1].strip()}"
                 return {"ok": False, "error": tb}
             try:
-                _in_window(lambda: bpy.ops.ed.undo_push(message="Mayk: " + (req.get("label") or "değişiklik")[:60]))
+                _in_window(lambda: bpy.ops.ed.undo_push(message="MAYK: " + (req.get("label") or "değişiklik")[:60]))
             except Exception:
                 pass
             return {"ok": True, "state": _state(), "diff": _diff(before, _snapshot())}

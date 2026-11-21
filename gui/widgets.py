@@ -368,14 +368,14 @@ class FileDropZone(QWidget):
         chosen = menu.exec(QCursor.pos())
         if chosen is pick_dir:
             path = QFileDialog.getExistingDirectory(
-                self, "Select a project folder for Mayk", str(Path.home()))
+                self, "Select a project folder for MAYK", str(Path.home()))
             if path:
                 self._set_file(path)
             return
         if chosen is not pick_file:
             return
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select a file for Mayk", str(Path.home()),
+            self, "Select a file for MAYK", str(Path.home()),
             "All Files (*.*);;"
             "Images (*.jpg *.jpeg *.png *.gif *.webp *.bmp *.svg);;"
             "Documents (*.pdf *.docx *.txt *.md *.pptx);;"
@@ -559,7 +559,7 @@ class _CameraPreview(QWidget):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  Mayk interface building blocks
+#  MAYK interface building blocks
 # ═════════════════════════════════════════════════════════════════════════════
 # All painted rather than styled: a stylesheet cannot cut a corner or light an
 # edge, and painting reads the palette at paint time, so every one of these

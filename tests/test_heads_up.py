@@ -39,7 +39,7 @@ class RoutingTest(unittest.TestCase):
         with mock.patch.object(quiet, "is_on", lambda now=None: True):
             self.assertFalse(quiet.holds("heads_up"))
         t, b = away.phone_note(hu.instruction(rem("a", "Doktor randevusu", 15), now=NOW), "heads_up")
-        self.assertEqual(t, "Mayk — yaklaşan")
+        self.assertEqual(t, "MAYK — yaklaşan")
         self.assertEqual(b, "Doktor randevusu — 15 dakika sonra.")
         with mock.patch.object(away, "push_enabled", lambda: True):
             away._last_push["at"] = float("-inf")

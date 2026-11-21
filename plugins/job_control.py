@@ -1,4 +1,4 @@
-"""Stop what Mayk is doing: "dur", "iptal et", "vazgeçtim", "Blender'daki işi durdur".
+"""Stop what MAYK is doing: "dur", "iptal et", "vazgeçtim", "Blender'daki işi durdur".
 
 Reaches every kind of long job: the ones registered in core.jobs (Blender …) and
 the background task engine (research, drafting).
@@ -8,7 +8,7 @@ from __future__ import annotations
 PLUGIN = {
     "name": "job_control",
     "description": (
-        "Stop or list Mayk's long-running jobs (Blender builds/renders, background research and drafting tasks). "
+        "Stop or list MAYK's long-running jobs (Blender builds/renders, background research and drafting tasks). "
         "Use when the user says stop / cancel / give up on a job that is running: 'dur', 'iptal et', "
         "'vazgeçtim', 'Blender'daki işi durdur', 'araştırmayı iptal et'. action=list shows what is running."
     ),

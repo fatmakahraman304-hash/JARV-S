@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-/** The shared gist every Mayk device uses (desktop: core/sync_hub.py). */
+/** The shared gist every MAYK device uses (desktop: core/sync_hub.py). */
 final class Gist {
     private final String token, id;
     private String etag = "";
@@ -88,7 +88,7 @@ final class Gist {
         cache = null;
     }
 
-    /** {g: gemini, t: token, i: gist, n: name} from a Mayk setup link (…#s=…). */
+    /** {g: gemini, t: token, i: gist, n: name} from a MAYK setup link (…#s=…). */
     static JSONObject parseSetup(String text) {
         try {
             String s = text.trim();

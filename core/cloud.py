@@ -911,7 +911,7 @@ def build_system_prompt(decls: list) -> str:
     from memory.memory_manager import format_memory_for_prompt, load_memory
 
     cfg = load_api_keys()
-    name = (cfg.get("assistant_name") or "Mayk").strip() or "Mayk"
+    name = (cfg.get("assistant_name") or "MAYK").strip() or "MAYK"
     user = (cfg.get("user_name") or "").strip()
     try:
         template = (BASE_DIR / "core" / "prompt.txt").read_text(encoding="utf-8")
@@ -1933,7 +1933,7 @@ def _assistant_name() -> str:
         from memory.config_manager import get_assistant_name
         return get_assistant_name()
     except Exception:
-        return "Mayk"
+        return "MAYK"
 
 
 def _ids(raw) -> set:
@@ -2061,7 +2061,7 @@ class Runtime:
                 self.queue_event(chat, "[EVENT] You sent a wake signal seven minutes ago and the "
                                  "computer has not checked in. Tell the user briefly, in their "
                                  "language: the usual causes are the wake signal not reaching it, "
-                                 "or Mayk not set to auto-start and connect to the cloud on launch.")
+                                 "or MAYK not set to auto-start and connect to the cloud on launch.")
             finally:
                 self._waking.discard(chat or 0)
         threading.Thread(target=wait, daemon=True, name="cloud-wake-watch").start()
@@ -2707,7 +2707,7 @@ def init_link(state: CloudState, host: str = "", port: int = 0, rotate: bool = F
 # ═════════════════════════════════════════════════════════════════════════════
 
 _UNIT = """[Unit]
-Description=Mayk cloud body
+Description=MAYK cloud body
 After=network-online.target
 Wants=network-online.target
 
@@ -2869,7 +2869,7 @@ def deploy(target: str, port: int, host: str, ssh_port: int, key: str = "") -> N
         target = f"root@{target}"
     missing = [rel for rel in MANIFEST if not (BASE_DIR / rel).is_file()]
     if missing:
-        raise SystemExit("These files are missing from this Mayk folder, so nothing was uploaded:\n  "
+        raise SystemExit("These files are missing from this MAYK folder, so nothing was uploaded:\n  "
                          + "\n  ".join(missing))
     with tempfile.TemporaryDirectory() as tmp:
         bundle = Path(tmp) / "jarvis-cloud.tgz"
@@ -2918,13 +2918,13 @@ def main() -> None:
     state = CloudState()
     doc, cert, key = init_link(state, args.host, args.port, rotate=args.rotate)
     if args.init or args.pair_code or args.rotate:
-        _say("\nPairing code — paste it into Mayk on your computer:\n"
+        _say("\nPairing code — paste it into MAYK on your computer:\n"
              "  ⚙ → PLUGIN SETTINGS → CLOUD AGENT → Pairing code\n\n"
              f"  {make_pair_code(doc['host'], doc['port'], doc['secret'], doc['fingerprint'])}\n\n"
              "Treat it like a password: anyone holding it can talk to this server.")
         if args.rotate:
             _say("The running service accepts the new code at once and refuses the old one — "
-                 "no restart needed. Paste the new code into Mayk and press TEST & SYNC.")
+                 "no restart needed. Paste the new code into MAYK and press TEST & SYNC.")
         return
     Runtime().run(doc["port"], cert, key)
 

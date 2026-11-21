@@ -1,8 +1,8 @@
 """
-core/jarvis_agent.py — Mayk's own coding agent. No subscription needed.
+core/jarvis_agent.py — MAYK's own coding agent. No subscription needed.
 
 Claude Code and Codex are rented: when the subscription ends, they are gone.
-This agent is Mayk's own. It works the way they do — looks around the
+This agent is MAYK's own. It works the way they do — looks around the
 project, reads the files it needs, makes exact edits, runs the code and the
 tests, reads the errors and fixes them until it works — and only borrows a
 "brain" to think with, choosing the best one that is free right now:
@@ -10,7 +10,7 @@ tests, reads the errors and fixes them until it works — and only borrows a
     1. DeepSeek — the user's chosen coder (new accounts get free tokens for a
        month, then it is pay-as-you-go and very cheap). An empty balance
        answers 402 and Gemini takes over.
-    2. Gemini, with the key Mayk already has, as the backup (the best model
+    2. Gemini, with the key MAYK already has, as the backup (the best model
        the key can use is found by asking Google which models exist — model
        names change every few months, so none is hard-coded)
 
@@ -61,7 +61,7 @@ _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "env", "__pycache__", "di
               ".idea", ".vscode", ".mypy_cache", ".pytest_cache", ".jarvis_backup"}
 
 SYSTEM = (
-    "You are Mayk's coding agent, working inside one project folder through tools. You are a senior "
+    "You are MAYK's coding agent, working inside one project folder through tools. You are a senior "
     "engineer who owns the result: the user asked by voice and will not review your diff, so what you "
     "hand back must simply work.\n"
     "Work like this:\n"
@@ -255,7 +255,7 @@ class Workspace:
     def t_fetch_url(self, url):
         if not str(url).startswith(("http://", "https://")):
             return "Only web addresses."
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Mayk"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 MAYK"})
         with urllib.request.urlopen(req, timeout=20) as r:
             raw = r.read(600_000).decode("utf-8", errors="replace")
         text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", raw)
@@ -480,10 +480,10 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("Mayk'ın kod ajanı için beyin yok: DeepSeek ya da Gemini anahtarı gerekiyor.")
+        raise RuntimeError("MAYK'ın kod ajanı için beyin yok: DeepSeek ya da Gemini anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
-    log(f"  Mayk ajanı: {brain.name}")
+    log(f"  MAYK ajanı: {brain.name}")
     idle = 0
     for step in range(max_steps):
         _shrink(history)

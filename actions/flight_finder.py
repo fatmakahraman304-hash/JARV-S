@@ -237,7 +237,7 @@ def _format_text_report(
     page_url:    str,
 ) -> str:
     lines = [
-        "Mayk — Flight Search Results",
+        "MAYK — Flight Search Results",
         "─" * 50,
         f"Route     : {origin} → {destination}",
         f"Date      : {date}",

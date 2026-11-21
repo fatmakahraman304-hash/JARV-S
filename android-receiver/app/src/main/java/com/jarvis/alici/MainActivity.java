@@ -19,7 +19,7 @@ import org.json.JSONObject;
 
 /**
  * One screen, easy with a TV remote: status, the setup (one tap from the
- * Mayk page on this device, or a pasted setup link), and a button to the
+ * MAYK page on this device, or a pasted setup link), and a button to the
  * accessibility settings.
  */
 public class MainActivity extends Activity {
@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(12, 8, 5));
 
         TextView title = new TextView(this);
-        title.setText("Mayk ALICI");
+        title.setText("MAYK ALICI");
         title.setTextColor(Color.rgb(255, 160, 60));
         title.setTextSize(30);
         root.addView(title);
@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> setup(link.getText().toString()));
         root.addView(save);
 
-        Button web = button("Projeksiyonda Mayk'ı aç");
+        Button web = button("Projeksiyonda MAYK'ı aç");
         web.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ReceiverService.WEB))));
         root.addView(web);
 
@@ -89,7 +89,7 @@ public class MainActivity extends Activity {
 
     private void setup(String text) {
         JSONObject j = Gist.parseSetup(text);
-        if (j == null) { status.setText("Bu bir Mayk kurulum bağlantısı değil."); return; }
+        if (j == null) { status.setText("Bu bir MAYK kurulum bağlantısı değil."); return; }
         SharedPreferences.Editor e = ReceiverService.prefs(this).edit();
         e.putString("tok", j.optString("t")).putString("gist", j.optString("i"));
         if (!j.optString("d").isEmpty()) e.putString("name", j.optString("d"));
@@ -104,9 +104,9 @@ public class MainActivity extends Activity {
         boolean linked = !p.getString("gist", "").isEmpty();
         boolean a11y = RemoteAccessibility.instance != null;
         status.setText("Bağlantı: " + (linked ? "kurulu" : "kurulmadı — 2. adım") + "\n"
-                + "Erişilebilirlik: " + (a11y ? "açık ✓" : "kapalı — 1. adım (Ayarlar → Erişilebilirlik → Mayk Alıcı)") + "\n"
+                + "Erişilebilirlik: " + (a11y ? "açık ✓" : "kapalı — 1. adım (Ayarlar → Erişilebilirlik → MAYK Alıcı)") + "\n"
                 + "Dinleme: " + ReceiverService.status + "\n\n"
-                + "Hazır olunca telefondaki Mayk'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
+                + "Hazır olunca telefondaki MAYK'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
         ui.removeCallbacksAndMessages(null);
         ui.postDelayed(this::refresh, 3000);
     }

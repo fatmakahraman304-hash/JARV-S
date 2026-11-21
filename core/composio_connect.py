@@ -255,7 +255,7 @@ def _fill_required(schema: dict, args: dict) -> dict:
         if enum:
             args[name] = enum[0]
         elif name in ("thought", "reasoning"):
-            args[name] = "Mayk is carrying out the user's spoken request."
+            args[name] = "MAYK is carrying out the user's spoken request."
         elif name in ("current_step", "step"):
             args[name] = "EXECUTING"
         elif typ == "boolean":

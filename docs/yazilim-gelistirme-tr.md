@@ -1,4 +1,4 @@
-# Mayk yazılım geliştirme
+# MAYK yazılım geliştirme
 
 Mevcut `dev_agent` yeni proje oluşturur, yerel projeleri geliştirir ve hata
 kontrolleri yapar. `github_develop` Murat uyarlamasının GitHub deposunu ayrı

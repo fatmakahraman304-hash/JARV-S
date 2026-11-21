@@ -1,4 +1,4 @@
-"""Odak modu (pomodoro): N dakika çalış, M dakika mola — bitince Mayk söyler,
+"""Odak modu (pomodoro): N dakika çalış, M dakika mola — bitince MAYK söyler,
 telefon ve saat de bilir (ortak hatırlatıcı)."""
 from __future__ import annotations
 

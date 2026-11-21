@@ -1,4 +1,4 @@
-/* Mayk device kit — small pure helpers the device modules (dev-*.js) share.
+/* MAYK device kit — small pure helpers the device modules (dev-*.js) share.
  *
  * Nothing here touches the page, so tests/test_web_devices.py runs every
  * function under Node. In the browser it is window.JarvisKit.

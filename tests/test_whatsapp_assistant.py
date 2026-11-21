@@ -70,4 +70,4 @@ class AssistantNameTests(unittest.TestCase):
             wa.Assistant.voice(fake, response, 0, "", "")
             self.assertIn("ben Murat", xml.tostring(response, encoding="unicode"))
         with patch("memory.config_manager.get_assistant_name", side_effect=RuntimeError):
-            self.assertEqual(wa.assistant_name(), "Mayk")
+            self.assertEqual(wa.assistant_name(), "MAYK")

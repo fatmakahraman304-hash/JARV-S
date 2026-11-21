@@ -148,7 +148,7 @@ def _archive(data):
                 raise RuntimeError('Geçersiz veya çok büyük güncelleme arşivi.')
             files[name] = archive.read(info)
     if not {'main.py', 'requirements.txt', 'gui/window.py'} <= files.keys():
-        raise RuntimeError('Eksik Mayk arşivi.')
+        raise RuntimeError('Eksik MAYK arşivi.')
     return files
 
 
@@ -273,7 +273,7 @@ def update(root=ROOT, progress=lambda message: None):
         if not re.fullmatch('[0-9a-f]{40}', sha):
             raise RuntimeError('Geçersiz GitHub sürüm kimliği.')
         if current == sha:
-            return False, f'Mayk güncel · {sha[:8]}'
+            return False, f'MAYK güncel · {sha[:8]}'
 
         if is_git:
             if int(_git(root, 'rev-list', '--count', f'{sha}..{current}')):
@@ -286,7 +286,7 @@ def update(root=ROOT, progress=lambda message: None):
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
         if _needs_dependency_install(old_req, new_req):
-            raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. Mayk’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
+            raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. MAYK’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
         progress('Yedek alınıyor ve güncelleme uygulanıyor…')
         note = ''
         if is_git:
@@ -317,13 +317,13 @@ def update(root=ROOT, progress=lambda message: None):
                 note = _restore(root, label)
         else:
             _apply_zip(root, files, sha, branch)
-        return True, f'Güncellendi · {sha[:8]}. Mayk otomatik yeniden başlatılıyor.{note}'
+        return True, f'Güncellendi · {sha[:8]}. MAYK otomatik yeniden başlatılıyor.{note}'
     finally:
         lock.unlink(missing_ok=True)
 
 
 def check(root=ROOT) -> dict:
-    """Read-only: is there a newer Mayk on GitHub, and what changed?
+    """Read-only: is there a newer MAYK on GitHub, and what changed?
     {"newer": bool, "sha": str, "current": str, "changes": [first lines of the new commits]}"""
     root = Path(root)
     if (root / '.git').exists():
