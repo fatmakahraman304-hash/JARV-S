@@ -249,7 +249,6 @@ public class MainActivity extends Activity {
                 + "Erişilebilirlik: " + a11yStatus + "\n"
                 + "Dinleme: " + ReceiverService.status + "\n\n"
                 + "Hazır olunca telefondaki MAYK'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
-        ui.removeCallbacksAndMessages(null);
         ui.postDelayed(this::refresh, 3000);
     }
 }
