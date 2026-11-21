@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import activity, outcome
+from core import activity, confirm, outcome
 from core.lazyimport import LazyModule, installed
 
 # Imported on first USE, not at launch — see core/lazyimport.py. PAUSE is 0.06
@@ -312,44 +312,6 @@ def _resolve_platform(platform_str: str):
     return lambda r, m: _desktop_send(platform_str.strip().title(), r, m)
 
 
-# A message cannot be taken back, and speech can be misheard: a recipient or a
-# sentence is read back to the user and sent only after they say yes. The yes
-# is only accepted for the exact message that was read back, within a few
-# minutes — the model cannot confirm on the user's behalf on the first call.
-CONFIRM_WINDOW = 300.0
-_pending: dict = {}
-_pending_lock = threading.Lock()
-
-
-def _key(platform: str, receiver: str, text: str) -> tuple:
-    norm = lambda t: " ".join(str(t or "").lower().split())
-    return (norm(platform) or "whatsapp", norm(receiver), norm(text))
-
-
-def _send_without_asking() -> bool:
-    try:
-        from memory.config_manager import get_plugin_config
-        return bool((get_plugin_config("send_message") or {}).get("send_without_asking"))
-    except Exception:
-        return False
-
-
-def needs_confirmation(platform: str, receiver: str, text: str, confirmed: bool) -> bool:
-    """True when the message must be read back first (and remembers that it was)."""
-    if _send_without_asking():
-        return False
-    k = _key(platform, receiver, text)
-    now = time.monotonic()
-    with _pending_lock:
-        for old in [x for x, t in _pending.items() if now - t > CONFIRM_WINDOW]:
-            _pending.pop(old, None)
-        if confirmed and k in _pending:
-            _pending.pop(k, None)
-            return False
-        _pending[k] = now
-    return True
-
-
 def send_message(
     parameters: dict,
     response=None,
@@ -361,25 +323,11 @@ def send_message(
     message_text = params.get("message_text", "").strip()
     platform     = params.get("platform", "whatsapp").strip()
 
-    if params.get("always_send_without_asking") is not None:     # the user's own choice
-        from memory.config_manager import save_plugin_config
-        on = bool(params.get("always_send_without_asking"))
-        save_plugin_config("send_message", {"send_without_asking": on})
-        if not receiver or not message_text:
-            return outcome.done("send_message", setting="send_without_asking", value=on)
     if not receiver:
         return outcome.failed("send_message", "no recipient was given")
     if not message_text:
         return outcome.failed("send_message", "no message text was given",
                               to=receiver)
-    if needs_confirmation(platform, receiver, message_text, bool(params.get("confirmed"))):
-        return outcome.ask(
-            "send_message",
-            f"read the message back to the user and ask whether to send it: to {receiver} on {platform}: "
-            f"«{message_text}». If they say yes, call send_message again with exactly the same receiver, "
-            "message_text and platform and confirmed=true; if they change something, call it with the new "
-            "text (it will be read back again)",
-            to=receiver, platform=platform)
     if not _PYAUTOGUI:
         return outcome.failed(
             "send_message",
@@ -388,25 +336,13 @@ def send_message(
             to=receiver, platform=platform,
         )
 
-    print(f"[SendMessage] {platform} -> {receiver}")
-    if player:
-        player.write_log(f"[msg] {platform} → {receiver}")   # the message itself IS the news
-
-    threading.Thread(
-        target=_send_and_report,
-        args=(player, platform, receiver, message_text),
-        daemon=True, name="send-message",
-    ).start()
-
-    # Sending opens an application, searches for a person and types — several
-    # seconds during which the old code held the whole conversation still. The
-    # answer goes out now and the result follows, which is the shape
-    # whatsapp_call.py settled on for the same reason.
-    return outcome.started("send_message", platform=platform, to=receiver)
+    detail = f"Platform: {platform}\nAlıcı: {receiver}\nMesaj: {message_text}"
+    return confirm.request("send_message", "Mesaj gönderilsin mi?", detail,
+                           lambda: _send_and_report(player, platform, receiver, message_text))
 
 
 def _send_and_report(player, platform: str, receiver: str,
-                     message_text: str) -> None:
+                     message_text: str) -> str:
     """Do the sending, then say what actually happened — including when it did
     not happen, and including when nobody can tell.
 
@@ -458,6 +394,8 @@ def _send_and_report(player, platform: str, receiver: str,
         except Exception:
             pass
 
+    return result
+
 
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
@@ -473,8 +411,7 @@ TOOL = {
         "receipt: sent, delivered or read. Status=unverified means the send is pending "
         "or a receipt could not be checked. Status=failed means the send failed. "
         "Never claim that a message was delivered unless the receipt confirms it. "
-        "The first call reads the message back (status=ask): say it to the user, and send with confirmed=true "
-        "only after they agree."
+        "Ask the user to review the recipient and full text on the HUD. Only the user can authorize sending."
     ),
     "tier": "core",
     "parameters": {
@@ -492,15 +429,7 @@ TOOL = {
                 "type": "STRING",
                 "description": "Platform: WhatsApp, Telegram, etc."
             },
-            "confirmed": {
-                "type": "BOOLEAN",
-                "description": "true ONLY after you read this exact message back to the user and they said yes"
-            },
-            "always_send_without_asking": {
-                "type": "BOOLEAN",
-                "description": "Only when the user explicitly says to stop/start reading messages back before "
-                               "sending ('mesajları sormadan gönder' = true, 'göndermeden önce sor' = false)"
-            }
+
         },
         "required": [
             "receiver",
