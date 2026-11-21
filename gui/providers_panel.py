@@ -871,7 +871,7 @@ class ProvidersOverlay(_HudOverlay):
                 self._fields_into(lay, "llm", sid)
         else:
             lay.addWidget(self._label(
-                ""Böyle bırakılırsa istekler Gemini’yi kullanmaya devam eder ve "
+                "Böyle bırakılırsa istekler Gemini’yi kullanmaya devam eder ve "
                 "metin kotası bitince durur.", 7, C.TEXT_DIM))
         return w
 
@@ -886,7 +886,7 @@ class ProvidersOverlay(_HudOverlay):
         head = self._label("🛠  KODLAMA", 9, C.PRI, bold=True)
         w, lay = self._box([head])
         lay.addWidget(self._label(
-            ""Proje geliştirmenizi istediğinizde planlama, kod yazma ve "
+            "Proje geliştirmenizi istediğinizde planlama, kod yazma ve "
             "düzeltme yapan modeldir. Dosyalar Masaüstü/JarvisProjects’e kaydedilir.",
             7, C.TEXT_DIM))
 
@@ -964,12 +964,12 @@ class ProvidersOverlay(_HudOverlay):
                    if not self._pipe.get(slot)]
         if "DÜŞÜNME" in missing:
             self._footer.setText(
-                ""⚠  ② DÜŞÜNME ayarlanmadı. Asistan Gemini Live’a döner ve "
+                "⚠  ② DÜŞÜNME ayarlanmadı. Asistan Gemini Live’a döner ve "
                 "bunu günlüğe yazar.")
         elif missing:
             words = " ve ".join(f"{m.lower()}" for m in missing)
             self._footer.setText(
-                "f"Yalnızca {words} eksik. Çalışır, ancak konuşmak yerine "
+                f"Yalnızca {words} eksik. Çalışır, ancak konuşmak yerine "
                 f"yazmanız veya dinlemek yerine okumanız gerekebilir.")
         else:
             self._footer.setText(
