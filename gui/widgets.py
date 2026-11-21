@@ -118,7 +118,7 @@ class LogWidget(QTextEdit):
 
     _sig = pyqtSignal(str)
     # The short all-caps prefixes the app itself writes, shown as the label.
-    _TAGS = {"sys": "SYS", "err": "ERR", "file": "FILE", "quiz": "QUIZ"}
+    _TAGS = {"sys": "SİSTEM", "err": "HATA", "file": "DOSYA", "quiz": "SINAV"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -162,7 +162,7 @@ class LogWidget(QTextEdit):
         head, sep, rest = text.partition(":")
         tl = text.lower()
         if tl.startswith("you:"):
-            return "you", "YOU", rest.strip()
+            return "you", "SİZ", rest.strip()
         if sep and (tl.startswith(f"{self._ai_name_lc}:") or tl.startswith("jarvis:")):
             return "ai", head.strip().upper(), rest.strip()
         key = head.strip().lower()
@@ -170,7 +170,7 @@ class LogWidget(QTextEdit):
             tag = key if key in ("err", "file") else "sys"
             return tag, self._TAGS[key], rest.strip()
         # Anything else keeps the old rule: an error if it says so.
-        return ("err" if "err" in tl else "sys"), "SYS", text.strip()
+        return ("err" if "err" in tl else "sys"), "SİSTEM", text.strip()
 
     @staticmethod
     def _colours(tag: str) -> tuple[QColor, QColor]:
@@ -513,7 +513,7 @@ class _CameraPreview(QWidget):
         lay.setSpacing(4)
 
         hdr = QHBoxLayout()
-        title = QLabel("◈  VISUAL INPUT")
+        title = QLabel("◈  GÖRSEL GİRİŞ")
         title.setFont(hud_font(7, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         hdr.addWidget(title)
@@ -1464,8 +1464,8 @@ class TaskRow(QWidget):
             return f"{used:.0f}/{t['budget']['minutes']}m"
         if s == "scheduled":
             return time.strftime("%H:%M", time.localtime(t.get("not_before") or 0))
-        return {"waiting_quota": "WAIT", "queued": "QUEUED", "done": "DONE",
-                "failed": "FAILED", "cancelled": "STOPPED"}.get(s, s.upper())
+        return {"waiting_quota": "BEKLİYOR", "queued": "SIRADA", "done": "BİTTİ",
+                "failed": "HATA", "cancelled": "DURDU"}.get(s, s.upper())
 
     def paintEvent(self, _):
         t = self._task

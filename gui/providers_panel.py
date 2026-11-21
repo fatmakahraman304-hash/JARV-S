@@ -97,9 +97,9 @@ class ProvidersOverlay(_HudOverlay):
     # Which provider fills each slot, and what the slot is FOR — in the words
     # somebody configuring it would use, not the words the code uses.
     _SLOTS = (
-        ("stt", "①", "HEARING",  "turns what you say into words"),
-        ("llm", "②", "THINKING", "understands, decides, uses your tools"),
-        ("tts", "③", "SPEAKING", "reads the answer out loud"),
+        ("stt", "①", "DİNLEME",  "söylediklerinizi metne dönüştürür"),
+        ("llm", "②", "DÜŞÜNME", "isteğinizi anlar, karar verir ve araçları kullanır"),
+        ("tts", "③", "KONUŞMA", "yanıtları sesli okur"),
     )
 
     def __init__(self, parent=None):
@@ -157,13 +157,13 @@ class ProvidersOverlay(_HudOverlay):
         outer.setContentsMargins(22, 18, 22, 18)
         outer.setSpacing(10)
 
-        title = QLabel("🔌  ENGINE  &  PROVIDERS")
+        title = QLabel("🔌  MOTOR VE SAĞLAYICILAR")
         title.setFont(hud_font(13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         outer.addWidget(title)
 
-        sub = QLabel("Choose what powers the conversation. "
-                     "Gemini is the default and needs nothing set up here.")
+        sub = QLabel( "Konuşmayı yöneten sistemi seçin. "
+                     "Gemini varsayılandır; ek bir ayar gerektirmez.")
         sub.setWordWrap(True)
         sub.setFont(hud_font(8))
         sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
@@ -177,14 +177,14 @@ class ProvidersOverlay(_HudOverlay):
         cards = QHBoxLayout(); cards.setSpacing(10)
         self._card_gemini = self._mode_card(
             "☁  GEMINI LIVE",
-            "One connection carries your voice, its voice, the transcript and "
-            "the tools together. The fastest option — about half a second to "
-            "the first word.",
+            "Tek bir bağlantıyla sesiniz, asistanın sesi, konuşma metni ve "
+            "araçlar birlikte çalışır. En hızlı seçenektir; ilk söz yaklaşık "
+            "yarım saniyede gelir.",
             "gemini")
         self._card_local = self._mode_card(
-            "🖥  MY OWN SETUP",
-            "Your choice of hearing, thinking and speaking. Can run entirely on "
-            "this computer, with nothing leaving it. Slower: 1.5 to 4 seconds.",
+            "🖥  KENDİ KURULUMUM",
+            "Dinleme, düşünme ve konuşma modellerini siz seçersiniz. "
+            "Her şey bu bilgisayarda çalışabilir. Daha yavaş: 1,5–4 saniye.",
             "pipeline")
         cards.addWidget(self._card_gemini)
         cards.addWidget(self._card_local)
@@ -234,7 +234,7 @@ class ProvidersOverlay(_HudOverlay):
         outer.addWidget(self._footer)
 
         row = QHBoxLayout(); row.setSpacing(8)
-        apply_btn = QPushButton("▸  SAVE  &&  APPLY")     # && — a lone & is a Qt shortcut marker
+        apply_btn = QPushButton("▸  KAYDET VE UYGULA")     # && — a lone & is a Qt shortcut marker
         apply_btn.setFixedHeight(34)
         apply_btn.setFont(hud_font(9, QFont.Weight.Bold))
         apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -246,7 +246,7 @@ class ProvidersOverlay(_HudOverlay):
         apply_btn.clicked.connect(self._apply)
         row.addWidget(apply_btn, 2)
 
-        close = QPushButton("CLOSE")
+        close = QPushButton("KAPAT")
         close.setFixedHeight(34)
         close.setFont(hud_font(9))
         close.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -384,8 +384,7 @@ class ProvidersOverlay(_HudOverlay):
             box.setCurrentIndex(j)
         elif keep:
             box.setCurrentText(keep)
-        self._say(pid, f"{len(items)} model{'s' if len(items) != 1 else ''} "
-                       f"found on this server — pick one above.", C.TEXT_DIM)
+        self._say(pid, f"{len(items)} model bu sunucuda bulundu; yukarıdan seçin.", C.TEXT_DIM)
 
     def _set_mode(self, value: str) -> None:
         if value == self._mode:
@@ -478,7 +477,7 @@ class ProvidersOverlay(_HudOverlay):
         STORED, not derived. The first version worked it out by comparing the
         saved address against each entry's — which is elegant and wrong, and it
         showed up immediately: pick "Whisper on this computer", reopen the
-        panel, and the box reads "— not set —" while the form beneath it is
+        panel, and the box reads "— seçilmedi —" while the form beneath it is
         fully drawn. That entry's address is the empty string, so any config
         whose address had ever been touched matched nothing and fell through to
         no selection at all.
@@ -607,12 +606,12 @@ class ProvidersOverlay(_HudOverlay):
         else:
             w, lay = self._box([])
             lay.addWidget(self._label(
-                "Nothing to set up. Your voice goes to Gemini and comes back as "
-                "speech over one connection, with the transcript and every tool "
-                "call on the same wire.", 8, C.TEXT_DIM))
+                "Ayarlanacak bir şey yok. Sesiniz Gemini’ye gönderilir ve tek "
+                "bağlantı üzerinden sesli yanıt, konuşma metni ve araç "
+                "çağrıları geri döner.", 8, C.TEXT_DIM))
             lay.addWidget(self._label(
-                "Pick MY OWN SETUP above to run it on your own machine, or "
-                "through another company's model.", 7, C.TEXT_DIM))
+                "Kendi bilgisayarınızda veya başka bir sağlayıcıda çalıştırmak için "
+                "yukarıdan KENDİ KURULUMUM’u seçin.", 7, C.TEXT_DIM))
             self._body_lay.addWidget(w)
 
         self._body_lay.addWidget(self._sidecar_box_widget())
@@ -634,10 +633,10 @@ class ProvidersOverlay(_HudOverlay):
                 label = f"    {label}"
             note = entry.get("note") or ""
             if not decl.get("_available", True):
-                note = (note + " · needs install").strip(" ·")
+                note = (note + " · kurulum gerekiyor").strip(" ·")
             return f"{label}{'   —  ' + note if note else ''}"
 
-        box = self._service_combo(slot, ("— not set —", ""), fmt)
+        box = self._service_combo(slot, ("— seçilmedi —", ""), fmt)
         sid = self._pipe.get(slot, "")
         self._select(box, sid)
         box.currentIndexChanged.connect(
@@ -737,7 +736,7 @@ class ProvidersOverlay(_HudOverlay):
 
         for _key, (w, f) in shown.items():
             lay.addWidget(self._label(
-                f.label + ("" if f.required else "   (optional)"), 7, C.TEXT_DIM))
+                f.label + ("" if f.required else "   (isteğe bağlı)"), 7, C.TEXT_DIM))
             lay.addWidget(w)
             # A text box already shows its hint as placeholder text. Adding the
             # label as well printed every hint twice, which is how the panel
@@ -754,18 +753,18 @@ class ProvidersOverlay(_HudOverlay):
         self._status[pid] = status
 
         brow = QHBoxLayout(); brow.setSpacing(6)
-        brow.addWidget(self._btn("TEST", lambda _=0, p=pid: self._test(p), C.PRI))
+        brow.addWidget(self._btn("TEST ET", lambda _=0, p=pid: self._test(p), C.PRI))
         # Not "LIST" any more: the list arrives on its own when a service is
         # chosen. This is the button for when it did not — the server was
         # starting up, or a model has just been pulled.
         if any(k in shown for k in ("model", "voice_id", "voice")):
-            brow.addWidget(self._btn("↻ REFRESH", lambda _=0, p=pid: self._list(p)))
+            brow.addWidget(self._btn("↻ YENİLE", lambda _=0, p=pid: self._list(p)))
         if advanced:
             brow.addWidget(self._btn(
-                ("⌃ LESS" if self._more.get(pid) else "⌄ MORE"),
+                ("⌃ DAHA AZ" if self._more.get(pid) else "⌄ DAHA FAZLA"),
                 lambda _=0, p=pid: self._toggle_more(p)))
         if not decl.get("_available", True) and decl.get("install"):
-            brow.addWidget(self._btn(f"INSTALL {decl['install']}",
+            brow.addWidget(self._btn(f"{decl['install']} KUR",
                                      lambda _=0, p=pid: self._install(p), C.ACC2))
         brow.addStretch(1)
         holder = QWidget()
@@ -794,7 +793,7 @@ class ProvidersOverlay(_HudOverlay):
             w = self._combo()
             choices = list(self._live_choices(pid, f.key) or f.choices)
             if not f.required:
-                w.addItem("— default —", "")
+                w.addItem("— varsayılan —", "")
             for c in choices:
                 w.addItem(str(c), str(c))
             w.setEditable(f.key in ("base_url", "model", "voice_id"))
@@ -811,8 +810,8 @@ class ProvidersOverlay(_HudOverlay):
             return w
         if f.kind == "bool":
             w = self._combo()
-            w.addItem("no", "")
-            w.addItem("yes", "1")
+            w.addItem("hayır", "")
+            w.addItem("evet", "1")
             w.setCurrentIndex(1 if str(value) in ("1", "True", "true") else 0)
             return w
         w = self._line(str(value if value is not None else ""))
@@ -828,13 +827,13 @@ class ProvidersOverlay(_HudOverlay):
         QTimer.singleShot(0, self._rebuild_body)
 
     def _sidecar_box_widget(self) -> QWidget:
-        head = self._label("⚡  BACKGROUND REQUESTS", 9, C.PRI, bold=True)
+        head = self._label("⚡  ARKA PLAN İSTEKLERİ", 9, C.PRI, bold=True)
         w, lay = self._box([head])
         lay.addWidget(self._label(
-            "Reading a document, looking at your screen, writing code — the "
-            "assistant's own requests, not the conversation. These use Gemini's "
-            "text quota, which runs out before the voice does. Sending them "
-            "somewhere else keeps them working, and changes nothing you hear.",
+            "Belgeleri okumak, ekrana bakmak ve kod yazmak gibi işler, "
+            "sohbetten bağımsız arka plan istekleridir. Bunlar Gemini’nin "
+            "metin kotasını kullanır. Bu istekleri başka bir modele "
+            "yönlendirmek sesli konuşmayı değiştirmez.",
             7, C.TEXT_DIM))
 
         # Read the stored choice BEFORE the box exists. The first version asked
@@ -845,18 +844,18 @@ class ProvidersOverlay(_HudOverlay):
         def fmt(entry, _decl):
             mark = "🖥" if entry.get("local") else (
                 "☁" if entry.get("local") is False else "  ")
-            return f"{mark}  Fall back to {entry['label']}"
+            return f"{mark}  {entry['label']} sağlayıcısını yedek olarak kullan"
 
         self._sidecar_combo = self._service_combo(
-            "llm", ("Gemini only  —  the way it has always been", ""), fmt)
+            "llm", ("Yalnızca Gemini — mevcut ayar", ""), fmt)
         self._select(self._sidecar_combo, sid)
         self._sidecar_combo.currentIndexChanged.connect(self._sidecar_changed)
         lay.addWidget(self._sidecar_combo)
 
         self._first_combo = self._combo()
-        self._first_combo.addItem("Try Gemini first  —  faster", "after")
+        self._first_combo.addItem("Önce Gemini — daha hızlı", "after")
         self._first_combo.addItem(
-            "Try the other one first  —  keeps more on your machine", "before")
+            "Önce diğer model — daha çok işlem cihazınızda kalır", "before")
         self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
         lay.addWidget(self._first_combo)
 
@@ -866,13 +865,13 @@ class ProvidersOverlay(_HudOverlay):
         if sid:
             if self._mode == "pipeline" and sid == self._pipe.get("llm"):
                 lay.addWidget(self._label(
-                    "Uses the model you chose for ② THINKING.", 7, C.TEXT_DIM))
+                    "② DÜŞÜNME için seçtiğiniz modeli kullanır.", 7, C.TEXT_DIM))
             else:
                 self._fields_into(lay, "llm", sid)
         else:
             lay.addWidget(self._label(
-                "Left as it is, these keep using Gemini and stop working when "
-                "its text quota runs out.", 7, C.TEXT_DIM))
+                "Böyle bırakılırsa istekler Gemini’yi kullanmaya devam eder ve "
+                "metin kotası bitince durur.", 7, C.TEXT_DIM))
         return w
 
     def _coding_box_widget(self) -> QWidget:
@@ -883,11 +882,11 @@ class ProvidersOverlay(_HudOverlay):
         whole source file at a time. Whatever is picked is tried FIRST for code,
         with Gemini behind it, so a service having a bad day still produces a
         project instead of nothing."""
-        head = self._label("🛠  CODING", 9, C.PRI, bold=True)
+        head = self._label("🛠  KODLAMA", 9, C.PRI, bold=True)
         w, lay = self._box([head])
         lay.addWidget(self._label(
-            "The model that plans, writes and fixes projects when you ask the "
-            "assistant to build something. Saved to Desktop/JarvisProjects.",
+            "Proje geliştirmenizi istediğinizde planlama, kod yazma ve "
+            "düzeltme yapan modeldir. Dosyalar Masaüstü/JarvisProjects’e kaydedilir.",
             7, C.TEXT_DIM))
 
         sid = self._coding
@@ -895,11 +894,11 @@ class ProvidersOverlay(_HudOverlay):
         def fmt(entry, _decl):
             mark = "🖥" if entry.get("local") else (
                 "☁" if entry.get("local") is False else "  ")
-            star = "   ★ recommended" if entry.get("id") == "minimax" else ""
-            return f"{mark}  Code with {entry['label']}{star}"
+            star = "   ★ önerilen" if entry.get("id") == "minimax" else ""
+            return f"{mark}  {entry['label']} ile kodla{star}"
 
         self._coding_combo = self._service_combo(
-            "llm", ("Same as background requests", ""), fmt)
+            "llm", ("Arka plan istekleriyle aynı", ""), fmt)
         # The sponsor's model sits directly under the default, where it is the
         # first real choice anybody sees — not buried twelfth in the list.
         for i in range(self._coding_combo.count()):
@@ -917,7 +916,7 @@ class ProvidersOverlay(_HudOverlay):
 
         if not sid:
             lay.addWidget(self._label(
-                "Code is written by whatever answers background requests above.",
+                "Kod, yukarıdaki arka plan isteklerini yanıtlayan modelle yazılır.",
                 7, C.TEXT_DIM))
         elif sid == CLAUDE_CODE:
             lay.addWidget(self._label(
@@ -929,10 +928,10 @@ class ProvidersOverlay(_HudOverlay):
                 7, C.TEXT_DIM))
         elif sid == self._sidecar:
             lay.addWidget(self._label(
-                "Uses the settings under BACKGROUND REQUESTS.", 7, C.TEXT_DIM))
+                "ARKA PLAN İSTEKLERİ bölümündeki ayarları kullanır.", 7, C.TEXT_DIM))
         elif self._mode == "pipeline" and sid == self._pipe.get("llm"):
             lay.addWidget(self._label(
-                "Uses the model you chose for ② THINKING.", 7, C.TEXT_DIM))
+                "② DÜŞÜNME için seçtiğiniz modeli kullanır.", 7, C.TEXT_DIM))
         else:
             self._fields_into(lay, "llm", sid)
         return w
@@ -958,22 +957,22 @@ class ProvidersOverlay(_HudOverlay):
     def _update_footer(self) -> None:
         if self._mode != "pipeline":
             self._footer.setText(
-                "Gemini Live. Nothing on this panel changes the conversation.")
+                "Gemini Live kullanılıyor. Buradaki ayarlar sohbeti değiştirmez.")
             return
         missing = [name for slot, _n, name, _w in self._SLOTS
                    if not self._pipe.get(slot)]
-        if "THINKING" in missing:
+        if "DÜŞÜNME" in missing:
             self._footer.setText(
-                "⚠  ② THINKING is not set — without it the assistant falls back "
-                "to Gemini Live and says so in the log.")
+                "⚠  ② DÜŞÜNME ayarlanmadı. Asistan Gemini Live’a döner ve "
+                "bunu günlüğe yazar.")
         elif missing:
-            words = " and ".join(f"{m.lower()}" for m in missing)
+            words = " ve ".join(f"{m.lower()}" for m in missing)
             self._footer.setText(
-                f"Only {words} is missing — it will run, but you will type "
-                f"instead of speak, or read instead of listen.")
+                f"Yalnızca {words} eksik. Çalışır, ancak konuşmak yerine "
+                f"yazmanız veya dinlemek yerine okumanız gerekebilir.")
         else:
             self._footer.setText(
-                "All three set. SAVE & APPLY reconnects; the conversation is kept.")
+                "Üç model de hazır. KAYDET VE UYGULA bağlantıyı yeniler; sohbet korunur.")
 
     # ── actions ──────────────────────────────────────────────────────────────
     def _live_choices(self, pid: str, key: str) -> tuple:
@@ -1050,13 +1049,13 @@ class ProvidersOverlay(_HudOverlay):
         # about to read — and a deleted QWidget raises rather than returning
         # something wrong, so it takes the click down with it.
         values = self._values(pid)
-        self._say(pid, "checking…", C.TEXT_DIM)
+        self._say(pid, "Kontrol ediliyor…", C.TEXT_DIM)
         QApplication.processEvents()
         try:
             inst = self._registry.build(pid, values)
             probe = getattr(inst, "probe", None)
             if probe is None:
-                self._say(pid, "Nothing to check for this one.", C.TEXT_DIM)
+                self._say(pid, "Bu sağlayıcı için kontrol yapılamıyor.", C.TEXT_DIM)
                 return
             ok, msg = probe()
         except Exception as e:
@@ -1076,7 +1075,7 @@ class ProvidersOverlay(_HudOverlay):
 
     def _list(self, pid: str) -> None:
         values = self._values(pid)          # before processEvents — see _test
-        self._say(pid, "reading…", C.TEXT_DIM)
+        self._say(pid, "Okunuyor…", C.TEXT_DIM)
         QApplication.processEvents()
         try:
             inst = self._registry.build(pid, values)
@@ -1085,7 +1084,7 @@ class ProvidersOverlay(_HudOverlay):
             elif hasattr(inst, "voices"):
                 items, key = list(inst.voices()), "voice_id"
             else:
-                self._say(pid, "Nothing to list for this one.", C.TEXT_DIM)
+                self._say(pid, "Bu sağlayıcı için liste bulunmuyor.", C.TEXT_DIM)
                 return
         except Exception as e:
             self._say(pid, f"✕  {type(e).__name__}: {str(e)[:150]}", C.RED)
@@ -1093,7 +1092,7 @@ class ProvidersOverlay(_HudOverlay):
 
         entry = self._edits.get(pid, {}).get(key)
         if entry is None or not items:
-            self._say(pid, f"✓  {len(items)} found." if items else "None found.",
+            self._say(pid, f"✓  {len(items)} bulundu." if items else "Hiçbiri bulunamadı.",
                       C.GREEN if items else C.TEXT_DIM)
             return
         box = entry[0]
@@ -1107,10 +1106,10 @@ class ProvidersOverlay(_HudOverlay):
                 j = box.findText(keep)
             box.setCurrentIndex(j if j >= 0 else 0)
         else:
-            self._say(pid, f"✓  {len(items)} available: "
+            self._say(pid, f"✓  {len(items)} seçenek: "
                            f"{', '.join(str(v) for v, _ in items[:8])}", C.GREEN)
             return
-        self._say(pid, f"✓  {len(items)} available — pick one above.", C.GREEN)
+        self._say(pid, f"✓  {len(items)} seçenek bulundu; yukarıdan seçin.", C.GREEN)
 
     def _install(self, pid: str) -> None:
         """Fetch a provider's optional dependency, off the Qt thread — pip takes
@@ -1122,7 +1121,7 @@ class ProvidersOverlay(_HudOverlay):
         pkg = decl.get("install")
         if not pkg:
             return
-        self._say(pid, f"installing {pkg} — this can take a minute…", C.ACC2)
+        self._say(pid, f"{pkg} kuruluyor; biraz sürebilir…", C.ACC2)
 
         def work():
             try:
@@ -1131,8 +1130,8 @@ class ProvidersOverlay(_HudOverlay):
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=900)
                 good = r.returncode == 0
                 tail = r.stdout.decode("utf-8", "replace").strip().splitlines()
-                msg = ("✓  installed — close and reopen this panel"
-                       if good else (tail[-1][:150] if tail else "pip failed"))
+                msg = ("✓  Kuruldu; paneli kapatıp yeniden açın"
+                       if good else (tail[-1][:150] if tail else "Paket kurulumu başarısız"))
             except Exception as e:
                 good, msg = False, f"{type(e).__name__}: {str(e)[:120]}"
             QTimer.singleShot(0, lambda: self._say(pid, msg,

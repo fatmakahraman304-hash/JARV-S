@@ -32,7 +32,7 @@ from typing import Optional
 # The label shown for "let the OS decide", and the value stored in config for
 # it. Empty string, so an untouched install and a deliberately-default install
 # are the same thing — nothing changes for anyone who never opens the picker.
-DEFAULT_LABEL = "System default"
+DEFAULT_LABEL = "Sistem varsayılanı"
 DEFAULT_VALUE = ""
 
 _cache: dict[str, list[str]] | None = None
@@ -494,16 +494,16 @@ def measure_input(name: str, seconds: float = 3.0, on_level=None) -> dict:
         peak = peak_seen[0]
     except Exception as e:
         return {"ok": False, "peak": 0, "level": 0.0,
-                "verdict": f"This microphone could not be opened: {e}"}
+                "verdict": f"Mikrofon açılamadı: {e}"}
 
     if peak < _SILENT_PEAK:
-        verdict = ("Nothing arrived. The microphone is muted, its level is at "
-                   "zero, or this is not the device you are speaking into.")
+        verdict = ("Mikrofondan ses alınamadı. Mikrofon kapalı olabilir, ses seviyesi "
+                   "sıfır olabilir veya yanlış mikrofon seçilmiş olabilir.")
     elif peak < _QUIET_PEAK:
-        verdict = ("Very quiet. Speech recognition will struggle — raise the "
-                   "input level in the system sound settings.")
+        verdict = ("Ses çok düşük. Ses tanıma zorlanabilir; sistem ses ayarlarından "
+                   "mikrofon giriş düzeyini yükseltin.")
     else:
-        verdict = "Working. Your voice is coming through clearly."
+        verdict = "Mikrofon çalışıyor. Sesiniz net biçimde alınıyor."
 
     return {"ok": peak >= _QUIET_PEAK, "peak": peak,
             "level": min(1.0, peak / 12000.0), "verdict": verdict}
@@ -530,8 +530,8 @@ def play_tone(name: str, seconds: float = 0.6) -> dict:
         sd.play(tone, samplerate=rate, device=idx)
         sd.wait()
     except Exception as e:
-        return {"ok": False, "verdict": f"This output could not be played: {e}"}
-    return {"ok": True, "verdict": "Tone played. Did you hear it?"}
+        return {"ok": False, "verdict": f"Hoparlörden ses çalınamadı: {e}"}
+    return {"ok": True, "verdict": "Test sesi çalındı. Duyabildiniz mi?"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

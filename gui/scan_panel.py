@@ -51,7 +51,7 @@ class ScanPanel(QWidget):
         title.setStyleSheet(f"color: {C.PRI};")
         header.addWidget(title)
         header.addStretch()
-        back = QPushButton("CORE’a dön")
+        back = QPushButton("ANA EKRANA DÖN")
         back.setStyleSheet(btn_css("dim", align="center"))
         back.clicked.connect(self.back_requested)
         header.addWidget(back)

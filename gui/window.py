@@ -220,12 +220,12 @@ class MainWindow(QMainWindow):
         _cam_v.setSpacing(0)
         _cam_hdr = QHBoxLayout()
         _cam_hdr.setContentsMargins(8, 5, 8, 5)
-        _cam_title = QLabel("◈  CAMERA FEED")
+        _cam_title = QLabel("◈  KAMERA GÖRÜNTÜSÜ")
         _cam_title.setFont(hud_font(8, QFont.Weight.Bold))
         _cam_title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         _cam_hdr.addWidget(_cam_title)
         _cam_hdr.addStretch()
-        _cam_x = QPushButton("✕  CLOSE")
+        _cam_x = QPushButton("✕  KAPAT")
         _cam_x.setFont(hud_font(8, QFont.Weight.Bold))
         _cam_x.setCursor(Qt.CursorShape.PointingHandCursor)
         _cam_x.setStyleSheet(f"""
@@ -265,7 +265,7 @@ class MainWindow(QMainWindow):
         _vid_v.setSpacing(4)
 
         _vid_hdr = QHBoxLayout()
-        self._video_title = QLabel("▶  VIDEO")
+        self._video_title = QLabel("▶  VİDEO")
         self._video_title.setFont(hud_font(9, QFont.Weight.Bold))
         self._video_title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         _vid_hdr.addWidget(self._video_title)
@@ -287,11 +287,11 @@ class MainWindow(QMainWindow):
         # Muted is the default and the button says so, because a soundtrack
         # talking over MAYK is the one way this feature could make the
         # assistant worse rather than better.
-        self._video_mute_btn = _vid_btn("🔇  SOUND OFF")
+        self._video_mute_btn = _vid_btn("🔇  SES KAPALI")
         self._video_mute_btn.clicked.connect(self._toggle_video_mute)
         _vid_hdr.addWidget(self._video_mute_btn)
 
-        _vid_x = _vid_btn("✕  CLOSE")
+        _vid_x = _vid_btn("✕  KAPAT")
         _vid_x.clicked.connect(self.stop_video)
         _vid_hdr.addWidget(_vid_x)
         _vid_v.addLayout(_vid_hdr)
@@ -793,7 +793,7 @@ class MainWindow(QMainWindow):
         self._cam_stop.set()
 
         # A video's title is in its own language; left as written (see _show_content).
-        self._video_title.setText(f"▶  {(title[:44] if title else 'VIDEO')}")
+        self._video_title.setText(f"▶  {(title[:44] if title else 'VİDEO')}")
         self._video_split = bool(audio_source)
         self._video_kind = "video"
         self._video_pos_ms = self._video_dur_ms = 0
@@ -858,7 +858,7 @@ class MainWindow(QMainWindow):
             self._video_item.setVisible(False)
         self._image_item.setPixmap(pixmap)
         self._image_item.setVisible(True)
-        self._video_title.setText(f"◧  {(title[:44] if title else 'PICTURE')}")
+        self._video_title.setText(f"◧  {(title[:44] if title else 'GÖRSEL')}")
         self._hud_cam_stack.setCurrentIndex(2)
         self._video_on = True
         self._sync_mic_for_video()
@@ -974,7 +974,7 @@ class MainWindow(QMainWindow):
     def _sync_video_mute_btn(self) -> None:
         out = self._video_sound_out if self._video_split else self._video_audio
         muted = bool(out and out.isMuted())
-        self._video_mute_btn.setText("🔇  SOUND OFF" if muted else "🔊  SOUND ON")
+        self._video_mute_btn.setText("🔇  SES KAPALI" if muted else "🔊  SES AÇIK")
 
     def _toggle_video_mute(self) -> None:
         out = self._video_sound_out if self._video_split else self._video_audio
@@ -1692,7 +1692,7 @@ class MainWindow(QMainWindow):
         try:
             from memory.config_manager import get_provider_mode, get_voice
             mode = str(get_provider_mode() or "gemini")
-            engine = "GEMINI LIVE" if mode == "gemini" else f"LOCAL {mode.upper()}"
+            engine = "GEMINI LIVE" if mode == "gemini" else f"YEREL {mode.upper()}"
             voice = str(get_voice() or "--").upper()
         except Exception:
             engine, voice = "GEMINI LIVE", "--"
@@ -1705,11 +1705,11 @@ class MainWindow(QMainWindow):
     def _refresh_status_strip(self) -> None:
         if not hasattr(self, "_status_strip"):
             return
-        mic = ("MIC · MUTED", "MUTED_C") if self._muted else ("MIC · LIVE", "GREEN")
+        mic = ("MİKROFON · KAPALI", "MUTED_C") if self._muted else ("MİKROFON · AÇIK", "GREEN")
         self._status_strip.set_items([
-            (f"ENGINE · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "GREEN"),
+            (f"MOTOR · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "GREEN"),
             mic,
-            (f"PROTOCOL · {APP_PROTOCOL}", "PRI"),
+            (f"PROTOKOL · {APP_PROTOCOL}", "PRI"),
         ])
 
     def _build_left_panel(self) -> QWidget:
@@ -1728,9 +1728,9 @@ class MainWindow(QMainWindow):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(2)
         self._g_cpu = RingGauge("CPU")
-        self._g_mem = RingGauge("MEMORY")
+        self._g_mem = RingGauge("BELLEK")
         self._g_gpu = RingGauge("GPU")
-        self._g_tmp = RingGauge("TEMP")
+        self._g_tmp = RingGauge("SICAKLIK")
         for i, g in enumerate((self._g_cpu, self._g_mem, self._g_gpu, self._g_tmp)):
             grid.addWidget(g, i // 2, i % 2)
         sysp.body.addWidget(grid_w)
@@ -1743,12 +1743,12 @@ class MainWindow(QMainWindow):
 
         stp = HoloPanel("DURUM", "", flat=True)
         os_name = {"Windows": "WINDOWS", "Darwin": "MACOS", "Linux": "LINUX"}.get(_OS, _OS.upper())
-        self._row_uptime = DataRow("UPTIME", "--:--", "GREEN")
-        self._row_proc = DataRow("PROCESSES", "--")
-        self._row_net = DataRow("NETWORK", "--")
-        self._row_os = DataRow("PLATFORM", os_name)
-        self._row_engine = DataRow("ENGINE", "--", "PRI")
-        self._row_voice = DataRow("VOICE", "--")
+        self._row_uptime = DataRow("ÇALIŞMA SÜRESİ", "--:--", "GREEN")
+        self._row_proc = DataRow("SÜREÇLER", "--")
+        self._row_net = DataRow("AĞ", "--")
+        self._row_os = DataRow("SİSTEM", os_name)
+        self._row_engine = DataRow("MOTOR", "--", "PRI")
+        self._row_voice = DataRow("SES", "--")
         for row in (self._row_uptime, self._row_proc, self._row_net, self._row_os,
                     self._row_engine, self._row_voice):
             stp.body.addWidget(row)
@@ -1769,7 +1769,7 @@ class MainWindow(QMainWindow):
             row.hide()
             rows_lay.addWidget(row)
             self._task_rows.append(row)
-        self._tasks_empty = QLabel("No background tasks yet.")
+        self._tasks_empty = QLabel("Henüz arka plan görevi yok.")
         self._tasks_empty.setFont(px_font(10))
         self._tasks_empty.setWordWrap(True)
         self._tasks_empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
@@ -1804,8 +1804,8 @@ class MainWindow(QMainWindow):
             row.hide()
             r_lay.addWidget(row)
             self._routine_rows.append(row)
-        self._routines_empty = QLabel("No routines yet. Ask for one by voice — "
-                                      "\"every weekday at 08:30, tell me the weather\".")
+        self._routines_empty = QLabel("Henüz rutin yok. Sesli olarak oluşturabilirsiniz: "
+                                      "\"Her hafta içi 08.30’da hava durumunu söyle\".")
         self._routines_empty.setFont(px_font(10))
         self._routines_empty.setWordWrap(True)
         self._routines_empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
@@ -1831,7 +1831,7 @@ class MainWindow(QMainWindow):
         self._tasks_stack.setCurrentIndex(2)
         self._tasks_panel.body.addWidget(self._tasks_stack)
 
-        self._panel_switch = QPushButton("TASKS")
+        self._panel_switch = QPushButton("GÖREVLER")
         self._panel_switch.setFixedSize(76, 20)
         self._panel_switch.setFont(px_font(9, QFont.Weight.DemiBold))
         self._panel_switch.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1849,8 +1849,8 @@ class MainWindow(QMainWindow):
     def _flip_tasks_panel(self) -> None:
         index = (self._tasks_stack.currentIndex() + 1) % 3
         self._tasks_stack.setCurrentIndex(index)
-        self._tasks_panel.set_title(("TASKS", "ROUTINES", "KONUM")[index])
-        self._panel_switch.setText(("ROUTINES", "HARİTA", "TASKS")[index])
+        self._tasks_panel.set_title(("GÖREVLER", "RUTİNLER", "KONUM")[index])
+        self._panel_switch.setText(("RUTİNLER", "HARİTA", "GÖREVLER")[index])
         self._tasks_panel.set_code("")
         self._refresh_tasks()
 
@@ -2054,7 +2054,7 @@ class MainWindow(QMainWindow):
     def _build_quick_drawer(self) -> QWidget:
         """Floating panel under the gear: the things you set once."""
         self._BTN_PRI, self._BTN_DIM = btn_css("primary"), btn_css("dim")
-        w = HoloPanel("SETUP", "", parent=self.centralWidget())
+        w = HoloPanel("KURULUM", "", parent=self.centralWidget())
         w.setObjectName("QuickDrawer")
         w.hide()
         lay = w.body
@@ -2070,14 +2070,14 @@ class MainWindow(QMainWindow):
             lay.addWidget(b)
             return b
 
-        _btn("◉  REMOTE CONTROL", self._open_remote, self._BTN_PRI)
-        _btn("⊞  CREATE DESKTOP SHORTCUT", self._create_desktop_shortcut)
-        self._autostart_btn = _btn("◉  AUTO-START: OFF", self._toggle_autostart)
-        _btn("⚙  CUSTOMISE ASSISTANT", self._open_customize)
-        _btn("🎧  AUDIO DEVICES", self._open_audio_devices)
-        _btn("🧠  MEMORY", self._open_memory_panel)
-        _btn("🧩  PLUGINS", self._open_plugin_manager)
-        _btn("⚙  PLUGIN SETTINGS", self._open_plugin_settings)
+        _btn("◉  UZAKTAN KONTROL", self._open_remote, self._BTN_PRI)
+        _btn("⊞  MASAÜSTÜ KISAYOLU OLUŞTUR", self._create_desktop_shortcut)
+        self._autostart_btn = _btn("◉  OTOMATİK BAŞLAT: KAPALI", self._toggle_autostart)
+        _btn("⚙  ASİSTANI ÖZELLEŞTİR", self._open_customize)
+        _btn("🎧  SES CİHAZLARI", self._open_audio_devices)
+        _btn("🧠  HAFIZA", self._open_memory_panel)
+        _btn("🧩  EKLENTİLER", self._open_plugin_manager)
+        _btn("⚙  EKLENTİ AYARLARI", self._open_plugin_settings)
         # The button is built here with the rest of the drawer; the panel behind
         # it — and the whole providers package — is imported on the click. The
         # drawer used to stutter for a measured 2.104 seconds because a state
@@ -2085,14 +2085,14 @@ class MainWindow(QMainWindow):
         # second thing that does that would undo the fix rather than repeat it.
         # "&&": a single & in a button label is Qt's shortcut marker, and it
         # was being drawn as an underscore — "ENGINE _PROVIDERS".
-        _btn("🔌  ENGINE && PROVIDERS", self._open_providers)
+        _btn("🔌  MOTOR VE SAĞLAYICILAR", self._open_providers)
 
         w.adjustSize()
         return w
 
     def _build_controls_drawer(self) -> QWidget:
         """The switches that get flicked every day, in their own panel."""
-        w = HoloPanel("CONTROLS", "", parent=self.centralWidget())
+        w = HoloPanel("KONTROLLER", "", parent=self.centralWidget())
         w.setObjectName("QuickDrawer")
         w.hide()
         lay = w.body
@@ -2107,7 +2107,7 @@ class MainWindow(QMainWindow):
             lay.addWidget(button)
             return button
 
-        fs_btn = _row(QPushButton("⛶  FULLSCREEN  [F11]"), self._BTN_DIM)
+        fs_btn = _row(QPushButton("⛶  TAM EKRAN  [F11]"), self._BTN_DIM)
         fs_btn.clicked.connect(self._toggle_fullscreen)
 
         self._brief_btn = _row(QPushButton())
@@ -2118,7 +2118,7 @@ class MainWindow(QMainWindow):
         self._wake_sleep_btn = _row(QPushButton())
         self._wake_sleep_btn.clicked.connect(self._tap_wake_manual)
         # Neutral until the real state lands from the background warm-up.
-        self._wake_btn.setText("🎙  WAKE WORD")
+        self._wake_btn.setText("🎙  UYANDIRMA KELİMESİ")
         self._wake_btn.setStyleSheet(self._BTN_DIM)
         self._wake_sleep_btn.hide()
 
@@ -2408,7 +2408,7 @@ class MainWindow(QMainWindow):
         Panel below the HUD — shows search results, news, briefings, reviews.
         Hidden by default; appears when show_content() is called.
         """
-        w = HoloPanel("BRIEFING", "")
+        w = HoloPanel("ÖZET", "")
         w.setObjectName("ContentPanel")
         w.hide()
         # The panel paints its own title and time; these stand in for the
@@ -2417,7 +2417,7 @@ class MainWindow(QMainWindow):
         self._content_ts_lbl = PanelText(w, "code")
 
         dismiss = IconButton("close", 22)
-        dismiss.setToolTip("Dismiss")
+        dismiss.setToolTip("Kapat")
         dismiss.clicked.connect(w.hide)
         w.add_header_widget(dismiss)
 
@@ -2638,7 +2638,7 @@ class MainWindow(QMainWindow):
         # it: Turkish "Sözleşmesi" comes back "SÖZLEŞMESI", having lost the
         # dotted capital İ. Python has no locale-aware upper to reach for, and
         # imposing one language's rules on all of them is the bug, not the fix.
-        self._content_title_lbl.setText((title or "Document")[:48])
+        self._content_title_lbl.setText((title or "Belge")[:48])
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
         self._content_display.setHtml("".join(parts))
         self._content_display.moveCursor(
@@ -2663,14 +2663,14 @@ class MainWindow(QMainWindow):
         return b
 
     def _build_quiz_panel(self) -> QWidget:
-        w = HoloPanel("QUIZ", "")
+        w = HoloPanel("SINAV", "")
         w.setObjectName("QuizPanel")
         w.hide()
         self._quiz_title_lbl = PanelText(w, "title")
         self._quiz_count_lbl = PanelText(w, "code")
 
         quit_btn = IconButton("close", 22)
-        quit_btn.setToolTip("Dismiss")
+        quit_btn.setToolTip("Kapat")
         quit_btn.clicked.connect(self._hide_quiz)
         w.add_header_widget(quit_btn)
 
@@ -2699,7 +2699,7 @@ class MainWindow(QMainWindow):
 
         foot = QHBoxLayout()
         foot.addStretch()
-        self._quiz_next_btn = self._quiz_btn("NEXT  →", primary=True)
+        self._quiz_next_btn = self._quiz_btn("İLERİ  →", primary=True)
         self._quiz_next_btn.setFixedWidth(120)
         self._quiz_next_btn.clicked.connect(self._quiz_next)
         self._quiz_next_btn.hide()
@@ -2721,7 +2721,7 @@ class MainWindow(QMainWindow):
             "results": [],
             "answered": False,
         }
-        self._quiz_title_lbl.setText((topic or "quiz").upper()[:48])
+        self._quiz_title_lbl.setText((topic or "SINAV").upper()[:48])
         self.hud.glance(0.0, -0.85, hold=1.3)
         self._reveal_below_hud(self._quiz_panel, 250)
         self._quiz_render()
@@ -2759,7 +2759,7 @@ class MainWindow(QMainWindow):
             h = QHBoxLayout(row); h.setContentsMargins(0, 0, 0, 0); h.setSpacing(6)
             field = QLineEdit()
             field.setFont(hud_font(9))
-            field.setPlaceholderText("your answer")
+            field.setPlaceholderText("Yanıtınız")
             field.setStyleSheet(f"""
                 QLineEdit {{
                     background: {C.PANEL2}; color: {C.WHITE};
@@ -2767,7 +2767,7 @@ class MainWindow(QMainWindow):
                 }}
                 QLineEdit:focus {{ border-color: {C.PRI_DIM}; }}
             """)
-            send = self._quiz_btn("ANSWER", primary=True)
+            send = self._quiz_btn("YANITLA", primary=True)
             send.setFixedWidth(90)
             field.returnPressed.connect(lambda: self._quiz_submit(field.text()))
             send.clicked.connect(lambda: self._quiz_submit(field.text()))
@@ -2802,20 +2802,20 @@ class MainWindow(QMainWindow):
                 wdg.setEnabled(False)
 
         if verdict is True:
-            mark, colour = "✓  correct", C.GREEN
+            mark, colour = "✓  doğru", C.GREEN
         elif verdict is False:
             mark, colour = "✕  " + str(q.get("answer", "")), C.RED
         else:
             # Open answers and near-miss gap-fills are MAYK's to judge. Saying
             # so is honest; marking it wrong here would be a guess.
-            mark, colour = "…  noted — I'll go over this one with you", C.ACC2
+            mark, colour = "…  not edildi — bu yanıtı değerlendireceğim", C.ACC2
         note = q.get("note") or ""
         self._quiz_note_lbl.setText(mark + (("\n" + note) if note else ""))
         self._quiz_note_lbl.setStyleSheet(f"color: {colour}; background: transparent;")
         self._quiz_note_lbl.show()
 
         last = self._quiz["i"] >= len(self._quiz["questions"]) - 1
-        self._quiz_next_btn.setText("FINISH  →" if last else "NEXT  →")
+        self._quiz_next_btn.setText("BİTİR  →" if last else "İLERİ  →")
         self._quiz_next_btn.show()
         self._quiz_next_btn.setFocus()
 
@@ -2898,7 +2898,7 @@ class MainWindow(QMainWindow):
                                  daemon=True).start()
             return
         size = _fmt_size(p.stat().st_size)
-        self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  Tell {self._assistant_name} what to do with it")
+        self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  {self._assistant_name}’a bu dosyayla ne yapılacağını söyleyin")
         self._log.append_log(f"FILE: {p.name} ({size}) loaded")
         if self.on_text_command:
             msg = (
@@ -2942,7 +2942,7 @@ class MainWindow(QMainWindow):
         ov.closed.connect(lambda: setattr(self, '_remote_overlay', None))
         ov.show()
         self._remote_overlay = ov
-        self._log.append_log(f"SYS: Remote key generated — manual: {manual or url}")
+        self._log.append_log(f"SYS: Uzaktan erişim anahtarı oluşturuldu — elle bağlantı: {manual or url}")
 
     # ── Auto-start ──────────────────────────────────────────────────────────────
 
@@ -3021,14 +3021,14 @@ class MainWindow(QMainWindow):
             enabled = not currently_on
             self._update_autostart_btn(enabled)
             self._log.append_log(
-                f"SYS: Auto-start {'enabled' if enabled else 'disabled'}.")
+                f"SYS: Otomatik başlatma {'açıldı' if enabled else 'kapatıldı'}.")
         except Exception as e:
-            self._log.append_log(f"ERR: Auto-start failed — {e}")
+            self._log.append_log(f"ERR: Otomatik başlatma başarısız — {e}")
 
     def _update_autostart_btn(self, enabled: bool):
         if not hasattr(self, '_autostart_btn'):
             return
-        self._autostart_btn.setText("◉  AUTO-START: ON" if enabled else "◉  AUTO-START: OFF")
+        self._autostart_btn.setText("◉  OTOMATİK BAŞLAT: AÇIK" if enabled else "◉  OTOMATİK BAŞLAT: KAPALI")
         self._autostart_btn.setStyleSheet(btn_css("on" if enabled else "off"))
 
     def _toggle_brief(self):
@@ -3078,17 +3078,17 @@ class MainWindow(QMainWindow):
         _on, _off = btn_css("on"), btn_css("off")
         self._wake_btn.setEnabled(True)
         if not st["ready"]:
-            self._wake_btn.setText("⬇  WAKE WORD: DOWNLOAD")
+            self._wake_btn.setText("⬇  UYANDIRMA MODELİNİ İNDİR")
             self._wake_btn.setStyleSheet(_off)
             self._wake_sleep_btn.hide()
         elif st["enabled"]:
-            self._wake_btn.setText("🎙  WAKE WORD: ON")
+            self._wake_btn.setText("🎙  UYANDIRMA: AÇIK")
             self._wake_btn.setStyleSheet(_on)
             self._wake_sleep_btn.show()
-            self._wake_sleep_btn.setText("😴  SLEEP NOW" if st["awake"] else "👂  WAKE NOW")
+            self._wake_sleep_btn.setText("😴  ŞİMDİ UYU" if st["awake"] else "👂  ŞİMDİ UYAN")
             self._wake_sleep_btn.setStyleSheet(_off)
         else:
-            self._wake_btn.setText("🎙  WAKE WORD: OFF")
+            self._wake_btn.setText("🎙  UYANDIRMA: KAPALI")
             self._wake_btn.setStyleSheet(_off)
             self._wake_sleep_btn.hide()
 
@@ -3100,28 +3100,28 @@ class MainWindow(QMainWindow):
         from memory.config_manager import get_push_to_talk_enabled
 
         ptt = get_push_to_talk_enabled()
-        self._ptt_btn.setText(f"🎚  PUSH-TO-TALK: {chord_label()}" if ptt
-                              else "🎚  PUSH-TO-TALK: OFF")
+        self._ptt_btn.setText(f"🎚  BASILI TUT KONUŞ: {chord_label()}" if ptt
+                              else "🎚  BASILI TUT KONUŞ: KAPALI")
         self._ptt_btn.setStyleSheet(btn_css("on" if ptt else "off"))
         self._ptt_btn.setToolTip(
-            "Microphone stays closed until you hold the key — nothing is sent "
-            "while you are not holding it." if ptt
-            else "Hold a key to talk instead of streaming the mic continuously.")
+            "Tuşu basılı tutana kadar mikrofon kapalı kalır; siz basılı "
+            "tutmazken ses gönderilmez." if ptt
+            else "Mikrofonu sürekli dinletmek yerine konuşmak için tuşu basılı tutun.")
 
     def _refresh_hud_btn(self):
         from memory.config_manager import get_hud_style
         face = get_hud_style() == "face"
         # Neither state is "off", so both read as active — this is a choice
         # between two things, not a switch with a disabled side.
-        self._hud_btn.setText("🧑  HUD: ANIMATED FACE" if face
-                              else "◉  HUD: REACTOR CORE")
+        self._hud_btn.setText("🧑  GÖRÜNÜM: HAREKETLİ YÜZ" if face
+                              else "◉  GÖRÜNÜM: REAKTÖR")
         self._hud_btn.setStyleSheet(btn_css("choice"))
         self._hud_btn.setToolTip(
-            "An animated head that speaks your words and shows what MAYK is "
-            "doing. Tap to switch to the reactor core."
+            "MAYK’ın konuşmasına ve durumuna göre hareket eden "
+            "bir yüz. Reaktöre geçmek için tıklayın."
             if face else
-            "A 3-D reactor core that turns with the state and moves with your "
-            "voice. Tap to switch to the animated head.")
+            "Duruma ve sesinize göre hareket eden 3B reaktör. "
+            "Hareketli yüze geçmek için tıklayın.")
 
     def _toggle_hud_style(self):
         """Swap the centrepiece. Both objects stay in memory, so the change is
@@ -3136,8 +3136,8 @@ class MainWindow(QMainWindow):
             pass
         self._refresh_hud_btn()
         self._log.append_log(
-            "SYS: HUD switched to the animated face." if want == "face"
-            else "SYS: HUD switched to the reactor core.")
+            "SYS: Görünüm hareketli yüze geçirildi." if want == "face"
+            else "SYS: Görünüm reaktöre geçirildi.")
 
     def _toggle_ptt(self):
         from memory.config_manager import (get_push_to_talk_enabled,
@@ -3246,7 +3246,7 @@ class MainWindow(QMainWindow):
     def _update_brief_btn(self, enabled: bool):
         if not hasattr(self, '_brief_btn'):
             return
-        self._brief_btn.setText("☀  MORNING BRIEF: ON" if enabled else "☀  MORNING BRIEF: OFF")
+        self._brief_btn.setText("☀  SABAH ÖZETİ: AÇIK" if enabled else "☀  SABAH ÖZETİ: KAPALI")
         self._brief_btn.setStyleSheet(btn_css("on" if enabled else "off"))
 
     def _open_customize(self):
@@ -3500,9 +3500,9 @@ class MainWindow(QMainWindow):
 
     def _style_mute_btn(self):
         if self._muted:
-            self._mute_btn.set_look("mic_off", "MIC MUTED", "MUTED_C")
+            self._mute_btn.set_look("mic_off", "MİKROFON KAPALI", "MUTED_C")
         else:
-            self._mute_btn.set_look("mic", "MIC ACTIVE", "GREEN")
+            self._mute_btn.set_look("mic", "MİKROFON AÇIK", "GREEN")
         self._refresh_status_strip()
 
     def _send(self):

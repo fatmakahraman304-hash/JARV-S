@@ -435,7 +435,7 @@ class ControlCenter(QWidget):
 
         bar = QHBoxLayout()
         bar.setSpacing(10)
-        back = QPushButton("‹  CORE")
+        back = QPushButton("‹  ANA EKRAN")
         back.setStyleSheet(btn_css("dim", align="center"))
         back.setFixedSize(96, 32)
         back.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.5))
