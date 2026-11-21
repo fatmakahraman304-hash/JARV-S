@@ -13,6 +13,7 @@ class ContinuityTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.p = patch.object(c, 'data_dir', return_value=self.root)
         self.p.start()
+        self.enterContext(patch.object(m, "BACKUP_PATH", self.root / "memory.json.bak"))
     def tearDown(self):
         self.p.stop()
         self.tmp.cleanup()
