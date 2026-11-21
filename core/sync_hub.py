@@ -263,6 +263,18 @@ def _save_local_categories(cats: dict) -> None:
         mm.save_memory(mem)
 
 
+def _merge_local_memory(cloud):
+    # Keep the read, merge and replacement in one local transaction. A missing
+    # hot-cache entry may have been archived. Only forget() records deletion.
+    from memory import memory_manager as mm
+    with mm._lock:
+        local = _local_memory_categories()
+        merged = merge_memory(local, cloud)
+        if any(merged.get(c, {}) != local.get(c, {}) for c in (*_CATS, "_deleted")):
+            _save_local_categories(merged)
+        return merged
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -1089,31 +1101,13 @@ def _cycle() -> None:
         _state["last_memory"] = now
         try:
             cloud = json.loads(files.get("memory.json") or "{}")
-        except Exception:
-            cloud = {}
-        local = _local_memory_categories()
-        # A key that was here at the last sync and is gone now was forgotten on
-        # this computer: record that, or the other devices would bring it back.
-        keys_now = {f"{c}/{k}" for c in _CATS for k in local.get(c, {})}
-        prev = _state.get("local_keys")
-        if prev is not None:
-            gone = prev - keys_now
-            if gone:
-                local.setdefault("_deleted", {}).update({k: _now() for k in gone})
-            # added here since the last sync: a re-add beats an older deletion
-            # (desktop entries carry only a date, so the timestamps can't tell)
-            fresh = keys_now - prev
-            if fresh and isinstance(cloud.get("_deleted"), dict):
-                cloud["_deleted"] = {k: t for k, t in cloud["_deleted"].items() if k not in fresh}
-        _state["local_keys"] = keys_now
-        merged = merge_memory(local, cloud)
-        local_norm = {c: {k: _entry(v) for k, v in local.get(c, {}).items()} for c in _CATS}
-        if (any(merged.get(c, {}) != local_norm[c] for c in _CATS)
-                or merged.get("_deleted", {}) != local.get("_deleted", {})):
-            _save_local_categories(merged)
-            _state["local_keys"] = {f"{c}/{k}" for c in _CATS for k in merged.get(c, {})}
-        if merged != cloud:
-            writes["memory.json"] = json.dumps(merged, ensure_ascii=False)
+        except ValueError:
+            cloud = None
+            _log("[Sync] Geçersiz uzak hafıza korunuyor.")
+        if isinstance(cloud, dict):
+            merged = _merge_local_memory(cloud)
+            if merged != cloud:
+                writes["memory.json"] = json.dumps(merged, ensure_ascii=False)
 
     # 4b. this computer's projects, so the phone can tell how they are going
     if _state.get("last_projects", 0.0) + MEMORY_EVERY < now:
