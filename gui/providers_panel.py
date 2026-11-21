@@ -384,7 +384,7 @@ class ProvidersOverlay(_HudOverlay):
             box.setCurrentIndex(j)
         elif keep:
             box.setCurrentText(keep)
-        self._say(pid, "f"{len(items)} model "
+        self._say(pid, f"{len(items)} model 
                        f"bu sunucuda bulundu; yukarıdan seçin.", C.TEXT_DIM)
 
     def _set_mode(self, value: str) -> None:
@@ -1107,7 +1107,7 @@ class ProvidersOverlay(_HudOverlay):
                 j = box.findText(keep)
             box.setCurrentIndex(j if j >= 0 else 0)
         else:
-            self._say(pid, "f"✓  {len(items)} seçenek: "
+            self._say(pid, f"✓  {len(items)} seçenek: 
                            f"{', '.join(str(v) for v, _ in items[:8])}", C.GREEN)
             return
         self._say(pid, f"✓  {len(items)} seçenek bulundu; yukarıdan seçin.", C.GREEN)
