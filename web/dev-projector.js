@@ -47,11 +47,14 @@
   sheet.querySelectorAll('[data-k]').forEach(b => {
     // Local HTTPS→HTTP bridge navigates away for every key. Do not repeat
     // or dispatch many navigations while a key is held. One tap = one command.
-    if (!REPEAT.has(b.dataset.k) || J.lanRemote) return;
+    if (!REPEAT.has(b.dataset.k)) return;
     let t1 = null, t2 = null, n = 0;
     b.onclick = null;
     const stop = () => { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; };
-    b.addEventListener('pointerdown', e => { e.preventDefault(); n = 0; press(b.dataset.k); t1 = setTimeout(() => { t2 = setInterval(() => { if (++n > 25) stop(); else press(b.dataset.k); }, 220); }, 450); });
+    b.addEventListener('pointerdown', e => { e.preventDefault(); n = 0; press(b.dataset.k);
+      if (J.lanRemote) return; // one navigation only, even if paired after page load
+      t1 = setTimeout(() => { t2 = setInterval(() => { if (++n > 25) stop(); else press(b.dataset.k); }, 220); }, 450);
+    });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => b.addEventListener(ev, stop));
     b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); press(b.dataset.k); } });
   });
