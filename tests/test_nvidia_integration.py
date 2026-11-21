@@ -178,6 +178,8 @@ class NvidiaRoutingTests(unittest.TestCase):
             encoding="utf-8")
         self.assertIn("NVIDIA anahtarınızı", panel)
         self.assertIn('("@deepseek", "@nvidia")', panel)
+        self.assertIn("working_model", panel)
+        self.assertIn("box.setCurrentIndex(index)", panel)
 
     def test_nvidia_settings_hints_are_in_turkish(self):
         from providers.llm_openai import PROVIDER, CATALOG
@@ -232,7 +234,8 @@ class NvidiaProbeTests(unittest.TestCase):
         ):
             with self.subTest(error=error):
                 instance = self._provider()
-                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)):
+                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)), \
+                     mock.patch("core.nvidia_account.available_models", return_value=[]):
                     ok, message = instance.probe(check_vision=False)
                 self.assertFalse(ok)
                 self.assertIn(expected, message)
@@ -247,7 +250,8 @@ class NvidiaProbeTests(unittest.TestCase):
             ("SSL verification failed", "bağlantısı kurulamadı"),
         ):
             with self.subTest(error=error):
-                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)):
+                with mock.patch.object(instance, "complete", side_effect=RuntimeError(error)), \
+                     mock.patch("core.nvidia_account.available_models", return_value=[]):
                     ok, message = instance.probe(check_vision=False)
                 self.assertFalse(ok)
                 self.assertIn(expected, message)
