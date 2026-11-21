@@ -43,53 +43,50 @@ _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "env", "__pycache__", "di
               ".idea", ".vscode", ".mypy_cache", ".pytest_cache", ".jarvis_backup"}
 
 SYSTEM = (
-    "You are MAYK's coding agent, working inside one project folder through tools. You are a senior "
-    "engineer who owns the result: the user asked by voice and will not review your diff, so what you "
-    "hand back must simply work.\n"
-    "Work like this:\n"
-    "1. Look before you change: list_files, search and read_file the code that matters; reuse what the "
-    "project already has.\n"
-    "2. Plan the steps in your head, then do them one by one.\n"
-    "3. Build it completely — no placeholders, no TODOs, no fake data in place of real logic. A website "
-    "gets real content, a responsive layout and working links.\n"
-    "4. Change files with edit_file (exact, small replacements); use write_file for new files or a full "
-    "rewrite of a small file. Never touch secrets, keys or settings files; never delete the user's data.\n"
-    "5. Verify: run the tests or the program with run, read the errors, fix, run again until it works. "
-    "Check your work once more for bugs before finishing.\n"
-    "6. When done, call finish with a summary IN TURKISH: what you built or changed, how you checked it, "
-    "how to open or run it (3–5 sentences, no code).\n"
-    "Only call the tools; paths are relative to the project folder."
+    "Sen MAYK'ın kodlama ajanısın. Yalnızca verilen proje klasöründe çalışırsın. "
+    "Deneyimli bir yazılım mühendisi gibi eksiksiz ve doğrulanmış çözüm üret. "
+    "Kullanıcı Türkçe konuşuyorsa yanıtların, günlük açıklamaların ve özetlerin Türkçe olsun.\n"
+    "1. Önce incele: list_files, search ve read_file ile mevcut yapıyı anla; tekrar kullanılabilecek kodu bul.\n"
+    "2. Gerekli adımları planla ve sırayla uygula.\n"
+    "3. Gerçek işlevleri tamamla. Sahte veri, boş fonksiyon veya TODO bırakma. "
+    "Web uygulamasında gerçek içerik, duyarlı tasarım ve çalışan bağlantılar kullan.\n"
+    "4. Mevcut dosyalarda küçük ve tam edit_file değişiklikleri yap; yeni dosyalar için "
+    "write_file kullan. API anahtarlarına, şifrelere, yerel ayarlara dokunma ve kullanıcı verisini silme.\n"
+    "5. run ile testleri veya uygulamayı çalıştır; hataları okuyup düzelt. İşini bitirmeden bir kez daha kontrol et.\n"
+    "6. Bittiğinde finish aracını çağır; ne yaptığını ve nasıl doğruladığını "
+    "Türkçe 3–5 cümlede açıkla. Sadece açıklama yaparak işi bitirmiş sayma.\n"
+    "Yalnızca tanımlanmış araçları çağır; dosya yolları proje klasörüne göreli olmalıdır."
 )
 
 TOOLS = [
-    {"name": "list_files", "description": "List files and folders (skips node_modules, .git, venv …).",
+    {"name": "list_files", "description": "Dosya ve klasörleri listele (.git, venv ve node_modules hariç).",
      "parameters": {"type": "object", "properties": {
-         "path": {"type": "string", "description": "folder, relative; default '.'"},
-         "depth": {"type": "integer", "description": "how deep, 1-4; default 2"}}}},
-    {"name": "read_file", "description": "Read a text file with line numbers (up to 500 lines at a time).",
+         "path": {"type": "string", "description": "Göreli klasör yolu; varsayılan '.'"},
+         "depth": {"type": "integer", "description": "Arama derinliği: 1–4, varsayılan 2"}}}},
+    {"name": "read_file", "description": "Bir metin dosyasını satır numaralarıyla oku (en fazla 500 satır).",
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}},
          "required": ["path"]}},
-    {"name": "search", "description": "Search the project's text files with a regular expression.",
+    {"name": "search", "description": "Projede düzenli ifadeyle metin ara.",
      "parameters": {"type": "object", "properties": {
-         "pattern": {"type": "string"}, "glob": {"type": "string", "description": "e.g. *.py; default all"}},
+         "pattern": {"type": "string"}, "glob": {"type": "string", "description": "Örn. *.py; varsayılan: tümü"}},
          "required": ["pattern"]}},
-    {"name": "write_file", "description": "Create a file or replace its whole content.",
+    {"name": "write_file", "description": "Yeni dosya oluştur veya tüm içeriğini değiştir.",
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}},
-    {"name": "edit_file", "description": "Replace an exact piece of text in a file. `old` must appear exactly "
-                                         "once unless replace_all is true; include enough context.",
+    {"name": "edit_file", "description": "Dosyada belirtilen metni birebir değiştir. Eski metin, replace_all kullanılmadığında "
+                                         "yalnızca bir kez bulunmalıdır; yeterli bağlam belirt.",
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string"}, "old": {"type": "string"}, "new": {"type": "string"},
          "replace_all": {"type": "boolean"}}, "required": ["path", "old", "new"]}},
-    {"name": "run", "description": "Run a command in the project folder to build, run or test (python, "
-                                   "pytest, npm, node, go, cargo, …). Returns exit code and output.",
+    {"name": "run", "description": "Proje klasöründe derleme, çalıştırma veya test komutu uygula (python, "
+                                   "pytest, npm, node, go, cargo vb.). Çıkış kodunu ve sonucu döndürür.",
      "parameters": {"type": "object", "properties": {
-         "command": {"type": "string"}, "timeout": {"type": "integer", "description": "seconds, default 120"}},
+         "command": {"type": "string"}, "timeout": {"type": "integer", "description": "Saniye cinsinden süre; varsayılan 120"}},
          "required": ["command"]}},
-    {"name": "fetch_url", "description": "Read a documentation web page as text.",
+    {"name": "fetch_url", "description": "Bir dokümantasyon sayfasını metin olarak oku.",
      "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}},
-    {"name": "finish", "description": "The work is done and checked: give the summary in Turkish.",
+    {"name": "finish", "description": "İş tamamlandı ve doğrulandı: sonucu Türkçe özetle.",
      "parameters": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"]}},
 ]
 
