@@ -653,9 +653,13 @@ class OpenAICompatLLM:
     def _try_another_nvidia_model(error: Exception) -> bool:
         """Yalnızca modele özgü sorunlarda alternatif NVIDIA modeli dene."""
         message = str(error).casefold()
-        match = re.match(r"^([1-5][0-9]{2})\\b", message)
+        match = re.match(r"^([1-5][0-9]{2})\b", message)
         if match:
             return int(match.group(1)) in (404, 500, 502, 503, 504)
+        # İnternet/DNS bağlantısı kurulamadığında başka model de çalışmaz.
+        if any(hint in message for hint in ("connecterror", "connecttimeout",
+                                            "name resolution", "dns", "ssl")):
+            return False
         return any(hint in message for hint in (
             "timed out", "timeout", "zaman aşımı", "readtimeout",
             "remoteprotocolerror",
@@ -708,7 +712,7 @@ class OpenAICompatLLM:
                                 break
                     self.model = original_model
                     return False, (_nvidia_probe_message(last) +
-                                   " Alternatif NVIDIA modelleri de denenmiş olabilir.")
+                                   " Alternatif NVIDIA modelleri de yanıt vermedi.")
                 return False, _nvidia_probe_message(e)
             msg = str(e)
             if "401" in msg or "403" in msg:
