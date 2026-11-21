@@ -9,8 +9,8 @@ android {
         applicationId 'com.jarvis.alici'
         minSdk 24
         targetSdk 30          // sideloaded on TV boxes / projectors (Android 11 on the HY320)
-        versionCode 4
-        versionName '1.3'
+        versionCode 5
+        versionName '1.4'
     }
     signingConfigs {
         // A fixed key in the repo so every build can update the installed app.
