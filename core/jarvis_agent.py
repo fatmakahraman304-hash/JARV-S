@@ -703,7 +703,12 @@ def _shrink(history: list[dict]) -> None:
                        for h in history)
     if size() <= CONTEXT_BUDGET:
         return
-    old = history[1:-12]
+    start = max(1, len(history) - 12)
+    # Never keep a tool result without its initiating assistant call;
+    # OpenAI/Gemini reject dangling tool-call ids after context compaction.
+    while start > 1 and history[start].get("role") == "tool":
+        start -= 1
+    old = history[1:start]
     if old:
         notes = []
         for h in old:
@@ -719,7 +724,7 @@ def _shrink(history: list[dict]) -> None:
             elif role == "user":
                 notes.append("previous instruction: " + str(h.get("text", ""))[:160])
         ledger = "\n".join(notes[-110:])[-17000:]
-        history[1:-12] = [{
+        history[1:start] = [{
             "role": "user",
             "text": "ÖNCEKİ KOD AJANI ADIMLARI (özet; asıl görev en başta):\n"
                     + ledger + "\nSonraki adımlara ve gerçek testlere devam et.",
