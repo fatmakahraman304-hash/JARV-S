@@ -31,6 +31,50 @@ class SnapshotTest(unittest.TestCase):
             self.assertFalse((root / "c.py").exists())
 
 
+class SafeRollbackTest(unittest.TestCase):
+    def test_restores_only_changed_files_and_preserves_other_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.py").write_text("old")
+            (root / "unchanged.py").write_text("original")
+            before = agent_coding.snapshot(root)
+            (root / "a.py").write_text("agent version")
+            (root / "new.py").write_text("new")
+            after = agent_coding.snapshot(root)
+            # A user edits an unrelated file after the agent completed.
+            (root / "unchanged.py").write_text("new user version")
+            conflicts = agent_coding.restore_checked(root, before, after)
+            self.assertFalse(conflicts)
+            self.assertEqual((root / "a.py").read_text(), "old")
+            self.assertEqual((root / "unchanged.py").read_text(), "new user version")
+            self.assertFalse((root / "new.py").exists())
+
+    def test_concurrent_edit_to_changed_file_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.py").write_text("old")
+            before = agent_coding.snapshot(root)
+            (root / "a.py").write_text("agent")
+            after = agent_coding.snapshot(root)
+            (root / "a.py").write_text("new user work")
+            conflicts = agent_coding.restore_checked(root, before, after)
+            self.assertTrue(any("edited after agent" in c for c in conflicts))
+            self.assertEqual((root / "a.py").read_text(), "new user work")
+
+    def test_missing_restore_bytes_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.py").write_text("old")
+            before = agent_coding.snapshot(root)
+            original = before["a.py"]
+            before["a.py"] = (original[0], original[1], original[2], None)
+            (root / "a.py").write_text("agent")
+            after = agent_coding.snapshot(root)
+            conflicts = agent_coding.restore_checked(root, before, after)
+            self.assertTrue(any("no checkpoint bytes" in c for c in conflicts))
+            self.assertEqual((root / "a.py").read_text(), "agent")
+
+
 class ClaudeStreamTest(unittest.TestCase):
     def test_events(self):
         logged = []
@@ -128,6 +172,51 @@ class AgentModeTest(unittest.TestCase):
             undo["fn"]()
             self.assertEqual((root / "app.py").read_text(), "def total(x):\n    return x\n")
             self.assertFalse((root / "test_app.py").exists())
+
+    def test_agent_verification_failure_rolls_back_changes(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "app.py").write_text("original")
+
+            def changes(provider, folder, instruction, guide, extra, log):
+                (folder / "app.py").write_text("failing update")
+                return "changed"
+
+            with mock.patch.object(agent_coding, "run", side_effect=changes), \
+                 mock.patch.object(self.da, "_agent_checks",
+                                   return_value={"app.py": "regression"}), \
+                 mock.patch.object(self.da, "_open_vscode"), \
+                 mock.patch.object(self.da, "_refresh_brief"):
+                with self.assertRaisesRegex(RuntimeError, "geri alındı"):
+                    self.da._improve_with_agent(root, "fix", "", {}, None,
+                                                {"app.py": "original"},
+                                                "jarvis_agent", None, 0.0, False)
+            self.assertEqual((root / "app.py").read_text(), "original")
+
+    def test_cancel_during_second_fix_round_reverts_all_changes(self):
+        from core.jarvis_agent import AgentCancelled
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "app.py").write_text("original")
+            rounds = []
+
+            def run(provider, folder, *args, **kwargs):
+                rounds.append(True)
+                (folder / "app.py").write_text("partial code")
+                if len(rounds) == 2:
+                    raise AgentCancelled("user cancelled")
+                return "first round"
+
+            with mock.patch.object(agent_coding, "run", side_effect=run), \
+                 mock.patch.object(self.da, "_agent_checks",
+                                   return_value={"app.py": "broken"}), \
+                 mock.patch.object(self.da, "_open_vscode"):
+                with self.assertRaises(AgentCancelled):
+                    self.da._improve_with_agent(root, "fix", "", {}, None,
+                                                {"app.py": "original"},
+                                                "jarvis_agent", None, 0.0, False)
+            self.assertEqual((root / "app.py").read_text(), "original")
+
 
     def test_agent_failure_leaves_folder_untouched(self):
         with tempfile.TemporaryDirectory() as d:
