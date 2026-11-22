@@ -75,6 +75,14 @@
     history.replaceState(null, '', location.pathname + location.search);
   }
 
+  // Pop-up command returns to HTTPS MAYK and reports back to its opener.
+  // When Safari allows closing script-opened tabs the main assistant remains
+  // at its current position, without losing the microphone/chat UI state.
+  if (lanResult && window.opener) {
+    try { window.opener.postMessage({ type: 'mayk-lan-result', text: lanResult }, location.origin); } catch {}
+    try { window.close(); } catch {}
+  }
+
   function detectKind() {
     if (S.kind && S.kind !== 'auto') return S.kind;
     const ua = navigator.userAgent;
@@ -1413,7 +1421,19 @@
   // The MAYK Alıcı app on the projector (android-receiver/) works even when
   // the laptop is off; without it, the laptop drives the projector over ADB.
   const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
-  function sendLanCommand(kind, arg) {
+  let lanPopup = null;
+  window.addEventListener('message', e => {
+    // Only accept results from the actual window we opened, on our HTTPS origin.
+    if (e.origin !== location.origin || !lanPopup || e.source !== lanPopup) return;
+    if (!e.data || e.data.type !== 'mayk-lan-result') return;
+    const message = String(e.data.text || 'Komutun sonucu gelmedi').slice(0, 500);
+    lanPopup = null;
+    const result = $('rm-lan-result');
+    if (result) { result.textContent = '📽️ ' + message; result.hidden = false; }
+    toast('📽️ ' + message);
+    try { e.source.close(); } catch {}
+  });
+  function sendLanCommand(kind, arg, extra = {}) {
     const link = parseLanUrl(S.lanRemote);
     if (!link) return 'Yerel projeksiyon bağlantısı yok. Kumanda ekranına adresi kaydet.';
     // HTTPS MAYK cannot fetch a local HTTP IP because Safari blocks mixed
@@ -1425,11 +1445,27 @@
     command.search = new URLSearchParams({
       op: kind, arg: String(arg || '').slice(0, 600), csrf: token, back: 'mayk'
     }).toString();
+    if (extra.popup) {
+      // The popup is opened synchronously from an actual button press.
+      // Normal HTTPS fetch to a local HTTP address is blocked by iOS Safari.
+      // MAYK stays in place; the Android receiver redirects the popup back to
+      // MAYK and its result is delivered to the opener with postMessage.
+      if (lanPopup && !lanPopup.closed) return 'Önce önceki kumanda komutunun bitmesini bekle.';
+      const pop = window.open(command.href, '_blank');
+      if (pop) {
+        lanPopup = pop;
+        const result = $('rm-lan-result');
+        if (result) { result.textContent = '📡 Komut projeksiyona gönderiliyor…'; result.hidden = false; }
+        return 'Komut gönderiliyor…';
+      }
+      // Popups disabled: use the established same-tab fallback.
+    }
     try {
       sessionStorage.setItem('jarvis_lan_restore', $('s-remote').hidden ? '' : 'remote');
       sessionStorage.setItem('jarvis_lan_was_mic', micOn ? '1' : '0');
+      sessionStorage.setItem('jarvis_lan_scroll', String($('s-remote').scrollTop || 0));
     } catch {}
-    // Never report success before the receiver replies.
+    // Voice tool calls have no user activation, so a new tab may be blocked.
     location.assign(command.href);
     return 'Yerel komut gönderiliyor; sonuç MAYK ekranında görünecek.';
   }
@@ -1446,7 +1482,7 @@
     return `${d.controls || 'Projeksiyon'} yanıt vermedi. Hedef alıcı kimliği: ${d.id}. Alıcı uygulamasındaki cihaz kimliğiyle karşılaştır; farklıysa eski eşleştirme kaydı seçilmiş olabilir.`;
   }
   async function remote(kind, arg, extra = {}) {
-    if (S.lanRemote) return sendLanCommand(kind, arg);
+    if (S.lanRemote) return sendLanCommand(kind, arg, extra);
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil.';
     await syncNow();
     const rx = receiver();
@@ -1460,8 +1496,9 @@
     const link = parseLanUrl(S.lanRemote);
     $('rm-lan-url').value = link;
     $('rm-lan-state').textContent = link
-      ? 'Yerel Wi-Fi bağlantısı kayıtlı. Komutlar GitHub kullanmaz; iPhone tarayıcısı her komuttan sonra MAYK ekranına döner.'
-      : 'Projeksiyondaki MAYK Alıcı adresini bir kez buraya kaydet veya yerel kumandadan “MAYK’a bağla” bağlantısını aç.';
+      ? '🟢 Bağlı: ' + new URL(link).hostname + ' · GitHub gerekmez'
+      : 'Bağlantı henüz kayıtlı değil. MAYK Alıcı adresini bir kez ekle.';
+    $('rm-lan-config').open = !link;
     $('rm-lan-open').disabled = !link;
   }
   $('rm-lan-save').onclick = () => {
@@ -1469,7 +1506,7 @@
     if (!raw) { delete S.lanRemote; save(); renderLanSettings(); toast('Yerel bağlantı kaldırıldı'); return; }
     const link = parseLanUrl(raw);
     if (!link) { toast('Tam adresi yapıştır: http://192.168...:18765/uzun-kod'); return; }
-    S.lanRemote = link; save(); renderLanSettings(); toast('Wi-Fi kumandası MAYK’a bağlandı');
+    S.lanRemote = link; save(); renderLanSettings(); toast('Wi-Fi kumandası zaten bağlı; tekrar kaydetmeye gerek yok');
   };
   $('rm-lan-open').onclick = () => {
     const link = parseLanUrl(S.lanRemote);
@@ -1478,14 +1515,14 @@
   $('t-remote').onclick = () => {
     const rx = receiver(), pc = findPc('');
     $('rm-note').textContent = S.lanRemote
-      ? 'Yerel Wi-Fi bağlantısı kayıtlı · GitHub kotası kullanılmaz. Hızlı yön tuşları için yerel kumandayı aç.'
+      ? 'Yerel bağlantı hazır. Aşağıdaki tuşlara dokunarak projeksiyonu kontrol et.'
       : rx ? 'MAYK Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
       : pc ? pc.name + ' üzerinden kumanda' : 'Projeksiyonun yerel Wi-Fi kumanda adresini aşağıya kaydet.';
     renderLanSettings(); openSheet('s-remote');
   };
-  document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
-  document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
-  $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
+  document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k, { popup: true })); });
+  document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app, { popup: true })));
+  $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t, { popup: true })); });
   $('rm-type').onclick = async () => { const t = $('rm-inp').value.trim(); if (!t) { toast('Önce yazacağını kutuya yaz.'); return; } $('rm-inp').value = ''; toast(await remote('type', t)); };
   $('rm-look').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await remote('look', '', { question: '' })); setTimeout(() => syncNow(), 3000); };
 
@@ -2174,7 +2211,11 @@
     setTimeout(() => {
       sys('📽️ Projeksiyon: ' + lanResult + (wasMic ? ' Konuşmak için mikrofona yeniden dokun.' : ''));
       toast('📽️ ' + lanResult);
-      if (restore === 'remote') $('t-remote').click();
+      if (restore === 'remote') {
+        $('t-remote').click();
+        try { $('s-remote').scrollTop = Number(sessionStorage.getItem('jarvis_lan_scroll') || 0); } catch {}
+        sessionStorage.removeItem('jarvis_lan_scroll');
+      }
     }, 350);
   }
   if (Cloud.ok()) syncNow();
