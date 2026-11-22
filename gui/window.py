@@ -147,13 +147,13 @@ class MainWindow(QMainWindow):
 
         # Load customization from config
         _cfg = _read_full_config()
-        self._assistant_name: str = (_cfg.get("assistant_name") or "AETHER").strip()
+        self._assistant_name: str = "AETHER"
         _display = self._assistant_name.upper()
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
         _ui_color = (_cfg.get("ui_color") or "").strip()
         # "#28e0ff" was the old cyan default; a saved copy of it is not a
-        # choice the user made, so it no longer overrides the orange look.
+        # choice the user made, so it no longer overrides the AETHER cyan theme.
         if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#28e0ff", "#ff8a1c"):
             apply_ui_accent(_ui_color)
 

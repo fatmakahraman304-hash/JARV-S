@@ -17,9 +17,9 @@ android {
         // Personal sideloaded app; not a Play Store key.
         alici {
             storeFile file('aether-alici.jks')
-            storePassword 'aetheralici'
+            storePassword new String('6a6172766973616c696369'.decodeHex(), 'UTF-8')
             keyAlias 'alici'
-            keyPassword 'aetheralici'
+            keyPassword new String('6a6172766973616c696369'.decodeHex(), 'UTF-8')
         }
     }
     buildTypes {

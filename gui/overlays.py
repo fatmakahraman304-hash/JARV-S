@@ -321,7 +321,8 @@ class CustomizeOverlay(QWidget):
 
         lay.addWidget(_lbl("ASİSTANIN ADI", 8, color=C.TEXT_DIM,
                             align=Qt.AlignmentFlag.AlignLeft))
-        self._name_input = QLineEdit(assistant_name)
+        self._name_input = QLineEdit("AETHER")
+        self._name_input.setReadOnly(True)
         self._name_input.setFont(hud_font(10))
         self._name_input.setFixedHeight(32)
         self._name_input.setStyleSheet(_fs)
