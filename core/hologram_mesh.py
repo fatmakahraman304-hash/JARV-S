@@ -32,7 +32,9 @@ def with_shoulders(mesh):
     added = count - len(original)
     for field in ("jaw", "brow", "lips"):
         result[field] = np.concatenate((mesh[field], np.zeros(added, np.float32)))
-    result["fade"] = np.concatenate((mesh["fade"], np.repeat([.86, .60, .0], segments).astype(np.float32)))
+    fade = mesh["fade"].copy()
+    fade[mesh["n_head"]:] = 1.0
+    result["fade"] = np.concatenate((fade, np.repeat([.90, .60, .0], segments).astype(np.float32)))
     result["face_group"] = np.concatenate((mesh["face_group"], np.zeros(segments * 6, np.float32)))
     outward = np.concatenate((mesh["normals"], result["verts"][len(original):] - [0, -1.40, -.25]))
     result["normals"] = np.ascontiguousarray(_vertex_normals(result["verts"], result["faces"], outward), dtype=np.float32)

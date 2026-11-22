@@ -47,3 +47,16 @@ class HologramFace(unittest.TestCase):
             self.assertGreater(float(avatar._v0[:, 0].max()), 1.1)
         finally:
             painter.end()
+
+
+    def test_shoulder_extension_preserves_base_and_has_no_neck_gap(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        base = get_head_mesh()
+        old_fade = base["fade"].copy()
+        mesh = with_shoulders(base)
+        np.testing.assert_array_equal(base["fade"], old_fade)
+        np.testing.assert_allclose(mesh["fade"][base["n_head"]:len(base["verts"])], 1)
+        np.testing.assert_allclose(mesh["jaw"][len(base["verts"]):], 0)
+        self.assertTrue(np.isfinite(mesh["normals"]).all())
+        self.assertEqual(len(mesh["faces"]), len(mesh["face_group"]))
