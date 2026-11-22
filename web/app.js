@@ -1451,6 +1451,13 @@
     // active content. Navigate to the receiver, then let it redirect to MAYK.
     if (!['key', 'app', 'search', 'url'].includes(kind))
       return 'Yerel Wi-Fi kumandası bu işlemi desteklemiyor: ses, yön tuşları, uygulama açma ve arama kullanılabilir.';
+    if (isIOS && extra.popup) {
+      // SFSafariViewController does not preserve window.opener across the
+      // HTTP command → HTTPS redirect. Open the genuine remote ONCE instead:
+      // its same-origin buttons work without repeated page transitions.
+      const opened = window.open(link, '_blank', 'noopener');
+      return opened ? 'Yerel kumanda açıldı. Tuşları o sayfadan kullan.' : 'Yerel kumandayı açmak için 📱 Hızlı yerel kumanda düğmesine dokun.';
+    }
     const token = new URL(link).pathname.slice(1);
     const command = new URL(link + '/cmd');
     command.search = new URLSearchParams({
