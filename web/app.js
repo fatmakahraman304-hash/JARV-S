@@ -1444,48 +1444,17 @@
     toast('📽️ ' + message);
     try { e.source.close(); } catch {}
   });
-  function sendLanCommand(kind, arg, extra = {}) {
+  async function sendLanCommand(kind, arg, extra = {}) {
     const link = parseLanUrl(S.lanRemote);
-    if (!link) return 'Yerel projeksiyon bağlantısı yok. Kumanda ekranına adresi kaydet.';
-    // HTTPS MAYK cannot fetch a local HTTP IP because Safari blocks mixed
-    // active content. Navigate to the receiver, then let it redirect to MAYK.
-    if (!['key', 'app', 'search', 'url'].includes(kind))
-      return 'Yerel Wi-Fi kumandası bu işlemi desteklemiyor: ses, yön tuşları, uygulama açma ve arama kullanılabilir.';
-    if (isIOS && extra.popup) {
-      // SFSafariViewController does not preserve window.opener across the
-      // HTTP command → HTTPS redirect. Open the genuine remote ONCE instead:
-      // its same-origin buttons work without repeated page transitions.
-      const opened = window.open(link, '_blank', 'noopener');
-      return opened ? 'Yerel kumanda açıldı. Tuşları o sayfadan kullan.' : 'Yerel kumandayı açmak için 📱 Hızlı yerel kumanda düğmesine dokun.';
-    }
-    const token = new URL(link).pathname.slice(1);
-    const command = new URL(link + '/cmd');
-    command.search = new URLSearchParams({
-      op: kind, arg: String(arg || '').slice(0, 600), csrf: token, back: 'mayk'
-    }).toString();
-    if (extra.popup) {
-      // The popup is opened synchronously from an actual button press.
-      // Normal HTTPS fetch to a local HTTP address is blocked by iOS Safari.
-      // MAYK stays in place; the Android receiver redirects the popup back to
-      // MAYK and its result is delivered to the opener with postMessage.
-      if (lanPopup && !lanPopup.closed) return 'Önce önceki kumanda komutunun bitmesini bekle.';
-      const pop = window.open(command.href, '_blank');
-      if (pop) {
-        lanPopup = pop;
-        const result = $('rm-lan-result');
-        if (result) { result.textContent = '📡 Komut projeksiyona gönderiliyor…'; result.hidden = false; }
-        return 'Komut gönderiliyor…';
-      }
-      // Popups disabled: use the established same-tab fallback.
-    }
-    try {
-      sessionStorage.setItem('jarvis_lan_restore', $('s-remote').hidden ? '' : 'remote');
-      sessionStorage.setItem('jarvis_lan_was_mic', micOn ? '1' : '0');
-      sessionStorage.setItem('jarvis_lan_scroll', String($('s-remote').scrollTop || 0));
-    } catch {}
-    // Voice tool calls have no user activation, so a new tab may be blocked.
-    location.assign(command.href);
-    return 'Yerel komut gönderiliyor; sonuç MAYK ekranında görünecek.';
+    if (!link) return 'Yerel projeksiyon bağlantısı kaydedilmemiş.';
+    if (!window.MAYKRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. MAYK sayfasını güncelle.';
+    // Unlike a local http:// fetch or a popup, this uses an encrypted HTTPS
+    // channel and preserves the exact existing MAYK UI and voice session.
+    const result = $('rm-lan-result');
+    if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
+    const reply = await window.MAYKRelay.send(link, kind, arg);
+    if (result) { result.textContent = '📽️ ' + reply; result.hidden = false; }
+    return reply;
   }
   async function sendToReceiver(d, cmd) {
     const id = S.id + '-r' + Date.now().toString(36);
@@ -1518,17 +1487,11 @@
       : 'Bağlantı henüz kayıtlı değil. MAYK Alıcı adresini bir kez ekle.';
     $('rm-lan-config').open = !link;
     $('rm-lan-open').disabled = !link;
-    // iOS opens each HTTPS→local-HTTP command in a separate browser view.
-    // In practice this view has no window.opener, so popup/postMessage cannot
-    // keep the MAYK keypad interactive. Use the proven native local keypad.
-    const iosNative = !!(isIOS && link);
-    $('s-remote').classList.toggle('lan-ios-native', iosNative);
-    $('rm-lan-open').textContent = iosNative ? '🎮 Çalışan Wi-Fi kumandasını aç' : '📱 Hızlı yerel kumandayı aç';
+    $('s-remote').classList.remove('lan-ios-native');
+    $('rm-lan-open').textContent = '📱 Yedek yerel kumandayı aç';
     const note = $('rm-lan-guide');
-    if (note) {
-      note.hidden = !iosNative;
-      if (iosNative) note.textContent = 'iPhone tarayıcısı MAYK içindeki tuşları her basışta ayrı pencereye taşıyor. Çalışan yerel kumandayı bir kez aç; ses, YouTube ve yön tuşlarını orada kesintisiz kullan.';
-    }
+    if (note) { note.hidden = !link; note.textContent =
+      'MAYK içindeki tuşlar ve sesli komutlar şifreli HTTPS üzerinden çalışır; sayfa değişmez. İnternet kesilirse yedek yerel Wi-Fi kumandasını kullan.'; }
   }
   $('rm-lan-save').onclick = () => {
     const raw = $('rm-lan-url').value.trim();
@@ -1544,7 +1507,7 @@
   $('t-remote').onclick = () => {
     const rx = receiver(), pc = findPc('');
     $('rm-note').textContent = S.lanRemote
-      ? (isIOS ? 'Bağlantı kayıtlı. iPhone’da ayrı pencere hatasını önlemek için çalışan yerel kumandayı aç.' : 'Yerel bağlantı hazır. Aşağıdaki tuşlara dokunarak projeksiyonu kontrol et.')
+      ? '📽️ MAYK kumandası hazır · Tuşlar ve sesli komutlar bu ekrandan, sayfa değiştirmeden gönderilir.'
       : rx ? 'MAYK Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
       : pc ? pc.name + ' üzerinden kumanda' : 'Projeksiyonun yerel Wi-Fi kumanda adresini aşağıya kaydet.';
     renderLanSettings(); openSheet('s-remote');
