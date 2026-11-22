@@ -54,7 +54,7 @@ class HologramFace(unittest.TestCase):
         from gui.android_gl import _human_relief, AndroidGL
         from core.avatar_mesh import get_head_mesh
         from core.hologram_mesh import with_shoulders
-        self.assertIn("float phase = p.y * frequency", FRAG_HOLOGRAM)
+        self.assertIn("float phase = contourY * frequency", FRAG_HOLOGRAM)
         self.assertIn("float rim", FRAG_HOLOGRAM)
         self.assertIn("vec3 neon", FRAG_HOLOGRAM)
         self.assertIn("u_mouth", FRAG_HOLOGRAM)
