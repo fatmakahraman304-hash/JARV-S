@@ -86,7 +86,7 @@ class HologramFace(unittest.TestCase):
     def test_sculpted_contour_lines_and_subtle_speaking_lips(self):
         from gui.hologram_glsl import FRAG_HOLOGRAM
         # Lines bend around sockets, nose and cheeks on the actual posed mesh.
-        self.assertIn("float contourY = p.y + face", FRAG_HOLOGRAM)
+        self.assertIn("float contourY = mix(horizontal, p.y, 0.13)", FRAG_HOLOGRAM)
         self.assertIn("float eyeSocket", FRAG_HOLOGRAM)
         self.assertIn("float bridge", FRAG_HOLOGRAM)
         self.assertIn("crown = np.clip", __import__("inspect").getsource(
