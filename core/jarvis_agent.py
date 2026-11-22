@@ -692,14 +692,48 @@ def available() -> bool:
 # ── the loop ─────────────────────────────────────────────────────────────────
 
 def _shrink(history: list[dict]) -> None:
-    """Keep the conversation within budget: old tool output is cut first."""
-    total = sum(len(json.dumps(h, ensure_ascii=False, default=str)) for h in history)
-    for h in history[1:-12]:
-        if total <= CONTEXT_BUDGET:
-            break
-        if h["role"] == "tool" and len(h["result"]) > 600:
-            total -= len(h["result"]) - 300
-            h["result"] = h["result"][:300] + "\n… (older output shortened)"
+    """Bound long-running agent history without losing the current task.
+
+    Preserve the user request and twelve most recent messages verbatim.
+    Collapse older *complete* tool turns into a concise progress ledger;
+    otherwise large write_file arguments (not only tool output) overflow
+    NVIDIA/Gemini context windows and the agent repeatedly fails.
+    """
+    size = lambda: sum(len(json.dumps(h, ensure_ascii=False, default=str))
+                       for h in history)
+    if size() <= CONTEXT_BUDGET:
+        return
+    old = history[1:-12]
+    if old:
+        notes = []
+        for h in old:
+            role = h.get("role")
+            if role == "assistant":
+                for call in h.get("calls") or []:
+                    args = call.get("args") or {}
+                    target = args.get("path") or args.get("command") or ""
+                    notes.append(f"{call.get('name', 'tool')}: {str(target)[:130]}")
+            elif role == "tool":
+                result = str(h.get("result", ""))
+                notes.append(f"result of {h.get('name', 'tool')}: {result[:180]}")
+            elif role == "user":
+                notes.append("previous instruction: " + str(h.get("text", ""))[:160])
+        ledger = "\n".join(notes[-110:])[-17000:]
+        history[1:-12] = [{
+            "role": "user",
+            "text": "ÖNCEKİ KOD AJANI ADIMLARI (özet; asıl görev en başta):\n"
+                    + ledger + "\nSonraki adımlara ve gerçek testlere devam et.",
+        }]
+    # A large recent test output may still exceed the budget. Tool results
+    # are safe to condense; keep the last diagnostics for debugging.
+    if size() > CONTEXT_BUDGET:
+        for h in history[1:]:
+            if size() <= CONTEXT_BUDGET:
+                break
+            if h.get("role") == "tool" and len(str(h.get("result", ""))) > 2400:
+                result = str(h["result"])
+                h["result"] = (result[:400] + "\n… [older output trimmed] …\n"
+                               + result[-900:])
 
 
 def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_steps: int = MAX_STEPS) -> str:
