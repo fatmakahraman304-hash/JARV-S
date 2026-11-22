@@ -13,7 +13,8 @@ class HologramFace(unittest.TestCase):
     def test_default_projection_draws_and_audio_changes_mouth_without_gpu(self):
         app = QApplication.instance() or QApplication([])
         avatar = HoloAvatar()
-        self.assertEqual(avatar.style, "projection")
+        self.assertEqual(avatar.style, "holographic")
+        avatar.style = "projection"
         frames = []
         with patch.object(avatar, "_paint_android") as skin:
             for mouth in (0.0, 0.8):
@@ -29,3 +30,33 @@ class HologramFace(unittest.TestCase):
             skin.assert_not_called()
         self.assertFalse(np.array_equal(frames[0], frames[1]))
         self.assertGreater(np.count_nonzero(frames[0] != np.tile([21, 10, 2, 255], 480 * 540)), 1000)
+
+
+    def test_default_face_routes_to_smooth_3d_surface(self):
+        app = QApplication.instance() or QApplication([])
+        avatar = HoloAvatar()
+        image = QImage(480, 540, QImage.Format.Format_ARGB32)
+        image.fill(QColor("#020a15"))
+        painter = QPainter(image)
+        try:
+            with patch.object(avatar, "_paint_android", return_value=True) as render:
+                avatar.paint(painter, 240, 235, 175, QColor("#ffffff"), QColor("#ffffff"))
+            render.assert_called_once()
+            self.assertEqual(avatar.style, "holographic")
+            self.assertLess(float(avatar._v0[:, 1].min()), -1.5)
+            self.assertGreater(float(avatar._v0[:, 0].max()), 1.1)
+        finally:
+            painter.end()
+
+
+    def test_shoulder_extension_preserves_base_and_has_no_neck_gap(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        base = get_head_mesh()
+        old_fade = base["fade"].copy()
+        mesh = with_shoulders(base)
+        np.testing.assert_array_equal(base["fade"], old_fade)
+        np.testing.assert_allclose(mesh["fade"][base["n_head"]:len(base["verts"])], 1)
+        np.testing.assert_allclose(mesh["jaw"][len(base["verts"]):], 0)
+        self.assertTrue(np.isfinite(mesh["normals"]).all())
+        self.assertEqual(len(mesh["faces"]), len(mesh["face_group"]))

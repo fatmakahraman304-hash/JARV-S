@@ -275,6 +275,7 @@ uniform float u_glow;
 uniform float u_time;
 uniform float u_mouth;
 uniform float u_muted;
+uniform float u_holographic;
 uniform float u_open;         // 1 open .. 0 shut (blink and sleepy lids)
 uniform vec2 u_gaze;
 uniform float u_scale;        // pixels per head unit
@@ -403,7 +404,7 @@ void main() {
     H -= eyeFold * 0.0005 + smileFold * 0.0007;
 
     // ── ears ───────────────────────────────────────────────────────────────
-    float er;
+    float er = 2.0;
     float earH = neck ? 0.0 : ear(p, er);
     float earM = neck ? 0.0 : (1.0 - smoothstep(0.92, 1.02, er)) * smoothstep(0.50, 0.62, ax);
     H += earH;
@@ -498,6 +499,14 @@ void main() {
         ks = mix(ks, 0.05, shirt); shin = mix(shin, 8.0, shirt); sss = 1.0 - shirt;
     }
 
+    if (u_holographic > 0.5) {
+        // Preserve measured surface curvature and cavities, with no drawn
+        // facial outlines. The same real eyes, lids and mouth render below.
+        alb = vec3(0.30, 0.36, 0.42);
+        H = earH * 0.6 + lipM * 0.0004;
+        ks = 0.22; shin = 42.0; sss = 0.18;
+        hairC = 0.0; browC *= 0.25; shirt = 0.0;
+    }
     vec3 n = bumpN(n0, v_pos, H * u_scale);
     float fwy = max(fwidth(p.y), 1e-5);
     float sMouth = clamp((p.y - yli) / max(yui - yli, 1e-4), 0.0, 1.0);
@@ -646,6 +655,14 @@ void main() {
         }
     }
 
+    if (u_holographic > 0.5) {
+        float luminance = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        float edge = pow(1.0 - clamp(dot(n, VIEW), 0.0, 1.0), 2.2);
+        float scan = mix(1.0, 0.94 + 0.06 * sin(p.y * 720.0), lod(720.0));
+        col = vec3(0.015, 0.44, 0.82) * (0.12 + 2.3 * luminance);
+        col += vec3(0.55, 1.0, 1.15) * edge * (1.9 + 0.20 * u_glow);
+        col *= scan;
+    }
     col = max(col, vec3(0.0));
     col = vec3(1.0) - exp(-col * 1.45);
     col = pow(col, vec3(1.0 / 1.18));
@@ -678,7 +695,7 @@ def _hairline(p: np.ndarray) -> np.ndarray:
     return hl + (-0.07 - hl) * sb
 
 
-def _human_relief(p: np.ndarray) -> np.ndarray:
+def _human_relief(p: np.ndarray, with_hair: bool = True) -> np.ndarray:
     """Outward displacement per vertex: hair volume (thick on top, a short
     fade at the sides and nape) and the ears standing off the skull."""
     ss = lambda e0, e1, x: (lambda t: t * t * (3 - 2 * t))(np.clip((x - e0) / (e1 - e0), 0, 1))
@@ -689,6 +706,8 @@ def _human_relief(p: np.ndarray) -> np.ndarray:
     side = ss(0.50, 0.62, ax)
     ear_in = 1.0 - ss(0.86, 1.0, r)
     ear = side * ear_in * (0.026 + 0.05 * np.clip(0.5 - 0.5 * u, 0.0, 1.0))
+    if not with_hair:
+        return ear
     ear_m = side * (1.0 - ss(0.92, 1.02, r))
     hl = _hairline(p)
     lift = ss(0.45, 0.78, p[:, 1]) * ss(-0.35, 0.30, p[:, 2])
@@ -733,7 +752,7 @@ class AndroidGL:
                  look: str = "human"):
         self.ok = None                     # None: not tried yet
         self.error = ""
-        self.look = look if look in ("human", "android") else "human"
+        self.look = look if look in ("human", "android", "holographic") else "human"
         f = np.asarray(faces, np.int32)
         n_base = len(rest)
         neck_face = (np.asarray(face_group) < 0.5).astype(np.float32)
@@ -762,8 +781,8 @@ class AndroidGL:
         neck_v = np.zeros(len(rest_sub), bool)
         neck_v[f[neck_face > 0.5].reshape(-1)] = True
         neck_v[f[neck_face < 0.5].reshape(-1)] = False
-        self._disp = (_human_relief(rest_sub) * ~neck_v).astype(np.float32) \
-            if self.look == "human" else None
+        self._disp = (_human_relief(rest_sub, with_hair=self.look == "human") * ~neck_v).astype(np.float32) \
+            if self.look in ("human", "holographic") else None
         self._scale = 1.0
         self._human = _human_params(np.asarray(rest, np.float32), landmarks)
         self._buf = np.zeros((self._n_vert, _STRIDE), np.float32)
@@ -813,14 +832,14 @@ class AndroidGL:
             prog = QOpenGLShaderProgram()
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERT):
                 raise RuntimeError("köşe gölgelendiricisi: " + prog.log())
-            frag = FRAG_HUMAN if self.look == "human" else FRAG
+            frag = FRAG_HUMAN if self.look in ("human", "holographic") else FRAG
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, frag):
                 raise RuntimeError("piksel gölgelendiricisi: " + prog.log())
             for i, name in enumerate(("a_clip", "a_n", "a_rest", "a_misc", "a_pos")):
                 prog.bindAttributeLocation(name, i)
             if not prog.link():
                 raise RuntimeError("gölgelendirici bağlanamadı: " + prog.log())
-            if self.look == "human":
+            if self.look in ("human", "holographic"):
                 sp = QOpenGLShaderProgram()
                 if not (sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERT_SHADOW)
                         and sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAG_SHADOW)):
@@ -951,7 +970,7 @@ class AndroidGL:
             self._vbo.bind()
             self._vbo.write(0, buf.tobytes(), buf.nbytes)
             self._vbo.release()
-            if self.look == "human":
+            if self.look in ("human", "holographic"):
                 self._shadow_pass()
 
             self._fbo.bind()
@@ -972,6 +991,7 @@ class AndroidGL:
             self._uniform("u_accent", accent)
             self._uniform("u_eyecol", eye if eye is not None else accent)
             self._uniform("u_glow", glow)
+            self._uniform("u_holographic", 1.0 if self.look == "holographic" else 0.0)
             self._uniform("u_time", t)
             self._uniform("u_mouth", mouth)
             self._uniform("u_muted", 1.0 if muted else 0.0)
@@ -984,7 +1004,7 @@ class AndroidGL:
             self._uniform("u_mouth_size", self.mouth_size)
             self._uniform("u_px", (w * 0.5, h * 0.5))
             self._uniform("u_scale", self._scale)
-            if self.look == "human":
+            if self.look in ("human", "holographic"):
                 for name, value in self._human.items():
                     self._uniform(name, value)
                 for name, value in zip(("u_lu", "u_lv", "u_ll"), _LIGHT_BASIS):

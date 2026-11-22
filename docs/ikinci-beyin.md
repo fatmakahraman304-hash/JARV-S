@@ -16,4 +16,6 @@ Model çağrıları yapılandırılmış sağlayıcıyı, onun anahtarını ve k
 
 ## Erkek hologram yüz
 
-Varsayılan yüz, ışık katmanları ve saydam tarama çizgilerinden oluşan erkek projeksiyonudur. Cilt ve saç malzemesi kullanılmaz. Mevcut konuşma sesinin sürdürdüğü çene hareketi, göz kırpma ve bakış davranışı korunur. Çizim QPainter ile yapılır ve OpenGL gerektirmez. Yüzün görseli Gideon tarzındaki holografik projeksiyonlardan esinlenir.
+Varsayılan yüz, pürüzsüz 3D erkek başı, boyun ve omuz geometrisi üzerinde mavi hologram malzemesidir. OpenGL çizicisi gerçek yüzey normallerini, gölgeleri, göz çukurlarını, göz kapaklarını ve ağız içini işler. İnce tarama dokusu ile kenar ışığı malzemenin parçasıdır. Mevcut konuşma sesinin sürdürdüğü çene, göz kırpma ve bakış animasyonu korunur.
+
+Çizici açılamazsa uygulama yedek yüz çizimine geçer ve nedeni günlüğe kaydeder. Bu durumda yüksek kaliteli 3D çizim doğrulanmış sayılmaz. Windows ve Linux render kabul aracı seçilen 3D yol çalışmadığında hata verir.
