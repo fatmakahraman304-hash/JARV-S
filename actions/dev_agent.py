@@ -1901,11 +1901,15 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
             from core.jarvis_agent import AgentCancelled
             if round_no == 0 or isinstance(e, AgentCancelled):
                 after = agent_coding.snapshot(folder)
-                agent_coding.restore(folder, before, list(after))
+                conflicts = agent_coding.restore_checked(folder, before, after)
+                if conflicts:
+                    raise RuntimeError(
+                        "Kod ajanı durdu fakat bazı dosyalar güvenle geri alınamadı: "
+                        + "; ".join(conflicts[:8])) from e
                 if isinstance(e, AgentCancelled):
                     raise
                 raise RuntimeError(f"{who} çalışamadı: {e} "
-                                   "Önceki dosyalar geri yüklenmeye çalışıldı.") from e
+                                   "Ajan değişiklikleri güvenle geri alındı.") from e
             _log(player, f"{who} düzeltme turunu tamamlayamadı: {str(e)[:160]}")
             break
         after = agent_coding.snapshot(folder)
@@ -1951,11 +1955,24 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     if not (changed or created or deleted):
         return f"{who} looked at '{folder.name}' but changed nothing."
 
-    final_after = list(agent_coding.snapshot(folder))
+    final_after = agent_coding.snapshot(folder)
+    # Failed verification is not a deliverable. Restore the checkpoint
+    # rather than leave a broken build in the user's project.
+    if problems:
+        conflicts = agent_coding.restore_checked(folder, before, final_after)
+        if conflicts:
+            raise RuntimeError("Kod ajanı testleri geçemedi; geri almada çakışma: "
+                               + "; ".join(conflicts[:8]))
+        raise RuntimeError("Kod ajanı testleri geçemedi; yapılan değişiklikler "
+                           "güvenle geri alındı: "
+                           + "; ".join(f"{r}: {p[:130]}" for r, p in problems.items()))
 
     def restore() -> str:
-        agent_coding.restore(folder, before, final_after)
-        return f"Put '{folder.name}' back as it was before the change."
+        conflicts = agent_coding.restore_checked(folder, before, final_after)
+        if conflicts:
+            return ("Geri alma tamamlanamadı; sonradan değiştirilmiş dosyalar "
+                    "korundu: " + "; ".join(conflicts[:8]))
+        return f"'{folder.name}' klasörü kontrol edilerek önceki hâline getirildi."
     try:
         from core.undo import push_undo
         push_undo(f"changes to {folder.name}", restore)
