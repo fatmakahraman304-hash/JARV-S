@@ -29,6 +29,10 @@ REPLACEMENTS = [
     ("6a6172766973", "aether"),
     ("462e522e492e442e412e59", "AETHER"),
     ("465249444159", "AETHER"),
+    ("467269646179", "Aether"),
+    ("667269646179", "aether"),
+    ("556c74726f6e", "Aether"),
+    ("756c74726f6e", "aether"),
     ("554c54524f4e", "AETHER"),
 ]
 SWAPS = [(_old(k), v) for k, v in REPLACEMENTS]
