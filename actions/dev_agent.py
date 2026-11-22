@@ -827,6 +827,25 @@ def _log(player, msg: str) -> None:
             pass
 
 
+def _agent_progress(player, message: str) -> None:
+    """Show the *actual* coding brain in the existing Code Agent panel.
+
+    Selection isn't proof of a response. Report attempts and successful
+    replies separately, including NVIDIA -> Gemini failover, without keys.
+    """
+    started = "  MAYK ajanı: "
+    switched = "  Yedek kodlama modeline geçildi: "
+    answered = "  Kodlama modeli yanıt verdi: "
+    if message.startswith(started):
+        _update(model_attempt=message[len(started):].strip(), model_used=None)
+    elif message.startswith(switched):
+        _update(model_attempt=message[len(switched):].strip(), model_used=None)
+    elif message.startswith(answered):
+        model = message[len(answered):].strip()
+        _update(model_attempt=model, model_used=model)
+    _log(player, message)
+
+
 def status_text() -> str:
     """Gerçek iş parçacığı, son ilerleme ve kalıcı proje günlüğünden durum."""
     j = _job_snapshot()
@@ -1855,7 +1874,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     for round_no in range(_AGENT_ROUNDS):
         try:
             summary = agent_coding.run(provider, folder, instruction, guide, extra,
-                                       log=lambda m: _log(player, m)) or summary
+                                       log=lambda m: _agent_progress(player, m)) or summary
         except RuntimeError as e:
             if round_no == 0:
                 after = agent_coding.snapshot(folder)
@@ -1967,7 +1986,8 @@ def _build_with_agent(description: str, language: str, project_name: str, provid
             f"Language: {language}. Include a README.md (in Turkish) that says how to install and run it, "
             "a requirements/package file if it needs libraries, and tests for the core logic. "
             "Run it and its tests, and fix everything until they pass.")
-    summary = agent_coding.run(provider, project_dir, task, "", "", log=lambda m: _log(player, m))
+    summary = agent_coding.run(provider, project_dir, task, "", "",
+                               log=lambda m: _agent_progress(player, m))
     files = sorted(agent_coding.snapshot(project_dir))
     with _state_lock:
         if _JOB:
