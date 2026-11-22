@@ -749,6 +749,10 @@ _PHASES = {"improve": ["reading", "planning", "writing", "checking", "testing"],
 def _new_job(folder: Path, model: str, instruction: str, player,
              kind: str = "improve", journal_id=None) -> None:
     global _JOB, _player_ref
+    # One coding job at a time. A new job clears the previous cancellation
+    # request; resuming an agent round must NOT clear it.
+    from core import jarvis_agent
+    jarvis_agent.reset_cancel()
     now = time.time()
     with _state_lock:
         _JOB = {"folder": folder.name, "path": str(folder), "model": model,
@@ -758,6 +762,24 @@ def _new_job(folder: Path, model: str, instruction: str, player,
                 "journal_id": journal_id, "files": {}, "steps": [], "result": ""}
     _player_ref = player
     _publish()
+
+
+def request_code_agent_cancel() -> bool:
+    """Request cooperative cancellation without falsely claiming a stopped thread.
+
+    The current HTTP turn/subprocess may need to return first; the agent checks
+    between model and tool calls, and the job status changes only when it exits.
+    """
+    from core import jarvis_agent
+    if not _job_lock.locked():
+        return False
+    snap = _job_snapshot()
+    if not snap or snap.get("finished") is not None:
+        return False
+    jarvis_agent.request_cancel()
+    _update("cancelling", cancel_requested=True)
+    _log(None, "Kodlama ajanı için iptal istendi; çalışan adım sonlandırılıyor.")
+    return True
 
 
 def _job_snapshot() -> dict:
@@ -1876,10 +1898,14 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
             summary = agent_coding.run(provider, folder, instruction, guide, extra,
                                        log=lambda m: _agent_progress(player, m)) or summary
         except RuntimeError as e:
-            if round_no == 0:
+            from core.jarvis_agent import AgentCancelled
+            if round_no == 0 or isinstance(e, AgentCancelled):
                 after = agent_coding.snapshot(folder)
                 agent_coding.restore(folder, before, list(after))
-                raise RuntimeError(f"{who} çalışamadı: {e} Klasör olduğu gibi bırakıldı.") from e
+                if isinstance(e, AgentCancelled):
+                    raise
+                raise RuntimeError(f"{who} çalışamadı: {e} "
+                                   "Önceki dosyalar geri yüklenmeye çalışıldı.") from e
             _log(player, f"{who} düzeltme turunu tamamlayamadı: {str(e)[:160]}")
             break
         after = agent_coding.snapshot(folder)
@@ -2079,12 +2105,18 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
                   or "still fail their test" in result):
                 status = "finished with problems"
         except Exception as e:
-            status = "failed"
-            result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
+            from core.jarvis_agent import AgentCancelled
+            if isinstance(e, AgentCancelled):
+                status = "cancelled"
+                result = f"'{name}' kodlama görevi kullanıcı isteğiyle iptal edildi."
+            else:
+                status = "failed"
+                result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
             journal_status = {"done": "bitti", "nothing changed": "değişiklik yok",
                               "finished with problems": "sorunlu bitti", "failed": "başarısız",
+                              "cancelled": "iptal edildi",
                               "unverified": "doğrulanamadı"}.get(status, status)
             if paused:
                 journal_status = "aşama bekliyor"
