@@ -49,17 +49,39 @@ class HologramFace(unittest.TestCase):
             painter.end()
 
 
-    def test_high_quality_hologram_keeps_human_relief(self):
-        # Spectral mode must not strip the scalp volume or character details.
-        from gui.android_gl import FRAG_HUMAN, _human_relief
-        points = np.array([[0.0, 0.92, 0.58], [0.0, -0.15, 0.58]], np.float32)
-        full = _human_relief(points, with_hair=True)
-        bare = _human_relief(points, with_hair=False)
-        self.assertGreater(float(full[0] - bare[0]), 0.02)
-        self.assertAlmostEqual(float(full[1]), float(bare[1]), places=4)
-        self.assertIn("ice *= 1.0 - beard", FRAG_HUMAN)
-        self.assertIn("hairC * 0.96", FRAG_HUMAN)
-        self.assertIn("frost * pow", FRAG_HUMAN)
+    def test_default_hologram_is_not_blue_human_skin(self):
+        from gui.hologram_glsl import FRAG_HOLOGRAM
+        from gui.android_gl import _human_relief, AndroidGL
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        self.assertIn("float phase = p.y * frequency", FRAG_HOLOGRAM)
+        self.assertIn("float rim", FRAG_HOLOGRAM)
+        self.assertIn("vec3 neon", FRAG_HOLOGRAM)
+        self.assertIn("u_mouth", FRAG_HOLOGRAM)
+        self.assertIn("u_open", FRAG_HOLOGRAM)
+        self.assertNotIn("vec3 iris", FRAG_HOLOGRAM)
+        self.assertNotIn("float hairC", FRAG_HOLOGRAM)
+        base = get_head_mesh()
+        mesh = with_shoulders(base)
+        gl = AndroidGL(mesh["faces"], mesh["face_group"], mesh["verts"],
+                       np.ones(len(mesh["verts"]), np.float32), mesh["jaw"],
+                       mesh["fade"], mesh["landmarks"], subdiv=0,
+                       look="holographic")
+        self.assertEqual(gl.look, "holographic")
+        # No protruding human hair: the scalp stays the contour-model surface.
+        self.assertAlmostEqual(
+            float(gl._disp[0]),
+            float(_human_relief(mesh["verts"][:1], with_hair=False)[0]),
+            places=5)
+
+    def test_projection_scanlines_remain_on_animated_mesh(self):
+        from core.hologram_face import ProjectionFace
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        projection = ProjectionFace(with_shoulders(get_head_mesh()))
+        self.assertEqual(len(projection.a), len(projection.b))
+        self.assertGreater(len(projection.a), 600)
+        self.assertTrue(np.isfinite(projection.w).all())
 
     def test_shoulder_extension_preserves_base_and_has_no_neck_gap(self):
         from core.avatar_mesh import get_head_mesh

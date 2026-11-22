@@ -12,8 +12,11 @@ def with_shoulders(mesh):
     faces = [mesh["faces"]]
     last = np.arange(len(original) - segments, len(original))
     count = len(original)
-    for width, depth, y in ((1.24, 1.10, -1.40), (1.68, 1.18, -1.50),
-                            (1.96, 1.22, -1.62)):
+    # Extra rings smooth the transition from the neck into broad shoulders.
+    ring_specs = ((1.06, 1.03, -1.28), (1.18, 1.08, -1.35),
+                  (1.38, 1.12, -1.43), (1.62, 1.16, -1.51),
+                  (1.88, 1.20, -1.59), (2.02, 1.23, -1.68))
+    for width, depth, y in ring_specs:
         ring = base.copy()
         ring[:, 0] *= width
         ring[:, 2] = -.25 + (ring[:, 2] + .25) * depth
@@ -34,10 +37,12 @@ def with_shoulders(mesh):
         result[field] = np.concatenate((mesh[field], np.zeros(added, np.float32)))
     fade = mesh["fade"].copy()
     fade[mesh["n_head"]:] = 1.0
-    result["fade"] = np.concatenate((fade, np.repeat([.90, .60, .0], segments).astype(np.float32)))
-    result["face_group"] = np.concatenate((mesh["face_group"], np.zeros(segments * 6, np.float32)))
+    result["fade"] = np.concatenate(
+        (fade, np.repeat([1.0, .97, .88, .72, .45, .0], segments).astype(np.float32)))
+    result["face_group"] = np.concatenate(
+        (mesh["face_group"], np.zeros(segments * 2 * len(ring_specs), np.float32)))
     outward = np.concatenate((mesh["normals"], result["verts"][len(original):] - [0, -1.40, -.25]))
     result["normals"] = np.ascontiguousarray(_vertex_normals(result["verts"], result["faces"], outward), dtype=np.float32)
     result["edges"] = _unique_edges(result["faces"])[::3]
-    result["span"] = (1.0, -1.62)
+    result["span"] = (1.0, -1.68)
     return result

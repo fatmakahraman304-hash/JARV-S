@@ -12,7 +12,7 @@ class ProjectionFace:
         # animate the same stencil, including the audio-driven jaw.
         starts, ends, weights = [], [], []
         triangles = rest[faces]
-        for level in np.linspace(-1.20, 1.02, 115):
+        for level in np.linspace(-1.62, 1.02, 185):
             candidates = np.flatnonzero((triangles[:, :, 1].min(1) <= level) &
                                          (triangles[:, :, 1].max(1) > level))
             for face in faces[candidates]:
@@ -129,13 +129,13 @@ class ProjectionFace:
             ids = faces[face_id]
             fade = float(self.fade[ids].mean())
             key = max(0.0, float(normal[face_id] @ light))
-            # Read the nose and cheekbones as 3D volumes, not a transparent
-            # wire sculpture: separate cool shadows and illuminated surfaces.
-            shade = 0.18 + 0.82 * key
-            face_alpha = int(np.clip((95 + 130 * shade) * fade, 0, 245))
-            painter.setBrush(QBrush(QColor(int(16 + 42 * shade),
-                                          int(66 + 137 * shade),
-                                          int(115 + 135 * shade), face_alpha)))
+            # Keep only a dark, translucent 3D volume below the luminous
+            # horizontal contours; never paint a solid blue human face.
+            shade = 0.20 + 0.80 * key
+            face_alpha = int(np.clip((17 + 35 * shade) * fade, 0, 70))
+            painter.setBrush(QBrush(QColor(int(3 + 18 * shade),
+                                          int(25 + 70 * shade),
+                                          int(54 + 106 * shade), face_alpha)))
             painter.drawPolygon(QPolygonF([QPointF(float(xs[i]), float(ys[i])) for i in ids]))
         w = self.w
         ix = xs[self.a] * (1 - w) + xs[self.b] * w
@@ -145,8 +145,8 @@ class ProjectionFace:
         height = vertices[self.a, 1] * (1 - w) + vertices[self.b, 1] * w
         energy = np.exp(-((height - scan) / .10) ** 2)
         rim = (1 - np.clip(nz, 0, 1)) ** 2
-        strength = np.clip((.15 + .38 * rim + .18 * energy) *
-                           fade * (.85 + .15 * amplitude), 0, 1).reshape(-1, 2).mean(1)
+        strength = np.clip((.45 + .40 * rim + .13 * energy) *
+                           fade * (.92 + .08 * amplitude), 0, 1).reshape(-1, 2).mean(1)
         visible = nz.reshape(-1, 2).mean(1) > -.08
         lines = np.stack((ix[::2], iy[::2], ix[1::2], iy[1::2]), axis=1)
         buckets = np.clip((strength * 8).astype(int), 0, 7)
@@ -155,7 +155,7 @@ class ProjectionFace:
             segments = [QLineF(*map(float, row)) for row in lines[visible & (buckets == bucket)]]
             if not segments:
                 continue
-            painter.setPen(QPen(QColor(75, 213, 255, 3 + bucket * 5), .45))
+            painter.setPen(QPen(QColor(60, 210, 255, 18 + bucket * 13), .70))
             painter.drawLines(segments)
 
         for name in ("eye_l", "eye_r", "lips_in", "brow_l", "brow_r"):
@@ -165,37 +165,14 @@ class ProjectionFace:
             x, y = xs[ids], ys[ids].copy()
             if name.startswith("eye"):
                 y = y.mean() + (y - y.mean()) * max(0.02, eye_open)
-            if name.startswith("eye") and eye_open > 0.18:
-                # Iris and pupil follow the eye ring and the live gaze rig.
-                # Draw *under* the lid contours so blinks stay convincing.
-                eyelid_w = float(x.max() - x.min())
-                eyelid_h = float(y.max() - y.min())
-                rad = min(eyelid_w * 0.18, eyelid_h * 0.85)
-                if rad > 0.6:
-                    center = QPointF(float(x.mean() + gaze[0] * eyelid_w * 0.12),
-                                     float(y.mean() + gaze[1] * eyelid_h * 0.16))
-                    painter.save()
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    socket = QRadialGradient(center, rad * 1.45)
-                    socket.setColorAt(0.0, QColor(1, 17, 35, 240))
-                    socket.setColorAt(0.65, QColor(11, 65, 103, 180))
-                    socket.setColorAt(1.0, QColor(23, 154, 204, 0))
-                    painter.setBrush(QBrush(socket))
-                    painter.drawEllipse(center, rad * 1.45, rad * 1.05)
-                    painter.setPen(QPen(QColor(104, 218, 249, 155), max(0.7, rad * 0.16)))
-                    painter.setBrush(QBrush(QColor(5, 37, 67, 215)))
-                    painter.drawEllipse(center, rad * 0.64, rad * 0.64)
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.setBrush(QBrush(QColor(1, 10, 24, 245)))
-                    painter.drawEllipse(center, rad * 0.32, rad * 0.32)
-                    painter.restore()
+            # Eyes are hollow hologram outlines; never add human pupils.
             points = [QPointF(float(xx), float(yy)) for xx, yy in zip(x, y)]
             if name.startswith(("eye", "lips")):
                 points.append(points[0])
             path = QPainterPath(points[0])
             for point in points[1:]:
                 path.lineTo(point)
-            strength = .28 if name.startswith("eye") else .16 if name.startswith("brow") else .28
+            strength = .56 if name.startswith("eye") else .28 if name.startswith("brow") else .47
             self._light_path(painter, path, strength, .75)
         # Bridge, nostrils and nose wings remain tied to the real face mesh.
         for ids in ((193, 122, 196, 3, 51, 45, 44), (417, 351, 419, 248, 281, 275, 274),
