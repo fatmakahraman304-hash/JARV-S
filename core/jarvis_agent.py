@@ -144,8 +144,20 @@ class Workspace:
 
     def _atomic_write(self, path: Path, content: str) -> None:
         """Replace only after a complete UTF-8 write, preserving file mode."""
-        if len(content.encode("utf-8")) > MAX_WRITE_BYTES:
+        encoded_size = len(content.encode("utf-8"))
+        if encoded_size > MAX_WRITE_BYTES:
             raise ValueError("Dosya çok büyük; daha küçük değişiklikler yapın.")
+        if path.is_file():
+            current_size = path.stat().st_size
+            if current_size > 2000 and encoded_size < current_size * .25:
+                raise ValueError("Mevcut dosyanın büyük bölümü kaybolacak. "
+                                 "Küçük edit_file değişiklikleri kullanın.")
+            if path.suffix.lower() in {".json", ".toml", ".yaml", ".yml"}:
+                from core.code_checks import dropped_data
+                old_text = path.read_text(encoding="utf-8", errors="replace")
+                lost = dropped_data(path.name, old_text, content)
+                if lost:
+                    raise ValueError(f"Mevcut ayar/veri anahtarları siliniyor: {lost}")
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = None
         try:
