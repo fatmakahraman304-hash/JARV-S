@@ -107,6 +107,10 @@ def execute(
                 except subprocess.TimeoutExpired:
                     continue
                 cancel_check()
+                if (os.fstat(out.fileno()).st_size +
+                        os.fstat(err.fileno()).st_size > MAX_OUTPUT_BYTES):
+                    raise CommandOutputLimit(
+                        "Test komutu çıktı sınırını aştı; çıktı kısaltıldı.")
                 return int(code), _tail(out), _tail(err)
         finally:
             if proc.poll() is None:
