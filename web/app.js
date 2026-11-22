@@ -817,7 +817,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, MAYK arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin where=youtube; Chrome\'da ara → op=search arg=aranacak metin where=chrome. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, MAYK arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -1460,7 +1460,7 @@
     // channel and preserves the exact existing MAYK UI and voice session.
     const result = $('rm-lan-result');
     if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
-    const reply = await window.MAYKRelay.send(link, kind, arg);
+    const reply = await window.MAYKRelay.send(link, kind, arg, { where: extra.where || 'youtube' });
     if (result) { result.textContent = '📽️ ' + reply; result.hidden = false; }
     const failed = /(?:yanıt vermedi|başarısız|kurulamadı|desteklenmiyor|geçersiz)/i.test(reply);
     $('rm-lan-state').textContent = failed
@@ -1526,8 +1526,44 @@
   };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k, { popup: true })); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app, { popup: true })));
-  $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t, { popup: true })); });
-  $('rm-type').onclick = async () => { const t = $('rm-inp').value.trim(); if (!t) { toast('Önce yazacağını kutuya yaz.'); return; } $('rm-inp').value = ''; toast(await remote('type', t)); };
+  // Keep the original MAYK keypad: decide whether its one search box sends
+  // the text to YouTube or performs a Google search in Chrome.
+  function searchWhere() { return S.rmSearchWhere === 'chrome' ? 'chrome' : 'youtube'; }
+  function renderSearchWhere() {
+    const where = searchWhere();
+    document.querySelectorAll('#rm-search-target [data-search-target]').forEach(b => {
+      const active = b.dataset.searchTarget === where;
+      b.classList.toggle('pri', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
+    $('rm-inp').placeholder = where === 'chrome'
+      ? 'Chrome’da Google’da ne aransın?' : 'YouTube’da aranacak video…';
+    $('rm-search-hint').textContent = where === 'chrome'
+      ? '🌐 Arama Chrome’da açılır. Chrome içindeki açık metin kutusuna yazmak için “Açık kutuya yaz” ve projeksiyonda Erişilebilirlik izni gerekir.'
+      : '▶ Arama YouTube’da açılır. Chrome’da aramak için üstteki Chrome düğmesini seç.';
+  }
+  document.querySelectorAll('#rm-search-target [data-search-target]').forEach(b => b.onclick = () => {
+    S.rmSearchWhere = b.dataset.searchTarget === 'chrome' ? 'chrome' : 'youtube';
+    save();
+    renderSearchWhere();
+  });
+  renderSearchWhere();
+  $('rm-ask').addEventListener('submit', async e => {
+    e.preventDefault();
+    const t = $('rm-inp').value.trim();
+    if (!t) return;
+    const where = searchWhere();
+    const reply = await remote('search', t, { where });
+    if (!/(?:yanıt vermedi|başarısız|kurulamadı|izin|hata|açılamadı)/i.test(reply)) $('rm-inp').value = '';
+    toast(reply);
+  });
+  $('rm-type').onclick = async () => {
+    const t = $('rm-inp').value.trim();
+    if (!t) { toast('Önce yazacağını kutuya yaz.'); return; }
+    const reply = await remote('type', t);
+    if (!/(?:erişilebilirlik|izin|gerekiyor|hata|yanıt vermedi|başarısız|desteklenmiyor)/i.test(reply)) $('rm-inp').value = '';
+    toast(reply);
+  };
   $('rm-look').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await remote('look', '', { question: '' })); setTimeout(() => syncNow(), 3000); };
 
   // ── coffee-cup reading (for fun): photos of the cup → Gemini looks ───────
@@ -1964,6 +2000,17 @@
       /^(.+?)\s+youtube(?:'da|da)\s+ara$/u,
       /^(.+?)\s+ara$/u
     ];
+    const chromePatterns = [
+      /^chrome(?:'da|da)?\s+ara\s+(.+)$/u,
+      /^chrome(?:'da|da)?\s+(.+?)\s+ara$/u,
+      /^(.+?)\s+chrome(?:'da|da)\s+ara$/u,
+      /^google(?:'da|da)?\s+ara\s+(.+)$/u
+    ];
+    for (const pattern of chromePatterns) {
+      const match = t.match(pattern);
+      if (match && match[1].length >= 2 && match[1].length <= 180)
+        return { op: 'search', arg: match[1], where: 'chrome' };
+    }
     for (let i = 0; i < searchPatterns.length; i++) {
       if (i === 3 && !explicit) continue;
       const m = t.match(searchPatterns[i]);
@@ -1997,7 +2044,7 @@
     setState('thinking');
     sys('📽️ Projeksiyona komut gönderiliyor…');
     try {
-      const reply = await remote(cmd.op, cmd.arg);
+      const reply = await remote(cmd.op, cmd.arg, { where: cmd.where || 'youtube' });
       // The relay reports actual Android replies or explicit errors. Never
       // tell the user an app opened merely because a request was sent.
       sys('📽️ ' + reply);
