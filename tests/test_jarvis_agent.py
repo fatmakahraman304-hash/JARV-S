@@ -166,6 +166,140 @@ class ToolSafetyTest(unittest.TestCase):
             self.assertEqual((Path(d) / "f.txt").read_text(), "b\nb\n")
 
 
+class AdvancedAgentReliabilityTest(unittest.TestCase):
+    def test_hidden_credentials_cannot_be_read_searched_or_edited(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            (folder / ".env").write_text("API=private-secret")
+            (folder / ".gitignore").write_text("private.json\n")
+            (folder / "private.json").write_text('{"token":"never-show"}')
+            (folder / "main.py").write_text("print('ok')\n")
+            ws = ja.Workspace(folder, log=lambda _: None)
+            for path in (".env", "private.json"):
+                self.assertIn("reddedildi", ws.call("read_file", {"path": path}).lower())
+                self.assertIn("reddedildi", ws.call("edit_file", {
+                    "path": path, "old": "token", "new": "x"}).lower())
+            found = ws.t_search("private-secret|never-show")
+            self.assertEqual(found, "Eşleşme bulunamadı.")
+            self.assertNotIn("private.json", ws.t_list_files())
+            self.assertIn("main.py", ws.t_list_files())
+
+    def test_git_metadata_and_parent_paths_are_not_accessible(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".git").mkdir()
+            (root / ".git" / "config").write_text("SECRET=local")
+            ws = ja.Workspace(root)
+            self.assertIn("reddedildi", ws.call("read_file", {
+                "path": ".git/config"}).lower())
+            self.assertIn("reddedildi", ws.call("read_file", {
+                "path": "../outside.txt"}).lower())
+
+    def test_write_is_atomic_on_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp) / "src.py"
+            p.write_text("original = 1\n")
+            ws = ja.Workspace(Path(temp), log=lambda _: None)
+            with mock.patch.object(ja.os, "replace", side_effect=OSError("busy")):
+                result = ws.call("write_file", {
+                    "path": "src.py", "content": "partial = 2\n"})
+            self.assertIn("Hata", result)
+            self.assertEqual(p.read_text(), "original = 1\n")
+            self.assertEqual(list(Path(temp).glob(".mayk-write-*")), [])
+
+    def test_shell_metas_and_eval_flags_rejected(self):
+        allowed = ja.Workspace.allowed
+        for command in (
+            "python-malware.py", "python -c \"print('x')\"",
+            "node --eval \"alert(1)\"", "git push",
+            "python app.py | sh", "python app.py & del x",
+            "npm test; curl private", "echo x > .env",
+            "python app.py &&", "python app.py\nrm -rf /",
+        ):
+            self.assertFalse(allowed(command), command)
+        self.assertTrue(allowed("python -m pytest -q"))
+        self.assertTrue(allowed("npm install && npm test"))
+        self.assertTrue(allowed("git diff"))
+
+    def test_run_uses_argv_without_shell_and_marks_test_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ws = ja.Workspace(Path(temp), log=lambda _: None)
+            proc = mock.Mock(returncode=0, stdout="4 passed", stderr="")
+            with mock.patch.object(ja.subprocess, "run", return_value=proc) as run:
+                result = ws.t_run("python -m pytest -q")
+            self.assertIn("exit code 0", result)
+            self.assertTrue(ws.test_passed)
+            self.assertFalse(run.call_args.kwargs["shell"])
+            self.assertIsInstance(run.call_args.args[0], list)
+
+    def test_finish_is_blocked_until_code_is_tested(self):
+        with tempfile.TemporaryDirectory() as temp:
+            brain = ScriptedBrain([
+                ("", [call("write_file", path="app.py", content="x=1\n")], None),
+                ("", [call("finish", summary="Bitti")], None),
+                ("", [call("finish", summary="Bitti")], None),
+                ("", [call("finish", summary="Bitti")], None),
+            ])
+            with self.assertRaisesRegex(RuntimeError, "test etmeden"):
+                ja.run(Path(temp), "Python yaz", log=lambda _: None, brain_list=[brain])
+            self.assertIn("doğrulama", str(brain.seen[2]).lower())
+
+    def test_test_after_last_edit_allows_finish(self):
+        with tempfile.TemporaryDirectory() as temp:
+            brain = ScriptedBrain([
+                ("", [call("write_file", path="test_app.py",
+                           content="assert 2 + 2 == 4\n")], None),
+                ("", [call("run", command="python test_app.py")], None),
+                ("", [call("finish", summary="Test başarılı.")], None),
+            ])
+            result = ja.run(Path(temp), "Testli kod oluştur",
+                            log=lambda _: None, brain_list=[brain])
+            self.assertEqual(result, "Test başarılı.")
+
+    def test_new_edit_invalidates_previous_test(self):
+        with tempfile.TemporaryDirectory() as temp:
+            brain = ScriptedBrain([
+                ("", [call("write_file", path="test_app.py",
+                           content="assert True\n")], None),
+                ("", [call("run", command="python test_app.py")], None),
+                ("", [call("edit_file", path="test_app.py",
+                           old="True", new="False")], None),
+                ("", [call("finish", summary="Bitti")], None),
+                ("", [call("finish", summary="Bitti")], None),
+                ("", [call("finish", summary="Bitti")], None),
+            ])
+            with self.assertRaisesRegex(RuntimeError, "test etmeden"):
+                ja.run(Path(temp), "Kod güncelle",
+                       log=lambda _: None, brain_list=[brain])
+
+    def test_oversized_tool_history_is_compacted_with_task_intact(self):
+        history = [{"role": "user", "text": "Kullanıcının ilk görevi"}]
+        history.extend({"role": "tool", "name": "read_file", "id": str(i),
+                        "result": "a" * 33000} for i in range(22))
+        ja._shrink(history)
+        self.assertEqual(history[0]["text"], "Kullanıcının ilk görevi")
+        self.assertLess(sum(len(json.dumps(h)) for h in history),
+                        ja.CONTEXT_BUDGET)
+        self.assertIn("ÖNCEKİ KOD AJANI", history[1]["text"])
+
+    def test_repeated_identical_tool_calls_stop(self):
+        brain = ScriptedBrain([
+            ("", [call("read_file", path="absent.py")], None)
+            for _ in range(6)])
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(RuntimeError, "aynı aracı"):
+                ja.run(Path(temp), "Kaynağı oku",
+                       log=lambda _: None, brain_list=[brain])
+
+    def test_private_urls_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ws = ja.Workspace(Path(temp))
+            for url in ("http://example.com", "https://localhost/admin",
+                        "https://127.0.0.1/status", "https://192.168.1.5/x"):
+                self.assertIn("Reddedildi", ws.t_fetch_url(url))
+            self.assertTrue(ws._public_url("https://docs.python.org/3/"))
+
+
 class BrainChoiceTest(unittest.TestCase):
     def test_best_free_gemini_first(self):
         names = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro",
