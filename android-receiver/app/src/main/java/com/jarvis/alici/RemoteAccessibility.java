@@ -24,11 +24,48 @@ import java.util.concurrent.TimeUnit;
  */
 public class RemoteAccessibility extends AccessibilityService {
     static volatile RemoteAccessibility instance;
+    private static final String TAG = "MAYK-Accessibility";
+    static final String STATE_KEY = "a11y_last_event";
+    static final String TIME_KEY = "a11y_last_event_time";
 
-    @Override protected void onServiceConnected() { instance = this; ReceiverService.start(this); }
+    private void record(String message) {
+        android.util.Log.i(TAG, message);
+        ReceiverService.prefs(this).edit()
+                .putString(STATE_KEY, message)
+                .putLong(TIME_KEY, System.currentTimeMillis())
+                .apply();
+    }
+
+    @Override protected void onServiceConnected() {
+        super.onServiceConnected();
+        instance = this;
+        record("Android hizmeti bağladı ✓");
+        // Never let a foreground-receiver startup failure crash this
+        // separately permissioned accessibility service. Android, not our
+        // app, owns the accessibility-service lifecycle.
+        try {
+            ReceiverService.start(this);
+        } catch (Exception ex) {
+            android.util.Log.e(TAG, "Receiver launch failed; accessibility remains enabled", ex);
+            record("Erişilebilirlik bağlı, alıcı başlatılamadı: " + ex.getClass().getSimpleName());
+        }
+    }
+
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
-    @Override public void onInterrupt() { }
-    @Override public void onDestroy() { if (instance == this) instance = null; super.onDestroy(); }
+    @Override public void onInterrupt() {
+        // onInterrupt is a temporary request by Android, NOT permission revocation.
+        android.util.Log.i(TAG, "Android interrupted events");
+    }
+    @Override public boolean onUnbind(android.content.Intent intent) {
+        if (instance == this) instance = null;
+        record("Android erişilebilirlik bağlantısını kesti");
+        return super.onUnbind(intent);
+    }
+    @Override public void onDestroy() {
+        if (instance == this) instance = null;
+        record("Android erişilebilirlik hizmetini durdurdu");
+        super.onDestroy();
+    }
 
     private AccessibilityNodeInfo focused() {
         AccessibilityNodeInfo root = getRootInActiveWindow();
