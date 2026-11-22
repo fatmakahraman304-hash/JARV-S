@@ -509,11 +509,18 @@ class HoloAvatar:
         verts, norms = self._pose()
 
         # ── aura ────────────────────────────────────────────────────────────
-        ar = r * 1.95
+        ar = r * (2.30 if self.style == "holographic" else 1.95)
         grad = QRadialGradient(cx, cy, ar)
-        grad.setColorAt(0.00, _c(primary, 34 + 66 * amp))
-        grad.setColorAt(0.38, _c(primary, 20 + 40 * amp))
-        grad.setColorAt(1.00, _c(primary, 0))
+        if self.style == "holographic":
+            # Reference has a deep navy aura behind the luminous cyan bust.
+            # The sharp contour and detailed scanlines remain foreground.
+            grad.setColorAt(0.00, QColor(2, 68, 145, int(87 + 22 * amp)))
+            grad.setColorAt(0.44, QColor(2, 51, 121, int(70 + 18 * amp)))
+            grad.setColorAt(1.00, QColor(2, 25, 79, 0))
+        else:
+            grad.setColorAt(0.00, _c(primary, 34 + 66 * amp))
+            grad.setColorAt(0.38, _c(primary, 20 + 40 * amp))
+            grad.setColorAt(1.00, _c(primary, 0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(grad))
         p.drawEllipse(QRectF(cx - ar, cy - ar, ar * 2, ar * 2))
