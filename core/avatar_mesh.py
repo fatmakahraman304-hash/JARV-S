@@ -210,27 +210,44 @@ def _shape_skull(cr: np.ndarray, ring_len: int) -> np.ndarray:
     return cr
 
 
-def _sharpen_jaw(head: np.ndarray, n_face: int) -> np.ndarray:
-    """A defined male jawline. The measured face is a soft average; this
-    squares the lower jaw towards a clear angle under the ears, gives the chin
-    a little width, and tucks the generated surface under the jaw in towards
-    the neck, so the jaw edge turns sharply instead of rolling into a jowl."""
+def _sculpt_feminine_face(head: np.ndarray, n_face: int) -> np.ndarray:
+    """Smooth, original feminine hologram geometry based on the live face mesh.
+
+    Keep the measured eye and lip vertex indices, speech rig and head topology.
+    A gently tapered mandible, raised cheeks, softened brow and narrower nose
+    change the *actual 3D surface*, not a pasted face image. Every transition
+    uses continuous Gaussian weights so head turns and visemes remain stable.
+    """
     v = head.copy()
     x, y, z = v[:, 0], v[:, 1], v[:, 2]
     ax = np.abs(x)
-    ss = lambda e0, e1, t: (lambda u: u * u * (3 - 2 * u))(np.clip((t - e0) / (e1 - e0), 0, 1))
-    front = ss(-0.50, -0.25, z)
-    sq = np.exp(-((y + 0.80) / 0.14) ** 2) * ss(0.12, 0.40, ax) * front
-    angle = np.exp(-(((y + 0.70) / 0.09) ** 2 + ((z + 0.12) / 0.16) ** 2))
-    chin = np.exp(-((y + 0.95) / 0.07) ** 2) * ss(0.04, 0.16, ax) * (1.0 - ss(0.22, 0.36, ax))
-    scale = 1.0 + 0.10 * sq + 0.05 * angle + 0.10 * chin
-    v[:, 0] = x * scale
-    v[:, 1] = y - 0.025 * angle
-    # under the jaw (generated part only): pull in and back towards the neck
-    under = np.zeros(len(v))
-    under[n_face:] = (ss(-0.32, -0.55, y) * front)[n_face:]
-    v[:, 0] *= 1.0 - 0.20 * under
-    v[:, 2] -= 0.12 * under * ss(-0.1, 0.3, z)
+
+    def smooth(a, b, t):
+        q = np.clip((t - a) / (b - a), 0.0, 1.0)
+        return q * q * (3.0 - 2.0 * q)
+
+    # Smooth front mask: avoid crushing the back of the cranium.
+    front = smooth(-0.40, 0.15, z)
+    jaw = np.exp(-((y + 0.68) / 0.32) ** 2) * front
+    chin = np.exp(-((y + 0.93) / 0.17) ** 2) * front
+    v[:, 0] = x * (1.0 - 0.095 * jaw - 0.080 * chin)
+
+    # High, softly curved cheeks instead of squared mandibular corners.
+    cheek = (np.exp(-((y + 0.27) / 0.20) ** 2) *
+             np.exp(-((ax - 0.32) / 0.20) ** 2) * front)
+    v[:, 0] += np.sign(x) * (0.021 * cheek)
+    v[:, 2] += 0.022 * cheek
+
+    # The brows remain at their measured locations, with less heavy relief.
+    brow = (np.exp(-((y - 0.12) / 0.15) ** 2) *
+            np.exp(-((ax - 0.26) / 0.21) ** 2) * front)
+    v[:, 2] -= 0.015 * brow
+
+    nose = (np.exp(-((y + 0.17) / 0.22) ** 2) *
+            np.exp(-((ax - 0.13) / 0.12) ** 2) * front)
+    v[:, 0] *= 1.0 - 0.040 * nose
+
+    # The neck, crown and lips still connect to their original triangles.
     return v
 
 
@@ -335,7 +352,7 @@ def build_head() -> dict:
     verts = (verts - centre) * scale
 
     verts[n_face:n_head] = _shape_skull(verts[n_face:n_head], len(_boundary_loop(_face_faces(faces, n_face))))
-    verts[:n_head] = _sharpen_jaw(verts[:n_head], n_face)
+    verts[:n_head] = _sculpt_feminine_face(verts[:n_head], n_face)
 
     # Outward reference, per part: the head is star-shaped about its own centre,
     # while the neck is a tube whose outward direction is radial in x/z only.

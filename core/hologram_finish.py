@@ -1,4 +1,4 @@
-"""Finishing passes for the reference-style cyan male hologram.
+"""Finishing passes for the Gideon-inspired cyan female hologram.
 
 The OpenGL shader provides real 3D, mouth animation, gaze and head rotation.
 This layer adds the soft blue halo and curved silhouette of the reference
@@ -113,6 +113,23 @@ def details(painter: QPainter, xs, ys, n_head: int, landmarks,
     half = (right - left) * 0.5
     height = max(1.0, bottom - top)
     center = 0.5 * (left + right)
+
+    # A subtle swept-back hairline, drawn entirely with animated QPainter
+    # curves. It follows this frame's projected 3D silhouette and never
+    # replaces the live eyelids, lips, face mesh or head rotation with a photo.
+    hairline = QPainterPath(QPointF(center - half * .72, top + height * .31))
+    hairline.cubicTo(center - half * .55, top + height * .12,
+                     center + half * .15, top + height * .13,
+                     center + half * .68, top + height * .27)
+    _neon_path(painter, hairline, .29 + .05 * energy)
+    for side in (-1.0, 1.0):
+        sweep = QPainterPath(QPointF(center + side * half * .63,
+                                     top + height * .31))
+        sweep.cubicTo(center + side * half * .83, top + height * .20,
+                      center + side * half * .76, top + height * .11,
+                      center + side * half * .43, top + height * .07)
+        _neon_path(painter, sweep, .16 + .04 * energy)
+
 
     # Ear shells: compact, anatomically placed translucent forms with the
     # same fine glowing horizontal contours as the face. Previous C loops
