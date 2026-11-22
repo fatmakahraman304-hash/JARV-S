@@ -100,7 +100,7 @@
     return state.ready;
   }
 
-  async function send(url, op, arg) {
+  async function send(url, op, arg, options = {}) {
     if (!['key', 'app', 'search', 'url', 'type'].includes(op)) {
       return 'Bu işlem için yerel HTTPS komut köprüsü desteklenmiyor.';
     }
@@ -108,7 +108,8 @@
     try {
       await configure(url);
       const id = hex(crypto.getRandomValues(new Uint8Array(16)));
-      const payload = await seal({ v: 1, id, ts: Date.now(), op, arg: String(arg || '').slice(0, 1000) });
+      const where = ['youtube', 'chrome', 'google'].includes(options.where) ? options.where : 'youtube';
+      const payload = await seal({ v: 1, id, ts: Date.now(), op, arg: String(arg || '').slice(0, 1000), where });
       const result = new Promise(resolve => {
         const timer = setTimeout(() => {
           state.pending.delete(id);
