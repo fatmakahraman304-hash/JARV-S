@@ -69,7 +69,13 @@
     state.stream = stream;
     let initialized = false;
     const startupTimeout = setTimeout(() => {
-      if (!initialized) { initialized = true; readyReject(new Error('HTTPS köprüsü yanıt vermedi.')); }
+      if (!initialized) {
+        initialized = true;
+        state.status = 'bağlantı kurulamadı';
+        stream.close();
+        if (state.stream === stream) { state.stream = null; state.secret = ''; }
+        readyReject(new Error('HTTPS köprüsü yanıt vermedi.'));
+      }
     }, 9000);
     stream.onopen = () => {
       state.status = 'bağlı';
