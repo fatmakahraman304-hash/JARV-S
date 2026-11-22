@@ -3,6 +3,7 @@ package com.jarvis.alici;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
+import android.content.ComponentName;
 import android.database.Cursor;
 import android.os.Environment;
 import android.accessibilityservice.AccessibilityServiceInfo;
@@ -39,6 +40,9 @@ public class MainActivity extends Activity {
     private boolean updateInstallLaunched = false;
     private static final String APK_URL = "https://github.com/fatmakahraman304-hash/JARV-S/releases/download/alici/jarvis-alici.apk";
     private final Handler ui = new Handler(Looper.getMainLooper());
+    // Keep exactly one status refresh loop. Do not cancel the APK updater's
+    // separate checkUpdateDownload callback (regression in older versions).
+    private final Runnable refreshTask = this::refresh;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -64,6 +68,12 @@ public class MainActivity extends Activity {
         Button a11y = button("1) Erişilebilirlik iznini aç (kumanda tuşları, yazı, ekran görüntüsü)");
         a11y.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         root.addView(a11y);
+
+        Button appSettings = button("İzin tekrar kapanıyorsa: MAYK uygulama kısıtlamaları");
+        appSettings.setOnClickListener(v -> startActivity(
+                new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName()))));
+        root.addView(appSettings);
 
         final EditText link = new EditText(this);
         link.setHint("2) Kurulum bağlantısını buraya yapıştır (…#s=…)");
@@ -207,7 +217,15 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); handle(i); }
-    @Override protected void onResume() { super.onResume(); refresh(); }
+    @Override protected void onResume() {
+        super.onResume();
+        ui.removeCallbacks(refreshTask);
+        refresh();
+    }
+    @Override protected void onPause() {
+        ui.removeCallbacks(refreshTask);
+        super.onPause();
+    }
 
     private void handle(Intent i) {
         Uri u = i == null ? null : i.getData();
@@ -227,19 +245,35 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+    /** Check Android's saved permission separately from service connectivity.
+     * Android TVs sometimes leave the switch ON but kill the bound service;
+     * getEnabledAccessibilityServiceList alone can misreport that as OFF.
+     * Read only: never change Settings.Secure without the user's approval.
+     */
     private boolean accessibilityEnabled() {
+        try {
+            String enabled = Settings.Secure.getString(getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (enabled != null) {
+                ComponentName mine = new ComponentName(this, RemoteAccessibility.class);
+                for (String name : enabled.split(":")) {
+                    ComponentName entry = ComponentName.unflattenFromString(name);
+                    if (mine.equals(entry)) return true;
+                }
+                return false;
+            }
+        } catch (Exception ignored) { /* Fall back to AccessibilityManager. */ }
         AccessibilityManager manager = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (manager == null) return false;
+        if (manager == null) return RemoteAccessibility.instance != null;
         List<AccessibilityServiceInfo> services = manager.getEnabledAccessibilityServiceList(
                 AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
         for (AccessibilityServiceInfo service : services) {
             if (service.getResolveInfo() != null
                     && getPackageName().equals(service.getResolveInfo().serviceInfo.packageName)
-                    && RemoteAccessibility.class.getName().equals(service.getResolveInfo().serviceInfo.name)) {
+                    && RemoteAccessibility.class.getName().equals(service.getResolveInfo().serviceInfo.name))
                 return true;
-            }
         }
-        return false;
+        return RemoteAccessibility.instance != null;
     }
 
     private void refresh() {
@@ -247,15 +281,25 @@ public class MainActivity extends Activity {
         boolean linked = !p.getString("gist", "").isEmpty();
         boolean a11yPermission = accessibilityEnabled();
         boolean a11yRunning = RemoteAccessibility.instance != null;
-        String a11yStatus = !a11yPermission
-                ? "kapalı — 1. adım (Ayarlar → Erişilebilirlik → MAYK Alıcı)"
-                : a11yRunning ? "açık ✓" : "izin açık, servis henüz çalışmıyor";
+        String a11yStatus = a11yRunning ? "hizmet çalışıyor ✓"
+                : a11yPermission ? "izin AÇIK, ancak Android hizmeti durdurmuş"
+                : "Android izni KAPALI — Ayarlar → Erişilebilirlik → MAYK Alıcı";
+        String lastEvent = p.getString(RemoteAccessibility.STATE_KEY, "Henüz bağlantı kaydı yok");
+        long lastTime = p.getLong(RemoteAccessibility.TIME_KEY, 0);
+        String when = lastTime > 0 ? new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                .format(new java.util.Date(lastTime)) : "";
+        String a11yHelp = a11yRunning ? ""
+                : a11yPermission
+                    ? "\nAndroid izin anahtarını kapatmamış; hizmet kesilmiş. Uygulama kısıtlamalarını kontrol et."
+                    : "\nAndroid izin anahtarını kapatmış. Uygulama bunu kendiliğinden açamaz.";
         status.setText("Bağlantı: " + (linked ? "kurulu" : "kurulmadı — 2. adım") + "\n"
                 + "Erişilebilirlik: " + a11yStatus + "\n"
+                + "Son hizmet olayı: " + lastEvent + (when.isEmpty() ? "" : " (" + when + ")") + a11yHelp + "\n"
                 + "Dinleme: " + ReceiverService.status + "\n"
                 + "MAYK HTTPS köprüsü: " + RelayRemote.status + "\n"
                 + "Wi-Fi kumanda: " + ReceiverService.lanAddress + "\n\n"
                 + "Hazır olunca telefondaki MAYK'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
-        ui.postDelayed(this::refresh, 3000);
+        ui.removeCallbacks(refreshTask);
+        ui.postDelayed(refreshTask, 3000);
     }
 }
