@@ -100,3 +100,15 @@ class AutonomousBrain(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as pool:
             claims = list(pool.map(service._claim, [100] * 4))
         self.assertEqual(sum(value is not None for value in claims), 1)
+
+
+    def test_model_unavailability_is_not_reported_as_a_clean_audit(self):
+        source = self.root / "core/wake_word.py"
+        source.parent.mkdir()
+        source.write_text("value = 1")
+        def unavailable(*args, **kwargs):
+            return kwargs["default"]
+        with patch.object(service, "ROOT", self.root), \
+             patch("core.gemini.as_json", side_effect=unavailable):
+            with self.assertRaisesRegex(ValueError, "modeli yanıt vermedi"):
+                service.discover(0)
