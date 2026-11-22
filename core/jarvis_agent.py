@@ -305,6 +305,30 @@ class Workspace:
         self.log(f"  Düzenledi: {p.relative_to(self.root).as_posix()}")
         return f"{path} düzenlendi ({n if replace_all else 1} değiştirme)."
 
+    def syntax_problems(self) -> list[str]:
+        """Check changed Python, JSON and TOML without executing user code."""
+        issues = []
+        for rel in sorted(self.changed):
+            path = self.root / rel
+            if not path.is_file():
+                continue
+            suffix = path.suffix.lower()
+            if suffix not in {".py", ".pyi", ".json", ".toml"}:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+                if suffix in {".py", ".pyi"}:
+                    import ast
+                    ast.parse(content, filename=rel)
+                elif suffix == ".json":
+                    json.loads(content)
+                else:
+                    import tomllib
+                    tomllib.loads(content)
+            except (SyntaxError, ValueError, UnicodeError, OSError) as exc:
+                issues.append(f"{rel}: {type(exc).__name__}: {str(exc)[:180]}")
+        return issues
+
     @staticmethod
     def _commands(command: str) -> list[list[str]]:
         """Parse approved test/build programs without a command shell."""
@@ -865,6 +889,20 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                         raise RuntimeError(
                             "Kod ajanı değişiklikleri test etmeden bitirmek istedi. "
                             "Görev doğrulanamadı.")
+                    history.append({"role": "tool", "id": c["id"], "name": "finish",
+                                    "result": problem})
+                    continue
+                failures = ws.syntax_problems()
+                if failures:
+                    finish_retries += 1
+                    problem = ("Kaydedilen kod/veri dosyalarında sözdizimi hatası: "
+                               + "; ".join(failures[:5])
+                               + ". Düzelterek testleri yeniden çalıştır.")
+                    log("  Kod ajanı statik doğrulama hatası: " + "; ".join(failures[:3]))
+                    if finish_retries >= 3:
+                        raise RuntimeError(
+                            "Kod ajanı statik kontrolleri geçemedi: "
+                            + "; ".join(failures[:4]))
                     history.append({"role": "tool", "id": c["id"], "name": "finish",
                                     "result": problem})
                     continue
