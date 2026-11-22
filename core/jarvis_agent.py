@@ -381,18 +381,38 @@ class Workspace:
     def allowed(command: str) -> bool:
         return bool(Workspace._commands(command))
 
-    @staticmethod
-    def _is_verification(tokens: list[str]) -> bool:
-        """Recognize a meaningful test, build, lint or smoke execution."""
-        body = " ".join(tokens[1:]).lower()
-        if re.search(r"\b(pytest|unittest|test[_\.-]|tests[/\\]|test\b|"
-                     r"compileall|check\b|lint\b|mypy|ruff|build\b|"
-                     r"typecheck|tsc)\b", body):
+    def _is_verification(self, tokens: list[str]) -> bool:
+        """A successful unrelated command is NOT evidence the edited code works.
+
+        Only recognize explicit test/lint/build tools, a project-wide Python
+        verification module, or a Python test/smoke script that was edited.
+        """
+        exe = tokens[0].lower()
+        args = tokens[1:]
+        if exe in {"pytest", "ruff", "mypy", "eslint", "tsc", "rustc", "black"}:
             return True
-        if tokens[0].lower() in {"pytest", "ruff", "mypy", "eslint", "tsc", "rustc"}:
-            return True
-        if tokens[0].lower() in {"python", "python3", "python.exe", "py", "py.exe"}:
-            return any(a.endswith(".py") for a in tokens[1:])
+        if exe in {"python", "python3", "python.exe", "py", "py.exe"}:
+            if "-m" in args:
+                idx = args.index("-m") + 1
+                if idx < len(args) and args[idx].lower() in {
+                        "pytest", "unittest", "compileall", "mypy", "ruff",
+                        "build"}:
+                    return True
+            for argument in args:
+                rel = Path(argument).as_posix().removeprefix("./")
+                if argument.endswith(".py") and (
+                        rel in self.changed or
+                        Path(argument).name.startswith("test_") or
+                        "tests/" in rel):
+                    return True
+            return False
+        if exe in {"npm", "yarn", "pnpm", "bun", "cargo", "go",
+                   "dotnet", "mvn", "gradle"}:
+            return any(t.lower() in {"test", "build", "check", "lint",
+                                     "typecheck", "verify"} for t in args[:3])
+        if exe in {"npx", "uv"}:
+            return any(t.lower() in {"pytest", "ruff", "mypy", "eslint",
+                                     "tsc", "vitest", "jest"} for t in args[:3])
         return False
 
     def _resolve_python(self, executable: str) -> str:
@@ -410,6 +430,10 @@ class Workspace:
         return shutil.which(executable) or executable
 
     def t_run(self, command, timeout=120):
+        """Run commands without a shell and stop their process tree on cancel."""
+        from core.agent_process import (
+            execute, CommandTimedOut, CommandOutputLimit,
+        )
         _check_cancel()
         commands = self._commands(command)
         if not commands:
@@ -420,49 +444,45 @@ class Workspace:
         deadline = time.monotonic() + seconds
         outputs = []
         checked = False
+        # Do not give model-authentication secrets to subprocesses; project
+        # tests should use fixture keys, not MAYK's live API credentials.
+        private = re.compile(
+            r"(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD|"
+            r"CREDENTIALS|PRIVATE_KEY|ACCESS_KEY|AUTH|COOKIE)(?:_|$)|"
+            r"^(?:OPENAI|GEMINI|ANTHROPIC|NVIDIA)_", re.I)
+        env = {k: v for k, v in os.environ.items() if not private.search(k)}
+        env.update(PYTHONDONTWRITEBYTECODE="1", PYTHONUTF8="1",
+                   PYTHONIOENCODING="utf-8")
         for tokens in commands:
             _check_cancel()
-            argv = [self._resolve_python(tokens[0]), *tokens[1:]]
-            if time.monotonic() >= deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 self.last_run_result = "timeout"
                 self.test_passed = False
                 return "\n".join(outputs + ["exit code timeout: süre sınırı doldu"])
+            argv = [self._resolve_python(tokens[0]), *tokens[1:]]
             try:
-                proc = subprocess.run(
-                    argv, shell=False, cwd=self.root,
-                    capture_output=True, text=True,
-                    timeout=max(1, deadline - time.monotonic()),
-                    encoding="utf-8", errors="replace",
-                    stdin=subprocess.DEVNULL,
-                    env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1",
-                         "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                code, stdout, stderr = execute(
+                    argv, self.root, timeout=remaining,
+                    cancel_check=_check_cancel, env=env,
                 )
-            except subprocess.TimeoutExpired as exc:
-                stdout, stderr = exc.stdout or b"", exc.stderr or b""
-                if isinstance(stdout, bytes):
-                    stdout = stdout.decode("utf-8", errors="replace")
-                if isinstance(stderr, bytes):
-                    stderr = stderr.decode("utf-8", errors="replace")
-                self.last_run_result = "timeout"
+            except (CommandTimedOut, CommandOutputLimit) as exc:
+                self.last_run_result = type(exc).__name__
                 self.test_passed = False
                 return "\n".join(outputs + [
-                    f"exit code timeout: {seconds}s",
-                    (stdout + "\n[stderr]\n" + stderr)[-MAX_OUTPUT:],
-                ])
+                    f"exit code timeout/limit: {str(exc)[:600]}"])[-MAX_OUTPUT:]
             except OSError as exc:
                 self.last_run_result = "start failed"
                 self.test_passed = False
                 return "\n".join(outputs + [
-                    f"exit code unavailable: Komut başlatılamadı: {type(exc).__name__}: {exc}"
-                ])
-            details = (proc.stdout or "") + (
-                "\n[stderr]\n" + proc.stderr if proc.stderr else "")
+                    f"exit code unavailable: Komut başlatılamadı: "
+                    f"{type(exc).__name__}: {exc}"])[-MAX_OUTPUT:]
+            details = stdout + ("\n[stderr]\n" + stderr if stderr else "")
             outputs.append(f"$ {tokens[0]} {' '.join(tokens[1:])}\n"
-                           f"exit code {proc.returncode}\n{details}")
-            self.last_run_result = f"exit code {proc.returncode}"
+                           f"exit code {code}\n{details}")
+            self.last_run_result = f"exit code {code}"
             _check_cancel()
-            if proc.returncode:
+            if code:
                 self.test_passed = False
                 return "\n".join(outputs)[-MAX_OUTPUT:]
             checked |= self._is_verification(tokens)
@@ -879,19 +899,6 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                               ".cs", ".php", ".rb", ".dart", ".sh"}
                 needs_test = any(Path(p).suffix.lower() in code_paths
                                  for p in ws.changed)
-                if needs_test and (ws.dirty_since_test or not ws.test_passed):
-                    finish_retries += 1
-                    problem = ("Önce son kod değişikliğinden sonra run aracını "
-                               "kullanarak test, derleme veya çalışma kontrolü yap. "
-                               "Başarısız kontrolleri düzelt; testi geçti sayma.")
-                    log("  Kod ajanı doğrulama bekliyor; finish ertelendi.")
-                    if finish_retries >= 3:
-                        raise RuntimeError(
-                            "Kod ajanı değişiklikleri test etmeden bitirmek istedi. "
-                            "Görev doğrulanamadı.")
-                    history.append({"role": "tool", "id": c["id"], "name": "finish",
-                                    "result": problem})
-                    continue
                 failures = ws.syntax_problems()
                 if failures:
                     finish_retries += 1
@@ -903,6 +910,19 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                         raise RuntimeError(
                             "Kod ajanı statik kontrolleri geçemedi: "
                             + "; ".join(failures[:4]))
+                    history.append({"role": "tool", "id": c["id"], "name": "finish",
+                                    "result": problem})
+                    continue
+                if needs_test and (ws.dirty_since_test or not ws.test_passed):
+                    finish_retries += 1
+                    problem = ("Önce son kod değişikliğinden sonra run aracını "
+                               "kullanarak test, derleme veya çalışma kontrolü yap. "
+                               "Başarısız kontrolleri düzelt; testi geçti sayma.")
+                    log("  Kod ajanı doğrulama bekliyor; finish ertelendi.")
+                    if finish_retries >= 3:
+                        raise RuntimeError(
+                            "Kod ajanı değişiklikleri test etmeden bitirmek istedi. "
+                            "Görev doğrulanamadı.")
                     history.append({"role": "tool", "id": c["id"], "name": "finish",
                                     "result": problem})
                     continue
