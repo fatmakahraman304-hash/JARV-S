@@ -207,6 +207,29 @@ class AdvancedAgentReliabilityTest(unittest.TestCase):
             self.assertEqual(p.read_text(), "original = 1\n")
             self.assertEqual(list(Path(temp).glob(".mayk-write-*")), [])
 
+    def test_configuration_key_loss_is_blocked(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            p = root / "settings.json"
+            p.write_text('{"theme": "dark", "other_option": true}')
+            ws = ja.Workspace(root, log=lambda _: None)
+            result = ws.call("write_file", {
+                "path": "settings.json", "content": '{"theme": "light"}'})
+            self.assertIn("anahtarları siliniyor", result)
+            self.assertIn("other_option", p.read_text())
+
+    def test_major_existing_file_deletion_is_blocked(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            p = root / "main.py"
+            old = "def function():\n    pass\n" * 200
+            p.write_text(old)
+            ws = ja.Workspace(root, log=lambda _: None)
+            result = ws.call("write_file", {
+                "path": "main.py", "content": "print('placeholder')\n"})
+            self.assertIn("büyük bölümü", result)
+            self.assertEqual(p.read_text(), old)
+
     def test_shell_metas_and_eval_flags_rejected(self):
         allowed = ja.Workspace.allowed
         for command in (
