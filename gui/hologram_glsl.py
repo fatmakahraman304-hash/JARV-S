@@ -9,6 +9,7 @@ FRAG_HOLOGRAM = """
 #version 120
 varying vec3 v_n;
 varying vec3 v_rest;
+varying vec3 v_pos;
 varying vec4 v_misc;
 uniform float u_time;
 uniform float u_glow;
@@ -56,11 +57,17 @@ void main() {
                           pow((p.y - u_eye_c.y) / 0.09, 2.0));
     float cheek = exp(-pow((ax - 0.30) / 0.19, 2.0) -
                       pow((p.y + 0.19) / 0.18, 2.0));
-    float contourY = p.y + face * (0.020 * bridge - 0.013 * tip -
-                                   0.019 * eyeSocket + 0.011 * cheek);
+    // Mostly screen-horizontal like the user's approved render, not concentric
+    // loops on the skull or twisting fingerprints around nose and eyes. A
+    // *small* portion of the surface coordinates makes the pattern breathe
+    // with a turning 3D face while the visible stripes stay calm and clean.
+    float horizontal = v_pos.y / max(u_scale, 1.0);
+    float contourY = mix(horizontal, p.y, 0.13) +
+                     face * (0.0028 * bridge - 0.0018 * tip -
+                             0.0025 * eyeSocket + 0.0018 * cheek);
 
-    // Lines remain subpixel antialiased and attached to the 3D surface.
-    float frequency = clamp(u_scale * 0.22, 44.0, 97.0);
+    // Subpixel anti-aliased neon scan lines.
+    float frequency = clamp(u_scale * 0.19, 34.0, 88.0);
     float phase = contourY * frequency;
     float d = abs(fract(phase) - 0.5);
     float halfwidth = clamp(0.11 + 0.22 * fwidth(phase), 0.11, 0.34);
