@@ -44,6 +44,8 @@ class AetherVisuals(unittest.TestCase):
             self.assertIn(part, web)
         self.assertNotIn("new Image(", web)
         self.assertNotIn("aether-core.webp", web)
+        server = (ROOT / "dashboard/server.py").read_text(encoding="utf8")
+        self.assertNotIn('"aether-core.webp": "image/webp"', server)
         for path in ("web/aether-core.webp", "dashboard/static/aether-core.webp",
                      "gui/assets/aether-core.webp"):
             self.assertFalse((ROOT / path).exists(), path)
