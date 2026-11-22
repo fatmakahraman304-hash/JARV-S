@@ -404,7 +404,7 @@ void main() {
     H -= eyeFold * 0.0005 + smileFold * 0.0007;
 
     // ── ears ───────────────────────────────────────────────────────────────
-    float er;
+    float er = 2.0;
     float earH = neck ? 0.0 : ear(p, er);
     float earM = neck ? 0.0 : (1.0 - smoothstep(0.92, 1.02, er)) * smoothstep(0.50, 0.62, ax);
     H += earH;
