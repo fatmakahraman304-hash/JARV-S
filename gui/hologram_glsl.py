@@ -48,7 +48,7 @@ void main() {
     float halfwidth = clamp(0.075 + 0.25 * fwidth(phase), 0.10, 0.35);
     float bands = 1.0 - smoothstep(halfwidth * 0.48, halfwidth, d);
 
-    float relief = 0.27 + 0.47 * key + 0.20 * rim;
+    float relief = 0.38 + 0.50 * key + 0.25 * rim;
     float lineLight = bands * relief;
     float front = (p.z > 0.05 && v_misc.w < 0.5 && ndv > 0.10) ? 1.0 : 0.0;
     float ax = abs(p.x);
@@ -89,17 +89,20 @@ void main() {
 
     // Dark translucent interior, bright electric cyan scan lines and edge.
     vec3 night = vec3(0.002, 0.075, 0.17);
-    vec3 neon = vec3(0.015, 0.64, 1.13);
-    vec3 ice = vec3(0.38, 1.02, 1.36);
-    vec3 col = night * (0.14 + 0.10 * key);
-    col += neon * lineLight * (0.96 + 0.18 * u_glow);
-    col += ice * rim * (0.64 + 0.28 * u_glow);
-    col += ice * features * 0.98;
+    vec3 neon = vec3(0.020, 0.80, 1.42);
+    vec3 ice = vec3(0.52, 1.14, 1.48);
+    vec3 col = night * (0.18 + 0.12 * key);
+    // Intentionally emissive: the reference is a lit projection, not an
+    // opaque blue mannequin. The edge is several times brighter than
+    // the inter-line interior, with dynamic voice-synchronised highlights.
+    col += neon * lineLight * (1.82 + 0.22 * u_glow);
+    col += ice * rim * (2.20 + 0.42 * u_glow);
+    col += ice * features * 1.75;
     col *= 1.0 - 0.75 * mouthCavity;
     col *= pulse * (1.0 - 0.44 * u_muted);
-    float alpha = clamp(0.055 + 0.72 * lineLight + 0.88 * rim +
-                        0.62 * features, 0.0, 1.0) * fade;
-    col = vec3(1.0) - exp(-max(col, vec3(0.0)) * 1.75);
+    float alpha = clamp(0.080 + 1.33 * lineLight + 1.40 * rim +
+                        0.93 * features, 0.0, 1.0) * fade;
+    col = vec3(1.0) - exp(-max(col, vec3(0.0)) * 2.10);
     gl_FragColor = vec4(col * alpha, alpha);
 }
 """
