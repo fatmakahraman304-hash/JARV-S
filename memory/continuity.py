@@ -111,7 +111,7 @@ def prompt_context():
 # where, and which stage it reached. A job cut off by a shutdown or an update
 # is marked 'yarıda kaldı' at the next start and can be resumed from its stage.
 
-_DONE = ("bitti", "sorunlu bitti", "başarısız", "iptal")
+_DONE = ("bitti", "sorunlu bitti", "başarısız", "iptal", "değişiklik yok")
 
 
 def project_start(kind, title, folder, instruction, stages=None):
@@ -142,31 +142,34 @@ def project_update(pid, *, status=None, stage=None, stages=None, note=None, fold
         db.execute(f"UPDATE projects SET {', '.join(fields)} WHERE id=?", vals)
 
 
+_PROJECT_FIELDS = "id,kind,title,folder,instruction,status,stage,stages,note,started,updated"
+
+
+def _project_row(row):
+    p = dict(zip(_PROJECT_FIELDS.split(","), row))
+    try:
+        p["stages"] = json.loads(p["stages"] or "[]")
+    except ValueError:
+        p["stages"] = []
+    return p
+
+
 def projects(unfinished_only=False, limit=20):
+    statuses = _DONE if unfinished_only else ()
+    where = " WHERE status NOT IN (" + ",".join("?" for _ in statuses) + ")" if statuses else ""
+    sql = f"SELECT {_PROJECT_FIELDS} FROM projects{where} ORDER BY id DESC"
+    args = list(statuses)
+    if limit is not None:
+        sql += " LIMIT ?"
+        args.append(max(0, int(limit)))
     with connect() as db:
-        rows = db.execute("SELECT id,kind,title,folder,instruction,status,stage,stages,note,started,updated "
-                          "FROM projects ORDER BY id DESC LIMIT ?", (max(1, int(limit) * 4),)).fetchall()
-    out = []
-    for r in rows:
-        p = dict(zip(("id", "kind", "title", "folder", "instruction", "status", "stage", "stages",
-                      "note", "started", "updated"), r))
-        try:
-            p["stages"] = json.loads(p["stages"] or "[]")
-        except ValueError:
-            p["stages"] = []
-        if unfinished_only and p["status"] in _DONE:
-            continue
-        out.append(p)
-        if len(out) >= limit:
-            break
-    return out
+        return [_project_row(row) for row in db.execute(sql, args)]
 
 
 def project(pid):
-    for p in projects(limit=200):
-        if p["id"] == pid:
-            return p
-    return None
+    with connect() as db:
+        row = db.execute(f"SELECT {_PROJECT_FIELDS} FROM projects WHERE id=?", (pid,)).fetchone()
+    return _project_row(row) if row else None
 
 
 def set_application(name, status, detail):

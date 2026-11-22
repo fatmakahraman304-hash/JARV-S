@@ -2041,12 +2041,14 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
     The caller must already hold `_job_lock`; it is released here."""
     def work():
         status = "done"
+        paused = False
         result = ""
         try:
             result = job()
             with _state_lock:
                 wrote = any(f.get("state") == "done" for f in _JOB["files"].values())
                 verification = _JOB.get("verification")
+                paused = _JOB.get("stage_paused")
             if verification == "failed":
                 status = "finished with problems"
             elif verification == "unverified":
@@ -2061,16 +2063,19 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
-            _journal(pid, status={"done": "bitti", "nothing changed": "değişiklik yok",
-                                  "finished with problems": "sorunlu bitti",
-                                  "failed": "başarısız"}.get(status, status), note=result)
+            journal_status = {"done": "bitti", "nothing changed": "değişiklik yok",
+                              "finished with problems": "sorunlu bitti", "failed": "başarısız",
+                              "unverified": "doğrulanamadı"}.get(status, status)
+            if paused:
+                journal_status = "aşama bekliyor"
+            _journal(pid, status=journal_status, note=result)
             try:
                 _update(status, result=result, finished=time.time())
             finally:
                 _job_lock.release()
         try:
             from core import sync_hub           # the user is on the phone: tell it there too
-            sync_hub.deliver_to_voice(f"Kodlama işi bitti: {name} ({status})", result)
+            sync_hub.deliver_to_voice(f"Kodlama işi: {name} ({journal_status})", result)
         except Exception:
             pass
         if speak:
@@ -2241,9 +2246,19 @@ def _build_staged(description: str, language: str, project_name: str, player, pi
                        f"NOW DO STAGE {i + 1}/{len(stages)}: {st['title']} — {st['goal']}\n"
                        "The earlier stages are already in the files. Do only this stage, completely and "
                        "working; keep README.md (Turkish) up to date with how to run the project.")
+        with _state_lock:
+            _JOB["verification"] = "unverified"
         result = _improve_folder(folder, instruction, player, open_editor=False)
-        st["done"] = True
+        with _state_lock:
+            verdict = _JOB.get("verification")
+            _JOB["stage_paused"] = verdict != "done"
         st["result"] = result[:600]
+        st["verification"] = verdict
+        if verdict != "done":
+            _journal(pid, stage=i, stages={"plan": plan, "language": language})
+            reason = "kontroller başarısız" if verdict == "failed" else "sonuç doğrulanamadı"
+            return f"{i + 1}. aşamada durdum ({reason}). {result[:600]}"
+        st["done"] = True
         results.append(f"{i + 1}. {st['title']}")
         _journal(pid, stage=i + 1, stages={"plan": plan, "language": language})
     shown = _present(folder, plan.get("present") or {}, player)
@@ -2260,16 +2275,31 @@ def _start_resume(target: str, speak=None, player=None) -> str:
     global _job_name
     try:
         from memory.continuity import projects
-        pending = projects(unfinished_only=True, limit=10)
+        pending = projects(unfinished_only=True, limit=None)
     except Exception as e:
         return f"I could not read the job journal: {e}"
     if not pending:
-        return "There is no unfinished coding job to continue, sir."
+        return "Devam edilecek yarım bir kodlama işi bulunamadı."
     t = (target or "").strip().casefold().lstrip("#")
-    pick = next((p for p in pending if t and (str(p["id"]) == t or t in p["title"].casefold()
-                                               or t in str(p["folder"]).casefold())), pending[0])
+    if t.isdecimal():
+        matches = [p for p in pending if str(p["id"]) == t]
+    elif t:
+        matches = [p for p in pending if t in (p["title"].casefold(), str(p["folder"]).casefold())]
+        if not matches:
+            matches = [p for p in pending if t in p["title"].casefold() or t in str(p["folder"]).casefold()]
+    else:
+        matches = pending
+    if not matches:
+        return "Bu ad veya numarayla yarım bir kodlama işi bulamadım."
+    if len(matches) > 1:
+        choices = ", ".join(f"#{p['id']} {p['title']}" for p in matches[:5])
+        return f"Hangi projeye devam edeyim? {choices}"
+    pick = matches[0]
     if not _job_lock.acquire(blocking=False):
         return f"Üzerinde çalışmaya devam ediyorum: '{_job_name}', sir. One job at a time."
+    if not str(pick.get("folder") or "").strip():
+        _job_lock.release()
+        return "Bu projenin klasörü kaydedilmemiş. Proje kaydı saklandı."
     folder = Path(pick["folder"])
     _job_name = pick["title"]
     who = _coding_provider() or "kodlama modeli"
@@ -2284,8 +2314,8 @@ def _start_resume(target: str, speak=None, player=None) -> str:
                         pick["title"], who, speak, player, pid=pick["id"])
     if not folder.is_dir():
         _job_lock.release()
-        _journal(pick["id"], status="iptal", note="folder no longer exists")
-        return f"The folder of '{pick['title']}' no longer exists, so it cannot be resumed."
+        _journal(pick["id"], status="yarıda kaldı", note="Proje klasörüne erişilemiyor.")
+        return f"'{pick['title']}' klasörüne erişemiyorum. Proje kaydı saklandı."
     _new_job(folder, who, pick["instruction"], player, kind="improve", journal_id=pick["id"])
     instruction = (pick["instruction"] + "\n\n(This job was interrupted before it finished. Look at the "
                    "folder as it is now, keep what is already done, and complete the rest.)")

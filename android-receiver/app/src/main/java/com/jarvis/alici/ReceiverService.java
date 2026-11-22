@@ -46,11 +46,13 @@ public class ReceiverService extends Service {
     static final String WEB = "https://fatmakahraman304-hash.github.io/JARV-S/";
     static volatile String status = "kapalı";
     private volatile boolean running;
+    private LanRemote lanRemote;
+    private RelayRemote relayRemote;
+    static volatile String lanAddress = "";
     private final Set<String> done = new LinkedHashSet<>();
 
     static void start(Context ctx) {
         SharedPreferences p = prefs(ctx);
-        if (p.getString("tok", "").isEmpty() || p.getString("gist", "").isEmpty()) return;
         Intent i = new Intent(ctx, ReceiverService.class);
         if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
     }
@@ -79,13 +81,30 @@ public class ReceiverService extends Service {
             startForeground(1, n);
         }
         if (!running) {
+            try {
+                lanRemote = new LanRemote(this, (op, arg) -> {
+                    try { return run(new JSONObject().put("op", op).put("arg", arg), new HashMap<>(), new HashMap<>()); }
+                    catch (Exception e) { return "Komut hatası: " + e.getMessage(); }
+                });
+                lanRemote.start(); lanAddress = lanRemote.address();
+            } catch (Exception e) { lanAddress = "Yerel bağlantı hatası: " + e.getMessage(); }
+            // The encrypted relay is independent of GitHub and local HTTP.
+            // It uses the existing saved LAN pairing key; no new QR scan.
+            relayRemote = new RelayRemote(this, command ->
+                    run(command, new HashMap<>(), new HashMap<>()));
+            relayRemote.start();
             running = true;
             new Thread(this::loop, "alici").start();
         }
         return START_STICKY;
     }
 
-    @Override public void onDestroy() { running = false; status = "kapalı"; super.onDestroy(); }
+    @Override public void onDestroy() {
+        running = false;
+        if (lanRemote != null) lanRemote.stop();
+        if (relayRemote != null) relayRemote.stop();
+        lanAddress = ""; status = "kapalı"; super.onDestroy();
+    }
 
     private static String now() {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
@@ -98,8 +117,11 @@ public class ReceiverService extends Service {
         Gist gist = new Gist(p.getString("tok", ""), p.getString("gist", ""));
         String me = deviceId(this);
         long lastBeat = 0;
+        long delayMs = 10000;
+        String phase = "okuma";
         while (running) {
             try {
+                phase = "okuma";
                 Map<String, String> files = gist.files();
                 Map<String, String> writes = new HashMap<>();
                 JSONArray inbox = new JSONArray(orEmpty(files.get("inbox-" + me + ".json"), "[]"));
@@ -122,16 +144,24 @@ public class ReceiverService extends Service {
                     for (int i = Math.max(0, outbox.length() - 30); i < outbox.length(); i++) keep.put(outbox.get(i));
                     writes.put("outbox-" + me + ".json", keep.toString());
                 }
-                if (SystemClock.elapsedRealtime() - lastBeat > 30000) {
-                    lastBeat = SystemClock.elapsedRealtime();
+                if (SystemClock.elapsedRealtime() - lastBeat > 60000) {
                     writes.put("device-" + me + ".json", beat(me).toString());
                 }
-                if (!writes.isEmpty()) gist.write(writes);
-                status = "bağlı";
+                if (!writes.isEmpty()) {
+                    phase = "yazma";
+                    gist.write(writes);
+                }
+                if (writes.containsKey("device-" + me + ".json")) lastBeat = SystemClock.elapsedRealtime();
+                status = "bağlı · cihaz kimliği: " + me;
+                delayMs = 10000;
             } catch (Exception e) {
-                status = "hata: " + e.getMessage();
+                status = phase + " hatası: " + e.getMessage();
+                // Back off on API errors; do not hammer GitHub with retries.
+                String error = e.getMessage() == null ? "" : e.getMessage();
+                delayMs = error.contains("GitHub 403") || error.contains("GitHub 429")
+                        ? 120000 : Math.min(60000, delayMs * 2);
             }
-            SystemClock.sleep(3000);
+            SystemClock.sleep(delayMs);
         }
     }
 
@@ -178,8 +208,15 @@ public class ReceiverService extends Service {
     private String key(String k) {
         AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
         switch (k) {
-            case "volume_up": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI); return "Ses açıldı.";
-            case "volume_down": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI); return "Ses kısıldı.";
+            case "volume_up": case "volume_down": {
+                int before = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                int direction = "volume_up".equals(k) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
+                int after = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                return after == before ? "Ses değişmedi (" + after + "/" + max + "). Ses sınırda olabilir."
+                        : "Ses seviyesi: " + before + " → " + after + " / " + max;
+            }
             case "mute": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI); return "Sessiz/sesli.";
             case "play_pause": return media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "Oynat/durdur.");
             case "play": return media(KeyEvent.KEYCODE_MEDIA_PLAY, "Oynatılıyor.");

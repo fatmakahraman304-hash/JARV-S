@@ -3,7 +3,7 @@
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'development';
 const PREFIX = 'mayk-web:' + self.registration.scope + ':';
 const CACHE = PREFIX + BUILD;
-const SCRIPTS = ['reactor', 'chess', 'devkit', 'app', 'dev-common', 'dev-phone',
+const SCRIPTS = ['reactor', 'chess', 'devkit', 'relay', 'app', 'dev-common', 'dev-phone',
                  'dev-tablet', 'dev-tv', 'dev-projector', 'dev-watch'];
 const suffix = BUILD === 'development' ? '' : '?v=' + BUILD;
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',

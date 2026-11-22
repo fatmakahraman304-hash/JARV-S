@@ -40,16 +40,21 @@
 
   // ── the remote, on every device ──────────────────────────────────────────
   const sheet = $('s-remote');
-  const press = async k => { J.vibrate(12); const r = await J.remote('key', k); if (r) J.toast(r); };
+  const press = async k => { J.vibrate(12); const r = await J.remote('key', k, { popup: true }); if (r) J.toast(r); };
 
   // 5 ── hold to repeat (replaces the one-shot click on repeatable keys) ──
   const REPEAT = new Set(['up', 'down', 'left', 'right', 'volume_up', 'volume_down']);
   sheet.querySelectorAll('[data-k]').forEach(b => {
+    // Local HTTPS→HTTP bridge navigates away for every key. Do not repeat
+    // or dispatch many navigations while a key is held. One tap = one command.
     if (!REPEAT.has(b.dataset.k)) return;
     let t1 = null, t2 = null, n = 0;
     b.onclick = null;
     const stop = () => { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; };
-    b.addEventListener('pointerdown', e => { e.preventDefault(); n = 0; press(b.dataset.k); t1 = setTimeout(() => { t2 = setInterval(() => { if (++n > 25) stop(); else press(b.dataset.k); }, 220); }, 450); });
+    b.addEventListener('pointerdown', e => { e.preventDefault(); n = 0; press(b.dataset.k);
+      if (J.lanRemote) return; // one navigation only, even if paired after page load
+      t1 = setTimeout(() => { t2 = setInterval(() => { if (++n > 25) stop(); else press(b.dataset.k); }, 220); }, 450);
+    });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => b.addEventListener(ev, stop));
     b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); press(b.dataset.k); } });
   });
@@ -81,7 +86,7 @@
   apps.innerHTML = [['prime', 'Prime Video'], ['disney', 'Disney+'], ['spotify', 'Spotify'], ['ayarlar', '⚙ Ayarlar'], ['chrome', 'Chrome'], ['play store', 'Play Store']]
     .map(([a, l]) => `<button class="btn" type="button" data-app2="${a}">${l}</button>`).join('');
   sheet.querySelector('.pcgrid').after(apps);
-  apps.querySelectorAll('[data-app2]').forEach(b => b.onclick = async () => J.toast(await J.remote('app', b.dataset.app2)));
+  apps.querySelectorAll('[data-app2]').forEach(b => b.onclick = async () => J.toast(await J.remote('app', b.dataset.app2, { popup: true })));
 
   // 9 ── sleep timer ───────────────────────────────────────────────────────
   const sleepRow = document.createElement('div'); sleepRow.className = 'row'; sleepRow.id = 'rm-sleep';
@@ -114,11 +119,15 @@
   function paintStatus() {
     const rx = J.receiver, pc = J.findPc('');
     const dot = on => `<span class="dot ${on ? 'on' : ''}"></span>`;
-    st.innerHTML = rx && J.online(rx) ? `${dot(true)} MAYK Alıcı açık — laptop kapalıyken de çalışır`
+    st.innerHTML = J.lanRemote ? `${dot(true)} Yerel Wi-Fi kumandası kayıtlı · GitHub gerekmez`
+      : rx && J.online(rx) ? `${dot(true)} MAYK Alıcı açık — laptop kapalıyken de çalışır`
       : pc && J.online(pc) ? `${dot(true)} ${J.esc(pc.name)} üzerinden (ADB)${rx ? ' · Alıcı çevrimdışı' : ''}`
       : `${dot(false)} Ulaşılamıyor: projeksiyon kapalı ya da Alıcı/laptop çevrimdışı`;
   }
-  $('t-remote').addEventListener('click', () => { paintStatus(); paintSleep(); J.syncNow().then(paintStatus).catch(() => {}); });
+  $('t-remote').addEventListener('click', () => {
+    paintStatus(); paintSleep();
+    if (!J.lanRemote) J.syncNow().then(paintStatus).catch(() => {});
+  });
 
   // ── on the projector's own page ──────────────────────────────────────────
   if (!J.is('projector')) return;

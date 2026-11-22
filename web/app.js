@@ -48,6 +48,52 @@
     history.replaceState(null, '', location.pathname);
   }
 
+  // Private device pairing: the capability URL is saved only on this iPhone.
+  // Do not sync its secret to the public repository or the shared gist.
+  function parseLanUrl(value) {
+    try {
+      const u = new URL(String(value || '').trim());
+      const ip = u.hostname.split('.').map(Number);
+      const local = ip.length === 4 && ip.every(x => Number.isInteger(x) && x >= 0 && x <= 255) &&
+        (ip[0] === 10 || (ip[0] === 172 && ip[1] >= 16 && ip[1] <= 31) || (ip[0] === 192 && ip[1] === 168));
+      if (u.protocol !== 'http:' || u.port !== '18765' || !local || u.username || u.password || u.search || u.hash) return '';
+      const match = u.pathname.match(/^\/([a-f0-9]{32,64})\/?$/i);
+      return match ? u.origin + '/' + match[1].toLowerCase() : '';
+    } catch { return ''; }
+  }
+  if (S.lanRemote && !parseLanUrl(S.lanRemote)) { delete S.lanRemote; save(); }
+  let lanResult = '';
+  if (location.hash.startsWith('#lan=')) {
+    let link = '';
+    try { link = parseLanUrl(decodeURIComponent(location.hash.slice(5))); } catch {}
+    if (link) { S.lanRemote = link; save(); setTimeout(() => toast('Yerel projeksiyon kumandası bağlandı'), 600); }
+    else setTimeout(() => toast('Yerel kumanda bağlantısı geçersiz'), 600);
+    history.replaceState(null, '', location.pathname + location.search);
+  } else if (location.hash.startsWith('#lan-result=')) {
+    try { lanResult = decodeURIComponent(location.hash.slice(12)).slice(0, 500); }
+    catch { lanResult = 'Yanıt okunamadı'; }
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
+  // Pop-up command returns to HTTPS MAYK and reports back to its opener.
+  // When Safari allows closing script-opened tabs the main assistant remains
+  // at its current position, without losing the microphone/chat UI state.
+  if (lanResult && window.opener) {
+    try { window.opener.postMessage({ type: 'mayk-lan-result', text: lanResult }, location.origin); } catch {}
+    try { window.close(); } catch {}
+    // On iOS versions which refuse window.close(), keep this extra tab
+    // lightweight instead of booting another MAYK session / GitHub sync.
+    document.body.textContent = '';
+    document.body.style.cssText = 'margin:0;padding:28px;background:#120d09;color:#fff;font:18px system-ui';
+    const reply = document.createElement('p'); reply.textContent = '📽️ ' + lanResult;
+    const hint = document.createElement('p'); hint.textContent = 'Komut sonucu asıl MAYK sekmesine gönderildi. Bu sekmeyi kapatabilirsin.';
+    const close = document.createElement('button'); close.textContent = 'Sekmeyi kapat';
+    close.style.cssText = 'padding:14px;background:#f69b32;border:0;border-radius:12px;font-size:18px';
+    close.onclick = () => window.close();
+    document.body.append(reply, hint, close);
+    return;
+  }
+
   function detectKind() {
     if (S.kind && S.kind !== 'auto') return S.kind;
     const ua = navigator.userAgent;
@@ -355,7 +401,7 @@
       const remSig = L => L.map(r => [r.id, +r.due, r.text, r.cancelled || ''].join('|')).join('\n');
       if (remSig(mergeReminders(cloudRem, [])) !== remSig(reminders)) writes['reminders.json'] = JSON.stringify(reminders);
       saveRem(); renderRem();
-      if (beatDirty || !lastBeat || Date.now() - lastBeat > (isActive() ? 20000 : 60000)) {
+      if (beatDirty || !lastBeat || Date.now() - lastBeat > (isActive() ? 120000 : 240000)) {
         lastBeat = Date.now(); beatDirty = false;
         writes['device-' + S.id + '.json'] = JSON.stringify(myBeat());
       }
@@ -372,7 +418,7 @@
   let lastBeat = 0, beatDirty = false, syncing = false;
   async function syncLoop() {
     if (!syncing) { syncing = true; try { await syncNow(); } finally { syncing = false; } }
-    setTimeout(syncLoop, document.visibilityState === 'visible' ? 8000 : 45000);
+    setTimeout(syncLoop, document.visibilityState === 'visible' ? 30000 : 120000);
   }
   setTimeout(syncLoop, 1500);
 
@@ -771,7 +817,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'Projeksiyonu (HY320) ya da Android TV\'yi kontrol et — projeksiyondaki MAYK Alıcı uygulamasıyla (laptop kapalıyken de) ya da laptop üzerinden. op: app (arg: youtube, netflix …) | search (arg: aranacak; where: youtube|google) | type (arg: odaklı kutuya yazılacak, Türkçe olur) | key (arg: up, down, left, right, ok, back, home, volume_up, volume_down, mute, play_pause, next, previous, power) | url (arg) | look (ekranına bak; question) | wifi (arg: ağ adı, password) | jarvis (MAYK\'ı projeksiyonda aç) | apps. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, MAYK arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -847,12 +893,21 @@
       case 'todo': return todoTool(a);
       case 'projector': {
         if (a.open) { $('t-remote').click(); if (!a.op) return 'Kumanda ekranı açıldı.'; }
-        const op = String(a.op || '').toLowerCase();
+        let op = String(a.op || '').trim().toLowerCase();
+        let arg = String(a.arg || '').trim();
+        const phrase = (op + ' ' + arg).toLocaleLowerCase('tr-TR');
+        if (/(ses|volume)/.test(phrase)) {
+          if (/(kıs|azalt|düşür|down|lower)/.test(phrase)) { op = 'key'; arg = 'volume_down'; }
+          else if (/(aç|artır|yükselt|up|raise)/.test(phrase)) { op = 'key'; arg = 'volume_up'; }
+          else if (/(sustur|sessiz|mute)/.test(phrase)) { op = 'key'; arg = 'mute'; }
+        }
+        if (['volume_up', 'volume_down', 'mute'].includes(op)) { arg = op; op = 'key'; }
         if (!op) return 'Ne yapayım? (op gerekli)';
+        if (S.lanRemote) return await remote(op, arg, { where: a.where || 'youtube' });
         await syncNow();
         const rx = receiver();
-        if (rx && online(rx)) {
-          const r = await sendToReceiver(rx, { op, arg: String(a.arg || ''), where: a.where || 'youtube', password: a.password || '', question: a.question || '', enter: true });
+        if (rx) {
+          const r = await sendToReceiver(rx, { op, arg, where: a.where || 'youtube', password: a.password || '', question: a.question || '', enter: true });
           if (op === 'look') { setTimeout(() => syncNow(), 2500); setTimeout(() => syncNow(), 6000); return r + ' Görüntü gelince ekranda açılacak; o zaman ne olduğunu anlat.'; }
           return r;
         }
@@ -1252,7 +1307,21 @@
 
   // ── chess on every device (engine: web/chess.js, same as the desktop's) ──
   const CH = window.JarvisChess;
-  const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  // Built-in SVG pieces: no OS emoji fallback (iOS renders ♟ as a 3-D
+  // black pawn even for the white side). Every piece uses the same viewBox.
+  const PIECE_SHAPES = {
+    p: '<circle cx="22.5" cy="12" r="5.4"/><path d="M19 17.5h7c0 5 4 9.5 5 15H14c1-5.5 5-10 5-15Z"/><path d="M13 32h19l2 5H11z"/><path d="M10 37h25v3H10z"/>',
+    n: '<path d="M14 34c1-5 0-9-3-11l-4-3 5-6 6-2 1-7 5 5 5-1 5 11-3 14H14Z"/><path d="M10 20l6-1" fill="none" stroke="var(--piece-detail)" stroke-width="2"/><circle cx="21" cy="16" r="1.5" fill="var(--piece-detail)" stroke="none"/><path d="M12 34h22l2 5H10z"/>',
+    b: '<circle cx="22.5" cy="6.5" r="2.3"/><path d="M22.5 9c5.2 4 9.2 9.8 8 15.8-.6 3.5-3.6 5.8-4.5 8.2h-7c-1-2.6-4.5-5.9-5-9.4-.8-5.4 3-11 8.5-14.6Z"/><path d="M28.7 14.2l-10.5 13" fill="none" stroke="var(--piece-detail)" stroke-width="2"/><path d="M14 33h17l2 5H12z"/><path d="M10 38h25v2H10z"/>',
+    r: '<path d="M10 10h6v4h4v-4h5v4h4v-4h6v9H10z"/><path d="M13 19h19l-3 15H16z"/><path d="M11 34h23v5H11z"/><path d="M10 39h25v2H10z"/>',
+    q: '<circle cx="10" cy="11" r="2.2"/><circle cx="18" cy="7.5" r="2.2"/><circle cx="27" cy="7.5" r="2.2"/><circle cx="35" cy="11" r="2.2"/><path d="M11 16l6 8 5.5-11 5.5 11 6-8-4 17H15z"/><path d="M14 33h17v3H14z"/><path d="M11 36h23v4H11z"/>',
+    k: '<path d="M21 5h3v7h7v3h-7v5h-3v-5h-7v-3h7z"/><path d="M20 19c-6 0-8 4-8 8 0 3 3 6 5 8h11c2-2 5-5 5-8 0-4-2-8-8-8z"/><path d="M13 35h19v5H13z"/>',
+  };
+  const PIECE_NAMES = { p: 'Piyon', n: 'At', b: 'Fil', r: 'Kale', q: 'Vezir', k: 'Şah' };
+  function pieceSvg(piece) {
+    const color = piece === piece.toUpperCase() ? 'white' : 'black';
+    return `<svg class="ch-piece ${color}" viewBox="0 0 45 45" aria-hidden="true" focusable="false"><g fill="var(--piece-fill)" stroke="var(--piece-stroke)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PIECE_SHAPES[piece.toLowerCase()]}</g></svg>`;
+  }
   const chess = (() => { const g = J(localStorage.getItem('jarvis_chess'), null);
     return { sans: g?.sans || [], userWhite: g?.userWhite ?? true, level: g?.level || 'orta', teach: !!g?.teach, sel: null, hint: null, coach: '' }; })();
   function chessBoard() { const b = new CH.Board(); for (const san of chess.sans) { const m = b.parse(san); if (!m) break; b.push(m); } return b; }
@@ -1271,7 +1340,8 @@
       const rr = chess.userWhite ? r : 7 - r, ff = chess.userWhite ? f : 7 - f, s = rr * 8 + ff, p = b.sq[s];
       const cls = [((rr + ff) % 2) ? 'l' : 'd', p !== '.' ? (p === p.toUpperCase() ? 'w' : 'b') : '', chess.sel === s ? 'sel' : '',
         last && (last[0] === s || last[1] === s) ? 'last' : '', targets.includes(s) ? 'tgt' : '', chess.hint && (chess.hint[0] === s || chess.hint[1] === s) ? 'hint' : ''].join(' ');
-      html += `<div class="${cls}" data-s="${s}">${p !== '.' ? GLYPH[p] : ''}</div>`;
+      const label = p === '.' ? 'Boş kare' : (p === p.toUpperCase() ? 'Beyaz ' : 'Siyah ') + PIECE_NAMES[p.toLowerCase()];
+      html += `<button type="button" class="ch-square ${cls}" data-s="${s}" aria-label="${label} ${CH.sqName(s)}" aria-pressed="${chess.sel === s}">${p !== '.' ? pieceSvg(p) : ''}</button>`;
     }
     $('ch-board').innerHTML = html;
     $('ch-status').textContent = chessState(b).status;
@@ -1370,6 +1440,34 @@
   // The MAYK Alıcı app on the projector (android-receiver/) works even when
   // the laptop is off; without it, the laptop drives the projector over ADB.
   const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
+  let lanPopup = null;
+  window.addEventListener('message', e => {
+    // Only accept results from the actual window we opened, on our HTTPS origin.
+    if (e.origin !== location.origin || !lanPopup || e.source !== lanPopup) return;
+    if (!e.data || e.data.type !== 'mayk-lan-result') return;
+    const message = String(e.data.text || 'Komutun sonucu gelmedi').slice(0, 500);
+    lanPopup = null;
+    const result = $('rm-lan-result');
+    if (result) { result.textContent = '📽️ ' + message; result.hidden = false; }
+    toast('📽️ ' + message);
+    try { e.source.close(); } catch {}
+  });
+  async function sendLanCommand(kind, arg, extra = {}) {
+    const link = parseLanUrl(S.lanRemote);
+    if (!link) return 'Yerel projeksiyon bağlantısı kaydedilmemiş.';
+    if (!window.MAYKRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. MAYK sayfasını güncelle.';
+    // Unlike a local http:// fetch or a popup, this uses an encrypted HTTPS
+    // channel and preserves the exact existing MAYK UI and voice session.
+    const result = $('rm-lan-result');
+    if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
+    const reply = await window.MAYKRelay.send(link, kind, arg);
+    if (result) { result.textContent = '📽️ ' + reply; result.hidden = false; }
+    const failed = /(?:yanıt vermedi|başarısız|kurulamadı|desteklenmiyor|geçersiz)/i.test(reply);
+    $('rm-lan-state').textContent = failed
+      ? '⚠️ HTTPS köprüsü cevap vermedi; yedek yerel kumanda kullanılabilir.'
+      : '🟢 HTTPS köprüsü çalışıyor · ' + new URL(link).hostname + ' · GitHub gerekmez';
+    return reply;
+  }
   async function sendToReceiver(d, cmd) {
     const id = S.id + '-r' + Date.now().toString(36);
     const f = await Cloud.read();
@@ -1377,25 +1475,58 @@
     box.push({ ...cmd, id, from: devName(), reply_to: S.id, ts: nowIso() });
     await Cloud.write({ [`inbox-${d.id}.json`]: JSON.stringify(box.slice(-10)) });
     for (let i = 0; i < 10; i++) {               // ~20 s
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 3000));
       try { const hit = J((await Cloud.read())[`outbox-${d.id}.json`], []).find(o => o.id === id); if (hit) return hit.reply; } catch {}
     }
-    return `${d.controls || 'Projeksiyon'} komutu aldı ama yanıt vermedi (açık mı?).`;
+    return `${d.controls || 'Projeksiyon'} yanıt vermedi. Hedef alıcı kimliği: ${d.id}. Alıcı uygulamasındaki cihaz kimliğiyle karşılaştır; farklıysa eski eşleştirme kaydı seçilmiş olabilir.`;
   }
   async function remote(kind, arg, extra = {}) {
+    if (S.lanRemote) return sendLanCommand(kind, arg, extra);
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil.';
     await syncNow();
     const rx = receiver();
-    if (rx && online(rx)) return await sendToReceiver(rx, { op: kind, arg, ...extra });
+    if (rx) return await sendToReceiver(rx, { op: kind, arg, ...extra });
     const pc = findPc('');
     if (pc && online(pc)) { const r = await sendToPc('', `adb:${kind}:${arg}`); return r.replace(/^[^:]+: /, ''); }
-    return rx ? 'Projeksiyondaki MAYK Alıcı şu an çevrimdışı (projeksiyon kapalı ya da internete bağlı değil).'
+    return rx ? 'Projeksiyon yanıt vermedi; MAYK Alıcı uygulamasının bağlantısını kontrol et.'
               : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona MAYK Alıcı uygulamasını kur ya da laptopu aç.';
   }
-  $('t-remote').onclick = () => { const pc = findPc(''); $('rm-note').textContent = pc ? `${pc.name} üzerinden kumanda (${online(pc) ? 'açık' : 'kapalı görünüyor'}). İlk kez: laptoptaki MAYK'a "projeksiyonu kur" de.` : 'Bağlı bilgisayar yok: kumanda laptoptaki MAYK üzerinden çalışır.'; openSheet('s-remote'); };
-  document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k)); });
-  document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app)));
-  $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t)); });
+  function renderLanSettings() {
+    const link = parseLanUrl(S.lanRemote);
+    $('rm-lan-url').value = link;
+    $('rm-lan-state').textContent = link
+      ? '🔒 Eşleştirme kayıtlı: ' + new URL(link).hostname + ' · HTTPS köprüsü ilk komutta doğrulanacak.'
+      : 'Bağlantı henüz kayıtlı değil. MAYK Alıcı adresini bir kez ekle.';
+    $('rm-lan-config').open = !link;
+    $('rm-lan-open').disabled = !link;
+    $('s-remote').classList.remove('lan-ios-native');
+    $('rm-lan-open').textContent = '📱 Yedek yerel kumandayı aç';
+    const note = $('rm-lan-guide');
+    if (note) { note.hidden = !link; note.textContent =
+      'MAYK içindeki tuşlar ve sesli komutlar şifreli HTTPS üzerinden çalışır; sayfa değişmez. İnternet kesilirse yedek yerel Wi-Fi kumandasını kullan.'; }
+  }
+  $('rm-lan-save').onclick = () => {
+    const raw = $('rm-lan-url').value.trim();
+    if (!raw) { delete S.lanRemote; save(); renderLanSettings(); toast('Yerel bağlantı kaldırıldı'); return; }
+    const link = parseLanUrl(raw);
+    if (!link) { toast('Tam adresi yapıştır: http://192.168...:18765/uzun-kod'); return; }
+    S.lanRemote = link; save(); renderLanSettings(); toast('Wi-Fi kumandası zaten bağlı; tekrar kaydetmeye gerek yok');
+  };
+  $('rm-lan-open').onclick = () => {
+    const link = parseLanUrl(S.lanRemote);
+    if (link) window.open(link, '_blank', 'noopener');
+  };
+  $('t-remote').onclick = () => {
+    const rx = receiver(), pc = findPc('');
+    $('rm-note').textContent = S.lanRemote
+      ? '📽️ MAYK kumandası hazır · Tuşlar ve sesli komutlar bu ekrandan, sayfa değiştirmeden gönderilir.'
+      : rx ? 'MAYK Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
+      : pc ? pc.name + ' üzerinden kumanda' : 'Projeksiyonun yerel Wi-Fi kumanda adresini aşağıya kaydet.';
+    renderLanSettings(); openSheet('s-remote');
+  };
+  document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k, { popup: true })); });
+  document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app, { popup: true })));
+  $('rm-ask').addEventListener('submit', async (e) => { e.preventDefault(); const t = $('rm-inp').value.trim(); if (!t) return; $('rm-inp').value = ''; toast(await remote('search', t, { popup: true })); });
   $('rm-type').onclick = async () => { const t = $('rm-inp').value.trim(); if (!t) { toast('Önce yazacağını kutuya yaz.'); return; } $('rm-inp').value = ''; toast(await remote('type', t)); };
   $('rm-look').onclick = async () => { closeSheets(); claimHere(); try { await connect(); } catch {} toast(await remote('look', '', { question: '' })); setTimeout(() => syncNow(), 3000); };
 
@@ -1800,12 +1931,92 @@
   }
   $('mic').onclick = () => { if (micOn) { resumeMic = false; stopMic(); } else { claimHere(); startMic(); } };
 
+  // Direct local-language projector actions from MAYK's MAIN chat input.
+  // These commands must not depend on the model deciding to call a tool.
+  // Normal conversation still goes through the AI unchanged.
+  function projectorCommand(input) {
+    if (!parseLanUrl(S.lanRemote)) return null;
+    let t = String(input || '').trim().toLocaleLowerCase('tr-TR')
+      .replace(/[’‘]/g, "'").replace(/[.!?]+$/g, '').trim()
+      .replace(/^(?:hey\s+)?(?:mayk|jarvis|cervis)\s*[,:\s]+/u, '');
+    const explicit = /^(?:projeksiyonda|projeksiyonumda|projektörde|perdede|televizyonda|tv'de|tvde)\s+/u.test(t);
+    if (explicit) t = t.replace(/^(?:projeksiyonda|projeksiyonumda|projektörde|perdede|televizyonda|tv'de|tvde)\s+/u, '');
+    if (!t || /^(?:nasıl|neden|niye|hangi|kim|kaç|ne\s+zaman)\b/u.test(t)) return null;
+
+    const volume = t.match(/^(?:sesi?|sesini)\s+(aç|artır|yükselt|kıs|azalt|düşür|sessize al|sustur|kapat)$/u);
+    if (volume) {
+      const act = volume[1];
+      return { op: 'key', arg: /^(?:aç|artır|yükselt)$/.test(act) ? 'volume_up'
+        : /^(?:kıs|azalt|düşür)$/.test(act) ? 'volume_down' : 'mute' };
+    }
+    const keys = {
+      'geri': 'back', 'geri dön': 'back', 'ana ekrana dön': 'home',
+      'ana ekran': 'home', 'yukarı': 'up', 'yukarı git': 'up',
+      'aşağı': 'down', 'aşağı git': 'down', 'sola git': 'left',
+      'sağa git': 'right', 'ok bas': 'enter', 'tamam bas': 'enter',
+      'oynat': 'play_pause', 'duraklat': 'play_pause'
+    };
+    if (keys[t] && (explicit || !['oynat', 'duraklat'].includes(t))) return { op: 'key', arg: keys[t] };
+
+    const searchPatterns = [
+      /^youtube(?:'da|da)?\s+(?:ara\s+)?(.+?)\s+ara$/u,
+      /^youtube(?:'da|da)?\s+ara\s+(.+)$/u,
+      /^(.+?)\s+youtube(?:'da|da)\s+ara$/u,
+      /^(.+?)\s+ara$/u
+    ];
+    for (let i = 0; i < searchPatterns.length; i++) {
+      if (i === 3 && !explicit) continue;
+      const m = t.match(searchPatterns[i]);
+      if (m && m[1].length >= 2 && m[1].length <= 180)
+        return { op: 'search', arg: m[1] };
+    }
+
+    const opening = t.match(/^(.+?)\s+(?:aç|açsana|açın|başlat|çalıştır|açar mısın|açabilir misin|açarmısın)$/u);
+    if (!opening) return null;
+    const raw = opening[1].trim()
+      .replace(/[''](?:yu|yü|yı|yi|u|ü|ı|i)$/u, '').trim();
+    const apps = {
+      youtube: 'youtube', 'you tube': 'youtube', netflix: 'netflix',
+      chrome: 'chrome', 'google chrome': 'chrome',
+      'play store': 'play store', playstore: 'play store', 'google play': 'play store',
+      'prime': 'prime', 'prime video': 'prime',
+      disney: 'disney', 'disney+': 'disney', spotify: 'spotify',
+      ayarlar: 'ayarlar', ayarları: 'ayarlar', settings: 'ayarlar'
+    };
+    const app = apps[raw];
+    // Without the projector target, only recognized apps are routed
+    // to the projector; other phrases remain ordinary chat.
+    if (app) return { op: 'app', arg: app };
+    if (explicit && /^[\p{L}\p{N} +.\-]{2,50}$/u.test(raw))
+      return { op: 'app', arg: raw };
+    return null;
+  }
+
+  async function runProjectorChat(cmd) {
+    const stateBefore = micOn ? 'listening' : 'idle';
+    setState('thinking');
+    sys('📽️ Projeksiyona komut gönderiliyor…');
+    try {
+      const reply = await remote(cmd.op, cmd.arg);
+      // The relay reports actual Android replies or explicit errors. Never
+      // tell the user an app opened merely because a request was sent.
+      sys('📽️ ' + reply);
+      toast(reply.slice(0, 180));
+    } catch (err) {
+      const message = '📽️ Bağlantı hatası: ' + (err?.message || err);
+      sys(message);
+      toast(message);
+    } finally { setState(stateBefore); }
+  }
+
   // ── text in ──────────────────────────────────────────────────────────────
   $('ask').addEventListener('submit', async (e) => {
     e.preventDefault();
     const t = $('inp').value.trim(); if (!t) return;
     $('inp').value = ''; ensureOut(); claimHere();
     closeTurns(); transcript.push({ role: 'user', text: t, open: false }); queueRecent('user', t); renderLog();
+    const directProjector = projectorCommand(t);
+    if (directProjector) { await runProjectorChat(directProjector); return; }
     if (!navigator.onLine) { offlineQueue.push(t); toast('İnternet yok; bağlantı gelince göndereceğim.'); return; }
     try { await connect(); } catch { offlineQueue.push(t); return; }
     setState('thinking');
@@ -1985,7 +2196,23 @@
     const j = JSON.stringify({ g: '', t: S.tok || '', i: S.gist || '', n: S.name || '', d: devName() });
     const code = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     if (!S.tok || !S.gist) { $('f-status').textContent = 'Önce ortak hafıza (GitHub anahtarı) kurulu olmalı.'; return; }
-    location.href = 'jarvisalici://setup?s=' + code;
+    const link = 'jarvisalici://setup?s=' + code;
+    // Only Android devices with MAYK Alıcı installed can open this scheme.
+    // iOS Safari/PWA otherwise displays an unhelpful "invalid address" error.
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      const note = 'Bu bağlantı iPhone\'da açılmaz. Projeksiyondaki MAYK Alıcı uygulamasının 2. adımına yapıştırmak için bağlantıyı güvenli biçimde projeksiyona aktar. Bağlantı özel GitHub anahtarını içerir; herkese açık paylaşma.';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+          $('f-status').textContent = 'Alıcı kurulum bağlantısı kopyalandı. ' + note;
+        }).catch(() => {
+          prompt(note + '\\nKurulum bağlantısı:', link);
+        });
+      } else {
+        prompt(note + '\\nKurulum bağlantısı:', link);
+      }
+      return;
+    }
+    location.href = link;
   };
   $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
   // ── the computer panel: buttons straight to the computer's MAYK ───────
@@ -2035,6 +2262,8 @@
     ask(text) { $('inp').value = String(text); $('ask').requestSubmit(); },
     // the user said it: send to the brain without putting it in the input box
     async say(text) { claimHere(); closeTurns(); transcript.push({ role: 'user', text, open: false }); queueRecent('user', text); renderLog();
+      const directProjector = projectorCommand(text);
+      if (directProjector) { await runProjectorChat(directProjector); return true; }
       try { await connect(); } catch { return false; } setState('thinking'); send({ realtimeInput: { text } }); return true; },
     async look(data, mime, question) { claimHere(); try { await connect(); } catch { return false; }
       send({ realtimeInput: { video: { data, mimeType: mime || 'image/jpeg' } } });
@@ -2044,6 +2273,7 @@
     startMic() { if (!micOn) { claimHere(); return startMic(); } }, stopMic() { if (micOn) { resumeMic = false; stopMic(); } },
     hush() { stopPlayback(); if (state === 'speaking') setState(micOn ? 'listening' : 'idle'); },
     core, beep, ringHere, remote, sendToDevice, runTool, reminderTool, todoTool, pendingRem, remTime, online, findDevice, syncNow,
+    get lanRemote() { return parseLanUrl(S.lanRemote); },
     get devices() { return devices.slice(); }, get memory() { return memory; }, get gallery() { return gallery.slice(); },
     get battery() { return { ...battery }; }, get weather() { return hudWeather; }, get owner() { return amOwner(); },
     get transcript() { return transcript.slice(); }, get receiver() { return receiver(); }, findPc, renderHud, refreshHudWeather,
@@ -2056,6 +2286,24 @@
   setState(S.key ? 'idle' : 'setup');
   if (!S.key) setTimeout(openSetup, 400);
   renderDevices(); renderLog();
+  if (lanResult) {
+    let wasMic = false, restore = '';
+    try {
+      wasMic = sessionStorage.getItem('jarvis_lan_was_mic') === '1';
+      restore = sessionStorage.getItem('jarvis_lan_restore') || '';
+      sessionStorage.removeItem('jarvis_lan_restore');
+      sessionStorage.removeItem('jarvis_lan_was_mic');
+    } catch {}
+    setTimeout(() => {
+      sys('📽️ Projeksiyon: ' + lanResult + (wasMic ? ' Konuşmak için mikrofona yeniden dokun.' : ''));
+      toast('📽️ ' + lanResult);
+      if (restore === 'remote') {
+        $('t-remote').click();
+        try { $('s-remote').scrollTop = Number(sessionStorage.getItem('jarvis_lan_scroll') || 0); } catch {}
+        sessionStorage.removeItem('jarvis_lan_scroll');
+      }
+    }, 350);
+  }
   if (Cloud.ok()) syncNow();
   if (KIND === 'tv' || KIND === 'projector') $('mic').focus();
 })();
