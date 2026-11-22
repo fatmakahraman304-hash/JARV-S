@@ -61,6 +61,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             blender_studio.stop_all() if not stopped else None      # nothing running: just clear the line
             stopped.append(f"sıradaki {len(waiting)} Blender işi")
         w = which.lower()
+        if action == "cancel" and (not w or any(
+                term in w for term in ("kod", "code", "agent", "mayk"))):
+            try:
+                from actions import dev_agent
+                if dev_agent.request_code_agent_cancel():
+                    stopped.append("Kod Ajanı (iptal isteği gönderildi)")
+            except Exception:
+                pass
         for t in tasks:
             if not w or w in str(t.get("title", "")).lower() or w in ("görev", "araştırma", "task", "research", "arka plan"):
                 try:
@@ -70,6 +78,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                     pass
         if not stopped:
             return "Durduracak süren bir iş bulamadım." + (f" ('{which}' ile eşleşen yok.)" if which else "")
+        if any("iptal isteği gönderildi" in item for item in stopped):
+            return ("İptal işlemi başlatıldı: " + "; ".join(stopped)
+                    + ". Kod Ajanı mevcut model/komut yanıtından sonra duracak; "
+                      "son durumu Kod Ajanı panelinde görebilirsiniz.")
         return "Durdurdum: " + "; ".join(stopped)
     except Exception as exc:
         return f"İşi durduramadım: {exc}"
