@@ -139,7 +139,7 @@ class Workspace:
         p = (self.root / raw).resolve()
         why = self._protected(p)
         if why:
-            raise ValueError(f"Erişim reddedildi: {why}")
+            raise ValueError(f"Reddedildi: {why}")
         return p
 
     def _atomic_write(self, path: Path, content: str) -> None:
