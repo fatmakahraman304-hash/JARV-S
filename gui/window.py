@@ -2430,6 +2430,12 @@ class MainWindow(QMainWindow):
         self._content_title_lbl = PanelText(w, "title")
         self._content_ts_lbl = PanelText(w, "code")
 
+        self._code_cancel_btn = IconButton("stop", 22, "", "MUTED_C")
+        self._code_cancel_btn.setToolTip("Kod Ajanını durdur (devam eden işlem güvenle iptal edilir)")
+        self._code_cancel_btn.clicked.connect(self._cancel_code_job)
+        self._code_cancel_btn.hide()
+        w.add_header_widget(self._code_cancel_btn)
+
         dismiss = IconButton("close", 22)
         dismiss.setToolTip("Kapat")
         dismiss.clicked.connect(w.hide)
@@ -2481,6 +2487,7 @@ class MainWindow(QMainWindow):
     def _show_content(self, title: str, text: str):
         """Slot — runs on Qt main thread. Updates and shows the content panel."""
         import time as _time
+        self._code_cancel_btn.hide()
         # The panel opens below the head, so the head looks down at it. It is a
         # tiny thing that answers "did that land?" before you read a word.
         self.hud.glance(0.0, -0.85, hold=1.3)
@@ -2516,7 +2523,14 @@ class MainWindow(QMainWindow):
         "starting": "BAŞLIYOR", "done": "BİTTİ", "failed": "BAŞARISIZ",
         "nothing changed": "DEĞİŞİKLİK YOK",
         "finished with problems": "SORUNLU BİTTİ",
+        "cancelling": "İPTAL İSTENDİ", "cancelled": "İPTAL EDİLDİ",
     }
+
+    def _cancel_code_job(self) -> None:
+        """Qt thread: set a cancellation flag; never block waiting for models."""
+        from actions import dev_agent
+        if dev_agent.request_code_agent_cancel():
+            self._code_cancel_btn.hide()
 
     def _refresh_code_job_clock(self) -> None:
         """API yanıtı gelmese de saniyeleri yenile; başka paneli ezme."""
@@ -2544,6 +2558,9 @@ class MainWindow(QMainWindow):
         col = lambda name: getattr(C, name, C.TEXT)
         status = job.get("status", "")
         finished = job.get("finished")
+        self._code_cancel_btn.setVisible(
+            not bool(finished) and not bool(job.get("cancel_requested"))
+            and status not in ("cancelling", "cancelled"))
         took = (finished or _time.time()) - job.get("started", _time.time())
 
         # Phase strip: where in the job it is, readable at a glance.

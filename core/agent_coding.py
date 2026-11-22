@@ -332,6 +332,71 @@ def diff(before: dict, after: dict) -> tuple[list[str], list[str], list[str]]:
     return sorted(changed), sorted(created), sorted(deleted)
 
 
+def restore_checked(folder: Path, before: dict, after: dict) -> list[str]:
+    """Restore only changed paths and never overwrite subsequent user edits.
+
+    Before is the checkpoint at agent start; after is its observed result.
+    If the current file differs from after, another actor has edited it:
+    report a conflict rather than clobbering the newer work.
+    Missing snapshot bytes produce an explicit conflict, never a false
+    restoration claim. The original bytes are installed atomically.
+    """
+    import hashlib
+    import tempfile
+    base = Path(folder).resolve()
+    changed, created, deleted = diff(before, after)
+    conflicts = []
+    for rel in sorted(set(changed + created + deleted)):
+        target = base / rel
+        if target.is_symlink() or any(
+                parent.is_symlink() for parent in target.parents
+                if parent != base and base in parent.parents):
+            conflicts.append(rel + ": symlink")
+            continue
+        try:
+            target.resolve().relative_to(base)
+        except ValueError:
+            conflicts.append(rel + ": outside workspace")
+            continue
+        expected = after.get(rel)
+        previous = before.get(rel)
+        try:
+            if target.exists():
+                current_digest = hashlib.sha1(target.read_bytes()).hexdigest()
+                if expected is None or current_digest != expected[2]:
+                    conflicts.append(rel + ": edited after agent")
+                    continue
+            elif expected is not None:
+                conflicts.append(rel + ": removed after agent")
+                continue
+            if previous is None:
+                if target.is_file():
+                    target.unlink()
+                continue
+            previous_bytes = previous[3]
+            if previous_bytes is None:
+                conflicts.append(rel + ": no checkpoint bytes")
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temp_name = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb", dir=target.parent, prefix=".mayk-restore-",
+                    delete=False,
+                ) as temp:
+                    temp_name = Path(temp.name)
+                    temp.write(previous_bytes)
+                    temp.flush()
+                    os.fsync(temp.fileno())
+                os.replace(temp_name, target)
+            finally:
+                if temp_name is not None:
+                    temp_name.unlink(missing_ok=True)
+        except OSError as exc:
+            conflicts.append(rel + ": " + type(exc).__name__)
+    return conflicts
+
+
 def restore(folder: Path, before: dict, after_paths: list[str]) -> None:
     """Put the folder back: rewrite what changed, remove what was created."""
     for rel, (_m, _s, _h, data) in before.items():

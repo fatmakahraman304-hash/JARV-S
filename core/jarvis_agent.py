@@ -17,6 +17,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -100,6 +101,31 @@ TOOLS = [
 
 class BrainError(RuntimeError):
     """This brain cannot go on (limit, no access, down): try the next one."""
+
+
+class AgentCancelled(RuntimeError):
+    """Explicit, cooperative user cancellation; not a provider failure."""
+
+
+_CANCEL_EVENT = threading.Event()
+
+
+def reset_cancel() -> None:
+    """Call when a fresh background job is created, not on each agent round."""
+    _CANCEL_EVENT.clear()
+
+
+def request_cancel() -> None:
+    _CANCEL_EVENT.set()
+
+
+def cancel_requested() -> bool:
+    return _CANCEL_EVENT.is_set()
+
+
+def _check_cancel() -> None:
+    if cancel_requested():
+        raise AgentCancelled("Kodlama görevi kullanıcı isteğiyle iptal edildi.")
 
 
 # ── tools ────────────────────────────────────────────────────────────────────
@@ -279,6 +305,30 @@ class Workspace:
         self.log(f"  Düzenledi: {p.relative_to(self.root).as_posix()}")
         return f"{path} düzenlendi ({n if replace_all else 1} değiştirme)."
 
+    def syntax_problems(self) -> list[str]:
+        """Check changed Python, JSON and TOML without executing user code."""
+        issues = []
+        for rel in sorted(self.changed):
+            path = self.root / rel
+            if not path.is_file():
+                continue
+            suffix = path.suffix.lower()
+            if suffix not in {".py", ".pyi", ".json", ".toml"}:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+                if suffix in {".py", ".pyi"}:
+                    import ast
+                    ast.parse(content, filename=rel)
+                elif suffix == ".json":
+                    json.loads(content)
+                else:
+                    import tomllib
+                    tomllib.loads(content)
+            except (SyntaxError, ValueError, UnicodeError, OSError) as exc:
+                issues.append(f"{rel}: {type(exc).__name__}: {str(exc)[:180]}")
+        return issues
+
     @staticmethod
     def _commands(command: str) -> list[list[str]]:
         """Parse approved test/build programs without a command shell."""
@@ -360,6 +410,7 @@ class Workspace:
         return shutil.which(executable) or executable
 
     def t_run(self, command, timeout=120):
+        _check_cancel()
         commands = self._commands(command)
         if not commands:
             return ("Reddedildi: yalnızca güvenli test/derleme komutları "
@@ -370,6 +421,7 @@ class Workspace:
         outputs = []
         checked = False
         for tokens in commands:
+            _check_cancel()
             argv = [self._resolve_python(tokens[0]), *tokens[1:]]
             if time.monotonic() >= deadline:
                 self.last_run_result = "timeout"
@@ -409,6 +461,7 @@ class Workspace:
             outputs.append(f"$ {tokens[0]} {' '.join(tokens[1:])}\n"
                            f"exit code {proc.returncode}\n{details}")
             self.last_run_result = f"exit code {proc.returncode}"
+            _check_cancel()
             if proc.returncode:
                 self.test_passed = False
                 return "\n".join(outputs)[-MAX_OUTPUT:]
@@ -755,6 +808,7 @@ def _shrink(history: list[dict]) -> None:
 
 def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_steps: int = MAX_STEPS) -> str:
     """Do `task` in `folder`. Returns the agent's Turkish summary."""
+    _check_cancel()
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
@@ -769,9 +823,11 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     previous_tool = ""
     repeated_tool = 0
     for step in range(max_steps):
+        _check_cancel()
         _shrink(history)
         try:
             text, calls, raw = brain.turn(history)
+            _check_cancel()
         except BrainError as e:
             err = str(e)
             last_error = err
@@ -783,7 +839,8 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                     and "limit: 0" not in err):
                 short_retries += 1
                 log(f"  {brain.name} geçici kota sınırında; bir kez yeniden deneniyor.")
-                time.sleep(wait + 1)
+                if _CANCEL_EVENT.wait(wait + 1):
+                    _check_cancel()
                 continue
             log(f"  Kod modeli yanıt hatası: {brain.name} — {err[:140]}")
             if not pool:
@@ -815,6 +872,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
             continue
         idle = 0
         for c in calls:
+            _check_cancel()
             if c["name"] == "finish":
                 code_paths = {".py", ".pyi", ".js", ".mjs", ".jsx", ".ts",
                               ".tsx", ".java", ".go", ".rs", ".c", ".cpp",
@@ -834,6 +892,20 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                     history.append({"role": "tool", "id": c["id"], "name": "finish",
                                     "result": problem})
                     continue
+                failures = ws.syntax_problems()
+                if failures:
+                    finish_retries += 1
+                    problem = ("Kaydedilen kod/veri dosyalarında sözdizimi hatası: "
+                               + "; ".join(failures[:5])
+                               + ". Düzelterek testleri yeniden çalıştır.")
+                    log("  Kod ajanı statik doğrulama hatası: " + "; ".join(failures[:3]))
+                    if finish_retries >= 3:
+                        raise RuntimeError(
+                            "Kod ajanı statik kontrolleri geçemedi: "
+                            + "; ".join(failures[:4]))
+                    history.append({"role": "tool", "id": c["id"], "name": "finish",
+                                    "result": problem})
+                    continue
                 summary = str((c.get("args") or {}).get("summary") or text
                               or "İş bitti.").strip()
                 return summary
@@ -845,6 +917,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                 raise RuntimeError("Kod ajanı aynı aracı art arda tekrar ediyor: "
                                    + c["name"] + ". Görev durduruldu.")
             result = ws.call(c["name"], c.get("args") or {})
+            _check_cancel()
             history.append({"role": "tool", "id": c["id"],
                             "name": c["name"], "result": result})
     raise RuntimeError(

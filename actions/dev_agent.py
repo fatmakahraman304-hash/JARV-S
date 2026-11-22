@@ -749,6 +749,10 @@ _PHASES = {"improve": ["reading", "planning", "writing", "checking", "testing"],
 def _new_job(folder: Path, model: str, instruction: str, player,
              kind: str = "improve", journal_id=None) -> None:
     global _JOB, _player_ref
+    # One coding job at a time. A new job clears the previous cancellation
+    # request; resuming an agent round must NOT clear it.
+    from core import jarvis_agent
+    jarvis_agent.reset_cancel()
     now = time.time()
     with _state_lock:
         _JOB = {"folder": folder.name, "path": str(folder), "model": model,
@@ -758,6 +762,24 @@ def _new_job(folder: Path, model: str, instruction: str, player,
                 "journal_id": journal_id, "files": {}, "steps": [], "result": ""}
     _player_ref = player
     _publish()
+
+
+def request_code_agent_cancel() -> bool:
+    """Request cooperative cancellation without falsely claiming a stopped thread.
+
+    The current HTTP turn/subprocess may need to return first; the agent checks
+    between model and tool calls, and the job status changes only when it exits.
+    """
+    from core import jarvis_agent
+    if not _job_lock.locked():
+        return False
+    snap = _job_snapshot()
+    if not snap or snap.get("finished") is not None:
+        return False
+    jarvis_agent.request_cancel()
+    _update("cancelling", cancel_requested=True)
+    _log(None, "Kodlama ajanı için iptal istendi; çalışan adım sonlandırılıyor.")
+    return True
 
 
 def _job_snapshot() -> dict:
@@ -1876,10 +1898,18 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
             summary = agent_coding.run(provider, folder, instruction, guide, extra,
                                        log=lambda m: _agent_progress(player, m)) or summary
         except RuntimeError as e:
-            if round_no == 0:
+            from core.jarvis_agent import AgentCancelled
+            if round_no == 0 or isinstance(e, AgentCancelled):
                 after = agent_coding.snapshot(folder)
-                agent_coding.restore(folder, before, list(after))
-                raise RuntimeError(f"{who} çalışamadı: {e} Klasör olduğu gibi bırakıldı.") from e
+                conflicts = agent_coding.restore_checked(folder, before, after)
+                if conflicts:
+                    raise RuntimeError(
+                        "Kod ajanı durdu fakat bazı dosyalar güvenle geri alınamadı: "
+                        + "; ".join(conflicts[:8])) from e
+                if isinstance(e, AgentCancelled):
+                    raise
+                raise RuntimeError(f"{who} çalışamadı: {e} "
+                                   "Ajan değişiklikleri güvenle geri alındı.") from e
             _log(player, f"{who} düzeltme turunu tamamlayamadı: {str(e)[:160]}")
             break
         after = agent_coding.snapshot(folder)
@@ -1925,11 +1955,24 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     if not (changed or created or deleted):
         return f"{who} looked at '{folder.name}' but changed nothing."
 
-    final_after = list(agent_coding.snapshot(folder))
+    final_after = agent_coding.snapshot(folder)
+    # Failed verification is not a deliverable. Restore the checkpoint
+    # rather than leave a broken build in the user's project.
+    if problems:
+        conflicts = agent_coding.restore_checked(folder, before, final_after)
+        if conflicts:
+            raise RuntimeError("Kod ajanı testleri geçemedi; geri almada çakışma: "
+                               + "; ".join(conflicts[:8]))
+        raise RuntimeError("Kod ajanı testleri geçemedi; yapılan değişiklikler "
+                           "güvenle geri alındı: "
+                           + "; ".join(f"{r}: {p[:130]}" for r, p in problems.items()))
 
     def restore() -> str:
-        agent_coding.restore(folder, before, final_after)
-        return f"Put '{folder.name}' back as it was before the change."
+        conflicts = agent_coding.restore_checked(folder, before, final_after)
+        if conflicts:
+            return ("Geri alma tamamlanamadı; sonradan değiştirilmiş dosyalar "
+                    "korundu: " + "; ".join(conflicts[:8]))
+        return f"'{folder.name}' klasörü kontrol edilerek önceki hâline getirildi."
     try:
         from core.undo import push_undo
         push_undo(f"changes to {folder.name}", restore)
@@ -2079,12 +2122,18 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
                   or "still fail their test" in result):
                 status = "finished with problems"
         except Exception as e:
-            status = "failed"
-            result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
+            from core.jarvis_agent import AgentCancelled
+            if isinstance(e, AgentCancelled):
+                status = "cancelled"
+                result = f"'{name}' kodlama görevi kullanıcı isteğiyle iptal edildi."
+            else:
+                status = "failed"
+                result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
             journal_status = {"done": "bitti", "nothing changed": "değişiklik yok",
                               "finished with problems": "sorunlu bitti", "failed": "başarısız",
+                              "cancelled": "iptal edildi",
                               "unverified": "doğrulanamadı"}.get(status, status)
             if paused:
                 journal_status = "aşama bekliyor"

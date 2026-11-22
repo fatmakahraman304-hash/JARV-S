@@ -88,10 +88,11 @@ class ErrorHandlingTest(unittest.TestCase):
             ja.BrainError('429 retry in 0.01s'),
         ])
         b = ScriptedBrain([("", [call("finish", summary="yedek çalıştı")], None)])
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(ja.time, "sleep") as sleep:
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(
+                ja._CANCEL_EVENT, "wait", return_value=False) as wait:
             result = ja.run(Path(d), "Kod yaz", brain_list=[a, b], log=lambda _: None)
         self.assertEqual(result, "yedek çalıştı")
-        self.assertEqual(sleep.call_count, 1)
+        self.assertEqual(wait.call_count, 1)
 
     def test_gemini_missing_candidates_falls_back(self):
         brain = ja.GeminiBrain("test-key", "gemini-flash-latest")
@@ -164,6 +165,72 @@ class ToolSafetyTest(unittest.TestCase):
             self.assertIn("bulunamadı", ws.call("edit_file", {"path": "f.txt", "old": "zzz", "new": "b"}))
             ws.call("edit_file", {"path": "f.txt", "old": "a", "new": "b", "replace_all": True})
             self.assertEqual((Path(d) / "f.txt").read_text(), "b\nb\n")
+
+
+class AgentCancellationTest(unittest.TestCase):
+    def tearDown(self):
+        ja.reset_cancel()
+
+    def test_cancel_before_job_blocks_model_calls(self):
+        brain = ScriptedBrain([("", [call("finish", summary="no")], None)])
+        ja.request_cancel()
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(ja.AgentCancelled):
+            ja.run(Path(d), "Kod yaz", brain_list=[brain], log=lambda _: None)
+        self.assertEqual(len(brain.seen), 0)
+
+    def test_cancel_during_model_response_prevents_file_write(self):
+        class CancellingBrain:
+            name = "fake"
+            def turn(self, history):
+                ja.request_cancel()
+                return "", [call("write_file", path="unsafe.py", content="x=1")], None
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(ja.AgentCancelled):
+                ja.run(Path(d), "Kod yaz", brain_list=[CancellingBrain()],
+                       log=lambda _: None)
+            self.assertFalse((Path(d) / "unsafe.py").exists())
+
+    def test_cancel_interrupts_quota_retry(self):
+        a = ScriptedBrain([ja.BrainError("429 retry in 2s")])
+        with tempfile.TemporaryDirectory() as d:
+            def cancelled_wait(seconds):
+                ja.request_cancel()
+                return True
+            with mock.patch.object(ja._CANCEL_EVENT, "wait",
+                                   side_effect=cancelled_wait):
+                with self.assertRaises(ja.AgentCancelled):
+                    ja.run(Path(d), "Kod yaz", brain_list=[a],
+                           log=lambda _: None)
+
+class StaticCodeVerificationTest(unittest.TestCase):
+    def test_changed_python_and_json_are_validated(self):
+        with tempfile.TemporaryDirectory() as d:
+            ws = ja.Workspace(Path(d), log=lambda _: None)
+            ws.t_write_file("bad.py", "def broken(:\n")
+            ws.t_write_file("config.json", '{"missing":')
+            failures = ws.syntax_problems()
+            self.assertEqual(len(failures), 2)
+            self.assertIn("bad.py", failures[0])
+            self.assertIn("config.json", failures[1])
+            ws.t_write_file("bad.py", "def fixed():\n    return 1\n")
+            ws.t_write_file("config.json", '{"ok": true}')
+            self.assertEqual(ws.syntax_problems(), [])
+
+    def test_unrelated_smoke_test_cannot_hide_broken_python(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "good.py").write_text("print('ok')\n")
+            brain = ScriptedBrain([
+                ("", [call("write_file", path="bad.py",
+                            content="def broken(:\n")], None),
+                ("", [call("run", command="python good.py")], None),
+                ("", [call("finish", summary="success")], None),
+                ("", [call("finish", summary="success")], None),
+                ("", [call("finish", summary="success")], None),
+            ])
+            with self.assertRaisesRegex(RuntimeError, "statik kontrolleri"):
+                ja.run(root, "Python yaz", brain_list=[brain],
+                       log=lambda _: None)
 
 
 class AdvancedAgentReliabilityTest(unittest.TestCase):
