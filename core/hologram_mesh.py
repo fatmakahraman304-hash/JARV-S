@@ -13,7 +13,13 @@ def with_shoulders(mesh):
     y = original[:count_head, 1]
     forehead = np.clip((y + .48) / 1.25, 0.0, 1.0) ** 1.4
     jaw = np.clip((-.28 - y) / .77, 0.0, 1.0)
-    original[:count_head, 0] *= 1.055 + .070 * forehead - .045 * jaw
+    crown = np.clip((y - .34) / .66, 0.0, 1.0) ** 2
+    # Narrow the upper skull into the reference's rounded oval dome instead
+    # of the wide, nearly vertical capsule that appeared on the user's HUD.
+    # Smoothly reduce width at the crown while keeping measured eyes/jaw and
+    # the existing landmark-based lip/blink animation intact.
+    original[:count_head, 0] *= (1.035 + .035 * forehead -
+                                 .085 * crown - .025 * jaw)
     segments = 14  # The existing neck ends with a 14-vertex elliptical ring.
     base = original[-segments:].copy()
     vertices = [original]
