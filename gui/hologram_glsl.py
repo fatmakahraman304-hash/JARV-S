@@ -17,6 +17,7 @@ uniform float u_mouth;
 uniform float u_open;
 uniform float u_scale;
 uniform vec2 u_eye_x;
+uniform vec2 u_eye_c;
 uniform vec4 u_eye_up;
 uniform vec4 u_eye_lo;
 uniform vec4 u_lip_uo;
@@ -38,22 +39,37 @@ void main() {
     float fade = clamp(v_misc.z, 0.0, 1.0);
     float ndv = clamp(n.z, 0.0, 1.0);
     float key = clamp(dot(n, normalize(vec3(-0.45, 0.5, 0.77))), 0.0, 1.0);
-    float rim = pow(1.0 - ndv, 2.1);
-
-    // Close horizontal lines wrap the 3D surface and move with the head.
-    // Reduce line density for small HUD canvases to prevent aliasing.
-    float frequency = clamp(u_scale * 0.18, 34.0, 83.0);
-    float phase = p.y * frequency;
-    float d = abs(fract(phase) - 0.5);
-    float halfwidth = clamp(0.075 + 0.25 * fwidth(phase), 0.10, 0.35);
-    float bands = 1.0 - smoothstep(halfwidth * 0.48, halfwidth, d);
-
-    // Reference: interior lines stay dark blue; only the silhouette and
-    // facial ridges bloom to bright cyan. Avoid an overexposed white mask.
-    float relief = 0.20 + 0.36 * key + 0.57 * rim;
-    float lineLight = bands * relief;
-    float front = (p.z > 0.05 && v_misc.w < 0.5 && ndv > 0.10) ? 1.0 : 0.0;
+    float rim = pow(1.0 - ndv, 3.1);
     float ax = abs(p.x);
+    float face = smoothstep(0.05, 0.38, p.z) *
+                 (1.0 - step(0.5, v_misc.w));
+    float front = face * smoothstep(0.05, 0.25, ndv);
+
+    // A real hologram does not print straight parallel stripes across the
+    // nose and eyelids. The scan contours bend around measured facial
+    // anatomy. These small, smooth distortions follow the head as it rotates.
+    float bridge = exp(-pow(p.x / 0.16, 2.0) -
+                       pow((p.y + 0.09) / 0.30, 2.0));
+    float tip = exp(-pow(p.x / 0.15, 2.0) -
+                    pow((p.y + 0.27) / 0.095, 2.0));
+    float eyeSocket = exp(-pow((ax - u_eye_c.x) / 0.155, 2.0) -
+                          pow((p.y - u_eye_c.y) / 0.09, 2.0));
+    float cheek = exp(-pow((ax - 0.30) / 0.19, 2.0) -
+                      pow((p.y + 0.19) / 0.18, 2.0));
+    float contourY = p.y + face * (0.020 * bridge - 0.013 * tip -
+                                   0.019 * eyeSocket + 0.011 * cheek);
+
+    // Lines remain subpixel antialiased and attached to the 3D surface.
+    float frequency = clamp(u_scale * 0.22, 44.0, 97.0);
+    float phase = contourY * frequency;
+    float d = abs(fract(phase) - 0.5);
+    float halfwidth = clamp(0.11 + 0.22 * fwidth(phase), 0.11, 0.34);
+    float bands = 1.0 - smoothstep(halfwidth * 0.50, halfwidth, d);
+
+    // Concentrate bright light at the contour while leaving deep blue
+    // negative space between fine lines.
+    float relief = 0.22 + 0.37 * key + 0.49 * rim;
+    float lineLight = bands * relief;
     float eyes = 0.0;
     if (front > 0.0 && ax > u_eye_x.x - 0.015 && ax < u_eye_x.y + 0.015) {
         float t = clamp((ax - u_eye_x.x) /
@@ -62,13 +78,14 @@ void main() {
                      (1.0 - smoothstep(0.88, 1.0, t));
         // Almond lid arcs, not large pupil-less geometric ellipses.
         float arc = sin(3.14159265 * t);
-        float upper = poly(u_eye_up, ax) + 0.008 * arc;
-        float lower = poly(u_eye_lo, ax) - 0.004 * arc;
+        float upper = poly(u_eye_up, ax) + 0.005 * arc;
+        float lower = poly(u_eye_lo, ax) - 0.0025 * arc;
         float lid = mix(lower, upper, clamp(u_open, 0.0, 1.0));
-        eyes = max(contour(p.y - lid, 0.0012),
-                   contour(p.y - lower, 0.0012)) * ends;
-        eyes += 0.28 * contour(p.y - upper - 0.036 * arc,
-                               0.0023) * ends;
+        eyes = max(contour(p.y - lid, 0.0010),
+                   contour(p.y - lower, 0.0010)) * ends;
+        // Sculpted brow ridge, faintly above the lid; no pupil or iris.
+        eyes += 0.22 * contour(p.y - upper - 0.024 * arc,
+                               0.0016) * ends;
     }
 
     // Only a luminous lip contour and an animated opening, not teeth or skin.
@@ -84,12 +101,15 @@ void main() {
         // image. Split into independently moving lips only while talking.
         float talk = smoothstep(0.10, 0.48, clamp(u_mouth, 0.0, 1.0));
         float mid = 0.5 * (upper + lower);
-        float opening = 0.057 * talk * taper;
-        float topLine = mix(mid, upper, talk);
-        float bottomLine = mix(mid, lower - opening, talk);
-        lips = max(contour(p.y - topLine, 0.0014),
-                   talk * contour(p.y - bottomLine, 0.0014)) * taper;
-        lips += talk * 0.20 * contour(p.y - innerUpper, 0.0015) * taper;
+        // The reference keeps a relaxed, gently curved mouth even when the
+        // assistant speaks; avoid a large horizontal oval or bright teeth.
+        float smile = 0.005 * pow(ax / max(u_lip_w.x, 0.01), 2.0);
+        float opening = 0.024 * talk * taper;
+        float topLine = mix(mid + smile, upper, talk * 0.52);
+        float bottomLine = topLine - opening;
+        lips = max(contour(p.y - topLine, 0.0012),
+                   talk * contour(p.y - bottomLine, 0.0012)) * taper;
+        lips += talk * 0.12 * contour(p.y - innerUpper, 0.0013) * taper;
         mouthCavity = smoothstep(innerLower - opening - 0.003,
                                  innerLower + 0.003, p.y);
         mouthCavity *= 1.0 - smoothstep(innerUpper - 0.003,
@@ -108,8 +128,14 @@ void main() {
     // opaque blue mannequin. The edge is several times brighter than
     // the inter-line interior, with dynamic voice-synchronised highlights.
     col += neon * lineLight * (1.45 + 0.24 * u_glow);
-    col += ice * rim * (2.55 + 0.48 * u_glow);
-    col += ice * features * 1.38;
+    // Add a subtle translucent anatomical bloom at the nose and cheekbones
+    // so the scanline portrait has depth instead of looking like a striped egg.
+    float ridge = face * (0.35 * bridge + 0.28 * tip +
+                          0.17 * cheek) * max(key, 0.22);
+    col += neon * ridge * 0.27;
+    float bust = 1.0 - smoothstep(-1.67, -1.14, p.y);
+    col += ice * rim * (2.48 + 0.45 * u_glow) * mix(1.0, 0.57, bust);
+    col += ice * features * 1.15;
     col *= 1.0 - 0.75 * mouthCavity;
     col *= pulse * (1.0 - 0.44 * u_muted);
     float alpha = clamp(0.080 + 1.33 * lineLight + 1.40 * rim +
