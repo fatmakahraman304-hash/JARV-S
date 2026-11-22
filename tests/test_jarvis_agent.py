@@ -191,7 +191,7 @@ class AgentCancellationTest(unittest.TestCase):
             self.assertFalse((Path(d) / "unsafe.py").exists())
 
     def test_cancel_interrupts_quota_retry(self):
-        a = ScriptedBrain([ja.BrainError("429 retry after 2")])
+        a = ScriptedBrain([ja.BrainError("429 retry in 2s")])
         with tempfile.TemporaryDirectory() as d:
             def cancelled_wait(seconds):
                 ja.request_cancel()
