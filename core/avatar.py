@@ -153,7 +153,8 @@ class HoloAvatar:
 
         # Crown (+1.0) down to the bottom of the neck, in head-half-heights.
         # Callers size the head to the room they have with this.
-        self.SPAN = mesh["span"][0] - mesh["span"][1]
+        self.SPAN = max(2.65 if self.style == "projection" else 0.0,
+                        mesh["span"][0] - mesh["span"][1])
 
         self._lut_cache: list = []
         self._lut_key = None
