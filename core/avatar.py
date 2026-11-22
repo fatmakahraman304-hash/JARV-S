@@ -532,7 +532,7 @@ class HoloAvatar:
                 from core.hologram_face import ProjectionFace
                 self._projection = ProjectionFace(self._mesh)
             self._projection.paint(p, xs, ys, norms, verts, self._scan, amp,
-                                   (1.0 - self._blink) * self._lids)
+                                   (1.0 - self._blink) * self._lids, tuple(self._gaze))
             return
         if self.style in ("human", "android") and self._paint_android(p, xs, ys, verts, norms,
                                                            primary, accent, amp):
