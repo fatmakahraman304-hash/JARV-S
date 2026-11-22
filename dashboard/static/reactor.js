@@ -1,13 +1,13 @@
-/* MAYK reactor core — the same orange energy sphere as the desktop
+/* AETHER reactor core — the same orange energy sphere as the desktop
  * (gui/reactor.py), drawn on a <canvas> for the phone, tablet, TV and watch
  * pages. A white-hot core inside a geodesic wireframe sphere, 3-D light rays,
  * thick orbiting arcs and swirling particle bands, all projected through a
  * perspective camera. Spin speed follows the state; brightness follows the
  * real voice level.
  *
- *   const core = JarvisReactor(canvas);
+ *   const core = AetherReactor(canvas);
  *   core.state = 'thinking';   // idle | thinking | speaking | sleeping | offline
- *   core.level = 0.6;          // 0..1, MAYK's voice
+ *   core.level = 0.6;          // 0..1, AETHER's voice
  */
 (function () {
   'use strict';
@@ -55,7 +55,7 @@
     return { V: V.map(p => [p[0] * MESH_R, p[1] * MESH_R, p[2] * MESH_R]), E: [...E].map(k => k.split('_').map(Number)) };
   }
 
-  window.JarvisReactor = function (canvas, opts) {
+  window.AetherReactor = function (canvas, opts) {
     opts = opts || {};
     const small = opts.small || false;               // watches and slow devices
     const R = rng(57);

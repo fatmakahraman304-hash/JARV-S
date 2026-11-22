@@ -1,7 +1,7 @@
 {
-  "name": "MAYK",
-  "short_name": "MAYK",
-  "description": "MAYK her cihazda — telefon, tablet, TV, projeksiyon, saat.",
+  "name": "AETHER",
+  "short_name": "AETHER",
+  "description": "AETHER her cihazda — telefon, tablet, TV, projeksiyon, saat.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

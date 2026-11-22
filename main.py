@@ -61,7 +61,7 @@ try:
 except OSError as exc:
     if _platform.system() == "Linux" and "PortAudio library not found" in str(exc):
         raise SystemExit(
-            "MAYK ses kütüphanesi PortAudio bulunamadı. Linux paket yöneticisinden "
+            "AETHER ses kütüphanesi PortAudio bulunamadı. Linux paket yöneticisinden "
             "PortAudio’yu kurup yeniden başlatın. Debian/Ubuntu paketi: libportaudio2."
         ) from exc
     raise
@@ -70,7 +70,7 @@ from core.snap_wake import SnapDetector, is_sleep_command
 from core.voice_commands import is_close_command
 from google import genai
 from google.genai import types
-from ui import MaykUI
+from ui import AetherUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     save_session_summary, pop_last_session,
@@ -366,7 +366,7 @@ def _load_system_prompt() -> str:
         return PROMPT_PATH.read_text(encoding="utf-8")
     except Exception:
         return (
-            "You are MAYK, the user's personal AI assistant. "
+            "You are AETHER, the user's personal AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool."
         )
@@ -400,7 +400,7 @@ TOOL_DECLARATIONS = [
     # handling is woven into live-session state — vision capture/injection,
     # camera stream, memory writes, the monitor engine, and shutdown. All other
     # tools live in their own action file and are auto-discovered by
-    # core.action_loader (see MaykLive.__init__).
+    # core.action_loader (see AetherLive.__init__).
     {
         "name": "system_status",
         "description": (
@@ -446,7 +446,7 @@ TOOL_DECLARATIONS = [
         "name": "manage_monitor",
         "description": (
             "Add, remove, or list background monitoring topics. "
-            "MAYK checks these topics once a day and alerts the user when there is a new development. "
+            "AETHER checks these topics once a day and alerts the user when there is a new development. "
             "Use 'add' when the user says 'monitor X', 'track X', 'follow X'. "
             "Use 'remove' when the user says 'stop monitoring X'. "
             "Use 'list' when the user asks what is being monitored. "
@@ -594,8 +594,8 @@ def _keep_context_of(exc: BaseException) -> bool:
     return True
 
 
-class MaykLive:
-    def __init__(self, ui: MaykUI):
+class AetherLive:
+    def __init__(self, ui: AetherUI):
         # Platform limits are announced once per run, not once per
         # reconnect: a dropped connection is not news about Wayland.
         self._platform_notes_shown = False
@@ -608,15 +608,15 @@ class MaykLive:
         self._is_speaking         = False
         self._outbox: list        = []      # what arrived while there was no session (sent on reconnect)
         self._away_since: float | None = None   # when the user was last seen leaving (core/away.py)
-        self._away_asleep         = False   # MAYK was asleep then: their wake command comes first
+        self._away_asleep         = False   # AETHER was asleep then: their wake command comes first
         self._quiet_was_on        = False
         self._quiet_slept         = False   # asleep for a meeting/call: wake when the quiet ends
-        self._voice_gain          = 1.0     # MAYK's own voice level (core/voice_level.py)
+        self._voice_gain          = 1.0     # AETHER's own voice level (core/voice_level.py)
         self._gain_checked        = float("-inf")
         from collections import deque as _deque
         self._say_queue           = _deque()  # (queued at, text): volunteered sentences waiting for calm
         self._last_said_at        = float("-inf")   # quiet mode was on: tell what it held back once it ends
-        self._update_checked      = None    # when GitHub was last asked for a newer MAYK
+        self._update_checked      = None    # when GitHub was last asked for a newer AETHER
         self._update_offered      = ""      # the version already offered (asked once, not every half hour)
         self._speaking_lock       = threading.Lock()
         self._phone_active        = False   # True while phone mic is streaming; pauses PC mic
@@ -799,7 +799,7 @@ class MaykLive:
             try:
                 self.set_push_to_talk(True)
             except Exception as e:
-                print(f"[MAYK] ⚠ Push-to-talk unavailable: {e}")
+                print(f"[AETHER] ⚠ Push-to-talk unavailable: {e}")
         # UI control surface for the Wake Word settings section.
         self.ui.wake_is_ready    = wake_is_ready          # () -> bool
         self.ui.wake_get_state   = self._wake_state       # () -> dict
@@ -828,7 +828,7 @@ class MaykLive:
         return True
 
     def _on_wake_detected(self) -> None:
-        """Called from the detector thread when 'Hey MAYK' is heard."""
+        """Called from the detector thread when 'Hey AETHER' is heard."""
         self.wake(reason="wake word")
 
     def wake(self, reason: str = "wake word") -> None:
@@ -865,7 +865,7 @@ class MaykLive:
         self.ui.set_state("SLEEPING")
         if self._snap_detector is not None:
             return
-        self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey MAYK' to wake me.")
+        self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey AETHER' to wake me.")
 
     def _sleep_until_snap(self) -> None:
         if self._snap_detector is not None:
@@ -908,7 +908,7 @@ class MaykLive:
             if not self._ensure_wake_detector():
                 self._wake_enabled = False
                 save_wake_word_enabled(False)
-                self.ui.write_log("SYS: Hey MAYK algılayıcısı başlatılamadı. Uyandırma kapalı.")
+                self.ui.write_log("SYS: Hey AETHER algılayıcısı başlatılamadı. Uyandırma kapalı.")
                 return "failed"
             save_wake_word_enabled(True)
             self._wake_enabled = True
@@ -930,7 +930,7 @@ class MaykLive:
             self.wake(reason="you tapped wake")
 
     def _ui_wake_install(self) -> tuple[bool, str]:
-        """Download Vosk and the MAYK wake model (runs in a UI worker thread)."""
+        """Download Vosk and the AETHER wake model (runs in a UI worker thread)."""
         # Triggered by the user pressing the button, so its progress is exactly
         # what they are waiting to see.
         return wake_install(logger=lambda m: print(f"[Wake] {m}"),
@@ -1006,7 +1006,7 @@ class MaykLive:
         try:
             await asyncio.wait_for(self._save_session_summary(), timeout=12)
         except Exception as e:
-            print(f"[MAYK] session summary not saved on exit: {e!r}")
+            print(f"[AETHER] session summary not saved on exit: {e!r}")
 
     def _stop_engines(self) -> None:
         """Routines stop firing; a running background task stops after the round
@@ -1032,7 +1032,7 @@ class MaykLive:
             try:
                 asyncio.run_coroutine_threadsafe(self._wrap_up(), loop).result(timeout)
             except Exception as e:
-                print(f"[MAYK] wrap-up cut short: {e!r}")
+                print(f"[AETHER] wrap-up cut short: {e!r}")
         self._stop_engines()
 
     # ── Routines (core/routines) ─────────────────────────────────────────────────
@@ -1099,7 +1099,7 @@ class MaykLive:
                 turns={"role": "user", "parts": [{"text": prompt}]},
                 turn_complete=True,
             )
-            print("[MAYK] Proactive check-in.")
+            print("[AETHER] Proactive check-in.")
         except Exception as e:
             print(f"[Proactive] ⚠️ {e}")
 
@@ -1126,14 +1126,14 @@ class MaykLive:
                     turns={"role": "user", "parts": [{"text": msg}]},
                     turn_complete=True,
                 )
-                print("[MAYK] Monitor alert sent.")
+                print("[AETHER] Monitor alert sent.")
                 await asyncio.sleep(6)   # gap between consecutive alerts
         except Exception as e:
             print(f"[Monitor] ⚠️ Background check error: {e}")
 
     def plugin_say(self, instruction: str) -> None:
         """
-        Thread-safe speech channel for plugins: lets a plugin ask MAYK to
+        Thread-safe speech channel for plugins: lets a plugin ask AETHER to
         say something short WHILE its run() is still executing (plugins block
         their executor thread, so they can't speak through the tool response
         until they finish). The instruction is injected into the Live session
@@ -1146,7 +1146,7 @@ class MaykLive:
         if not loop or not self.session:
             self._outbox.append(instruction)          # said as soon as the session is back
             return
-        # Never cut into a sentence: a user turn injected while MAYK is talking (or while
+        # Never cut into a sentence: a user turn injected while AETHER is talking (or while
         # the user is) interrupts the reply. Queue it; _drain_say sends it at the next calm
         # moment, one at a time, a few seconds apart.
         self._say_queue.append((time.monotonic(), instruction))
@@ -1218,7 +1218,7 @@ class MaykLive:
             if deadline is None or time.monotonic() < deadline:
                 continue
             self._clear_stall()
-            print(f"[MAYK] ⚠️  No response for {_STALL_LIMIT:.0f}s — "
+            print(f"[AETHER] ⚠️  No response for {_STALL_LIMIT:.0f}s — "
                   f"the live session is not answering. Rebuilding it.")
             self.ui.write_log("SYS: The model stopped answering — reconnecting.")
             self.request_reconnect(keep_context=True, reason="no response")
@@ -1277,13 +1277,13 @@ class MaykLive:
                                    or getattr(ex, "_broken", False))
         if ex is None or dead or getattr(loop, "_executor_shutdown_called", False):
             if dead:
-                print("[MAYK] ⚠️  Thread pool was shut down — replacing it")
+                print("[AETHER] ⚠️  Thread pool was shut down — replacing it")
                 self.ui.write_log("SYS: Recovered from a stopped worker pool.")
             # Without this flag reset, asyncio refuses the new pool as well.
             if getattr(loop, "_executor_shutdown_called", False):
                 loop._executor_shutdown_called = False
             loop.set_default_executor(
-                ThreadPoolExecutor(max_workers=32, thread_name_prefix="jarvis"))
+                ThreadPoolExecutor(max_workers=32, thread_name_prefix="aether"))
 
     async def _watch_reconnect(self):
         """Session-scoped task: when a voluntary reconnect is requested, raise a
@@ -1398,12 +1398,12 @@ class MaykLive:
             if self._loop and self._loop.is_running():
                 self._loop.call_soon_threadsafe(self._sleep_until_snap)
             else:
-                self.ui.write_log("SYS: Uyku modu için MAYK’ın ses oturumu hazır olmalı.")
+                self.ui.write_log("SYS: Uyku modu için AETHER’ın ses oturumu hazır olmalı.")
             return
 
         command, _, instruction = text.strip().partition(" ")
-        if command.casefold() in ("/mayk-gelistir", "/mayk-yayinla"):
-            mode = "self_release" if command.casefold() == "/mayk-yayinla" else "self_edit"
+        if command.casefold() in ("/aether-gelistir", "/aether-yayinla"):
+            mode = "self_release" if command.casefold() == "/aether-yayinla" else "self_edit"
             result = self._plugin_registry.run(
                 "github_develop", {"mode": mode, "instruction": instruction}, player=self.ui
             )
@@ -1419,7 +1419,7 @@ class MaykLive:
             self._outbox.append(text)
             self.ui.write_log("SYS: Bağlantı yeniden kuruluyor — mesajını aldım, bağlanınca ileteceğim.")
             return
-        # Typing to MAYK is as deliberate as saying its name: it wakes it. (The
+        # Typing to AETHER is as deliberate as saying its name: it wakes it. (The
         # sleep gate exists so overheard speech is never taken as a command — a
         # typed line cannot be overheard.)
         if not self._awake:
@@ -1515,7 +1515,7 @@ class MaykLive:
                 asyncio.run_coroutine_threadsafe(
                     self._engine.flush_microphone(SEND_SAMPLE_RATE), self._loop)
             except Exception as e:
-                print(f"[MAYK] PTT flush failed: {e}")
+                print(f"[AETHER] PTT flush failed: {e}")
         try:
             if held:
                 state = "LISTENING"
@@ -1536,7 +1536,7 @@ class MaykLive:
             pass
 
     def interrupt(self) -> None:
-        """Stop MAYK mid-speech: drain queued audio and open mic immediately."""
+        """Stop AETHER mid-speech: drain queued audio and open mic immediately."""
         self._interrupted = True
         q = self.audio_in_queue
         if q:
@@ -1548,7 +1548,7 @@ class MaykLive:
                 except Exception:
                     break
             if drained:
-                print(f"[MAYK] ✋ Interrupted — {drained} audio chunks discarded")
+                print(f"[AETHER] ✋ Interrupted — {drained} audio chunks discarded")
         self.set_speaking(False)
         # The words we were about to mouth are never going to be spoken now.
         self._visemes.reset()
@@ -1590,7 +1590,7 @@ class MaykLive:
             self._asst_name = normalized_assistant_name(_cfg.get("assistant_name"))
             _user_name = (_cfg.get("user_name") or "").strip()
         except Exception:
-            self._asst_name = "MAYK"
+            self._asst_name = "AETHER"
             _user_name = ""
 
         memory     = load_memory()
@@ -1680,7 +1680,7 @@ class MaykLive:
                 _all_decls = [d for d in _all_decls
                               if (d.get("name") if isinstance(d, dict)
                                   else getattr(d, "name", "")) not in _blocked]
-                print(f"[MAYK] {len(_blocked)} tool(s) withheld — "
+                print(f"[AETHER] {len(_blocked)} tool(s) withheld — "
                       f"this engine cannot serve them")
 
         _names = {(d.get("name") if isinstance(d, dict) else getattr(d, "name", ""))
@@ -1710,8 +1710,8 @@ class MaykLive:
         parts.append(
             "[TURKISH SPEECH UNDERSTANDING]\n"
             "This is a Turkish-first voice conversation. Recognize everyday "
-            "Turkish pronunciation and inflected commands, including MAYK, "
-            "M.A.Y.K., and 'Mayk' as the assistant's name. "
+            "Turkish pronunciation and inflected commands, including AETHER, "
+            "AETHER, and 'Aether' as the assistant's name. "
             "Keep Turkish as the response language unless the user clearly "
             "and intentionally requests another language or has an unmistakable "
             "conversation in that language. A single unclear sound, accidental "
@@ -1757,7 +1757,7 @@ class MaykLive:
                 handle=self._resume_handle
             ),
             # Sliding-window compression: session never dies from a full context
-            # window — MAYK can stay in one conversation for hours
+            # window — AETHER can stay in one conversation for hours
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow(),
             ),
@@ -1770,7 +1770,7 @@ class MaykLive:
             ),
         )
         if self._enhanced_live:
-            # Proactive audio: MAYK stays silent when speech isn't addressed
+            # Proactive audio: AETHER stays silent when speech isn't addressed
             # to it (background chatter, talking to someone else in the room).
             # (Affective dialog was dropped: gemini-3.1-flash-live does not
             #  support it, and it never reliably detected tone in practice.
@@ -1865,7 +1865,7 @@ class MaykLive:
                     resp.response["result"] = f"{result}\n{cure}"
         except Exception as exc:
             print(f"[Lessons] {exc}")
-        try:                                   # a tool failed for a missing library MAYK may install itself
+        try:                                   # a tool failed for a missing library AETHER may install itself
             from core import installer
             pkg = installer.missing_package(result)
             if pkg and fc.name != "install_package":
@@ -1892,7 +1892,7 @@ class MaykLive:
     _goaway_pending = False
 
     def _user_away(self) -> bool:
-        """Nobody would hear MAYK now: asleep, or no voice and no hand on the computer for a while."""
+        """Nobody would hear AETHER now: asleep, or no voice and no hand on the computer for a while."""
         try:
             from core import away
             return away.is_away(bool(getattr(self, "_awake", True)),
@@ -1925,7 +1925,7 @@ class MaykLive:
         threading.Thread(target=go, daemon=True, name="quiet-sleep").start()
 
     def _quiet(self) -> bool:
-        """Quiet mode (core/quiet.py): the user asked MAYK to volunteer nothing for now."""
+        """Quiet mode (core/quiet.py): the user asked AETHER to volunteer nothing for now."""
         try:
             from core import quiet
             return quiet.is_on()
@@ -1933,7 +1933,7 @@ class MaykLive:
             return False
 
     def _hold_for_later(self, instruction: str) -> bool:
-        """When the user is away, or asked for quiet, keep what MAYK meant to say for later
+        """When the user is away, or asked for quiet, keep what AETHER meant to say for later
         (core/away.py, core/quiet.py)."""
         kind, key = "note", ""
         for tag, k, kk in self._AWAY_KINDS:
@@ -2192,7 +2192,7 @@ class MaykLive:
         if any(sev == "alarm" for sev, _ in notes):
             try:
                 from core import away
-                away.push_to_phones("MAYK — EV ALARMI", " ".join(t for sev, t in notes if sev == "alarm"))
+                away.push_to_phones("AETHER — EV ALARMI", " ".join(t for sev, t in notes if sev == "alarm"))
             except Exception:
                 pass
             if not self._awake:
@@ -2230,7 +2230,7 @@ class MaykLive:
             await asyncio.sleep(15)
 
     async def _watch_vigil(self) -> None:
-        """MAYK keeping watch: once, dryly, after hours without a break or deep into the night
+        """AETHER keeping watch: once, dryly, after hours without a break or deep into the night
         (core/vigil.py). Grounded in measured activity; off when the user says so."""
         from datetime import datetime
         from core import away, vigil
@@ -2254,7 +2254,7 @@ class MaykLive:
             await asyncio.sleep(60)
 
     def _is_idle_for_note(self) -> bool:
-        """Like _is_idle, but the user may be typing: only speech and MAYK's own work must be quiet."""
+        """Like _is_idle, but the user may be typing: only speech and AETHER's own work must be quiet."""
         try:
             from core import jobs
             busy = bool(jobs.current())
@@ -2265,7 +2265,7 @@ class MaykLive:
                 and (self.audio_in_queue is None or self.audio_in_queue.empty()))
 
     def _is_idle(self) -> bool:
-        """Nobody is talking, nothing of MAYK's is running: a moment that interrupts no one."""
+        """Nobody is talking, nothing of AETHER's is running: a moment that interrupts no one."""
         try:
             from core import jobs
             busy = bool(jobs.current())
@@ -2278,7 +2278,7 @@ class MaykLive:
                 and not self._quiet())
 
     async def _watch_updates(self) -> None:
-        """Every half hour: a newer MAYK on GitHub? Offer it once at a quiet moment (or install it, if the
+        """Every half hour: a newer AETHER on GitHub? Offer it once at a quiet moment (or install it, if the
         user turned automatic updates on)."""
         from core import app_updater
         from memory.config_manager import get_plugin_config
@@ -2300,7 +2300,7 @@ class MaykLive:
                         self.ui.start_update()
                     else:
                         from plugins.self_update import summary
-                        self.ui.write_log(f"SYS: Yeni MAYK sürümü var ({info['sha'][:8]}).")
+                        self.ui.write_log(f"SYS: Yeni AETHER sürümü var ({info['sha'][:8]}).")
                         self.plugin_say("[UPDATE_AVAILABLE] " + summary(info))
             await asyncio.sleep(60)
 
@@ -2363,20 +2363,20 @@ class MaykLive:
 
     async def _execute_tool_inner(self, fc) -> types.FunctionResponse:
         name = fc.name
-        if name == "shutdown_jarvis":
+        if name == "shutdown_aether":
             return types.FunctionResponse(
                 id=fc.id, name=name, response={"result": "Use the explicit application close command."}
             )
         args = dict(fc.args or {})
 
-        print(f"[MAYK] 🔧 {name}  {args}")
+        print(f"[AETHER] 🔧 {name}  {args}")
         _t_tool = time.monotonic()
         self.ui.set_state("THINKING")
 
         # A question, a how-to or a "what if" never changes anything — whatever the tool.
         blocked = self._intent_guard(name, args)
         if blocked:
-            print(f"[MAYK] 🛑 {name} not run — {blocked[:80]}")
+            print(f"[AETHER] 🛑 {name} not run — {blocked[:80]}")
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
             return types.FunctionResponse(id=fc.id, name=name, response={"result": blocked})
@@ -2480,7 +2480,7 @@ class MaykLive:
                 #
                 # Decided HERE, not left to the model. Told plainly in the tool
                 # description, it still answered "create a quiz plugin" with
-                # mode='build' — a brand-new project in Desktop/JarvisProjects,
+                # mode='build' — a brand-new project in Desktop/AetherProjects,
                 # nowhere near the folder the user had just handed it. Somebody
                 # who loads a folder and asks for something means "in this
                 # folder", so every coding request goes there; clearing the
@@ -2526,7 +2526,7 @@ class MaykLive:
         # How long the tool itself took. A long silence after a tool call is
         # either this number or the model's own time before and after it — and
         # without it the two look identical from the outside.
-        print(f"[MAYK] 📤 {name} ({(time.monotonic() - _t_tool) * 1000:.0f} ms) "
+        print(f"[AETHER] 📤 {name} ({(time.monotonic() - _t_tool) * 1000:.0f} ms) "
               f"→ {str(result)[:80]}")
 
         # A tool that declared itself NON_BLOCKING also says when its answer may
@@ -2562,7 +2562,7 @@ class MaykLive:
             )
 
     async def _listen_audio(self):
-        print("[MAYK] 🎤 Mic started")
+        print("[AETHER] 🎤 Mic started")
         loop = asyncio.get_event_loop()
 
         speech_blocks: list[bytes] = []
@@ -2592,7 +2592,7 @@ class MaykLive:
             self._mic_heartbeat = time.monotonic()      # the microphone is alive
             # ── Wake-word gate ───────────────────────────────────────────────
             # While asleep, the mic audio NEVER goes to Gemini (nothing is
-            # streamed, so MAYK can't respond to speech not addressed to it and
+            # streamed, so AETHER can't respond to speech not addressed to it and
             # nothing leaves the machine). Frames are instead handed to the local
             # detector, which runs its model in ITS OWN thread — the cost here is
             # only a queue push, so the audio path is never slowed. When wake word
@@ -2609,7 +2609,7 @@ class MaykLive:
                     self._wake_detector.feed(indata)
                 return
             with self._speaking_lock:
-                mayk_speaking = self._is_speaking
+                aether_speaking = self._is_speaking
 
             if (self.ui.muted or self._phone_active or self._yield_voice
                     or (self._ptt_enabled and not self._ptt_held)):
@@ -2617,7 +2617,7 @@ class MaykLive:
                 return
             if interruption_pending:
                 return
-            if mayk_speaking:
+            if aether_speaking:
                 if self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, _pcm_level(indata)):
                     speech_blocks.append(indata.tobytes())
                     if len(speech_blocks) >= self._echo.required_blocks:
@@ -2674,7 +2674,7 @@ class MaykLive:
             _mic_name = get_input_device()
             _mic_dev  = audio_devices.resolve(_mic_name, "input")
             if _mic_dev is not None:
-                print(f"[MAYK] 🎤 Input device: {_mic_name}")
+                print(f"[AETHER] 🎤 Input device: {_mic_name}")
             try:
                 _mic_stream = _open_mic(_mic_dev)
             except Exception as _e:
@@ -2684,7 +2684,7 @@ class MaykLive:
                 # mean the assistant cannot hear at all.
                 if _mic_dev is None:
                     raise
-                print(f"[MAYK] ⚠️  Mic '{_mic_name}' failed: {_e} — using default")
+                print(f"[AETHER] ⚠️  Mic '{_mic_name}' failed: {_e} — using default")
                 self.ui.write_log(
                     f"SYS: Microphone '{_mic_name}' unavailable — using system default."
                 )
@@ -2692,7 +2692,7 @@ class MaykLive:
 
             # Self-healing: a microphone pulled out mid-session (headset unplugged,
             # Bluetooth dropped) does not raise — the stream simply stops calling
-            # back and MAYK would stay deaf for good. No audio for a few seconds
+            # back and AETHER would stay deaf for good. No audio for a few seconds
             # means: close it, find a microphone again (the chosen one, or the
             # default) and carry on.
             from core import selfheal
@@ -2700,11 +2700,11 @@ class MaykLive:
             while True:
                 self._mic_heartbeat = time.monotonic()
                 with _mic_stream:
-                    print("[MAYK] 🎤 Mic stream open")
+                    print("[AETHER] 🎤 Mic stream open")
                     while not selfheal.mic_dead(self._mic_heartbeat, getattr(_mic_stream, "active", True)):
                         await asyncio.sleep(0.25)
                 fails += 1
-                print("[MAYK] 🔧 Mic stopped sending audio — reopening")
+                print("[AETHER] 🔧 Mic stopped sending audio — reopening")
                 self.ui.write_log("SYS: Mikrofon sustu (çıkarılmış ya da bağlantısı kopmuş olabilir) — yeniden bağlanıyorum.")
                 _mic_stream = None
                 for attempt in range(1, 61):
@@ -2719,7 +2719,7 @@ class MaykLive:
                             break
                         except Exception as e2:
                             if attempt in (1, 10, 30):
-                                print(f"[MAYK] Mic still unavailable: {e2}")
+                                print(f"[AETHER] Mic still unavailable: {e2}")
                 if _mic_stream is None:
                     raise RuntimeError("no microphone could be opened for two minutes")
                 self.ui.write_log("SYS: ✅ Mikrofon yeniden bağlandı.")
@@ -2729,7 +2729,7 @@ class MaykLive:
                 except Exception:
                     pass
         except Exception as e:
-            print(f"[MAYK] ❌ Mic: {e}")
+            print(f"[AETHER] ❌ Mic: {e}")
             raise
 
     async def _flush_pending_vision(self) -> bool:
@@ -2767,7 +2767,7 @@ class MaykLive:
         )
 
         if self._vision_cam_active:
-            # Camera: stay busy until MAYK has finished speaking the answer,
+            # Camera: stay busy until AETHER has finished speaking the answer,
             # then close the preview.
             self._vision_cam_active    = False
             self._vision_close_pending = True
@@ -2776,7 +2776,7 @@ class MaykLive:
         return True
 
     async def _receive_audio(self):
-        print("[MAYK] 👂 Recv started")
+        print("[AETHER] 👂 Recv started")
         out_buf, in_buf = [], []
 
         try:
@@ -2798,7 +2798,7 @@ class MaykLive:
                     if _sru is not None:
                         if getattr(_sru, "resumable", False) and getattr(_sru, "new_handle", None):
                             if self._resume_handle is None:
-                                print("[MAYK] 🔗 Session resumption armed")
+                                print("[AETHER] 🔗 Session resumption armed")
                             self._resume_handle = _sru.new_handle
 
                     # ── The server is about to close this connection ──────────
@@ -2808,7 +2808,7 @@ class MaykLive:
                     _ga = getattr(response, "go_away", None)
                     if _ga is not None and not self._goaway_pending:
                         self._goaway_pending = True
-                        print(f"[MAYK] 🔁 Server will close the connection (time left: "
+                        print(f"[AETHER] 🔁 Server will close the connection (time left: "
                               f"{getattr(_ga, 'time_left', '?')}) — reconnecting at the next pause")
                         if not self._is_speaking and self.audio_in_queue.empty():
                             self.request_reconnect(keep_context=True, reason="go_away")
@@ -2896,7 +2896,7 @@ class MaykLive:
                                 self._last_out_logged = ""   # new exchange
                                 self.ui.write_log(f"You: {full_in}")
                                 from core import activity as _activity
-                                _activity.record("voice", f"MAYK'la konuştun: {full_in[:80]}", "info")
+                                _activity.record("voice", f"AETHER'la konuştun: {full_in[:80]}", "info")
                                 self._session_log.append(f"User: {full_in}")
                                 self._persist_turn("Kullanıcı", full_in)
                                 if self._dashboard:
@@ -2920,7 +2920,7 @@ class MaykLive:
                                 from core import activity as _activity
                                 _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
-                                self._persist_turn("MAYK", full_out)
+                                self._persist_turn("AETHER", full_out)
                                 try:
                                     from core import sync_hub
                                     sync_hub.note_reply(full_out)
@@ -2928,7 +2928,7 @@ class MaykLive:
                                     pass
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
-                                        "type": "log", "speaker": "jarvis",
+                                        "type": "log", "speaker": "aether",
                                         "text": full_out,
                                         "ts": datetime.now().isoformat(),
                                     }))
@@ -2946,7 +2946,7 @@ class MaykLive:
                     if response.tool_call:
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
-                            print(f"[MAYK] 📞 {fc.name}")
+                            print(f"[AETHER] 📞 {fc.name}")
                             fr = await self._execute_tool(fc)
                             fn_responses.append(fr)
                         await self.session.send_tool_response(
@@ -2954,17 +2954,17 @@ class MaykLive:
                         )
                         await self._flush_pending_vision()
         except Exception as e:
-            print(f"[MAYK] ❌ Recv: {e}")
+            print(f"[AETHER] ❌ Recv: {e}")
             traceback.print_exc()
             raise
 
     async def _play_audio(self):
-        print("[MAYK] 🔊 Play started")
+        print("[AETHER] 🔊 Play started")
 
         _spk_name = get_output_device()
         _spk_dev  = audio_devices.resolve(_spk_name, "output")
         if _spk_dev is not None:
-            print(f"[MAYK] 🔊 Output device: {_spk_name}")
+            print(f"[AETHER] 🔊 Output device: {_spk_name}")
 
         def _open_spk(dev):
             st = sd.RawOutputStream(
@@ -2985,7 +2985,7 @@ class MaykLive:
             # cost the user their voice. Fall back to the default and say so.
             if _spk_dev is None:
                 raise
-            print(f"[MAYK] ⚠️  Output device '{_spk_name}' failed: {_e} — using default")
+            print(f"[AETHER] ⚠️  Output device '{_spk_name}' failed: {_e} — using default")
             self.ui.write_log(f"SYS: Speaker '{_spk_name}' unavailable — using system default.")
             stream = _open_spk(None)
 
@@ -2997,7 +2997,7 @@ class MaykLive:
             lat = float(getattr(stream, "latency", 0.0) or 0.0)
             if 0.0 < lat < 1.0:
                 self._out_latency = lat
-            print(f"[MAYK] 🔊 Output latency {self._out_latency*1000:.0f} ms "
+            print(f"[AETHER] 🔊 Output latency {self._out_latency*1000:.0f} ms "
                   f"→ echo tail {(self._out_latency + _TAIL_MARGIN)*1000:.0f} ms")
         except Exception:
             pass
@@ -3031,7 +3031,7 @@ class MaykLive:
                     except asyncio.QueueEmpty:
                         break
 
-                # Drive the HUD waveform and the avatar's mouth from MAYK's
+                # Drive the HUD waveform and the avatar's mouth from AETHER's
                 # own voice. The batch is up to 100 ms long, so we hand over a
                 # *schedule* of 20 ms viseme frames instead of a single averaged
                 # level and let the HUD play it out in step with the audio.
@@ -3106,7 +3106,7 @@ class MaykLive:
                     # The speaker went away (headset unplugged, Bluetooth dropped,
                     # HDMI switched). Reopen it here — the chosen device if it is
                     # back, else the default — instead of tearing down the session.
-                    print(f"[MAYK] 🔧 Speaker error ({e}) — reopening")
+                    print(f"[AETHER] 🔧 Speaker error ({e}) — reopening")
                     try:
                         stream.stop()
                     except Exception:
@@ -3127,7 +3127,7 @@ class MaykLive:
                         raise
                     self.ui.write_log("SYS: ✅ Hoparlör yeniden bağlandı.")
         except Exception as e:
-            print(f"[MAYK] ❌ Play: {e}")
+            print(f"[AETHER] ❌ Play: {e}")
             raise
         finally:
             self.set_speaking(False)
@@ -3220,7 +3220,7 @@ class MaykLive:
             turns={"role": "user", "parts": [{"text": p1}]},
             turn_complete=True,
         )
-        print("[MAYK] Briefing phase 1 (greeting) sent.")
+        print("[AETHER] Briefing phase 1 (greeting) sent.")
         if not want_news and not extra:
             return
 
@@ -3297,10 +3297,10 @@ class MaykLive:
                     turns={"role": "user", "parts": [{"text": p2}]},
                     turn_complete=True,
                 )
-                print("[MAYK] Briefing phase 2 (news) sent.")
+                print("[AETHER] Briefing phase 2 (news) sent.")
             except Exception as e:
                 print(f"[Briefing] Phase 2 error: {e}")
-                print(f"[MAYK] Briefing phase 2 failed: {e}")
+                print(f"[AETHER] Briefing phase 2 failed: {e}")
                 self.ui.write_log("SYS: Could not fetch the news for the briefing.")
 
         self._keep_task(asyncio.create_task(_deliver_news()))
@@ -3372,7 +3372,7 @@ class MaykLive:
         await asyncio.sleep(300)          # wait 5 min after startup before first check
         while True:
             if self.session and self._awake and not self._quiet():
-                # Don't interrupt if user spoke recently or MAYK is mid-sentence
+                # Don't interrupt if user spoke recently or AETHER is mid-sentence
                 with self._speaking_lock:
                     speaking = self._is_speaking
                 recent_speech = (time.monotonic() - self._last_user_speech) < 30
@@ -3392,7 +3392,7 @@ class MaykLive:
                                 turns={"role": "user", "parts": [{"text": msg}]},
                                 turn_complete=True,
                             )
-                            print("[MAYK] Monitor alert sent.")
+                            print("[AETHER] Monitor alert sent.")
                             await asyncio.sleep(6)   # gap between consecutive alerts
                     except Exception as e:
                         print(f"[Monitor] ⚠️ Background check error: {e}")
@@ -3435,7 +3435,7 @@ class MaykLive:
                     turns={"role": "user", "parts": [{"text": prompt}]},
                     turn_complete=True,
                 )
-                print("[MAYK] Proactive check-in.")
+                print("[AETHER] Proactive check-in.")
             except Exception as e:
                 print(f"[Proactive] ⚠️ {e}")
 
@@ -3481,7 +3481,7 @@ class MaykLive:
                     await asyncio.sleep(0.1)
                 if self.session:
                     # A remote command is deliberate control and the phone user
-                    # has no desktop WAKE button — so it wakes MAYK if asleep.
+                    # has no desktop WAKE button — so it wakes AETHER if asleep.
                     if not self._awake:
                         self.wake(reason="remote command")
                     await self.session.send_client_content(
@@ -3554,7 +3554,7 @@ class MaykLive:
                         f"SYS: {llm_id} "
                         + ("can see images." if seen else "is text only."))
                 except Exception as e:
-                    print(f"[MAYK] vision check skipped: {e}")
+                    print(f"[AETHER] vision check skipped: {e}")
 
             caps = dict(getattr(llm, "caps", {}) or {})
             caps["audio_out"] = bool(str(pipe.get("tts") or "").strip())
@@ -3569,7 +3569,7 @@ class MaykLive:
             if note != getattr(self, "_engine_fail_said", ""):
                 self._engine_fail_said = note
                 self.ui.write_log(note)
-            print(f"[MAYK] Pipeline engine unavailable: {e}")
+            print(f"[AETHER] Pipeline engine unavailable: {e}")
             return None
 
     @asynccontextmanager
@@ -3660,7 +3660,7 @@ class MaykLive:
             print(f"[Dashboard] Disabled: {e}")
             self._dashboard = None
 
-        # One MAYK on every device: shared memory and the command mailbox in
+        # One AETHER on every device: shared memory and the command mailbox in
         # the user's private gist (core/sync_hub.py). Off until set up.
         try:
             from core import sync_hub
@@ -3698,7 +3698,7 @@ class MaykLive:
         while True:
             try:
                 self._ensure_executor()
-                print("[MAYK] Connecting...")
+                print("[AETHER] Connecting...")
                 self.ui.set_state("THINKING")
                 # Pick the rung to open the conversation on. A model resting
                 # off a quota limit is skipped; the name is published back to
@@ -3706,7 +3706,7 @@ class MaykLive:
                 global LIVE_MODEL
                 LIVE_MODEL = _gemini.live_model()
                 live_model = LIVE_MODEL
-                print(f"[MAYK] Live model: {live_model}")
+                print(f"[AETHER] Live model: {live_model}")
 
                 _resumed_with = self._resume_handle is not None
 
@@ -3770,7 +3770,7 @@ class MaykLive:
                     self._interrupted          = False
                     self._goaway_pending       = False
 
-                    print("[MAYK] Connected.")
+                    print("[AETHER] Connected.")
                     if _resumed_with:
                         # Say it plainly: the difference between "it reconnected"
                         # and "it reconnected and still knows what we were doing"
@@ -3778,7 +3778,7 @@ class MaykLive:
                         self.ui.write_log("SYS: Reconnected — conversation restored.")
 
                     # Wake word: if enabled, come up ASLEEP (mic gated, silent)
-                    # until the user says "Hey MAYK" or taps wake in the UI.
+                    # until the user says "Hey AETHER" or taps wake in the UI.
                     #
                     # Only on the FIRST connect of a run. A reconnect — a dropped
                     # network, the server rotating the connection — used to put an
@@ -3812,11 +3812,11 @@ class MaykLive:
                     elif self._wake_enabled and wake_ok and (first_connect or not self._awake):
                         self._awake = False
                         self.ui.set_state("SLEEPING")
-                        self.ui.write_log("SYS: MAYK online — sleeping. Say 'Hey MAYK' to wake me.")
+                        self.ui.write_log("SYS: AETHER online — sleeping. Say 'Hey AETHER' to wake me.")
                     else:
                         self._awake = True
                         self.ui.set_state("LISTENING")
-                        self.ui.write_log("SYS: MAYK online.")
+                        self.ui.write_log("SYS: AETHER online.")
 
                     # What this machine will not permit, said once, on screen.
                     #
@@ -3895,7 +3895,7 @@ class MaykLive:
                 # Voluntary reconnect (voice change) — not an error. Rebuild the
                 # session immediately with no backoff and no scary logs.
                 if _is_reconnect_signal(e):
-                    print("[MAYK] Voluntary reconnect requested.")
+                    print("[AETHER] Voluntary reconnect requested.")
                     if not _keep_context_of(e):
                         # A deliberate clean slate (voice change) — drop the
                         # handle so the next connect really does start empty.
@@ -3915,19 +3915,19 @@ class MaykLive:
                     or "INVALID_ARGUMENT" in str(e)
                     or "NOT_FOUND" in str(e)
                 ):
-                    print("[MAYK] 🔗 Resumption handle rejected — starting a fresh session")
+                    print("[AETHER] 🔗 Resumption handle rejected — starting a fresh session")
                     self.ui.write_log("SYS: Could not restore the conversation — starting fresh.")
                     self._resume_handle = None
                     self._conn_backoff = 0
                     continue
 
                 err_str = str(e)
-                print(f"[MAYK] Error ({type(e).__name__}): {e}")
+                print(f"[AETHER] Error ({type(e).__name__}): {e}")
                 traceback.print_exc()
 
                 # Out of quota, or this model is not available to this key —
                 # step down the ladder and reconnect straight away. This is the
-                # difference between "MAYK is quieter today" and "MAYK does
+                # difference between "AETHER is quieter today" and "AETHER does
                 # not start today": one model means one daily limit, and the
                 # limit always arrives mid-conversation.
                 if _gemini.note_live_failure(live_model, err_str):
@@ -3955,7 +3955,7 @@ class MaykLive:
                     or "thinking" in err_str.lower()
                 ):
                     self._tuned_live = False
-                    print("[MAYK] Live tuning rejected — reconnecting without it.")
+                    print("[AETHER] Live tuning rejected — reconnecting without it.")
                     continue
 
                 # Proactive audio rejected by the server (preview API drift) —
@@ -3979,7 +3979,7 @@ class MaykLive:
                     self.ui.prompt_reconfig()
                     while not self.ui._win._ready:
                         await asyncio.sleep(1)
-                    print("[MAYK] New API key saved — reconnecting...")
+                    print("[AETHER] New API key saved — reconnecting...")
                     self._conn_backoff = 3
                     continue
 
@@ -4011,7 +4011,7 @@ class MaykLive:
                 self._dashboard.set_state("sleeping")
 
             delay = getattr(self, "_conn_backoff", 3)
-            print(f"[MAYK] Reconnecting in {delay}s...")
+            print(f"[AETHER] Reconnecting in {delay}s...")
             await asyncio.sleep(delay)
 
 def _exit_process(code: int = 0) -> None:
@@ -4038,10 +4038,10 @@ def _exit_process(code: int = 0) -> None:
 def main():
     try:                                   # everything printed and every crash, kept on disk
         from core import logbook
-        print(f"[MAYK] Günlük: {logbook.install()}")
+        print(f"[AETHER] Günlük: {logbook.install()}")
     except Exception as exc:
-        print(f"[MAYK] Günlük dosyası açılamadı: {exc}")
-    ui = MaykUI("face.png")
+        print(f"[AETHER] Günlük dosyası açılamadı: {exc}")
+    ui = AetherUI("face.png")
     from core.second_brain_service import Controller
     from memory.continuity import recover_jobs
     try:
@@ -4057,10 +4057,10 @@ def main():
 
     def runner():
         ui.wait_for_api_key()
-        mayk = MaykLive(ui)
-        holder["mayk"] = mayk
+        aether = AetherLive(ui)
+        holder["aether"] = aether
         try:
-            asyncio.run(mayk.run())
+            asyncio.run(aether.run())
         except KeyboardInterrupt:
             print("\n🔴 Shutting down...")
 
@@ -4074,16 +4074,16 @@ def main():
         worker.join()
 
     # The window is closed: write the session summary, stop the engines, go.
-    mayk = holder.get("mayk")
-    if mayk is not None:
+    aether = holder.get("aether")
+    if aether is not None:
         try:
-            mayk.finish()
+            aether.finish()
         except Exception as e:
-            print(f"[MAYK] finish: {e!r}")
+            print(f"[AETHER] finish: {e!r}")
     _exit_process(75 if getattr(ui._win, "_restart_requested", False) else 0)
 
 # Compatibility with existing integrations.
-JarvisLive = MaykLive
+AetherLive = AetherLive
 
 if __name__ == "__main__":
     main()

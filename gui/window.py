@@ -147,7 +147,7 @@ class MainWindow(QMainWindow):
 
         # Load customization from config
         _cfg = _read_full_config()
-        self._assistant_name: str = (_cfg.get("assistant_name") or "MAYK").strip()
+        self._assistant_name: str = (_cfg.get("assistant_name") or "AETHER").strip()
         _display = self._assistant_name.upper()
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
@@ -168,15 +168,15 @@ class MainWindow(QMainWindow):
 
         self.on_text_command   = None
         self.on_remote_clicked = None   # callable: () -> (url, key) | None
-        self.on_interrupt      = None   # callable: () -> None — stop MAYK mid-speech
+        self.on_interrupt      = None   # callable: () -> None — stop AETHER mid-speech
         self.on_voice_change   = None   # callable: () -> None — rebuild session with new voice
         self.on_audio_device_change = None  # callable: () -> None — reopen audio streams
         self._confirm_overlay  = None   # live ConfirmBanner, if one is on screen
-        self.get_plugins       = None   # callable: () -> list[dict], set by MaykLive
-        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by MaykLive
+        self.get_plugins       = None   # callable: () -> list[dict], set by AetherLive
+        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by AetherLive
         self._wake_busy = False
         self._wake_feedback = ""
-        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by MaykLive
+        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by AetherLive
         self.on_wake_manual    = None   # callable: () -> None — manual sleep/wake
         self.on_push_to_talk   = None   # callable: (enable: bool) -> str scope
         self.ptt_hold          = None   # callable: (held: bool) -> None — windowed chord
@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         # inventing a second mechanism means the avatar, the camera and a video
         # can never be on screen at once.
         self._video_split = False        # is the sound a separate stream?
-        self._video_auto_muted = False   # did MAYK close the mic, or the user?
+        self._video_auto_muted = False   # did AETHER close the mic, or the user?
         # A plain flag rather than reading the widget. video_is_playing() is
         # called from plugin threads, and reading a widget's state from one is
         # not something to rely on; an attribute is.
@@ -286,7 +286,7 @@ class MainWindow(QMainWindow):
             return b
 
         # Muted is the default and the button says so, because a soundtrack
-        # talking over MAYK is the one way this feature could make the
+        # talking over AETHER is the one way this feature could make the
         # assistant worse rather than better.
         self._video_mute_btn = _vid_btn("🔇  SES KAPALI")
         self._video_mute_btn.clicked.connect(self._toggle_video_mute)
@@ -590,7 +590,7 @@ class MainWindow(QMainWindow):
                 self._scan_result_sig.emit(jpeg, result)
 
         try:
-            threading.Thread(target=worker, daemon=True, name="jarvis-camera-scan").start()
+            threading.Thread(target=worker, daemon=True, name="aether-camera-scan").start()
         except RuntimeError:
             self._desktop_scan_busy = False
             self._log.append_log("SYS: Kamera taraması başlatılamadı.")
@@ -649,7 +649,7 @@ class MainWindow(QMainWindow):
             self._scan_research_result_sig.emit(generation, subject, pages)
 
         try:
-            threading.Thread(target=worker, daemon=True, name="jarvis-scan-research").start()
+            threading.Thread(target=worker, daemon=True, name="aether-scan-research").start()
         except RuntimeError:
             self._research_busy = False
             scan.research_status.setText("Araştırma başlatılamadı.")
@@ -698,7 +698,7 @@ class MainWindow(QMainWindow):
         self._book_panel.status.setText("Kamera açık · Elini sola kaydır: ileri, sağa kaydır: geri.")
         self._gesture_thread = threading.Thread(
             target=self._book_gesture_loop, args=(generation, self._gesture_stop),
-            daemon=True, name="jarvis-book-gestures",
+            daemon=True, name="aether-book-gestures",
         )
         try:
             self._gesture_thread.start()
@@ -931,7 +931,7 @@ class MainWindow(QMainWindow):
     def _sync_mic_for_video(self) -> None:
         """Close the microphone while the video is making sound.
 
-        MAYK subtracts its OWN output from the microphone — that is what
+        AETHER subtracts its OWN output from the microphone — that is what
         core/echo.py does — but a video plays through a different output
         entirely, so the guard has never heard of it and the assistant answers
         the film. There is no arrangement in which an open microphone and a
@@ -939,7 +939,7 @@ class MainWindow(QMainWindow):
 
         So the microphone closes for exactly as long as the sound is on, and
         opens again by itself the moment it goes off or the video is closed.
-        Only if MAYK closed it: a microphone the user muted themselves stays
+        Only if AETHER closed it: a microphone the user muted themselves stays
         muted, and pressing the mute key during a video hands the decision back
         to them for good.
         """
@@ -1052,9 +1052,9 @@ class MainWindow(QMainWindow):
     # Icon generation — arc-reactor style, rendered with Pillow
     # ------------------------------------------------------------------
     @staticmethod
-    def _build_jarvis_icon(out_path: Path) -> bool:
+    def _build_aether_icon(out_path: Path) -> bool:
         """
-        Render a MAYK arc-reactor icon at 4× resolution and downsample
+        Render a AETHER arc-reactor icon at 4× resolution and downsample
         for crisp results at all sizes. Saves a multi-res .ico to out_path.
         Returns True on success.
         """
@@ -1167,7 +1167,7 @@ class MainWindow(QMainWindow):
             sc.TargetPath       = target
             sc.Arguments        = f'"{args}"'
             sc.WorkingDirectory = work_dir
-            sc.Description      = "MAYK AI Assistant"
+            sc.Description      = "AETHER AI Assistant"
             sc.IconLocation     = icon_loc
             sc.save()
             return
@@ -1182,7 +1182,7 @@ class MainWindow(QMainWindow):
             f'sc.TargetPath = "{target}"',
             f'sc.Arguments = Chr(34) & "{args}" & Chr(34)',
             f'sc.WorkingDirectory = "{work_dir}"',
-            'sc.Description = "MAYK AI Assistant"',
+            'sc.Description = "AETHER AI Assistant"',
             f'sc.IconLocation = "{icon_loc}"',
             'sc.Save',
         ])
@@ -1294,9 +1294,9 @@ class MainWindow(QMainWindow):
         desktop = self._get_desktop_dir()
 
         # Arc-reactor icon (.ico — also exported as .png for Linux/macOS)
-        ico_path = Path(__file__).resolve().parent.parent / "config" / "jarvis.ico"
+        ico_path = Path(__file__).resolve().parent.parent / "config" / "aether.ico"
         if not ico_path.exists():
-            self._build_jarvis_icon(ico_path)
+            self._build_aether_icon(ico_path)
 
         try:
             _os = platform.system()
@@ -1305,14 +1305,14 @@ class MainWindow(QMainWindow):
             if _os == "Windows":
                 pythonw  = python.parent / "pythonw.exe"
                 target   = str(pythonw if pythonw.exists() else python)
-                lnk      = str(desktop / "MAYK.lnk")
+                lnk      = str(desktop / "AETHER.lnk")
                 icon_loc = str(ico_path) if ico_path.exists() else f"{target},0"
                 self._create_lnk_windows(lnk, target, str(script),
                                          str(script.parent), icon_loc)
 
             # ── macOS — proper .app bundle (no Terminal window) ───────────────
             elif _os == "Darwin":
-                app     = desktop / "MAYK.app"
+                app     = desktop / "AETHER.app"
                 mac_dir = app / "Contents" / "MacOS"
                 res_dir = app / "Contents" / "Resources"
                 mac_dir.mkdir(parents=True, exist_ok=True)
@@ -1320,7 +1320,7 @@ class MainWindow(QMainWindow):
 
                 # Launcher executable (bash — runs as background process,
                 # macOS does NOT open Terminal for executables inside .app bundles)
-                launcher = mac_dir / "MAYK"
+                launcher = mac_dir / "AETHER"
                 launcher.write_text(
                     "#!/usr/bin/env bash\n"
                     f'cd "{script.parent}"\n'
@@ -1335,10 +1335,10 @@ class MainWindow(QMainWindow):
                     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
                     '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
                     '<plist version="1.0"><dict>\n'
-                    '  <key>CFBundleExecutable</key><string>MAYK</string>\n'
+                    '  <key>CFBundleExecutable</key><string>AETHER</string>\n'
                     '  <key>CFBundleIdentifier</key>'
-                    '<string>com.jarvis.assistant</string>\n'
-                    '  <key>CFBundleName</key><string>MAYK</string>\n'
+                    '<string>com.aether.assistant</string>\n'
+                    '  <key>CFBundleName</key><string>AETHER</string>\n'
                     '  <key>CFBundlePackageType</key><string>APPL</string>\n'
                     '  <key>CFBundleVersion</key><string>1.0</string>\n'
                     '</dict></plist>\n'
@@ -1376,10 +1376,10 @@ class MainWindow(QMainWindow):
                         png_path = ico_path  # fallback to .ico
 
                 icon_line = f"Icon={png_path}\n" if png_path.exists() else ""
-                desk = desktop / "MAYK.desktop"
+                desk = desktop / "AETHER.desktop"
                 desk.write_text(
                     "[Desktop Entry]\n"
-                    "Name=MAYK\n"
+                    "Name=AETHER\n"
                     f"Exec={python} {script}\n"
                     f"Path={script.parent}\n"
                     "Type=Application\n"
@@ -1577,7 +1577,7 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 self._update_done_sig.emit(False, f"Güncelleme uygulanamadı: {exc}")
         # Non-daemon: an ordinary window close must not interrupt a file transaction.
-        self._update_worker = threading.Thread(target=work, name="jarvis-update", daemon=False)
+        self._update_worker = threading.Thread(target=work, name="aether-update", daemon=False)
         try:
             self._update_worker.start()
         except RuntimeError as exc:
@@ -1603,10 +1603,10 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(1500, self._restart_after_update)
             return
         from PyQt6.QtWidgets import QMessageBox
-        QMessageBox.information(self, "MAYK Güncelleme", message)
+        QMessageBox.information(self, "AETHER Güncelleme", message)
 
     def _restart_after_update(self):
-        """An update restarts MAYK automatically, after its process exits.
+        """An update restarts AETHER automatically, after its process exits.
 
         A supervised launch uses exit code 75; a normal launch uses a
         separate helper. Never close the current GUI if the helper cannot
@@ -1624,13 +1624,13 @@ class MainWindow(QMainWindow):
                 self._update_btn.setText("ELLE YENİDEN AÇ")
             self._log.append_log(
                 f"SYS: Otomatik yeniden başlatma başarısız: {exc}. "
-                "MAYK'ı kapatıp tekrar açın."
+                "AETHER'ı kapatıp tekrar açın."
             )
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(
-                self, "MAYK Yeniden Başlatma",
+                self, "AETHER Yeniden Başlatma",
                 "Güncelleme uygulandı ancak otomatik yeniden başlatılamadı. "
-                "Lütfen MAYK'ı kapatıp tekrar açın.\n\n" + str(exc)
+                "Lütfen AETHER'ı kapatıp tekrar açın.\n\n" + str(exc)
             )
 
     def _tick_clock(self):
@@ -1643,7 +1643,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _wordmark(display: str) -> str:
-        return "M.A.Y.K" if display == "MAYK" else display
+        return "AETHER" if display == "AETHER" else display
 
     @staticmethod
     def _subtitle(display: str) -> str:
@@ -2032,7 +2032,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self._cc_btn)
         self._brain_btn = IconButton("brain", 42)
         self._brain_btn.setCheckable(True)
-        self._brain_btn.setToolTip("İkinci Beyin — MAYK’ın gelişim alanı")
+        self._brain_btn.setToolTip("İkinci Beyin — AETHER’ın gelişim alanı")
         self._brain_btn.clicked.connect(lambda: self._set_second_brain(self._brain_btn.isChecked()))
         row.addWidget(self._brain_btn)
         self._chess_btn = IconButton("knight", 42)
@@ -2303,7 +2303,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 self._map_search_sig.emit([], "Yer arama servisine ulaşılamadı. Tekrar deneyin.")
 
-        threading.Thread(target=work, daemon=True, name="jarvis-map-search").start()
+        threading.Thread(target=work, daemon=True, name="aether-map-search").start()
 
     def _finish_map_search(self, places, message):
         self._map_search_button.setEnabled(True)
@@ -2646,7 +2646,7 @@ class MainWindow(QMainWindow):
     # while translating the tag would mean a table per language, which is worse.
     # A shape carries it in every language, and shape plus colour still reads
     # for someone who cannot separate red from amber. What the marks mean
-    # arrives the way everything else does: MAYK says it out loud.
+    # arrives the way everything else does: AETHER says it out loud.
     _REVIEW_MARKS = {"serious": ("RED", "▲"), "caution": ("ACC2", "●"), "note": ("PRI_DIM", "·")}
 
     @staticmethod
@@ -2717,7 +2717,7 @@ class MainWindow(QMainWindow):
     # An interactive twin of the content panel. The plugin only ever hands over
     # questions; everything about asking, marking and reporting happens here,
     # and the finished result is pushed back into the conversation the same way
-    # a dropped file is — as a message MAYK reads and responds to. That keeps
+    # a dropped file is — as a message AETHER reads and responds to. That keeps
     # the tool call short (it returns the moment the board is up) and leaves the
     # talking to the assistant, in the user's own language.
 
@@ -2874,7 +2874,7 @@ class MainWindow(QMainWindow):
         elif verdict is False:
             mark, colour = "✕  " + str(q.get("answer", "")), C.RED
         else:
-            # Open answers and near-miss gap-fills are MAYK's to judge. Saying
+            # Open answers and near-miss gap-fills are AETHER's to judge. Saying
             # so is honest; marking it wrong here would be a guess.
             mark, colour = "…  not edildi — bu yanıtı değerlendireceğim", C.ACC2
         note = q.get("note") or ""
@@ -2909,7 +2909,7 @@ class MainWindow(QMainWindow):
 
         self._log.append_log(f"QUIZ: {topic or 'quiz'} — {right}/{total} correct")
 
-        # Hand it back to MAYK as a message, not as a tool return: the tool
+        # Hand it back to AETHER as a message, not as a tool return: the tool
         # call ended minutes ago. This is the same channel a dropped file uses.
         lines = [f"[QUIZ_DONE] topic={topic or 'general'} | "
                  f"auto-marked {right}/{total} correct"
@@ -3030,9 +3030,9 @@ class MainWindow(QMainWindow):
                     winreg.CloseKey(key)
             elif _OS == "Darwin":
                 return (Path.home() / "Library" / "LaunchAgents"
-                        / "com.jarvis.assistant.plist").exists()
+                        / "com.aether.assistant.plist").exists()
             else:
-                return (Path.home() / ".config" / "autostart" / "jarvis.desktop").exists()
+                return (Path.home() / ".config" / "autostart" / "aether.desktop").exists()
         except Exception:
             return False
 
@@ -3055,7 +3055,7 @@ class MainWindow(QMainWindow):
             elif _OS == "Darwin":
                 plist_dir = Path.home() / "Library" / "LaunchAgents"
                 plist_dir.mkdir(parents=True, exist_ok=True)
-                plist = plist_dir / "com.jarvis.assistant.plist"
+                plist = plist_dir / "com.aether.assistant.plist"
                 if currently_on:
                     plist.unlink(missing_ok=True)
                 else:
@@ -3064,7 +3064,7 @@ class MainWindow(QMainWindow):
                         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
                         '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
                         '<plist version="1.0"><dict>\n'
-                        '  <key>Label</key><string>com.jarvis.assistant</string>\n'
+                        '  <key>Label</key><string>com.aether.assistant</string>\n'
                         '  <key>ProgramArguments</key><array>\n'
                         f'    <string>{sys.executable}</string>\n'
                         f'    <string>{script}</string>\n'
@@ -3075,7 +3075,7 @@ class MainWindow(QMainWindow):
             else:
                 desk_dir = Path.home() / ".config" / "autostart"
                 desk_dir.mkdir(parents=True, exist_ok=True)
-                desk = desk_dir / "jarvis.desktop"
+                desk = desk_dir / "aether.desktop"
                 if currently_on:
                     desk.unlink(missing_ok=True)
                 else:
@@ -3125,7 +3125,7 @@ class MainWindow(QMainWindow):
                         "awake": bool(s.get("awake"))}
             except Exception:
                 pass
-        # Before MaykLive has wired its callback (drawer built at startup).
+        # Before AetherLive has wired its callback (drawer built at startup).
         ready, enabled = False, False
         try:
             from core.wake_word import is_ready
@@ -3185,7 +3185,7 @@ class MainWindow(QMainWindow):
                               else "◉  GÖRÜNÜM: REAKTÖR")
         self._hud_btn.setStyleSheet(btn_css("choice"))
         self._hud_btn.setToolTip(
-            "MAYK’ın konuşmasına ve durumuna göre hareket eden "
+            "AETHER’ın konuşmasına ve durumuna göre hareket eden "
             "bir yüz. Reaktöre geçmek için tıklayın."
             if face else
             "Duruma ve sesinize göre hareket eden 3B reaktör. "
@@ -3291,7 +3291,7 @@ class MainWindow(QMainWindow):
                 status = self.on_wake_toggle(enable)
                 if status != ("enabled" if enable else "disabled"):
                     raise RuntimeError("Uyandırma ayarı uygulanamadı. Ses modelini kontrol edip tekrar deneyin.")
-                self._wake_dl_sig.emit(True, "Hey MAYK açık." if enable else "Hey MAYK kapalı.")
+                self._wake_dl_sig.emit(True, "Hey AETHER açık." if enable else "Hey AETHER kapalı.")
             except Exception as exc:
                 self._wake_dl_sig.emit(False, str(exc))
 
@@ -3323,7 +3323,7 @@ class MainWindow(QMainWindow):
             self._customize_overlay.hide()
         cw = self.centralWidget()
         ov = CustomizeOverlay(
-            cfg.get("assistant_name", "MAYK") or "MAYK",
+            cfg.get("assistant_name", "AETHER") or "AETHER",
             cfg.get("user_name", ""),
             cfg.get("ui_color", "") or DEFAULT_UI_COLOR,
             cfg.get("voice_name", ""),
@@ -3735,7 +3735,7 @@ class MainWindow(QMainWindow):
             self._overlay.hide()
             self._overlay = None
         self._apply_state("LISTENING")
-        self._assistant_name = _read_full_config().get("assistant_name", "MAYK") or "MAYK"
+        self._assistant_name = _read_full_config().get("assistant_name", "AETHER") or "AETHER"
         self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online.")
 
 

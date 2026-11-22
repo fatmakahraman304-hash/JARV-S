@@ -1,4 +1,4 @@
-/* MAYK — the same assistant on every device.
+/* AETHER — the same assistant on every device.
  *
  * This page is the whole assistant for a phone, tablet, TV, projector or watch.
  * Its brain is Gemini Live, reached straight from the device, so it works when
@@ -14,14 +14,14 @@
   const GH = 'https://api.github.com';
 
   // ── settings ─────────────────────────────────────────────────────────────
-  const S = (() => { try { return JSON.parse(localStorage.getItem('jarvis_web') || '{}'); } catch { return {}; } })();
-  const assistantName = value => /^(?:mayk|m\.a\.y\.k\.?|jarvis|j\.a\.r\.v\.i\.s\.?)$/i.test(String(value || "").trim()) ? "MAYK" : value;
+  const S = (() => { try { const key = "aether_web"; const legacy = Object.keys(localStorage).find(k => k.endsWith("_web") && k !== key); return JSON.parse(localStorage.getItem(key) || (legacy && localStorage.getItem(legacy)) || "{}"); } catch { return {}; } })();\nS.name = "AETHER";
+  const assistantName = value => "AETHER";
   S.name = assistantName(S.name);
-  const save = () => localStorage.setItem('jarvis_web', JSON.stringify(S));
+  const save = () => localStorage.setItem('aether_web', JSON.stringify(S));
   if (!S.id) { S.id = 'w' + Math.random().toString(36).slice(2, 12); save(); }
   if (!S.voice) S.voice = 'Charon';
   // A setup link (…#s=<code>) carries the keys from one device to another —
-  // and from Safari to the home-screen MAYK on an iPhone, which Apple keeps
+  // and from Safari to the home-screen AETHER on an iPhone, which Apple keeps
   // in separate storage.
   function importSetup(text) {
     const m = String(text || '').match(/(?:[#&?]s=|^)([A-Za-z0-9_-]{20,})\s*$/);
@@ -44,7 +44,7 @@
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (/[#&]s=/.test(location.hash)) {
     const ok = importSetup(location.hash);
-    setTimeout(() => toast(ok ? 'Kurulum tamam — MAYK bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
+    setTimeout(() => toast(ok ? 'Kurulum tamam — AETHER bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
     history.replaceState(null, '', location.pathname);
   }
 
@@ -75,18 +75,18 @@
     history.replaceState(null, '', location.pathname + location.search);
   }
 
-  // Pop-up command returns to HTTPS MAYK and reports back to its opener.
+  // Pop-up command returns to HTTPS AETHER and reports back to its opener.
   // When Safari allows closing script-opened tabs the main assistant remains
   // at its current position, without losing the microphone/chat UI state.
   if (lanResult && window.opener) {
-    try { window.opener.postMessage({ type: 'mayk-lan-result', text: lanResult }, location.origin); } catch {}
+    try { window.opener.postMessage({ type: 'aether-lan-result', text: lanResult }, location.origin); } catch {}
     try { window.close(); } catch {}
     // On iOS versions which refuse window.close(), keep this extra tab
-    // lightweight instead of booting another MAYK session / GitHub sync.
+    // lightweight instead of booting another AETHER session / GitHub sync.
     document.body.textContent = '';
     document.body.style.cssText = 'margin:0;padding:28px;background:#120d09;color:#fff;font:18px system-ui';
     const reply = document.createElement('p'); reply.textContent = '📽️ ' + lanResult;
-    const hint = document.createElement('p'); hint.textContent = 'Komut sonucu asıl MAYK sekmesine gönderildi. Bu sekmeyi kapatabilirsin.';
+    const hint = document.createElement('p'); hint.textContent = 'Komut sonucu asıl AETHER sekmesine gönderildi. Bu sekmeyi kapatabilirsin.';
     const close = document.createElement('button'); close.textContent = 'Sekmeyi kapat';
     close.style.cssText = 'padding:14px;background:#f69b32;border:0;border-radius:12px;font-size:18px';
     close.onclick = () => window.close();
@@ -107,15 +107,15 @@
   }
   const KIND_NAMES = { phone: 'Telefon', tablet: 'Tablet', tv: 'Televizyon', projector: 'Projeksiyon', watch: 'Akıllı saat', pc: 'Bilgisayar', receiver: 'Alıcı (projeksiyonu kontrol eder)' };
   const ICON = { phone: '📱', tablet: '📱', tv: '📺', projector: '📽️', watch: '⌚', pc: '💻', receiver: '📡' };
-  const ALICI_APK = 'https://github.com/fatmakahraman304-hash/JARV-S/releases/download/alici/jarvis-alici.apk';
+  const ALICI_APK = 'https://github.com/fatmakahraman304-hash/JARV-S/releases/download/alici/aether-alici.apk';
   let KIND = detectKind();
   function applyKind() {
     KIND = detectKind();
     document.body.classList.toggle('big', KIND === 'tv' || KIND === 'projector');
     document.body.classList.toggle('watch', KIND === 'watch');
     for (const k of Object.keys(KIND_NAMES)) document.body.classList.toggle('k-' + k, KIND === k);
-    const displayName = (S.name || 'MAYK').toUpperCase();
-    $('brand-name').textContent = displayName === 'MAYK' ? 'M.A.Y.K' : displayName;
+    const displayName = (S.name || 'AETHER').toUpperCase();
+    $('brand-name').textContent = displayName === 'AETHER' ? 'AETHER' : displayName;
     $('brand-sub').textContent = 'AI OS · ' + (S.devName || KIND_NAMES[KIND]);
   }
   applyKind();
@@ -140,7 +140,7 @@
                    setup: ['Kurulum gerekli', 'Ayarlardan Gemini anahtarını gir.'] };
   let state = 'idle';
   let micOn = false, micLvl = 0;
-  const core = JarvisReactor($('core'), { small: KIND === 'watch' });
+  const core = AetherReactor($('core'), { small: KIND === 'watch' });
   function setState(s) {
     state = s; core.state = (s === 'listening' || s === 'connecting') ? 'idle' : (s === 'setup' ? 'sleeping' : s);
     $('st-title').textContent = STATES[s][0]; $('st-sub').textContent = STATES[s][1];
@@ -188,8 +188,8 @@
   function renderLog() {
     const L = transcript.slice(-60);
     $('log').innerHTML = L.map(t => `<div class="msg ${t.role === 'user' ? 'u' : t.role === 'sys' ? 's' : 'j'}">${esc(t.text)}</div>`).join('');
-    $('side-log').innerHTML = L.filter(t => t.role !== 'sys').slice(-10).map(t => `<div><b>${t.role === 'user' ? 'Sen' : 'MAYK'}:</b> ${esc(t.text.slice(0, 160))}</div>`).join('');
-    const lastJ = [...L].reverse().find(t => t.role === 'jarvis'), lastU = [...L].reverse().find(t => t.role === 'user');
+    $('side-log').innerHTML = L.filter(t => t.role !== 'sys').slice(-10).map(t => `<div><b>${t.role === 'user' ? 'Sen' : 'AETHER'}:</b> ${esc(t.text.slice(0, 160))}</div>`).join('');
+    const lastJ = [...L].reverse().find(t => t.role === 'aether'), lastU = [...L].reverse().find(t => t.role === 'user');
     if (lastJ || lastU) {
       $('reply').hidden = false;
       $('reply-you').textContent = lastU ? '“' + lastU.text.slice(0, 120) + '”' : '';
@@ -240,17 +240,17 @@
       return this.req('PATCH', '/gists/' + S.gist, body);
     },
     async create() {
-      const g = await this.req('POST', '/gists', { description: 'MAYK — ortak hafıza (gizli, silme)', public: false,
-        files: { 'memory.json': { content: '{}' }, 'recent.json': { content: '[]' }, 'README.md': { content: 'MAYK ortak hafıza. Silme.' } } });
+      const g = await this.req('POST', '/gists', { description: 'AETHER — ortak hafıza (gizli, silme)', public: false,
+        files: { 'memory.json': { content: '{}' }, 'recent.json': { content: '[]' }, 'README.md': { content: 'AETHER ortak hafıza. Silme.' } } });
       return g.id;
     },
   };
   const J = (s, d) => { try { const v = JSON.parse(s); return v ?? d; } catch { return d; } };
-  let memory = J(localStorage.getItem('jarvis_mem'), {});
-  let recent = J(localStorage.getItem('jarvis_recent'), []);
+  let memory = J(localStorage.getItem('aether_mem'), {});
+  let recent = J(localStorage.getItem('aether_recent'), []);
   let devices = [];
   let recentQueue = [];
-  let pcProjects = J(localStorage.getItem('jarvis_projects'), []);
+  let pcProjects = J(localStorage.getItem('aether_projects'), []);
   // shared gallery (images.json; core/sync_hub.merge_gallery is the same rule)
   let gallery = [], galleryNew = [];
   function mergeGallery(a, b) {
@@ -277,16 +277,16 @@
   // can be answered. Not read on every sync — only when searching.
   // Desktop side: core/sync_hub.py (archive_*).
   const Archive = {
-    pending: J(localStorage.getItem('jarvis_arch_q'), []), last: 0, busy: false,
+    pending: J(localStorage.getItem('aether_arch_q'), []), last: 0, busy: false,
     queue(t) { this.pending.push(t); this.save(); if (this.pending.length >= 16) this.flush(); },
-    save() { try { localStorage.setItem('jarvis_arch_q', JSON.stringify(this.pending.slice(-400))); } catch {} },
+    save() { try { localStorage.setItem('aether_arch_q', JSON.stringify(this.pending.slice(-400))); } catch {} },
     async id() {
       if (!Cloud.ok()) return '';
       const f = Cloud.cache || await Cloud.read();
       let id = J(f['archive.json'], {}).gist || '';
       if (!id) {
-        const g = await Cloud.req('POST', '/gists', { description: 'MAYK — konuşma arşivi (gizli, silme)', public: false,
-          files: { 'README.md': { content: 'MAYK konuşma arşivi: her ay bir dosya. Silme.' } } });
+        const g = await Cloud.req('POST', '/gists', { description: 'AETHER — konuşma arşivi (gizli, silme)', public: false,
+          files: { 'README.md': { content: 'AETHER konuşma arşivi: her ay bir dosya. Silme.' } } });
         id = g.id; await Cloud.write({ 'archive.json': JSON.stringify({ gist: id }) });
       }
       return id;
@@ -334,7 +334,7 @@
       const pick = new Set();
       for (const [, i] of hits.slice(0, 8)) { pick.add(i - 1); pick.add(i); pick.add(i + 1); }   // with the line around it
       const lines = [...pick].filter(i => all[i]).sort((a, b) => a - b).map(i => { const t = all[i];
-        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'MAYK'}: ${t.text}`; });
+        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'AETHER'}: ${t.text}`; });
       return lines.length ? `Arşivden (${all.length} satır arandı):\n` + lines.join('\n').slice(0, 6000) : 'Arşivde bununla ilgili bir konuşma bulamadım.';
     },
   };
@@ -343,7 +343,7 @@
 
   // ── learning: every so often Gemini's free text model reads the latest
   // conversation and files lasting facts about the user into shared memory
-  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like MAYK knowing Tony.
+  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like AETHER knowing Tony.
   const Learn = {
     buf: [], timer: null,
     turn(t) { this.buf.push(t); clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 90000); if (this.buf.filter(x => x.role === 'user').length >= 10) this.run(); },
@@ -355,7 +355,7 @@
         'Geçici şeyleri (bugünkü ruh hali, tek seferlik istekler), sağlık, din, siyaset, para bilgilerini ve zaten bilinenleri ALMA. Emin değilsen alma. ' +
         `Kategoriler: ${CATS.join(', ')}. Bilinen anahtarlar: ${known || '(yok)'}\n` +
         'Sadece JSON dizi döndür: [{"category":"...","key":"kısa_anahtar","value":"kısa değer"}] ya da [].\n\nKONUŞMA:\n' +
-        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'MAYK'}: ${t.text}`).join('\n').slice(-6000);
+        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'AETHER'}: ${t.text}`).join('\n').slice(-6000);
       for (const model of TEXT_MODELS) {
         try {
           const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST',
@@ -371,7 +371,7 @@
             if (!k || !v || entry((memory[c] || {})[k] || '').value === v) continue;
             memory[c] = memory[c] || {}; memory[c][k] = { value: v, updated: nowIso() }; n++;
           }
-          if (n) { localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow(); console.info('[öğrenme]', n, 'yeni bilgi'); }
+          if (n) { localStorage.setItem('aether_mem', JSON.stringify(memory)); syncNow(); console.info('[öğrenme]', n, 'yeni bilgi'); }
           return;
         } catch {}
       }
@@ -390,7 +390,7 @@
       if (JSON.stringify(cloudMem) !== JSON.stringify(memory)) writes['memory.json'] = JSON.stringify(memory);
       if (recentQueue.length) { recent = recent.concat(recentQueue).slice(-40); recentQueue = []; writes['recent.json'] = JSON.stringify(recent); }
       pcProjects = Object.entries(f).filter(([k]) => k.startsWith('projects-')).map(([, v]) => J(v, null)).filter(Boolean);
-      try { localStorage.setItem('jarvis_projects', JSON.stringify(pcProjects)); } catch {}
+      try { localStorage.setItem('aether_projects', JSON.stringify(pcProjects)); } catch {}
       const myInbox = J(f[`inbox-${S.id}.json`], []);
       if (myInbox.length) { runInbox(myInbox); writes[`inbox-${S.id}.json`] = '[]'; }
       const cloudG = J(f['images.json'], []);
@@ -406,8 +406,8 @@
         writes['device-' + S.id + '.json'] = JSON.stringify(myBeat());
       }
       if (Object.keys(writes).length) await Cloud.write(writes);
-      localStorage.setItem('jarvis_mem', JSON.stringify(memory));
-      localStorage.setItem('jarvis_recent', JSON.stringify(recent));
+      localStorage.setItem('aether_mem', JSON.stringify(memory));
+      localStorage.setItem('aether_recent', JSON.stringify(recent));
       renderDevices();
       updateOwner();
       batteryWatch();
@@ -440,7 +440,7 @@
     upd(); b.addEventListener('levelchange', upd); b.addEventListener('chargingchange', upd); } catch {} })();
   // Low battery anywhere: said once by the device that has the voice
   // (core/sync_hub.low_battery is the same rule).
-  const batAlerted = new Set(J(sessionStorage.getItem('jarvis_bat'), []));
+  const batAlerted = new Set(J(sessionStorage.getItem('aether_bat'), []));
   function lowBattery(list) {
     const out = [];
     for (const d of list) {
@@ -448,7 +448,7 @@
       if (d.charging || d.battery > 30) { batAlerted.delete(d.id); continue; }
       if (d.battery <= 15 && online(d) && !batAlerted.has(d.id)) { batAlerted.add(d.id); out.push(d); }
     }
-    try { sessionStorage.setItem('jarvis_bat', JSON.stringify([...batAlerted])); } catch {}
+    try { sessionStorage.setItem('aether_bat', JSON.stringify([...batAlerted])); } catch {}
     return out;
   }
   function batteryWatch() {
@@ -594,7 +594,7 @@
     return ofKind.sort((a, b) => (online(b) - online(a)) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
   }
   // Something sent to this device by another one (desktop: sync_hub.send_to_device).
-  let inboxDone = J(localStorage.getItem('jarvis_inbox_done'), []);
+  let inboxDone = J(localStorage.getItem('aether_inbox_done'), []);
   function runInbox(cmds) {
     let did = false;
     for (const c of Array.isArray(cmds) ? cmds : []) {
@@ -635,7 +635,7 @@
         }
       } catch (e) { console.warn('inbox', e); }
     }
-    if (did) localStorage.setItem('jarvis_inbox_done', JSON.stringify(inboxDone.slice(-200)));
+    if (did) localStorage.setItem('aether_inbox_done', JSON.stringify(inboxDone.slice(-200)));
     return did;
   }
   // ── "telefonumu bul": this device rings loudly until touched (or 30 s) ──
@@ -647,8 +647,8 @@
     let n = 0;
     ringing = setInterval(() => { beep(); if (navigator.vibrate) navigator.vibrate([400, 100, 400]); if (++n > 20) stop(); }, 1500);
     document.addEventListener('pointerdown', stop, true);
-    toast(`📳 ${from || 'MAYK'} bu cihazı arıyor — durdurmak için dokun`);
-    sys(`📳 ${from || 'MAYK'} bu cihazı arıyor.`);
+    toast(`📳 ${from || 'AETHER'} bu cihazı arıyor — durdurmak için dokun`);
+    sys(`📳 ${from || 'AETHER'} bu cihazı arıyor.`);
   }
 
   // ── guard mode: this device's camera watches; on movement a photo goes to
@@ -735,7 +735,7 @@
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; bilgisayara ulaşamıyorum.';
     await syncNow();
     const pc = findPc(name);
-    if (!pc) return 'Bağlı bir bilgisayar yok. Bilgisayarda MAYK açıkken "MAYK\'ı her cihaza kur" demen gerekiyor.';
+    if (!pc) return 'Bağlı bir bilgisayar yok. Bilgisayarda AETHER açıkken "AETHER\'ı her cihaza kur" demen gerekiyor.';
     if (!online(pc)) return `${pc.name} şu an kapalı ya da çevrimdışı görünüyor.`;
     const id = S.id + '-' + Date.now().toString(36);
     const f = await Cloud.read();
@@ -761,9 +761,9 @@
     { name: 'forget', description: 'Ortak hafızadan bir bilgiyi sil.',
       parameters: { type: 'OBJECT', properties: { category: { type: 'STRING' }, key: { type: 'STRING' } }, required: ['key'] } },
     { name: 'search_memory', description: 'Ortak hafızada ara.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-    { name: 'list_devices', description: 'MAYK\'ın çalıştığı cihazları ve hangisinin açık olduğunu listele.', parameters: { type: 'OBJECT', properties: {} } },
-    { name: 'computer_command', description: 'Bilgisayardaki/laptoptaki MAYK\'a bir komut gönder ve yanıtını al: uygulama ya da dosya açmak, projede kod yazıp çalıştırmak, bilgisayarın ekranına bakmak, mesaj göndermek gibi yalnızca bilgisayarın yapabildiği her şey. Evdeki akıllı cihazlar da buradan (Home Assistant bilgisayara bağlı): "salonun ışığını kapat", "açık kalan ışıkları kapat", "klimayı 22 yap", "kapı kilitli mi" → command olarak aynen ilet. Bilgisayar kapalıysa bunu söyle.',
-      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'bilgisayarın adı ya da "laptop"; boşsa açık olan' }, command: { type: 'STRING', description: 'bilgisayardaki MAYK\'a söylenecek komut, Türkçe' } }, required: ['command'] } },
+    { name: 'list_devices', description: 'AETHER\'ın çalıştığı cihazları ve hangisinin açık olduğunu listele.', parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'computer_command', description: 'Bilgisayardaki/laptoptaki AETHER\'a bir komut gönder ve yanıtını al: uygulama ya da dosya açmak, projede kod yazıp çalıştırmak, bilgisayarın ekranına bakmak, mesaj göndermek gibi yalnızca bilgisayarın yapabildiği her şey. Evdeki akıllı cihazlar da buradan (Home Assistant bilgisayara bağlı): "salonun ışığını kapat", "açık kalan ışıkları kapat", "klimayı 22 yap", "kapı kilitli mi" → command olarak aynen ilet. Bilgisayar kapalıysa bunu söyle.',
+      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'bilgisayarın adı ya da "laptop"; boşsa açık olan' }, command: { type: 'STRING', description: 'bilgisayardaki AETHER\'a söylenecek komut, Türkçe' } }, required: ['command'] } },
     { name: 'computer_quick', description: 'Bilgisayarda anında: volume_up, volume_down, mute, play_pause, next, prev, lock.',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, action: { type: 'STRING' } }, required: ['action'] } },
     { name: 'show_code', description: 'Yazdığın kodu bu cihazın ekranında göster (kopyalanabilir, indirilebilir) ve ortak hafızaya kaydet. Kod yazman istenince bunu kullan; kodu sesli okuma.',
@@ -787,7 +787,7 @@
     { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
-    { name: 'projects', description: 'Bilgisayarda MAYK\'ın yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
+    { name: 'projects', description: 'Bilgisayarda AETHER\'ın yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'protocol', description: 'Protokoller (Iron Man tarzı): tek komutla sırayla birçok iş. "çalışma protokolü", "film moduna geç", "uyku protokolü", "günaydın", "protokollerim neler", "yeni protokol kaydet". action: run | list | save | delete. run bir adım listesi döner: o adımları sırayla araçlarınla yap.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
@@ -795,7 +795,7 @@
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'guard', description: 'Güvenlik modu: bu cihazın (ya da device verilirse o cihazın) kamerası odayı izler; hareket olursa fotoğraf çekip bütün cihazlara gönderir ve sesli haber verir. "odayı izle", "güvenlik modunu aç/kapat", "tableti kamera yap".',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, device: { type: 'STRING', description: 'boşsa bu cihaz' } }, required: ['on'] } },
-    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (MAYK sayfası açıksa). device: cihazın adı ya da türü.',
+    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (AETHER sayfası açıksa). device: cihazın adı ya da türü.',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' } }, required: ['device'] } },
     { name: 'gallery', description: 'Bütün cihazlarda çizilen resimlerin ortak galerisi: "galerimde ne var", "dünkü resmi göster", "laptopta çizdiğin logoyu aç", "ikinci resmi TV\'ye gönder". action: list | show | send. number: 1 = en yeni, ya da query: resimde ne vardı. send için device.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, number: { type: 'NUMBER' }, query: { type: 'STRING' }, device: { type: 'STRING' } }, required: ['action'] } },
@@ -817,7 +817,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin where=youtube; Chrome\'da ara → op=search arg=aranacak metin where=chrome. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, MAYK arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin where=youtube; Chrome\'da ara → op=search arg=aranacak metin where=chrome. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, AETHER arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -831,7 +831,7 @@
       case 'remember': {
         const c = CATS.includes(a.category) ? a.category : 'notes';
         memory[c] = memory[c] || {}; memory[c][String(a.key)] = { value: String(a.value), updated: nowIso() };
-        localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow();
+        localStorage.setItem('aether_mem', JSON.stringify(memory)); syncNow();
         return `Kaydedildi: ${c}/${a.key}`;
       }
       case 'forget': {
@@ -840,7 +840,7 @@
           delete memory[c][a.key]; done = true;
           memory._deleted = memory._deleted || {}; memory._deleted[c + '/' + a.key] = nowIso();
         }
-        localStorage.setItem('jarvis_mem', JSON.stringify(memory));
+        localStorage.setItem('aether_mem', JSON.stringify(memory));
         if (done && Cloud.ok()) { try { await Cloud.write({ 'memory.json': JSON.stringify(memory) }); } catch {} }
         return done ? 'Silindi.' : 'Bulunamadı.';
       }
@@ -879,7 +879,7 @@
       }
       case 'make_image': {
         // Drawing can take half a minute; the conversation goes on meanwhile and
-        // MAYK says so when the picture is on screen.
+        // AETHER says so when the picture is on screen.
         const edit = String(a.mode || 'new') === 'edit';
         if (imgBusy) return 'Önceki resmi hâlâ çiziyorum; o bitince bunu yaparım.';
         if (edit && !lastImage) return 'Değiştirilecek resim yok; önce yeni bir resim çizeyim mi?';
@@ -913,7 +913,7 @@
         }
         const pc = findPc('');
         if (pc && online(pc)) return await sendToPc('', `Projeksiyon/TV (android_device aracı): ${op} ${a.arg || ''} ${a.where || ''} ${a.question || ''}`.trim());
-        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona MAYK Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
+        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona AETHER Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
       }
       case 'chess': return chessTool(a);
       case 'coffee_fortune': {
@@ -924,7 +924,7 @@
       case 'weather': return await weatherTool(a);
       case 'currency': return await currencyTool(a);
       case 'notifications': {
-        if ('Notification' in window && Notification.permission === 'granted' && J(localStorage.getItem('jarvis_push_key'), '')) return 'Bildirimler bu cihazda zaten açık.';
+        if ('Notification' in window && Notification.permission === 'granted' && J(localStorage.getItem('aether_push_key'), '')) return 'Bildirimler bu cihazda zaten açık.';
         openSetup(); return 'Ayarlar açıldı: kullanıcı "🔔 Bildirimleri aç" tuşuna bassın (izin bir dokunuş ister). Bunu ona söyle.';
       }
       case 'background_task': {
@@ -963,7 +963,7 @@
         const d = findDevice(a.device);
         if (!d) return `"${a.device}" adında bir cihaz bulamadım.`;
         if (d.kind === 'pc') return await sendToPc(d.name, 'quick:volume_up');
-        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, MAYK sayfası açık değilse çalamaz.');
+        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, AETHER sayfası açık değilse çalamaz.');
       }
       case 'guard': {
         if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'guard', on: !!a.on });
@@ -992,7 +992,7 @@
       case 'screen_share':
         if (!a.on) { stopVideo(); return 'Ekran paylaşımı kapandı.'; }
         if (!navigator.mediaDevices?.getDisplayMedia) return 'Bu cihaz ekran paylaşamıyor (telefonlar desteklemiyor). Kamerayı açabilirim.';
-        askUser('Ekranı göster', 'MAYK ekranını görmek istiyor.', () => startVideo('screen'));
+        askUser('Ekranı göster', 'AETHER ekranını görmek istiyor.', () => startVideo('screen'));
         return 'Kullanıcıdan ekran paylaşımı onayı istendi.';
     }
     return 'Bilinmeyen araç.';
@@ -1003,16 +1003,16 @@
   // ("429 … limit: 0"), so without this a free key could never draw.
   const IMAGE_MODELS = ['gemini-3.1-flash-image', 'gemini-3-pro-image', 'gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
   const TEXT_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
-  const NOQ_KEY = 'jarvis_img_noq', NOQ_REST = 6 * 3600e3;
-  let lastImage = (() => { try { return JSON.parse(sessionStorage.getItem('jarvis_img') || 'null'); } catch { return null; } })();
+  const NOQ_KEY = 'aether_img_noq', NOQ_REST = 6 * 3600e3;
+  let lastImage = (() => { try { return JSON.parse(sessionStorage.getItem('aether_img') || 'null'); } catch { return null; } })();
   let imgBusy = false;
   const geminiResting = () => { try { return Number(localStorage.getItem(NOQ_KEY) || 0) > Date.now(); } catch { return false; } };
   const restGemini = (on) => { try { on ? localStorage.setItem(NOQ_KEY, String(Date.now() + NOQ_REST)) : localStorage.removeItem(NOQ_KEY); } catch {} };
   const noQuota = (e) => /limit: 0|free_tier|billing|^40[34]\b/i.test(e);
   function keepImage(img) {
     lastImage = img;
-    try { sessionStorage.setItem('jarvis_img', JSON.stringify(lastImage)); }
-    catch { try { sessionStorage.setItem('jarvis_img', JSON.stringify({ ...img, data: '' })); } catch {} }
+    try { sessionStorage.setItem('aether_img', JSON.stringify(lastImage)); }
+    catch { try { sessionStorage.setItem('aether_img', JSON.stringify({ ...img, data: '' })); } catch {} }
   }
   async function geminiImage(prompt, edit, aspect) {
     const parts = edit && lastImage?.data
@@ -1068,7 +1068,7 @@
   const blobToB64 = (blob) => new Promise((res, rej) => { const f = new FileReader(); f.onload = () => res(String(f.result).split(',')[1] || ''); f.onerror = rej; f.readAsDataURL(blob); });
   async function freeImage(en, aspect, seed) {
     const [w, h] = imageSize(aspect);
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(en)}?width=${w}&height=${h}&seed=${seed}&model=flux&nologo=true&enhance=false&referrer=jarvis`;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(en)}?width=${w}&height=${h}&seed=${seed}&model=flux&nologo=true&enhance=false&referrer=aether`;
     let err = '';
     for (let i = 0; i < 3; i++) {
       try {
@@ -1137,12 +1137,12 @@
   });
   function imageBlob() { if (!lastImage.data) return null; const b = atob(lastImage.data), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: lastImage.mime }); }
   $('img-dl').onclick = () => { if (!lastImage) return; if (!lastImage.data) { window.open(lastImage.url, '_blank'); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(imageBlob());
-    a.download = 'jarvis-' + Date.now() + (lastImage.mime.includes('jpeg') ? '.jpg' : '.png'); a.click(); };
+    a.download = 'aether-' + Date.now() + (lastImage.mime.includes('jpeg') ? '.jpg' : '.png'); a.click(); };
   $('img-share').onclick = async () => {
     if (!lastImage) return;
-    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'MAYK' }); } catch { window.open(lastImage.url, '_blank'); } return; }
-    const file = new File([imageBlob()], 'jarvis.png', { type: lastImage.mime });
-    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'MAYK' }); else $('img-dl').click(); } catch {}
+    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'AETHER' }); } catch { window.open(lastImage.url, '_blank'); } return; }
+    const file = new File([imageBlob()], 'aether.png', { type: lastImage.mime });
+    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'AETHER' }); else $('img-dl').click(); } catch {}
   };
   $('img-full').onclick = () => { try { $('img-view').requestFullscreen(); } catch {} };
 
@@ -1207,13 +1207,13 @@
       const text = steps.join(' | ');
       if (text.length > 370) return 'Bu protokol çok uzun; adımları kısalt (en fazla 370 harf).';
       memory.preferences = memory.preferences || {}; memory.preferences[PROTO + n] = { value: text, updated: nowIso() };
-      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow();
+      localStorage.setItem('aether_mem', JSON.stringify(memory)); syncNow();
       return `'${n}' protokolü kaydedildi (${steps.length} adım); bütün cihazlar biliyor.`;
     }
     if (act === 'delete') {
       if (!(n in saved)) return 'Böyle kayıtlı bir protokol yok.';
       delete memory.preferences[PROTO + n]; memory._deleted = memory._deleted || {}; memory._deleted['preferences/' + PROTO + n] = nowIso();
-      localStorage.setItem('jarvis_mem', JSON.stringify(memory));
+      localStorage.setItem('aether_mem', JSON.stringify(memory));
       if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
       return `'${n}' protokolü silindi.`;
     }
@@ -1246,14 +1246,14 @@
       let c; try { c = await here(); } catch (e) { return e.message; }
       const when = new Date().toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
       memory.notes[PLACE + name] = { value: `${c.latitude.toFixed(6)},${c.longitude.toFixed(6)} | ${when} | ±${Math.round(c.accuracy)} m`, updated: nowIso() };
-      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow();
+      localStorage.setItem('aether_mem', JSON.stringify(memory)); syncNow();
       return `"${name}" konumu kaydedildi (±${Math.round(c.accuracy)} m). Bütün cihazlar biliyor.`;
     }
     const hit = places.find(([k]) => k.slice(PLACE.length) === name) || places.find(([k]) => k.includes(name));
     if (!hit) return `"${name}" diye kayıtlı bir yer yok.`;
     if (act === 'forget') {
       delete memory.notes[hit[0]]; memory._deleted = memory._deleted || {}; memory._deleted['notes/' + hit[0]] = nowIso();
-      localStorage.setItem('jarvis_mem', JSON.stringify(memory)); if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
+      localStorage.setItem('aether_mem', JSON.stringify(memory)); if (Cloud.ok()) Cloud.write({ 'memory.json': JSON.stringify(memory) }).catch(() => {});
       return `"${hit[0].slice(PLACE.length)}" silindi.`;
     }
     const [coords, when] = entry(hit[1]).value.split('|').map(x => x.trim());
@@ -1306,7 +1306,7 @@
   }
 
   // ── chess on every device (engine: web/chess.js, same as the desktop's) ──
-  const CH = window.JarvisChess;
+  const CH = window.AetherChess;
   // Built-in SVG pieces: no OS emoji fallback (iOS renders ♟ as a 3-D
   // black pawn even for the white side). Every piece uses the same viewBox.
   const PIECE_SHAPES = {
@@ -1322,14 +1322,14 @@
     const color = piece === piece.toUpperCase() ? 'white' : 'black';
     return `<svg class="ch-piece ${color}" viewBox="0 0 45 45" aria-hidden="true" focusable="false"><g fill="var(--piece-fill)" stroke="var(--piece-stroke)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PIECE_SHAPES[piece.toLowerCase()]}</g></svg>`;
   }
-  const chess = (() => { const g = J(localStorage.getItem('jarvis_chess'), null);
+  const chess = (() => { const g = J(localStorage.getItem('aether_chess'), null);
     return { sans: g?.sans || [], userWhite: g?.userWhite ?? true, level: g?.level || 'orta', teach: !!g?.teach, sel: null, hint: null, coach: '' }; })();
   function chessBoard() { const b = new CH.Board(); for (const san of chess.sans) { const m = b.parse(san); if (!m) break; b.push(m); } return b; }
-  const saveChess = () => localStorage.setItem('jarvis_chess', JSON.stringify({ sans: chess.sans, userWhite: chess.userWhite, level: chess.level, teach: chess.teach }));
+  const saveChess = () => localStorage.setItem('aether_chess', JSON.stringify({ sans: chess.sans, userWhite: chess.userWhite, level: chess.level, teach: chess.teach }));
   function chessState(b = chessBoard()) {
     const out = b.outcome(), pgn = chess.sans.map((m, i) => (i % 2 ? '' : (i / 2 + 1) + '. ') + m).join(' ');
     const userTurn = b.white === chess.userWhite;
-    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'MAYK düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
+    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'AETHER düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
     return { fen: b.fen(), moves: pgn || 'yok', status, user_color: chess.userWhite ? 'beyaz' : 'siyah', level: chess.level, teach: chess.teach };
   }
   function renderChess() {
@@ -1437,14 +1437,14 @@
 
   // ── projector / Android TV remote: the laptop drives it over ADB ────────
   // (core/adb_control.py); this page sends "adb:…" to the laptop's mailbox.
-  // The MAYK Alıcı app on the projector (android-receiver/) works even when
+  // The AETHER Alıcı app on the projector (android-receiver/) works even when
   // the laptop is off; without it, the laptop drives the projector over ADB.
   const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
   let lanPopup = null;
   window.addEventListener('message', e => {
     // Only accept results from the actual window we opened, on our HTTPS origin.
     if (e.origin !== location.origin || !lanPopup || e.source !== lanPopup) return;
-    if (!e.data || e.data.type !== 'mayk-lan-result') return;
+    if (!e.data || e.data.type !== 'aether-lan-result') return;
     const message = String(e.data.text || 'Komutun sonucu gelmedi').slice(0, 500);
     lanPopup = null;
     const result = $('rm-lan-result');
@@ -1455,9 +1455,9 @@
   async function sendLanCommand(kind, arg, extra = {}) {
     const link = parseLanUrl(S.lanRemote);
     if (!link) return 'Yerel projeksiyon bağlantısı kaydedilmemiş.';
-    if (!window.MAYKRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. MAYK sayfasını güncelle.';
+    if (!window.MAYKRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. AETHER sayfasını güncelle.';
     // Unlike a local http:// fetch or a popup, this uses an encrypted HTTPS
-    // channel and preserves the exact existing MAYK UI and voice session.
+    // channel and preserves the exact existing AETHER UI and voice session.
     const result = $('rm-lan-result');
     if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
     const reply = await window.MAYKRelay.send(link, kind, arg, { where: extra.where || 'youtube' });
@@ -1488,22 +1488,22 @@
     if (rx) return await sendToReceiver(rx, { op: kind, arg, ...extra });
     const pc = findPc('');
     if (pc && online(pc)) { const r = await sendToPc('', `adb:${kind}:${arg}`); return r.replace(/^[^:]+: /, ''); }
-    return rx ? 'Projeksiyon yanıt vermedi; MAYK Alıcı uygulamasının bağlantısını kontrol et.'
-              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona MAYK Alıcı uygulamasını kur ya da laptopu aç.';
+    return rx ? 'Projeksiyon yanıt vermedi; AETHER Alıcı uygulamasının bağlantısını kontrol et.'
+              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona AETHER Alıcı uygulamasını kur ya da laptopu aç.';
   }
   function renderLanSettings() {
     const link = parseLanUrl(S.lanRemote);
     $('rm-lan-url').value = link;
     $('rm-lan-state').textContent = link
       ? '🔒 Eşleştirme kayıtlı: ' + new URL(link).hostname + ' · HTTPS köprüsü ilk komutta doğrulanacak.'
-      : 'Bağlantı henüz kayıtlı değil. MAYK Alıcı adresini bir kez ekle.';
+      : 'Bağlantı henüz kayıtlı değil. AETHER Alıcı adresini bir kez ekle.';
     $('rm-lan-config').open = !link;
     $('rm-lan-open').disabled = !link;
     $('s-remote').classList.remove('lan-ios-native');
     $('rm-lan-open').textContent = '📱 Yedek yerel kumandayı aç';
     const note = $('rm-lan-guide');
     if (note) { note.hidden = !link; note.textContent =
-      'MAYK içindeki tuşlar ve sesli komutlar şifreli HTTPS üzerinden çalışır; sayfa değişmez. İnternet kesilirse yedek yerel Wi-Fi kumandasını kullan.'; }
+      'AETHER içindeki tuşlar ve sesli komutlar şifreli HTTPS üzerinden çalışır; sayfa değişmez. İnternet kesilirse yedek yerel Wi-Fi kumandasını kullan.'; }
   }
   $('rm-lan-save').onclick = () => {
     const raw = $('rm-lan-url').value.trim();
@@ -1519,14 +1519,14 @@
   $('t-remote').onclick = () => {
     const rx = receiver(), pc = findPc('');
     $('rm-note').textContent = S.lanRemote
-      ? '📽️ MAYK kumandası hazır · Tuşlar ve sesli komutlar bu ekrandan, sayfa değiştirmeden gönderilir.'
-      : rx ? 'MAYK Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
+      ? '📽️ AETHER kumandası hazır · Tuşlar ve sesli komutlar bu ekrandan, sayfa değiştirmeden gönderilir.'
+      : rx ? 'AETHER Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
       : pc ? pc.name + ' üzerinden kumanda' : 'Projeksiyonun yerel Wi-Fi kumanda adresini aşağıya kaydet.';
     renderLanSettings(); openSheet('s-remote');
   };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k, { popup: true })); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app, { popup: true })));
-  // Keep the original MAYK keypad: decide whether its one search box sends
+  // Keep the original AETHER keypad: decide whether its one search box sends
   // the text to YouTube or performs a Google search in Chrome.
   function searchWhere() { return S.rmSearchWhere === 'chrome' ? 'chrome' : 'youtube'; }
   function renderSearchWhere() {
@@ -1612,7 +1612,7 @@
     const act = String(a.action || 'list').toLowerCase(), item = String(a.item || '').trim();
     memory.notes = memory.notes || {};
     const items = Object.entries(memory.notes).filter(([k]) => k.startsWith(TODO));
-    const persist = () => { localStorage.setItem('jarvis_mem', JSON.stringify(memory)); syncNow(); };
+    const persist = () => { localStorage.setItem('aether_mem', JSON.stringify(memory)); syncNow(); };
     const drop = (k) => { delete memory.notes[k]; memory._deleted = memory._deleted || {}; memory._deleted['notes/' + k] = nowIso(); };
     if (act === 'add') {
       if (!item) return 'Neyi ekleyeyim?';
@@ -1657,9 +1657,9 @@
   // merge_reminders), so one set on the phone is known to the computer and the
   // other way round. Every device marks it due on its own; only the device that
   // has the voice says it out loud.
-  let reminders = J(localStorage.getItem('jarvis_rem'), []);
-  let remFired = J(localStorage.getItem('jarvis_rem_fired'), []);
-  const saveRem = () => { localStorage.setItem('jarvis_rem', JSON.stringify(reminders)); localStorage.setItem('jarvis_rem_fired', JSON.stringify(remFired.slice(-200))); };
+  let reminders = J(localStorage.getItem('aether_rem'), []);
+  let remFired = J(localStorage.getItem('aether_rem_fired'), []);
+  const saveRem = () => { localStorage.setItem('aether_rem', JSON.stringify(reminders)); localStorage.setItem('aether_rem_fired', JSON.stringify(remFired.slice(-200))); };
   const REM_KEEP = 24 * 3600e3;
   function mergeReminders(a, b, now = Date.now()) {
     const by = new Map();
@@ -1737,7 +1737,7 @@
       const late = now - r.due > 10 * 60000 ? ' (geç kaldı, sayfa kapalıydı)' : '';
       toast('⏰ ' + r.text + late);
       if (amOwner()) { beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }
-      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('MAYK hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('AETHER hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
       sys('⏰ Hatırlatma: ' + r.text + late);
       if (amOwner()) {
         const note = r.protocol ? `Zamanlanmış protokol zamanı: "${r.protocol}". Şimdi protocol aracıyla çalıştır.` : `Hatırlatma zamanı: ${r.text}.`;
@@ -1747,7 +1747,7 @@
     }
   }, 5000);
 
-  // ── keep the screen awake while MAYK is listening or on a big screen ──
+  // ── keep the screen awake while AETHER is listening or on a big screen ──
   let wakeLock = null;
   async function keepAwake() {
     const want = micOn || !!guard || KIND === 'tv' || KIND === 'projector';
@@ -1772,18 +1772,18 @@
   window.addEventListener('online', () => { toast('İnternet geri geldi'); if (wantLive || micOn || offlineQueue.length) connect().then(flushOffline).catch(() => {}); else setState('idle'); });
 
   // ── the brain: Gemini Live ───────────────────────────────────────────────
-  let ws = null, ready = false, wantLive = false, variant = +(localStorage.getItem('jarvis_variant') || 0), connecting = null;
+  let ws = null, ready = false, wantLive = false, variant = +(localStorage.getItem('aether_variant') || 0), connecting = null;
   // Gemini closes a live session every ~10 minutes and on network blips. With the
   // resumption handle the next session carries on the same conversation instead
   // of starting from nothing (the desktop does the same in main.py).
   const RESUME_MS = 2 * 3600e3;
-  let resume = J(sessionStorage.getItem('jarvis_resume'), null);
+  let resume = J(sessionStorage.getItem('aether_resume'), null);
   const resumeHandle = () => (resume && Date.now() - resume.t < RESUME_MS ? resume.h : '');
-  function setResume(h) { resume = h ? { h, t: Date.now() } : null; try { h ? sessionStorage.setItem('jarvis_resume', JSON.stringify(resume)) : sessionStorage.removeItem('jarvis_resume'); } catch {} }
+  function setResume(h) { resume = h ? { h, t: Date.now() } : null; try { h ? sessionStorage.setItem('aether_resume', JSON.stringify(resume)) : sessionStorage.removeItem('aether_resume'); } catch {} }
   function systemText() {
-    const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'MAYK'}: ${t.text}`).join('\n');
+    const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'AETHER'}: ${t.text}`).join('\n');
     const pcs = devices.filter(d => d.kind === 'pc').map(d => `${d.name} (${online(d) ? 'açık' : 'kapalı'})`).join(', ') || 'yok';
-    return `Adın ${S.name || 'MAYK'}. Kullanıcının kişisel asistanısın. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
+    return `Adın ${S.name || 'AETHER'}. Kullanıcının kişisel asistanısın. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
       `aynı sen bilgisayarda, laptopta, telefonda, tablette, TV'de ve saatte de varsın ve hepsi aynı hafızayı paylaşır. ` +
       `Türkçe (tr-TR) varsayılan komut ve yanıt dilindir. Türkçe sesli ve yazılı istekleri, günlük söyleyişleri ve ekleri anlayıp mevcut araçlara yönlendir. ` +
       `Örneğin 'uygulamayı aç', 'şunu araştır', 'dosyayı bul', 'hatırlatıcı kur', 'telefona gönder', 'projeksiyonu aç' ve 'testleri çalıştır' uygun aracı çağırmalıdır. ` +
@@ -1828,7 +1828,7 @@
           const msg = typeof e.data === 'string' ? JSON.parse(e.data) : JSON.parse(new TextDecoder().decode(e.data));
           if (msg.setupComplete !== undefined) {
             opened = true; ws = sock; ready = true; connecting = null;
-            if (v !== variant) { variant = v; localStorage.setItem('jarvis_variant', String(v)); }
+            if (v !== variant) { variant = v; localStorage.setItem('aether_variant', String(v)); }
             setState(micOn ? 'listening' : 'idle'); resolve(); return;
           }
           onServer(msg);
@@ -1860,7 +1860,7 @@
       const sc = m.serverContent;
       if (sc.interrupted) { stopPlayback(); }
       if (sc.inputTranscription?.text) { lastInteract = Date.now(); addTurn('user', sc.inputTranscription.text); setState('thinking'); }
-      if (sc.outputTranscription?.text) { if (!outOpen) { closeTurnsOf('user'); outOpen = true; } addTurn('jarvis', sc.outputTranscription.text); }
+      if (sc.outputTranscription?.text) { if (!outOpen) { closeTurnsOf('user'); outOpen = true; } addTurn('aether', sc.outputTranscription.text); }
       for (const p of sc.modelTurn?.parts || []) {
         if (p.thought) continue;          // the model's own reasoning: never shown, never spoken
         if (p.inlineData?.data && /audio/.test(p.inlineData.mimeType || 'audio')) playPcm(p.inlineData.data);
@@ -1870,7 +1870,7 @@
       }
       if (sc.modelTurn?.parts?.some(p => p.inlineData?.data && !p.thought)) hadAudio = true;
       if (sc.turnComplete) {
-        if (pendingText && !hadAudio && !transcript.some(t => t.open && t.role === 'jarvis')) addTurn('jarvis', pendingText);
+        if (pendingText && !hadAudio && !transcript.some(t => t.open && t.role === 'aether')) addTurn('aether', pendingText);
         pendingText = ''; hadAudio = false;
         outOpen = false; closeTurns(); syncSoon(); emit('turn'); if (!playing()) setState(micOn ? 'listening' : 'idle'); }
     }
@@ -1967,14 +1967,14 @@
   }
   $('mic').onclick = () => { if (micOn) { resumeMic = false; stopMic(); } else { claimHere(); startMic(); } };
 
-  // Direct local-language projector actions from MAYK's MAIN chat input.
+  // Direct local-language projector actions from AETHER's MAIN chat input.
   // These commands must not depend on the model deciding to call a tool.
   // Normal conversation still goes through the AI unchanged.
   function projectorCommand(input) {
     if (!parseLanUrl(S.lanRemote)) return null;
     let t = String(input || '').trim().toLocaleLowerCase('tr-TR')
       .replace(/[’‘]/g, "'").replace(/[.!?]+$/g, '').trim()
-      .replace(/^(?:hey\s+)?(?:mayk|jarvis|cervis)\s*[,:\s]+/u, '');
+      .replace(/^(?:hey\s+)?(?:aether|aether|cervis)\s*[,:\s]+/u, '');
     const explicit = /^(?:projeksiyonda|projeksiyonumda|projektörde|perdede|televizyonda|tv'de|tvde)\s+/u.test(t);
     if (explicit) t = t.replace(/^(?:projeksiyonda|projeksiyonumda|projektörde|perdede|televizyonda|tv'de|tvde)\s+/u, '');
     if (!t || /^(?:nasıl|neden|niye|hangi|kim|kaç|ne\s+zaman)\b/u.test(t)) return null;
@@ -2108,7 +2108,7 @@
 
   // ── settings ─────────────────────────────────────────────────────────────
   function openSetup() {
-    // iPhone home-screen MAYK starting empty: say why and offer the paste
+    // iPhone home-screen AETHER starting empty: say why and offer the paste
     $('f-ios').hidden = !(isIOS && standalone && !S.key);
     $('f-move').hidden = !(isIOS && !standalone && S.key);
     $('f-key').value = S.key || ''; $('f-tok').value = S.tok || ''; $('f-gist').value = S.gist || '';
@@ -2122,14 +2122,14 @@
     let text = '';
     try { text = await navigator.clipboard.readText(); } catch {}
     if (!importSetup(text)) text = prompt('Kurulum bağlantısını buraya yapıştır:') || '';
-    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir MAYK kurulum bağlantısı değil.'; return; }
+    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir AETHER kurulum bağlantısı değil.'; return; }
     $('f-status').textContent = 'Kurulum geldi, hafıza yükleniyor…';
     openSetup(); lastBeat = 0; await syncNow(); setState(S.key ? 'idle' : 'setup');
     $('f-status').textContent = 'Tamam — hafızan ve ayarların bu uygulamada.'; setTimeout(closeSheets, 1200);
   }
   $('f-paste').onclick = pasteSetup; $('f-paste2').onclick = pasteSetup;
   $('f-copy').onclick = async () => {
-    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki MAYK\'ı açınca "Yapıştır"a bas.'; }
+    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki AETHER\'ı açınca "Yapıştır"a bas.'; }
     catch { prompt('Bu bağlantıyı kopyala:', setupLink()); }
   };
   $('f-save').onclick = async () => {
@@ -2145,7 +2145,7 @@
   };
   $('f-link').onclick = async () => {
     const link = setupLink();
-    try { if (navigator.share) await navigator.share({ title: 'MAYK kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
+    try { if (navigator.share) await navigator.share({ title: 'AETHER kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
     catch { try { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı'); } catch { prompt('Bağlantı:', link); } }
   };
 
@@ -2223,31 +2223,31 @@
   const b64uBytes = t => { const b = atob(String(t).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(t).length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
   async function enablePush() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return /iPhone|iPad/.test(navigator.userAgent)
-      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile MAYK\'ı ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
+      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile AETHER\'ı ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
     if (!Cloud.ok()) return 'Önce ortak hafıza (GitHub anahtarı) kurulmalı.';
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return 'Bildirim izni verilmedi.';
     const f = await Cloud.read();
     const pub = J(f['push.json'], {}).publicKey;
-    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda MAYK bir kez açılınca oluşur. Sonra tekrar dene.';
+    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda AETHER bir kez açılınca oluşur. Sonra tekrar dene.';
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    if (sub && J(localStorage.getItem('jarvis_push_key'), '') !== pub) { await sub.unsubscribe(); sub = null; }
+    if (sub && J(localStorage.getItem('aether_push_key'), '') !== pub) { await sub.unsubscribe(); sub = null; }
     sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(pub) });
-    localStorage.setItem('jarvis_push_key', JSON.stringify(pub));
+    localStorage.setItem('aether_push_key', JSON.stringify(pub));
     await Cloud.write({ [`push-sub-${S.id}.json`]: JSON.stringify(sub.toJSON()) });
-    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki MAYK açıkken).';
+    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki AETHER açıkken).';
   }
-  $('f-alici').onclick = () => { window.open(ALICI_APK, '_blank'); $('f-status').textContent = 'İndirilen jarvis-alici.apk\'yı aç ve kur (bilinmeyen kaynaklara izin ver). Sonra "Alıcıyı bağla"ya bas.'; };
+  $('f-alici').onclick = () => { window.open(ALICI_APK, '_blank'); $('f-status').textContent = 'İndirilen aether-alici.apk\'yı aç ve kur (bilinmeyen kaynaklara izin ver). Sonra "Alıcıyı bağla"ya bas.'; };
   $('f-alici-link').onclick = () => {
     const j = JSON.stringify({ g: '', t: S.tok || '', i: S.gist || '', n: S.name || '', d: devName() });
     const code = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     if (!S.tok || !S.gist) { $('f-status').textContent = 'Önce ortak hafıza (GitHub anahtarı) kurulu olmalı.'; return; }
-    const link = 'jarvisalici://setup?s=' + code;
-    // Only Android devices with MAYK Alıcı installed can open this scheme.
+    const link = 'aetheralici://setup?s=' + code;
+    // Only Android devices with AETHER Alıcı installed can open this scheme.
     // iOS Safari/PWA otherwise displays an unhelpful "invalid address" error.
     if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      const note = 'Bu bağlantı iPhone\'da açılmaz. Projeksiyondaki MAYK Alıcı uygulamasının 2. adımına yapıştırmak için bağlantıyı güvenli biçimde projeksiyona aktar. Bağlantı özel GitHub anahtarını içerir; herkese açık paylaşma.';
+      const note = 'Bu bağlantı iPhone\'da açılmaz. Projeksiyondaki AETHER Alıcı uygulamasının 2. adımına yapıştırmak için bağlantıyı güvenli biçimde projeksiyona aktar. Bağlantı özel GitHub anahtarını içerir; herkese açık paylaşma.';
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).then(() => {
           $('f-status').textContent = 'Alıcı kurulum bağlantısı kopyalandı. ' + note;
@@ -2262,9 +2262,9 @@
     location.href = link;
   };
   $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
-  // ── the computer panel: buttons straight to the computer's MAYK ───────
+  // ── the computer panel: buttons straight to the computer's AETHER ───────
   $('t-pc').onclick = () => {
-    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "MAYK\'ı her cihaza kur" de.';
+    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "AETHER\'ı her cihaza kur" de.';
     openSheet('s-pc');
   };
   document.querySelectorAll('#s-pc [data-q]').forEach(b => b.onclick = async () => {
@@ -2277,8 +2277,8 @@
     e.preventDefault(); const t = $('pc-inp').value.trim(); if (!t) return; $('pc-inp').value = '';
     toast('Bilgisayara gönderildi…'); const r = await sendToPc('', t); sys('💻 ' + r); toast(r.slice(0, 120));
   });
-  // Shared from another app (Android "Paylaş → MAYK", manifest share_target):
-  // MAYK asks what to do with it — open on the TV, send to the computer …
+  // Shared from another app (Android "Paylaş → AETHER", manifest share_target):
+  // AETHER asks what to do with it — open on the TV, send to the computer …
   (function sharedIn() {
     const q = new URLSearchParams(location.search);
     const parts = ['share_title', 'share_text', 'share_url'].map(k => (q.get(k) || '').trim()).filter(Boolean);
@@ -2288,7 +2288,7 @@
     closeTurns(); transcript.push({ role: 'user', text: '📎 ' + shared, open: false }); renderLog();
     claimHere();
     connect().then(() => { setState('thinking');
-      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu MAYK'a paylaştı: ${shared}\n` +
+      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu AETHER'a paylaştı: ${shared}\n` +
         'Ne olduğunu tek cümleyle söyle ve ne yapmak istediğini sor: bir cihazda açmak (TV, bilgisayar…), özetlemek, kaydetmek, yapılacaklara eklemek gibi.' } }); })
       .catch(() => toast('Paylaşılan alındı; bağlanınca soracağım.'));
   })();
@@ -2301,7 +2301,7 @@
   checkVersion();
 
   // ── device modules: web/dev-*.js reach the app only through this object ──
-  window.JARVIS = {
+  window.AETHER = {
     get kind() { return KIND; }, S, save, $, esc, toast, sys, openSheet, closeSheets, askUser,
     on(ev, fn) { (hooks[ev] = hooks[ev] || []).push(fn); if (ev === 'weather' && hudWeather) fn(hudWeather); },
     tool(decl, fn) { if (!TOOLS.some(t => t.name === decl.name)) TOOLS.push(decl); extraTools[decl.name] = fn; },
@@ -2336,18 +2336,18 @@
   if (lanResult) {
     let wasMic = false, restore = '';
     try {
-      wasMic = sessionStorage.getItem('jarvis_lan_was_mic') === '1';
-      restore = sessionStorage.getItem('jarvis_lan_restore') || '';
-      sessionStorage.removeItem('jarvis_lan_restore');
-      sessionStorage.removeItem('jarvis_lan_was_mic');
+      wasMic = sessionStorage.getItem('aether_lan_was_mic') === '1';
+      restore = sessionStorage.getItem('aether_lan_restore') || '';
+      sessionStorage.removeItem('aether_lan_restore');
+      sessionStorage.removeItem('aether_lan_was_mic');
     } catch {}
     setTimeout(() => {
       sys('📽️ Projeksiyon: ' + lanResult + (wasMic ? ' Konuşmak için mikrofona yeniden dokun.' : ''));
       toast('📽️ ' + lanResult);
       if (restore === 'remote') {
         $('t-remote').click();
-        try { $('s-remote').scrollTop = Number(sessionStorage.getItem('jarvis_lan_scroll') || 0); } catch {}
-        sessionStorage.removeItem('jarvis_lan_scroll');
+        try { $('s-remote').scrollTop = Number(sessionStorage.getItem('aether_lan_scroll') || 0); } catch {}
+        sessionStorage.removeItem('aether_lan_scroll');
       }
     }, 350);
   }
