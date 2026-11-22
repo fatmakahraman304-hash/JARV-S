@@ -317,24 +317,92 @@ class Workspace:
     def allowed(command: str) -> bool:
         return bool(Workspace._commands(command))
 
+    @staticmethod
+    def _is_verification(tokens: list[str]) -> bool:
+        """Recognize a meaningful test, build, lint or smoke execution."""
+        body = " ".join(tokens[1:]).lower()
+        if re.search(r"\b(pytest|unittest|test[_\.-]|tests[/\\]|test\b|"
+                     r"compileall|check\b|lint\b|mypy|ruff|build\b|"
+                     r"typecheck|tsc)\b", body):
+            return True
+        if tokens[0].lower() in {"pytest", "ruff", "mypy", "eslint", "tsc", "rustc"}:
+            return True
+        if tokens[0].lower() in {"python", "python3", "python.exe", "py", "py.exe"}:
+            return any(a.endswith(".py") for a in tokens[1:])
+        return False
+
+    def _resolve_python(self, executable: str) -> str:
+        if executable not in {"python", "python.exe", "python3", "py", "py.exe"}:
+            return executable
+        # An installed Windows MAYK.exe is not the Python interpreter.
+        for name in (".venv", "venv", "env"):
+            for rel in ("Scripts/python.exe", "bin/python"):
+                exe = self.root / name / rel
+                if exe.is_file():
+                    return str(exe)
+        if Path(sys.executable).name.lower().startswith("python"):
+            return sys.executable
+        import shutil
+        return shutil.which(executable) or executable
+
     def t_run(self, command, timeout=120):
-        if not self.allowed(command):
-            return ( "Reddedildi: yalnızca derleme, çalıştırma ve test komutlarına izin verilir "
-                    "(silme, git commit/push veya indirme işlemleri yasaktır).")
+        commands = self._commands(command)
+        if not commands:
+            return ("Reddedildi: yalnızca güvenli test/derleme komutları "
+                    "kabul edilir; kabuk yönlendirmeleri çalıştırılmaz.")
         self.log(f"  Çalıştırıyor: {str(command)[:140]}")
-        try:
-            r = subprocess.run(command, shell=True, cwd=self.root, capture_output=True, text=True,
-                               timeout=max(5, min(600, int(timeout or 120))), encoding="utf-8", errors="replace",
-                               stdin=subprocess.DEVNULL,
-                               # a file fixed within the same second must not run from a stale .pyc
-                               env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"},
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            out = (r.stdout or "") + ("\n[stderr]\n" + r.stderr if r.stderr else "")
-            if len(out) > MAX_OUTPUT:
-                out = out[:MAX_OUTPUT // 2] + "\n… (cut) …\n" + out[-MAX_OUTPUT // 2:]
-            return f"exit code {r.returncode}\n{out}"
-        except subprocess.TimeoutExpired:
-            return "Süre sınırı doldu. Sürekli çalışan sunucu veya programsa yeniden açmayın; başka yöntemle test edin."
+        seconds = max(5, min(600, int(timeout or 120)))
+        deadline = time.monotonic() + seconds
+        outputs = []
+        checked = False
+        for tokens in commands:
+            argv = [self._resolve_python(tokens[0]), *tokens[1:]]
+            if time.monotonic() >= deadline:
+                self.last_run_result = "timeout"
+                self.test_passed = False
+                return "\n".join(outputs + ["exit code timeout: süre sınırı doldu"])
+            try:
+                proc = subprocess.run(
+                    argv, shell=False, cwd=self.root,
+                    capture_output=True, text=True,
+                    timeout=max(1, deadline - time.monotonic()),
+                    encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL,
+                    env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1",
+                         "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except subprocess.TimeoutExpired as exc:
+                stdout, stderr = exc.stdout or b"", exc.stderr or b""
+                if isinstance(stdout, bytes):
+                    stdout = stdout.decode("utf-8", errors="replace")
+                if isinstance(stderr, bytes):
+                    stderr = stderr.decode("utf-8", errors="replace")
+                self.last_run_result = "timeout"
+                self.test_passed = False
+                return "\n".join(outputs + [
+                    f"exit code timeout: {seconds}s",
+                    (stdout + "\n[stderr]\n" + stderr)[-MAX_OUTPUT:],
+                ])
+            except OSError as exc:
+                self.last_run_result = "start failed"
+                self.test_passed = False
+                return "\n".join(outputs + [
+                    f"exit code unavailable: Komut başlatılamadı: {type(exc).__name__}: {exc}"
+                ])
+            details = (proc.stdout or "") + (
+                "\n[stderr]\n" + proc.stderr if proc.stderr else "")
+            outputs.append(f"$ {tokens[0]} {' '.join(tokens[1:])}\n"
+                           f"exit code {proc.returncode}\n{details}")
+            self.last_run_result = f"exit code {proc.returncode}"
+            if proc.returncode:
+                self.test_passed = False
+                return "\n".join(outputs)[-MAX_OUTPUT:]
+            checked |= self._is_verification(tokens)
+        if checked:
+            self.test_passed = True
+            self.dirty_since_test = False
+        return "\n".join(outputs)[-MAX_OUTPUT:]
 
     def t_fetch_url(self, url):
         if not str(url).startswith(("http://", "https://")):
