@@ -1,4 +1,4 @@
-name: MAYK Windows installation and HUD acceptance
+name: AETHER Windows installation and HUD acceptance
 on:
   workflow_dispatch:
   pull_request:
@@ -37,27 +37,27 @@ jobs:
       - name: Open the first-run desktop window and close it normally
         shell: pwsh
         run: |
-          $process = Start-Process -PassThru -FilePath ".\.venv\Scripts\pythonw.exe" -ArgumentList "main.py" -RedirectStandardError "$env:RUNNER_TEMP/mayk-error.log"
+          $process = Start-Process -PassThru -FilePath ".\.venv\Scripts\pythonw.exe" -ArgumentList "main.py" -RedirectStandardError "$env:RUNNER_TEMP/aether-error.log"
           try {
             $deadline = [DateTime]::UtcNow.AddSeconds(90)
             $windowOwner = $null
             do {
               Start-Sleep -Milliseconds 250
               $process.Refresh()
-              if ($process.HasExited) { throw "MAYK exited before displaying a window ($($process.ExitCode))" }
+              if ($process.HasExited) { throw "AETHER exited before displaying a window ($($process.ExitCode))" }
               # A Windows venv launcher can host the interpreter in a child.
               $processIds = @($process.Id) + @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | Select-Object -ExpandProperty ProcessId)
               $windowOwner = Get-Process -Id $processIds -ErrorAction SilentlyContinue |
-                Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle -like 'M.A.Y.K*' } |
+                Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle -like 'AETHER*' } |
                 Select-Object -First 1
             } until ($windowOwner -or [DateTime]::UtcNow -gt $deadline)
             if (-not $windowOwner) { throw "No native desktop window" }
-            if (-not $windowOwner.CloseMainWindow()) { throw "MAYK did not accept a window close" }
-            if (-not $process.WaitForExit(30000)) { throw "MAYK remained alive after window close" }
-            if ($process.ExitCode -ne 0) { throw "MAYK exited with $($process.ExitCode)" }
+            if (-not $windowOwner.CloseMainWindow()) { throw "AETHER did not accept a window close" }
+            if (-not $process.WaitForExit(30000)) { throw "AETHER remained alive after window close" }
+            if ($process.ExitCode -ne 0) { throw "AETHER exited with $($process.ExitCode)" }
           } finally {
             if (-not $process.HasExited) { $process.Kill($true) }
-            Get-Content "$env:RUNNER_TEMP/mayk-error.log" -Tail 30
+            Get-Content "$env:RUNNER_TEMP/aether-error.log" -Tail 30
           }
       - name: Verify the installed browser engines
         shell: python
@@ -69,8 +69,8 @@ jobs:
               for engine in (browser_api.chromium, browser_api.firefox):
                   browser = engine.launch()
                   page = browser.new_page()
-                  page.set_content("<title>MAYK acceptance</title>")
-                  assert page.title() == "MAYK acceptance"
+                  page.set_content("<title>AETHER acceptance</title>")
+                  assert page.title() == "AETHER acceptance"
                   browser.close()
           '''
           subprocess.run([r".venv\Scripts\python.exe", "-c", script], check=True)

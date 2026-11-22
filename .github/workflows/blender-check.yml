@@ -41,7 +41,7 @@ jobs:
       - name: Blender tests
         env:
           BLENDER_RENDER_DIR: ${{ runner.temp }}/renders
-          JARVIS_BLENDER_NO_MANUAL: "1"
+          AETHER_BLENDER_NO_MANUAL: "1"
           BLENDER_MANUAL_TEST: ${{ matrix.series == '5.0' && '1' || '' }}
           BLENDER_MANUAL_VERSION: ${{ matrix.series }}
         run: |
