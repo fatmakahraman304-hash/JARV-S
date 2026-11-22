@@ -27,7 +27,7 @@ def main() -> int:
     from core.avatar import HoloAvatar
     from gui.theme import C, qcol
 
-    look = sys.argv[sys.argv.index("--look") + 1] if "--look" in sys.argv else "human"
+    look = sys.argv[sys.argv.index("--look") + 1] if "--look" in sys.argv else "projection"
     av = HoloAvatar()
     av.style = look
     poses = [("1_front", 0.0, 0.0, 0.0, 0.0, 0.0), ("2_turned", 0.42, 0.07, 0.0, 0.0, 0.0),
@@ -48,7 +48,7 @@ def main() -> int:
         p.end()
         img.save(str(out / f"{name}.png"))
         if av.style != look:
-            print("GPU path failed:", av.render_note)
+            print("Requested face rendering failed:", av.render_note)
             return 1
     # steady-state timing at HUD size (1080p and 4K head heights)
     for label, s in (("1080p", 560), ("4K", 1120)):
@@ -67,7 +67,7 @@ def main() -> int:
     if "--log-preview" in sys.argv:
         _log_images(out, size)
     gl = av._gl
-    print("renderer:", getattr(gl, "renderer_name", "?"), "| first frames ms:",
+    print("renderer:", getattr(gl, "renderer_name", "QPainter projection" if look == "projection" else "?"), "| first frames ms:",
           [round(x * 1000) for x in times])
     return 0
 

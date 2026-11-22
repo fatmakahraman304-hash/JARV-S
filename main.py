@@ -697,10 +697,12 @@ class MaykLive:
         self._proactive        = ProactiveEngine()
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         from memory.continuity import recover_jobs
-        try:
-            recover_jobs()
-        except Exception as exc:
-            print(f"[Memory] Job state could not be read: {exc}")
+        if getattr(ui, "_jobs_recovered", False) is not True:
+            try:
+                recover_jobs()
+                ui._jobs_recovered = True
+            except Exception as exc:
+                print(f"[Memory] Job state could not be read: {exc}")
         # A coding job cut off by a shutdown or an update in the last hours is
         # picked up again by itself, from the stage it reached.
         threading.Thread(target=self._resume_interrupted_work, daemon=True,
@@ -4040,6 +4042,17 @@ def main():
     except Exception as exc:
         print(f"[MAYK] Günlük dosyası açılamadı: {exc}")
     ui = MaykUI("face.png")
+    from core.second_brain_service import Controller
+    from memory.continuity import recover_jobs
+    try:
+        recover_jobs()
+        ui._jobs_recovered = True
+    except Exception as exc:
+        ui.write_log(f"SYS: Görev günlüğü okunamadı: {exc}")
+    second_brain = Controller(ui, ready=lambda: ui._win._ready)
+    ui._win._brain_controller = second_brain
+    ui._app.aboutToQuit.connect(second_brain.stop)
+    second_brain.start()
     holder: dict = {}
 
     def runner():

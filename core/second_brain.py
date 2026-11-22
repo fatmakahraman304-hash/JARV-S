@@ -62,7 +62,8 @@ def scan():
         from memory.continuity import projects
         jobs = projects(limit=200)
         for job in jobs:
-            if job["status"] in ("başarısız", "sorunlu bitti", "aşama bekliyor"):
+            if (job["status"] in ("başarısız", "sorunlu bitti", "aşama bekliyor")
+                    and "[SECOND_BRAIN:" not in job["instruction"]):
                 add("Kod işini incele · " + job["title"], job["note"], "project:" + str(job["id"]))
         for item in items():
             if item["state"] not in ("requested", "running"):
@@ -111,7 +112,7 @@ def develop(item_id, player):
     if item["state"] in ("requested", "running"):
         raise ValueError("Bu fikir için geliştirme zaten istendi.")
     from plugins import github_develop
-    instruction = (f"[SECOND_BRAIN:{item_id}]\nKullanıcının seçtiği MAYK geliştirmesi\n"
+    instruction = (f"[SECOND_BRAIN:{item_id}]\nMAYK geliştirme bulgusu\n"
                    f"{item['title']}\n{item['detail']}\nPlan taslağı\n{item['analysis']}\n"
                    "Inspect current code and AGENTS.md. Implement a focused change with relevant tests. "
                    "Report failed or missing tests truthfully. Preserve user data and credentials.")

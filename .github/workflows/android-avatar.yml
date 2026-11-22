@@ -3,7 +3,7 @@ on:
   push:
     branches: [feature/android-face]
   pull_request:
-    paths: ["gui/android_gl.py", "core/avatar.py", "core/android_render.py",
+    paths: ["gui/android_gl.py", "core/avatar.py", "core/android_render.py", "core/hologram_face.py",
             "tools/render_android_preview.py", ".github/workflows/android-avatar.yml"]
 permissions:
   contents: read

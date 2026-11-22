@@ -866,7 +866,18 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     p.setPen(pen)
     p.setBrush(Qt.BrushStyle.NoBrush)
-    if kind == "gear":
+    if kind == "brain":
+        path = QPainterPath(QPointF(cx, cy - s * 0.78))
+        path.cubicTo(cx - s * 0.65, cy - s * 1.10, cx - s * 0.98, cy - s * 0.35, cx - s * 0.67, cy - s * 0.12)
+        path.cubicTo(cx - s * 1.10, cy + s * 0.38, cx - s * 0.55, cy + s * 0.95, cx, cy + s * 0.68)
+        path.cubicTo(cx + s * 0.55, cy + s * 0.95, cx + s * 1.10, cy + s * 0.38, cx + s * 0.67, cy - s * 0.12)
+        path.cubicTo(cx + s * 0.98, cy - s * 0.35, cx + s * 0.65, cy - s * 1.10, cx, cy - s * 0.78)
+        p.drawPath(path)
+        p.drawLine(QPointF(cx, cy - s * 0.64), QPointF(cx, cy + s * 0.58))
+        for side in (-1, 1):
+            p.drawLine(QPointF(cx + side * s * 0.20, cy - s * 0.25), QPointF(cx + side * s * 0.52, cy - s * 0.38))
+            p.drawLine(QPointF(cx + side * s * 0.18, cy + s * 0.35), QPointF(cx + side * s * 0.55, cy + s * 0.16))
+    elif kind == "gear":
         pts = []
         for i in range(32):
             a = math.radians(i * 11.25 - 11.25)
@@ -938,10 +949,6 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
         p.drawPolygon(QPolygonF([QPointF(cx - s * 0.85, cy - s * 0.55), QPointF(cx - s * 0.3, cy - s * 0.55),
                                  QPointF(cx - s * 0.15, cy - s * 0.35), QPointF(cx + s * 0.85, cy - s * 0.35),
                                  QPointF(cx + s * 0.85, cy + s * 0.65), QPointF(cx - s * 0.85, cy + s * 0.65)]))
-    elif kind == "brain":
-        p.drawEllipse(QPointF(cx - s * 0.32, cy), s * 0.48, s * 0.68)
-        p.drawEllipse(QPointF(cx + s * 0.32, cy), s * 0.48, s * 0.68)
-        p.drawLine(QLineF(cx, cy - s * 0.6, cx, cy + s * 0.6))
     elif kind == "play":
         path = QPainterPath()
         path.addRoundedRect(QRectF(cx - s * 0.85, cy - s * 0.6, s * 1.7, s * 1.2), s * 0.3, s * 0.3)
