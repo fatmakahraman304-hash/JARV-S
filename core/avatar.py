@@ -128,10 +128,13 @@ class HoloAvatar:
     # screen's own resolution (gui/android_gl.py). "hologram": the QPainter
     # drawing below. Android falls back to hologram by itself if this machine
     # has no usable OpenGL, and says why in `render_note`.
-    style = "projection"          # "human" | "android" (GPU) | "hologram" (wireframe)
+    style = "holographic"          # Smooth 3D surface with a blue light material.
 
     def __init__(self) -> None:
         mesh = get_head_mesh()
+        if self.style == "holographic":
+            from core.hologram_mesh import with_shoulders
+            mesh = with_shoulders(mesh)
         self._v0 = mesh["verts"]
         self._n0 = mesh["normals"]
         self._jaw = mesh["jaw"]
@@ -153,7 +156,7 @@ class HoloAvatar:
 
         # Crown (+1.0) down to the bottom of the neck, in head-half-heights.
         # Callers size the head to the room they have with this.
-        self.SPAN = max(2.65 if self.style == "projection" else 0.0,
+        self.SPAN = max(2.65 if self.style in ("projection", "holographic") else 0.0,
                         mesh["span"][0] - mesh["span"][1])
 
         self._lut_cache: list = []
@@ -499,7 +502,7 @@ class HoloAvatar:
         """
         if bg is None:
             bg = QColor(0, 0, 0)
-        if self.style == "projection":
+        if self.style in ("projection", "holographic"):
             primary = QColor(70, 188, 255)
         amp = self._glow
         verts, norms = self._pose()
@@ -521,6 +524,9 @@ class HoloAvatar:
         xs = cx + verts[:, 0] * k
         ys = cy - verts[:, 1] * k
 
+        if self.style == "holographic":
+            if self._paint_android(p, xs, ys, verts, norms, primary, accent, amp):
+                return
         if self.style == "projection":
             if self._projection is None:
                 from core.hologram_face import ProjectionFace
@@ -567,8 +573,8 @@ class HoloAvatar:
             p.drawImage(QPointF(x0, y0), img)
             return True
         except Exception as exc:
-            self.render_note = f"3D yüz çizilemedi, hologram kullanılıyor: {exc}"[:300]
-            self.style = "hologram"
+            self.render_note = f"3D çizici açılamadı, yedek yüz kullanılıyor: {exc}"[:300]
+            self.style = "projection" if self.style == "holographic" else "hologram"
             try:
                 import sys
                 print(f"[Avatar] {self.render_note}", file=sys.stderr)

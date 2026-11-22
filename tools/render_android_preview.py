@@ -27,7 +27,7 @@ def main() -> int:
     from core.avatar import HoloAvatar
     from gui.theme import C, qcol
 
-    look = sys.argv[sys.argv.index("--look") + 1] if "--look" in sys.argv else "projection"
+    look = sys.argv[sys.argv.index("--look") + 1] if "--look" in sys.argv else "holographic"
     av = HoloAvatar()
     av.style = look
     poses = [("1_front", 0.0, 0.0, 0.0, 0.0, 0.0), ("2_turned", 0.42, 0.07, 0.0, 0.0, 0.0),
