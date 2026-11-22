@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
     _gesture_finished_sig = pyqtSignal(int, str)
     _scan_request_sig = pyqtSignal()
     _scan_result_sig = pyqtSignal(bytes, object)
+    _second_brain_sig = pyqtSignal()
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
@@ -422,6 +423,7 @@ class MainWindow(QMainWindow):
         self._route_result_sig.connect(self._show_route)
         self._world_map_sig.connect(self._show_world_map)
         self._map_search_sig.connect(self._finish_map_search)
+        self._second_brain_sig.connect(self._open_second_brain)
         self._codejob_sig.connect(self._show_code_job)
         self._reconfig_sig.connect(self._show_setup)
         self._camera_sig.connect(self._show_camera_frame)
@@ -1539,6 +1541,12 @@ class MainWindow(QMainWindow):
         self._drawer_btn.setCheckable(True)
         self._drawer_btn.setToolTip("Ayarlar — bir kez yapılandırılan her şey")
         self._drawer_btn.clicked.connect(self._open_settings_page)
+        brain_btn = QPushButton("İKİNCİ BEYİN")
+        brain_btn.setFont(px_font(11, QFont.Weight.DemiBold))
+        brain_btn.setStyleSheet(btn_css("primary", align="center"))
+        brain_btn.setFixedHeight(38)
+        brain_btn.clicked.connect(self._open_second_brain)
+        lay.addWidget(brain_btn)
         lay.addWidget(self._drawer_btn)
 
         grid.addWidget(left, 0, 0)
@@ -3433,6 +3441,15 @@ class MainWindow(QMainWindow):
             self.on_audio_device_change()
 
     # ── Memory panel ─────────────────────────────────────────────────────────
+
+    def _open_second_brain(self):
+        from gui.second_brain import SecondBrainPanel
+        panel = self.__dict__.get("_second_brain_panel")
+        if panel is None:
+            panel = self._second_brain_panel = SecondBrainPanel(self)
+        panel.show()
+        panel.raise_()
+        panel.activateWindow()
 
     def _open_memory_panel(self):
         ov = MemoryOverlay(parent=self.centralWidget())

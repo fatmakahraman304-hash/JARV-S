@@ -356,6 +356,9 @@ class MaykUI:
         """Thread-safe: show the native world map or close it."""
         self._win._world_map_sig.emit(visible)
 
+    def show_second_brain(self):
+        self._win._second_brain_sig.emit()
+
     def show_code_job(self, job: dict) -> None:
         """Thread-safe: draw the coding agent's live progress in the panel."""
         self._win._codejob_sig.emit(dict(job))
