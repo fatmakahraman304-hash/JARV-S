@@ -406,11 +406,34 @@ class Workspace:
             self.dirty_since_test = False
         return "\n".join(outputs)[-MAX_OUTPUT:]
 
+    @staticmethod
+    def _public_url(url: str) -> bool:
+        """Never use documentation fetches to reach local/internal services."""
+        parts = urllib.parse.urlsplit(str(url))
+        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+            return False
+        host = parts.hostname.rstrip(".").lower()
+        if (host == "localhost" or host.endswith(
+                (".localhost", ".local", ".internal", ".home.arpa"))):
+            return False
+        try:
+            return ipaddress.ip_address(host).is_global
+        except ValueError:
+            return True
+
     def t_fetch_url(self, url):
-        if not str(url).startswith(("http://", "https://")):
-            return "Yalnızca web adresleri kabul edilir."
+        if not self._public_url(url):
+            return "Reddedildi: yalnızca herkese açık HTTPS dokümanları okunabilir."
+
+        class PublicRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                if not Workspace._public_url(newurl):
+                    raise ValueError("Yerel ağa veya HTTP adresine yönlendirme reddedildi.")
+                return super().redirect_request(req, fp, code, msg, headers, newurl)
+
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 MAYK"})
-        with urllib.request.urlopen(req, timeout=20) as r:
+        opener = urllib.request.build_opener(PublicRedirect())
+        with opener.open(req, timeout=20) as r:
             raw = r.read(600_000).decode("utf-8", errors="replace")
         text = re.sub(r"(?is)<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ", raw)
         text = html.unescape(re.sub(r"<[^>]+>", " ", text))
