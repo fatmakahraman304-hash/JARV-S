@@ -500,12 +500,20 @@ void main() {
     }
 
     if (u_holographic > 0.5) {
-        // Preserve measured surface curvature and cavities, with no drawn
-        // facial outlines. The same real eyes, lids and mouth render below.
-        alb = vec3(0.30, 0.36, 0.42);
-        H = earH * 0.6 + lipM * 0.0004;
-        ks = 0.22; shin = 42.0; sss = 0.18;
-        hairC = 0.0; browC *= 0.25; shirt = 0.0;
+        // Spectral translucent skin, not a smooth blue mask. Retain the
+        // sculpted hair, ear relief, pores, brow follicles, beard shadow and
+        // lip microrelief: these are what make a human head read as human.
+        vec3 ice = mix(vec3(0.085, 0.22, 0.34), vec3(0.23, 0.53, 0.68),
+                       clamp(0.48 + 0.30 * mott + 0.18 * cheek - 0.15 * under, 0.0, 1.0));
+        ice *= 1.0 - beard * (0.22 + 0.11 * dots);
+        ice = mix(ice, vec3(0.020, 0.070, 0.12), hairC * 0.96);
+        ice = mix(ice, vec3(0.023, 0.080, 0.13), browC * 0.94);
+        ice = mix(ice, vec3(0.12, 0.30, 0.43), lipM * 0.75);
+        ice = mix(ice, vec3(0.040, 0.13, 0.23), shirt * 0.90);
+        alb = ice;
+        ks = mix(0.12, 0.32, lipM + hairC * 0.30);
+        shin = mix(24.0, 52.0, lipM);
+        sss = 0.42;
     }
     vec3 n = bumpN(n0, v_pos, H * u_scale);
     float fwy = max(fwidth(p.y), 1e-5);
@@ -656,11 +664,22 @@ void main() {
     }
 
     if (u_holographic > 0.5) {
-        float luminance = dot(col, vec3(0.2126, 0.7152, 0.0722));
-        float edge = pow(1.0 - clamp(dot(n, VIEW), 0.0, 1.0), 2.2);
-        float scan = mix(1.0, 0.94 + 0.06 * sin(p.y * 720.0), lod(720.0));
-        col = vec3(0.015, 0.44, 0.82) * (0.12 + 2.3 * luminance);
-        col += vec3(0.55, 1.0, 1.15) * edge * (1.9 + 0.20 * u_glow);
+        // Filmic, depth-preserving spectral grade. Dark eye sockets, hair,
+        // nostrils and the lip line stay dark; nose bridge, brow ridge and
+        // cheekbones catch separate key/fill highlights instead of turning
+        // into one overexposed cyan silhouette.
+        float luminance = max(0.0, dot(col, vec3(0.2126, 0.7152, 0.0722)));
+        float tonal = smoothstep(0.015, 0.65, luminance);
+        vec3 deep = vec3(0.002, 0.022, 0.045);
+        vec3 mid = vec3(0.018, 0.34, 0.56);
+        vec3 frost = vec3(0.40, 0.93, 1.08);
+        col = mix(deep, mid, pow(tonal, 0.90));
+        col += frost * pow(max(luminance - 0.19, 0.0), 1.4) * 0.70;
+        float edge = pow(1.0 - clamp(dot(n, VIEW), 0.0, 1.0), 2.8);
+        col += vec3(0.17, 0.62, 0.94) * edge * (0.72 + 0.32 * u_glow);
+        // A barely visible moving scan says hologram without obscuring
+        // facial anatomy; screen-size LOD suppresses sparkling on small HUDs.
+        float scan = 1.0 + 0.018 * sin(p.y * 540.0 - u_time * 1.7) * lod(540.0);
         col *= scan;
     }
     col = max(col, vec3(0.0));
@@ -781,7 +800,7 @@ class AndroidGL:
         neck_v = np.zeros(len(rest_sub), bool)
         neck_v[f[neck_face > 0.5].reshape(-1)] = True
         neck_v[f[neck_face < 0.5].reshape(-1)] = False
-        self._disp = (_human_relief(rest_sub, with_hair=self.look == "human") * ~neck_v).astype(np.float32) \
+        self._disp = (_human_relief(rest_sub, with_hair=True) * ~neck_v).astype(np.float32) \
             if self.look in ("human", "holographic") else None
         self._scale = 1.0
         self._human = _human_params(np.asarray(rest, np.float32), landmarks)
