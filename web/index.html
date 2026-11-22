@@ -287,8 +287,13 @@
       <button class="btn" data-k="volume_down" type="button">🔉</button><button class="btn" data-k="mute" type="button">🔇</button><button class="btn" data-k="volume_up" type="button">🔊</button>
       <button class="btn" data-app="youtube" type="button">YouTube</button><button class="btn" data-app="netflix" type="button">Netflix</button><button class="btn" data-k="power" type="button">⏻</button>
     </div>
-    <form class="ask" id="rm-ask" autocomplete="off" style="margin-top:12px"><input id="rm-inp" placeholder="Projeksiyonda ara / yaz…" enterkeyhint="search"><button class="mic send" type="submit" aria-label="Gönder">➤</button></form>
-    <div class="row" style="margin-top:8px"><button class="btn" id="rm-type" type="button">⌨️ Kutuya yaz</button><button class="btn" id="rm-look" type="button">👁 Ekranına bak</button></div>
+    <div id="rm-search-target" role="group" aria-label="Projeksiyonda nerede aransın?" style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px">
+      <button class="btn pri" type="button" data-search-target="youtube" aria-pressed="true">▶ YouTube'da ara</button>
+      <button class="btn" type="button" data-search-target="chrome" aria-pressed="false">🌐 Chrome'da ara</button>
+    </div>
+    <form class="ask" id="rm-ask" autocomplete="off" style="margin-top:10px"><input id="rm-inp" placeholder="YouTube'da aranacak video…" enterkeyhint="search" aria-label="Aranacak metin"><button class="mic send" type="submit" aria-label="Seçili uygulamada ara">➤</button></form>
+    <p id="rm-search-hint" style="font-size:12px;margin:7px 2px;color:var(--dim)">YouTube seçili: Yazdığın video YouTube'da aranır.</p>
+    <div class="row" style="margin-top:8px"><button class="btn" id="rm-type" type="button">⌨️ Açık kutuya yaz</button><button class="btn" id="rm-look" type="button">👁 Ekranına bak</button></div>
   </section>
 
   <section class="sheet" id="s-chess" hidden>
