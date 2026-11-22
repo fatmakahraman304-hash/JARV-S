@@ -99,6 +99,35 @@ class BackgroundJobTrackingTests(unittest.TestCase):
         self.assertEqual(dev_agent._job_snapshot()["model_used"],
                          "Gemini (flash)")
 
+    def test_cancel_command_reaches_running_code_agent(self):
+        from core import jarvis_agent
+        self._new()
+        self.assertTrue(dev_agent._job_lock.acquire(blocking=False))
+        try:
+            with mock.patch.object(job_control, "_tasks", return_value=(None, [])), \
+                 mock.patch("core.jobs.cancel", return_value=[]):
+                message = job_control.run({"action": "cancel", "which": "kod ajanı"})
+            self.assertIn("iptal isteği gönderildi", message)
+            self.assertTrue(jarvis_agent.cancel_requested())
+            snapshot = dev_agent._job_snapshot()
+            self.assertEqual(snapshot["status"], "cancelling")
+            self.assertIsNone(snapshot["finished"])
+        finally:
+            dev_agent._job_lock.release()
+            jarvis_agent.reset_cancel()
+
+    def test_cancel_does_not_claim_worker_has_stopped(self):
+        from core import jarvis_agent
+        self._new()
+        self.assertTrue(dev_agent._job_lock.acquire(blocking=False))
+        try:
+            self.assertTrue(dev_agent.request_code_agent_cancel())
+            self.assertTrue(dev_agent._job_lock.locked())
+            self.assertIsNone(dev_agent._job_snapshot()["finished"])
+        finally:
+            dev_agent._job_lock.release()
+            jarvis_agent.reset_cancel()
+
     def test_job_control_list_includes_running_code_agent(self):
         self._new()
         dev_agent._update("planning", worker_started=True)
