@@ -800,7 +800,7 @@ class AndroidGL:
         neck_v = np.zeros(len(rest_sub), bool)
         neck_v[f[neck_face > 0.5].reshape(-1)] = True
         neck_v[f[neck_face < 0.5].reshape(-1)] = False
-        self._disp = (_human_relief(rest_sub, with_hair=True) * ~neck_v).astype(np.float32) \
+        self._disp = (_human_relief(rest_sub, with_hair=self.look == "human") * ~neck_v).astype(np.float32) \
             if self.look in ("human", "holographic") else None
         self._scale = 1.0
         self._human = _human_params(np.asarray(rest, np.float32), landmarks)
@@ -851,14 +851,18 @@ class AndroidGL:
             prog = QOpenGLShaderProgram()
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERT):
                 raise RuntimeError("köşe gölgelendiricisi: " + prog.log())
-            frag = FRAG_HUMAN if self.look in ("human", "holographic") else FRAG
+            if self.look == "holographic":
+                from gui.hologram_glsl import FRAG_HOLOGRAM
+                frag = FRAG_HOLOGRAM
+            else:
+                frag = FRAG_HUMAN if self.look == "human" else FRAG
             if not prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, frag):
                 raise RuntimeError("piksel gölgelendiricisi: " + prog.log())
             for i, name in enumerate(("a_clip", "a_n", "a_rest", "a_misc", "a_pos")):
                 prog.bindAttributeLocation(name, i)
             if not prog.link():
                 raise RuntimeError("gölgelendirici bağlanamadı: " + prog.log())
-            if self.look in ("human", "holographic"):
+            if self.look == "human":
                 sp = QOpenGLShaderProgram()
                 if not (sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERT_SHADOW)
                         and sp.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAG_SHADOW)):
@@ -989,7 +993,7 @@ class AndroidGL:
             self._vbo.bind()
             self._vbo.write(0, buf.tobytes(), buf.nbytes)
             self._vbo.release()
-            if self.look in ("human", "holographic"):
+            if self.look == "human":
                 self._shadow_pass()
 
             self._fbo.bind()
@@ -1026,6 +1030,7 @@ class AndroidGL:
             if self.look in ("human", "holographic"):
                 for name, value in self._human.items():
                     self._uniform(name, value)
+            if self.look == "human":
                 for name, value in zip(("u_lu", "u_lv", "u_ll"), _LIGHT_BASIS):
                     self._uniform(name, value)
                 gl.glActiveTexture(0x84C0)                         # GL_TEXTURE0
