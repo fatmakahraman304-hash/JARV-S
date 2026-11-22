@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import fnmatch
 import html
+import ipaddress
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -24,6 +27,8 @@ PROVIDER_ID = "jarvis_agent"
 MAX_STEPS = 90
 MAX_OUTPUT = 8000
 MAX_READ_LINES = 500
+MAX_SOURCE_BYTES = 1_500_000
+MAX_WRITE_BYTES = 1_500_000
 CONTEXT_BUDGET = 350_000          # characters of history kept before old tool output is shortened
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -52,7 +57,7 @@ SYSTEM = (
     "Web uygulamasında gerçek içerik, duyarlı tasarım ve çalışan bağlantılar kullan.\n"
     "4. Mevcut dosyalarda küçük ve tam edit_file değişiklikleri yap; yeni dosyalar için "
     "write_file kullan. API anahtarlarına, şifrelere, yerel ayarlara dokunma ve kullanıcı verisini silme.\n"
-    "5. run ile testleri veya uygulamayı çalıştır; hataları okuyup düzelt. İşini bitirmeden bir kez daha kontrol et.\n"
+    "5. run ile testleri veya uygulamayı çalıştır; hataları okuyup düzelt. Son kod değişikliğinden sonra test veya derleme kontrolü çalıştır.\n"
     "6. Bittiğinde finish aracını çağır; ne yaptığını ve nasıl doğruladığını "
     "Türkçe 3–5 cümlede açıkla. Sadece açıklama yaparak işi bitirmiş sayma.\n"
     "Yalnızca tanımlanmış araçları çağır; dosya yolları proje klasörüne göreli olmalıdır."
@@ -102,12 +107,60 @@ class Workspace:
         self.root = Path(folder).resolve()
         self.log = log
         self.changed: set[str] = set()
+        self.dirty_since_test = False
+        self.test_passed = False
+        self.last_run_result = ""
+        from core.code_checks import Protection
+        self.protection = Protection(self.root)
+
+    def _protected(self, path: Path) -> str:
+        """Common protection for read, search, create and edit.
+
+        Never send .env/API keys or gitignored local settings to an LLM.
+        Symlinks are resolved before checking, so neither secret files nor
+        files outside the workspace can be reached through an alias.
+        """
+        try:
+            resolved = path.resolve()
+            relative = resolved.relative_to(self.root).as_posix()
+        except (OSError, ValueError):
+            return "Proje klasörünün dışına çıkılamaz."
+        if any(part in (".git", ".jarvis_backup", ".hg", ".svn")
+               for part in Path(relative).parts):
+            return "Sürüm geçmişi ve yedekler korumalıdır."
+        return self.protection.reason(relative)
 
     def _path(self, rel: str) -> Path:
-        p = (self.root / str(rel or ".").strip().lstrip("/\\")).resolve()
-        if p != self.root and self.root not in p.parents:
-            raise ValueError("Proje klasörünün dışına çıkılamaz.")
+        raw = str(rel or ".").strip()
+        if Path(raw).is_absolute() or re.match(r"^[a-zA-Z]:", raw):
+            raise ValueError("Mutlak dosya yolu kullanılamaz.")
+        p = (self.root / raw).resolve()
+        why = self._protected(p)
+        if why:
+            raise ValueError(f"Erişim reddedildi: {why}")
         return p
+
+    def _atomic_write(self, path: Path, content: str) -> None:
+        """Replace only after a complete UTF-8 write, preserving file mode."""
+        if len(content.encode("utf-8")) > MAX_WRITE_BYTES:
+            raise ValueError("Dosya çok büyük; daha küçük değişiklikler yapın.")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", newline="", dir=path.parent,
+                prefix=".mayk-write-", delete=False,
+            ) as stream:
+                tmp = Path(stream.name)
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if path.exists():
+                os.chmod(tmp, path.stat().st_mode)
+            os.replace(tmp, path)
+        finally:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
 
     def call(self, name: str, args: dict) -> str:
         try:
@@ -128,11 +181,15 @@ class Workspace:
             rel = Path(root).relative_to(base)
             if len(rel.parts) >= depth:
                 dirs[:] = []
-            dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".jarvis"))
+            dirs[:] = sorted(
+                d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".jarvis")
+                and not self._protected(Path(root) / d))
             for d in dirs:
                 out.append(str((rel / d).as_posix()) + "/")
             for f in sorted(files):
                 fp = Path(root) / f
+                if self._protected(fp):
+                    continue
                 try:
                     size = fp.stat().st_size
                 except OSError:
@@ -147,6 +204,8 @@ class Workspace:
         p = self._path(path)
         if not p.is_file():
             return f"Dosya bulunamadı: {path}"
+        if p.stat().st_size > MAX_SOURCE_BYTES:
+            return "Dosya çok büyük; tamamını okuyup modele gönderemem."
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
         s = max(1, int(start_line or 1))
         e = min(len(lines), int(end_line or s + MAX_READ_LINES - 1), s + MAX_READ_LINES - 1)
@@ -158,11 +217,14 @@ class Workspace:
         rx = re.compile(pattern, re.I)
         hits = []
         for root, dirs, files in os.walk(self.root):
-            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".jarvis")]
+            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".jarvis")
+                       and not self._protected(Path(root) / d)]
             for f in files:
                 if not fnmatch.fnmatch(f, glob or "*"):
                     continue
                 fp = Path(root) / f
+                if self._protected(fp):
+                    continue
                 try:
                     if fp.stat().st_size > 1_500_000:
                         continue
@@ -178,11 +240,10 @@ class Workspace:
 
     def t_write_file(self, path, content):
         p = self._path(path)
-        if p.name.lower() in (".env", "api_keys.json", "credentials.json"):
-            return "Reddedildi: bu dosyada gizli bilgiler var."
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(str(content), encoding="utf-8")
+        self._atomic_write(p, str(content))
         self.changed.add(p.relative_to(self.root).as_posix())
+        self.dirty_since_test = True
+        self.test_passed = False
         self.log(f"  Yazdı: {p.relative_to(self.root).as_posix()}")
         return f"{path} yazıldı ({len(str(content))} karakter)."
 
@@ -196,8 +257,11 @@ class Workspace:
             return "Eski metin bulunamadı. Dosyayı yeniden okuyup tam metni kullanın."
         if n > 1 and not replace_all:
             return f"`old` metni {n} kez geçiyor; daha uzun bağlam belirtin veya replace_all kullanın."
-        p.write_text(text.replace(old, new) if replace_all else text.replace(old, new, 1), encoding="utf-8")
+        self._atomic_write(p, text.replace(old, new) if replace_all
+                           else text.replace(old, new, 1))
         self.changed.add(p.relative_to(self.root).as_posix())
+        self.dirty_since_test = True
+        self.test_passed = False
         self.log(f"  Düzenledi: {p.relative_to(self.root).as_posix()}")
         return f"{path} düzenlendi ({n if replace_all else 1} değiştirme)."
 
