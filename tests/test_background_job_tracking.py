@@ -79,6 +79,26 @@ class BackgroundJobTrackingTests(unittest.TestCase):
             if dev_agent._job_lock.locked():
                 dev_agent._job_lock.release()
 
+    def test_panel_shows_actual_brain_not_just_initial_choice(self):
+        self._new()
+        dev_agent._agent_progress(None, "  MAYK ajanı: NVIDIA (coding-model)")
+        attempted = dev_agent._job_snapshot()
+        self.assertEqual(attempted["model_attempt"], "NVIDIA (coding-model)")
+        self.assertIsNone(attempted.get("model_used"))
+        dev_agent._agent_progress(None,
+                                  "  Kodlama modeli yanıt verdi: NVIDIA (coding-model)")
+        answered = dev_agent._job_snapshot()
+        self.assertEqual(answered["model_used"], "NVIDIA (coding-model)")
+        dev_agent._agent_progress(None,
+                                  "  Yedek kodlama modeline geçildi: Gemini (flash)")
+        switched = dev_agent._job_snapshot()
+        self.assertEqual(switched["model_attempt"], "Gemini (flash)")
+        self.assertIsNone(switched.get("model_used"))
+        dev_agent._agent_progress(None,
+                                  "  Kodlama modeli yanıt verdi: Gemini (flash)")
+        self.assertEqual(dev_agent._job_snapshot()["model_used"],
+                         "Gemini (flash)")
+
     def test_job_control_list_includes_running_code_agent(self):
         self._new()
         dev_agent._update("planning", worker_started=True)
