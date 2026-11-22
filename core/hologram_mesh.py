@@ -5,7 +5,15 @@ from core.avatar_mesh import _vertex_normals, _unique_edges
 
 def with_shoulders(mesh):
     result = dict(mesh)
-    original = mesh["verts"]
+    # Match the reference's rounded cranium and tapered, defined male jaw.
+    # This warp applies ONLY to the hologram; the optional human head keeps
+    # its measured anatomy. Preserve indices for the existing speech rig.
+    original = mesh["verts"].copy()
+    count_head = int(mesh["n_head"])
+    y = original[:count_head, 1]
+    forehead = np.clip((y + .48) / 1.25, 0.0, 1.0) ** 1.4
+    jaw = np.clip((-.28 - y) / .77, 0.0, 1.0)
+    original[:count_head, 0] *= 1.055 + .070 * forehead - .045 * jaw
     segments = 14  # The existing neck ends with a 14-vertex elliptical ring.
     base = original[-segments:].copy()
     vertices = [original]
@@ -13,9 +21,9 @@ def with_shoulders(mesh):
     last = np.arange(len(original) - segments, len(original))
     count = len(original)
     # Extra rings smooth the transition from the neck into broad shoulders.
-    ring_specs = ((1.06, 1.03, -1.28), (1.18, 1.08, -1.35),
-                  (1.38, 1.12, -1.43), (1.62, 1.16, -1.51),
-                  (1.88, 1.20, -1.59), (2.02, 1.23, -1.68))
+    ring_specs = ((1.08, 1.03, -1.28), (1.24, 1.08, -1.35),
+                  (1.54, 1.12, -1.43), (2.00, 1.16, -1.51),
+                  (2.47, 1.20, -1.59), (2.84, 1.23, -1.68))
     for width, depth, y in ring_specs:
         ring = base.copy()
         ring[:, 0] *= width
@@ -38,7 +46,7 @@ def with_shoulders(mesh):
     fade = mesh["fade"].copy()
     fade[mesh["n_head"]:] = 1.0
     result["fade"] = np.concatenate(
-        (fade, np.repeat([1.0, .97, .88, .72, .45, .0], segments).astype(np.float32)))
+        (fade, np.repeat([1.0, .98, .91, .79, .58, .0], segments).astype(np.float32)))
     result["face_group"] = np.concatenate(
         (mesh["face_group"], np.zeros(segments * 2 * len(ring_specs), np.float32)))
     outward = np.concatenate((mesh["normals"], result["verts"][len(original):] - [0, -1.40, -.25]))

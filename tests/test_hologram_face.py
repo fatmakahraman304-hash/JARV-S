@@ -83,6 +83,40 @@ class HologramFace(unittest.TestCase):
         self.assertGreater(len(projection.a), 600)
         self.assertTrue(np.isfinite(projection.w).all())
 
+    def test_reference_halo_and_ears_draw_in_qpainter(self):
+        from core.hologram_finish import bloom, details, _hull
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        mesh = with_shoulders(get_head_mesh())
+        img = QImage(320, 320, QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(QColor("#020a15"))
+        glow = QImage(80, 80, QImage.Format.Format_ARGB32_Premultiplied)
+        glow.fill(QColor(0, 0, 0, 0))
+        gp = QPainter(glow)
+        gp.setPen(QColor(45, 224, 255))
+        gp.drawEllipse(20, 20, 40, 40)
+        gp.end()
+        p = QPainter(img)
+        bloom(p, glow, 120, 100, 0.4)
+        xs = 160 + 85 * mesh["verts"][:, 0]
+        ys = 150 - 85 * mesh["verts"][:, 1]
+        details(p, xs, ys, mesh["n_head"], mesh["landmarks"], 0.4)
+        p.end()
+        self.assertTrue(_hull([(0, 0), (1, 0), (1, 1), (0, 1)]))
+        self.assertNotEqual(img.pixelColor(160, 100), QColor("#020a15"))
+
+    def test_reference_bust_is_wider_and_never_mutates_base_mesh(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        base = get_head_mesh()
+        before = base["verts"].copy()
+        mesh = with_shoulders(base)
+        np.testing.assert_array_equal(before, base["verts"])
+        self.assertGreater(float(np.max(np.abs(mesh["verts"][:, 0]))),
+                           1.5 * float(np.max(np.abs(before[:, 0]))))
+        self.assertGreater(float(np.max(mesh["verts"][:mesh["n_head"], 0])),
+                           float(np.max(before[:base["n_head"], 0])))
+
     def test_shoulder_extension_preserves_base_and_has_no_neck_gap(self):
         from core.avatar_mesh import get_head_mesh
         from core.hologram_mesh import with_shoulders

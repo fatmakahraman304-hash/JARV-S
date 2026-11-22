@@ -162,6 +162,7 @@ class HoloAvatar:
         self._lut_cache: list = []
         self._lut_key = None
         self._mesh = mesh
+        self._n_head = mesh["n_head"]
         self._gl = None
         self._projection = None
         self._muted = False
@@ -508,11 +509,18 @@ class HoloAvatar:
         verts, norms = self._pose()
 
         # ── aura ────────────────────────────────────────────────────────────
-        ar = r * 1.95
+        ar = r * (2.30 if self.style == "holographic" else 1.95)
         grad = QRadialGradient(cx, cy, ar)
-        grad.setColorAt(0.00, _c(primary, 34 + 66 * amp))
-        grad.setColorAt(0.38, _c(primary, 20 + 40 * amp))
-        grad.setColorAt(1.00, _c(primary, 0))
+        if self.style == "holographic":
+            # Reference has a deep navy aura behind the luminous cyan bust.
+            # The sharp contour and detailed scanlines remain foreground.
+            grad.setColorAt(0.00, QColor(2, 68, 145, int(87 + 22 * amp)))
+            grad.setColorAt(0.44, QColor(2, 51, 121, int(70 + 18 * amp)))
+            grad.setColorAt(1.00, QColor(2, 25, 79, 0))
+        else:
+            grad.setColorAt(0.00, _c(primary, 34 + 66 * amp))
+            grad.setColorAt(0.38, _c(primary, 20 + 40 * amp))
+            grad.setColorAt(1.00, _c(primary, 0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(grad))
         p.drawEllipse(QRectF(cx - ar, cy - ar, ar * 2, ar * 2))
@@ -526,6 +534,8 @@ class HoloAvatar:
 
         if self.style == "holographic":
             if self._paint_android(p, xs, ys, verts, norms, primary, accent, amp):
+                from core.hologram_finish import details
+                details(p, xs, ys, self._n_head, self._lm, amp)
                 return
         if self.style == "projection":
             if self._projection is None:
@@ -570,6 +580,9 @@ class HoloAvatar:
             if img is None:
                 raise RuntimeError(self._gl.error or "OpenGL çizimi başarısız")
             img.setDevicePixelRatio(dpr)
+            if self.style == "holographic":
+                from core.hologram_finish import bloom
+                bloom(p, img, x0, y0, amp)
             p.drawImage(QPointF(x0, y0), img)
             return True
         except Exception as exc:
