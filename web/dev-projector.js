@@ -40,7 +40,7 @@
 
   // ── the remote, on every device ──────────────────────────────────────────
   const sheet = $('s-remote');
-  const press = async k => { J.vibrate(12); const r = await J.remote('key', k); if (r) J.toast(r); };
+  const press = async k => { J.vibrate(12); const r = await J.remote('key', k, { popup: true }); if (r) J.toast(r); };
 
   // 5 ── hold to repeat (replaces the one-shot click on repeatable keys) ──
   const REPEAT = new Set(['up', 'down', 'left', 'right', 'volume_up', 'volume_down']);
@@ -86,7 +86,7 @@
   apps.innerHTML = [['prime', 'Prime Video'], ['disney', 'Disney+'], ['spotify', 'Spotify'], ['ayarlar', '⚙ Ayarlar'], ['chrome', 'Chrome'], ['play store', 'Play Store']]
     .map(([a, l]) => `<button class="btn" type="button" data-app2="${a}">${l}</button>`).join('');
   sheet.querySelector('.pcgrid').after(apps);
-  apps.querySelectorAll('[data-app2]').forEach(b => b.onclick = async () => J.toast(await J.remote('app', b.dataset.app2)));
+  apps.querySelectorAll('[data-app2]').forEach(b => b.onclick = async () => J.toast(await J.remote('app', b.dataset.app2, { popup: true })));
 
   // 9 ── sleep timer ───────────────────────────────────────────────────────
   const sleepRow = document.createElement('div'); sleepRow.className = 'row'; sleepRow.id = 'rm-sleep';
