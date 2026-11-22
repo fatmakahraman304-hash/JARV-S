@@ -809,7 +809,7 @@
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Kaydedilmiş yerel Wi-Fi kumandası varsa GitHub yerine bunu kullan. Projeksiyonda YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; arama → op=search arg=aranacak metin. Sesli işlem sırasında tarayıcı yerel adrese gidip MAYK sayfasına geri döner; mikrofonun yeniden açılması gerekebilir. Desteklenen yerel komutlar: app, key, search, url. Desteklenmeyen look/type/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, MAYK arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -1923,12 +1923,92 @@
   }
   $('mic').onclick = () => { if (micOn) { resumeMic = false; stopMic(); } else { claimHere(); startMic(); } };
 
+  // Direct local-language projector actions from MAYK's MAIN chat input.
+  // These commands must not depend on the model deciding to call a tool.
+  // Normal conversation still goes through the AI unchanged.
+  function projectorCommand(input) {
+    if (!parseLanUrl(S.lanRemote)) return null;
+    let t = String(input || '').trim().toLocaleLowerCase('tr-TR')
+      .replace(/[’‘]/g, "'").replace(/[.!?]+$/g, '').trim()
+      .replace(/^(?:hey\s+)?(?:mayk|jarvis|cervis)\s*[,:\s]+/u, '');
+    const explicit = /^(?:projeksiyonda|projeksiyonumda|projektörde|perdede|televizyonda|tv'de|tvde)\s+/u.test(t);
+    if (explicit) t = t.replace(/^(?:projeksiyonda|projeksiyonumda|projektörde|perdede|televizyonda|tv'de|tvde)\s+/u, '');
+    if (!t || /^(?:nasıl|neden|niye|hangi|kim|kaç|ne\s+zaman)\b/u.test(t)) return null;
+
+    const volume = t.match(/^(?:sesi?|sesini)\s+(aç|artır|yükselt|kıs|azalt|düşür|sessize al|sustur|kapat)$/u);
+    if (volume) {
+      const act = volume[1];
+      return { op: 'key', arg: /^(?:aç|artır|yükselt)$/.test(act) ? 'volume_up'
+        : /^(?:kıs|azalt|düşür)$/.test(act) ? 'volume_down' : 'mute' };
+    }
+    const keys = {
+      'geri': 'back', 'geri dön': 'back', 'ana ekrana dön': 'home',
+      'ana ekran': 'home', 'yukarı': 'up', 'yukarı git': 'up',
+      'aşağı': 'down', 'aşağı git': 'down', 'sola git': 'left',
+      'sağa git': 'right', 'ok bas': 'enter', 'tamam bas': 'enter',
+      'oynat': 'play_pause', 'duraklat': 'play_pause'
+    };
+    if (keys[t] && (explicit || !['oynat', 'duraklat'].includes(t))) return { op: 'key', arg: keys[t] };
+
+    const searchPatterns = [
+      /^youtube(?:'da|da)?\s+(?:ara\s+)?(.+?)\s+ara$/u,
+      /^youtube(?:'da|da)?\s+ara\s+(.+)$/u,
+      /^(.+?)\s+youtube(?:'da|da)\s+ara$/u,
+      /^(.+?)\s+ara$/u
+    ];
+    for (let i = 0; i < searchPatterns.length; i++) {
+      if (i === 3 && !explicit) continue;
+      const m = t.match(searchPatterns[i]);
+      if (m && m[1].length >= 2 && m[1].length <= 180)
+        return { op: 'search', arg: m[1] };
+    }
+
+    const opening = t.match(/^(.+?)\s+(?:aç|açsana|açın|başlat|çalıştır|açar mısın|açabilir misin|açarmısın)$/u);
+    if (!opening) return null;
+    const raw = opening[1].trim()
+      .replace(/[''](?:yu|yü|yı|yi|u|ü|ı|i)$/u, '').trim();
+    const apps = {
+      youtube: 'youtube', 'you tube': 'youtube', netflix: 'netflix',
+      chrome: 'chrome', 'google chrome': 'chrome',
+      'play store': 'play store', playstore: 'play store', 'google play': 'play store',
+      'prime': 'prime', 'prime video': 'prime',
+      disney: 'disney', 'disney+': 'disney', spotify: 'spotify',
+      ayarlar: 'settings', ayarları: 'settings', settings: 'settings'
+    };
+    const app = apps[raw];
+    // Without the projector target, only recognized apps are routed
+    // to the projector; other phrases remain ordinary chat.
+    if (app) return { op: 'app', arg: app };
+    if (explicit && /^[\p{L}\p{N} +.\-]{2,50}$/u.test(raw))
+      return { op: 'app', arg: raw };
+    return null;
+  }
+
+  async function runProjectorChat(cmd) {
+    const stateBefore = micOn ? 'listening' : 'idle';
+    setState('thinking');
+    sys('📽️ Projeksiyona komut gönderiliyor…');
+    try {
+      const reply = await remote(cmd.op, cmd.arg);
+      // The relay reports actual Android replies or explicit errors. Never
+      // tell the user an app opened merely because a request was sent.
+      sys('📽️ ' + reply);
+      toast(reply.slice(0, 180));
+    } catch (err) {
+      const message = '📽️ Bağlantı hatası: ' + (err?.message || err);
+      sys(message);
+      toast(message);
+    } finally { setState(stateBefore); }
+  }
+
   // ── text in ──────────────────────────────────────────────────────────────
   $('ask').addEventListener('submit', async (e) => {
     e.preventDefault();
     const t = $('inp').value.trim(); if (!t) return;
     $('inp').value = ''; ensureOut(); claimHere();
     closeTurns(); transcript.push({ role: 'user', text: t, open: false }); queueRecent('user', t); renderLog();
+    const directProjector = projectorCommand(t);
+    if (directProjector) { await runProjectorChat(directProjector); return; }
     if (!navigator.onLine) { offlineQueue.push(t); toast('İnternet yok; bağlantı gelince göndereceğim.'); return; }
     try { await connect(); } catch { offlineQueue.push(t); return; }
     setState('thinking');
@@ -2174,6 +2254,8 @@
     ask(text) { $('inp').value = String(text); $('ask').requestSubmit(); },
     // the user said it: send to the brain without putting it in the input box
     async say(text) { claimHere(); closeTurns(); transcript.push({ role: 'user', text, open: false }); queueRecent('user', text); renderLog();
+      const directProjector = projectorCommand(text);
+      if (directProjector) { await runProjectorChat(directProjector); return true; }
       try { await connect(); } catch { return false; } setState('thinking'); send({ realtimeInput: { text } }); return true; },
     async look(data, mime, question) { claimHere(); try { await connect(); } catch { return false; }
       send({ realtimeInput: { video: { data, mimeType: mime || 'image/jpeg' } } });
