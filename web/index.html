@@ -263,6 +263,7 @@
       <b>📡 Yerel Wi-Fi kumandası</b>
       <p id="rm-lan-state" style="margin:6px 0">Projeksiyon bağlantısı kontrol ediliyor.</p>
       <p id="rm-lan-result" role="status" aria-live="polite" hidden style="margin:8px 0;font-weight:600"></p>
+      <p id="rm-lan-guide" hidden style="margin:8px 0;color:#ffd49b;line-height:1.6"></p>
       <div class="row" style="margin-top:8px">
         <button class="btn" id="rm-lan-open" type="button">📱 Hızlı yerel kumandayı aç</button>
       </div>
@@ -364,6 +365,25 @@
     <div class="row"><button class="btn pri" id="ask-yes" type="button">Tamam</button><button class="btn" data-close type="button">Vazgeç</button></div>
   </section>
 
+<style>
+    /* HTTPS-to-local-HTTP popup handoff fails inside iOS app browsers.
+       Hide misleading in-page keys and expose the proven native controller. */
+    #s-remote.lan-ios-native .pad,
+    #s-remote.lan-ios-native .pcgrid,
+    #s-remote.lan-ios-native #rm-pad,
+    #s-remote.lan-ios-native #rm-sleep,
+    #s-remote.lan-ios-native #rm-ask,
+    #s-remote.lan-ios-native #rm-type,
+    #s-remote.lan-ios-native #rm-look { display: none !important; }
+    #s-remote.lan-ios-native #rm-lan-open {
+      padding: 17px 20px;
+      font-weight: 700;
+      width: 100%;
+      background: linear-gradient(100deg,#d96c10,#ff9933);
+      color: #171009;
+      border-radius: 14px;
+    }
+  </style>
   <script src="reactor.js"></script>
   <script src="chess.js"></script>
   <script src="devkit.js"></script>
