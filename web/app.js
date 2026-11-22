@@ -81,6 +81,17 @@
   if (lanResult && window.opener) {
     try { window.opener.postMessage({ type: 'mayk-lan-result', text: lanResult }, location.origin); } catch {}
     try { window.close(); } catch {}
+    // On iOS versions which refuse window.close(), keep this extra tab
+    // lightweight instead of booting another MAYK session / GitHub sync.
+    document.body.textContent = '';
+    document.body.style.cssText = 'margin:0;padding:28px;background:#120d09;color:#fff;font:18px system-ui';
+    const reply = document.createElement('p'); reply.textContent = '📽️ ' + lanResult;
+    const hint = document.createElement('p'); hint.textContent = 'Komut sonucu asıl MAYK sekmesine gönderildi. Bu sekmeyi kapatabilirsin.';
+    const close = document.createElement('button'); close.textContent = 'Sekmeyi kapat';
+    close.style.cssText = 'padding:14px;background:#f69b32;border:0;border-radius:12px;font-size:18px';
+    close.onclick = () => window.close();
+    document.body.append(reply, hint, close);
+    return;
   }
 
   function detectKind() {
