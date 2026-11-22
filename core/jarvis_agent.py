@@ -899,19 +899,6 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                               ".cs", ".php", ".rb", ".dart", ".sh"}
                 needs_test = any(Path(p).suffix.lower() in code_paths
                                  for p in ws.changed)
-                if needs_test and (ws.dirty_since_test or not ws.test_passed):
-                    finish_retries += 1
-                    problem = ("Önce son kod değişikliğinden sonra run aracını "
-                               "kullanarak test, derleme veya çalışma kontrolü yap. "
-                               "Başarısız kontrolleri düzelt; testi geçti sayma.")
-                    log("  Kod ajanı doğrulama bekliyor; finish ertelendi.")
-                    if finish_retries >= 3:
-                        raise RuntimeError(
-                            "Kod ajanı değişiklikleri test etmeden bitirmek istedi. "
-                            "Görev doğrulanamadı.")
-                    history.append({"role": "tool", "id": c["id"], "name": "finish",
-                                    "result": problem})
-                    continue
                 failures = ws.syntax_problems()
                 if failures:
                     finish_retries += 1
@@ -923,6 +910,19 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                         raise RuntimeError(
                             "Kod ajanı statik kontrolleri geçemedi: "
                             + "; ".join(failures[:4]))
+                    history.append({"role": "tool", "id": c["id"], "name": "finish",
+                                    "result": problem})
+                    continue
+                if needs_test and (ws.dirty_since_test or not ws.test_passed):
+                    finish_retries += 1
+                    problem = ("Önce son kod değişikliğinden sonra run aracını "
+                               "kullanarak test, derleme veya çalışma kontrolü yap. "
+                               "Başarısız kontrolleri düzelt; testi geçti sayma.")
+                    log("  Kod ajanı doğrulama bekliyor; finish ertelendi.")
+                    if finish_retries >= 3:
+                        raise RuntimeError(
+                            "Kod ajanı değişiklikleri test etmeden bitirmek istedi. "
+                            "Görev doğrulanamadı.")
                     history.append({"role": "tool", "id": c["id"], "name": "finish",
                                     "result": problem})
                     continue
