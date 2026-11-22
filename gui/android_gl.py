@@ -660,7 +660,7 @@ void main() {
         float edge = pow(1.0 - clamp(dot(n, VIEW), 0.0, 1.0), 2.2);
         float scan = mix(1.0, 0.94 + 0.06 * sin(p.y * 720.0), lod(720.0));
         col = vec3(0.015, 0.44, 0.82) * (0.12 + 2.3 * luminance);
-        col += vec3(0.18, 0.76, 1.0) * edge * (0.65 + 0.15 * u_glow);
+        col += vec3(0.55, 1.0, 1.15) * edge * (1.9 + 0.20 * u_glow);
         col *= scan;
     }
     col = max(col, vec3(0.0));
