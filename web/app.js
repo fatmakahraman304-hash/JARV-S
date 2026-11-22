@@ -1973,7 +1973,7 @@
       'play store': 'play store', playstore: 'play store', 'google play': 'play store',
       'prime': 'prime', 'prime video': 'prime',
       disney: 'disney', 'disney+': 'disney', spotify: 'spotify',
-      ayarlar: 'settings', ayarları: 'settings', settings: 'settings'
+      ayarlar: 'ayarlar', ayarları: 'ayarlar', settings: 'ayarlar'
     };
     const app = apps[raw];
     // Without the projector target, only recognized apps are routed
