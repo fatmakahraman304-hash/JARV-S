@@ -266,15 +266,56 @@ class Workspace:
         return f"{path} düzenlendi ({n if replace_all else 1} değiştirme)."
 
     @staticmethod
+    def _commands(command: str) -> list[list[str]]:
+        """Parse approved test/build programs without a command shell."""
+        command = str(command or "").strip()
+        if (not command or any(c in command for c in
+             (";", "|", "<", ">", chr(96), "\n", "\r")) or
+             "$(" in command or "$" + "{" in command or
+             "&" in command.replace("&&", "")):
+            return []
+        allowed = {
+            "python", "python3", "python.exe", "py", "py.exe", "pytest",
+            "pip", "pip3", "uv", "node", "node.exe", "npm", "npx",
+            "yarn", "pnpm", "bun", "deno", "tsc", "eslint", "prettier",
+            "go", "cargo", "rustc", "dotnet", "mvn", "gradle", "java",
+            "javac", "gcc", "g++", "clang", "cmake", "make", "php",
+            "composer", "ruby", "bundle", "flutter", "dart", "ruff",
+            "black", "mypy", "git", "ls", "dir", "cat", "type", "head",
+            "tail", "wc", "echo", "mkdir", "where", "which", "find", "grep",
+        }
+        commands = []
+        for part in command.split("&&"):
+            if not part.strip():
+                return []
+            try:
+                tokens = shlex.split(part, posix=(os.name != "nt"))
+            except ValueError:
+                return []
+            if not tokens:
+                return []
+            if os.name == "nt":
+                tokens = [v[1:-1] if len(v) > 1 and v[0] == v[-1] == '"' else v
+                          for v in tokens]
+            exe = tokens[0].lower()
+            if exe not in allowed or "/" in exe or "\\" in exe:
+                return []
+            flags = set(tokens[1:])
+            if exe in {"python", "python3", "python.exe", "py", "py.exe"} and (
+                    "-c" in flags or "-i" in flags or "--interactive" in flags):
+                return []
+            if exe in {"node", "node.exe", "bun", "deno"} and (
+                    "-e" in flags or "--eval" in flags or "-p" in flags):
+                return []
+            if exe == "git" and (
+                    len(tokens) < 2 or tokens[1] not in {"status", "diff", "log"}):
+                return []
+            commands.append(tokens)
+        return commands
+
+    @staticmethod
     def allowed(command: str) -> bool:
-        cmd = str(command or "").strip()
-        if not cmd or RUN_FORBIDDEN.search(cmd):
-            return False
-        for part in re.split(r"&&|\|\||;|\|", cmd):
-            part = part.strip()
-            if part and not any(part.lower().startswith(a) for a in RUN_ALLOWED):
-                return False
-        return True
+        return bool(Workspace._commands(command))
 
     def t_run(self, command, timeout=120):
         if not self.allowed(command):
