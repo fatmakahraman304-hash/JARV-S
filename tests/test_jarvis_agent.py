@@ -274,13 +274,18 @@ class AdvancedAgentReliabilityTest(unittest.TestCase):
 
     def test_oversized_tool_history_is_compacted_with_task_intact(self):
         history = [{"role": "user", "text": "Kullanıcının ilk görevi"}]
-        history.extend({"role": "tool", "name": "read_file", "id": str(i),
-                        "result": "a" * 33000} for i in range(22))
+        for i in range(22):
+            history.append({"role": "assistant", "text": "",
+                            "calls": [{"id": str(i), "name": "read_file",
+                                       "args": {"path": "main.py"}}]})
+            history.append({"role": "tool", "name": "read_file",
+                            "id": str(i), "result": "a" * 33000})
         ja._shrink(history)
         self.assertEqual(history[0]["text"], "Kullanıcının ilk görevi")
         self.assertLess(sum(len(json.dumps(h)) for h in history),
                         ja.CONTEXT_BUDGET)
         self.assertIn("ÖNCEKİ KOD AJANI", history[1]["text"])
+        self.assertNotEqual(history[2]["role"], "tool")
 
     def test_repeated_identical_tool_calls_stop(self):
         brain = ScriptedBrain([
