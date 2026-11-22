@@ -13,6 +13,19 @@
   const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=';
   const GH = 'https://api.github.com';
 
+  // Migrate user memory/settings to the new identity without dropping stored data.
+  // Only the assistant's known keys are eligible; other applications' storage stays intact.
+  try {
+    const known = ['mem', 'recent', 'projects', 'arch_q', 'web'];
+    for (const suffix of known) {
+      const target = 'aether_' + suffix;
+      if (localStorage.getItem(target) !== null) continue;
+      const previous = Object.keys(localStorage).find(key =>
+        key !== target && key.endsWith('_' + suffix));
+      if (previous) localStorage.setItem(target, localStorage.getItem(previous));
+    }
+  } catch (_) { /* restricted/private browser storage */ }
+
   // ── settings ─────────────────────────────────────────────────────────────
   const S = (() => { try { const key = "aether_web"; const legacy = Object.keys(localStorage).find(k => k.endsWith("_web") && k !== key); return JSON.parse(localStorage.getItem(key) || (legacy && localStorage.getItem(legacy)) || "{}"); } catch { return {}; } })();
 S.name = "AETHER";
