@@ -1,50 +1,57 @@
-"""A message is read back and sent only after the user says yes to that exact message."""
+"""Only the decision on the matching HUD banner may dispatch a message."""
+import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from actions import send_message as sm
+from core import confirm
 
 
 class Confirm(unittest.TestCase):
     def setUp(self):
-        sm._pending.clear()
-        self.cfg = patch.object(sm, "_send_without_asking", return_value=False)
-        self.cfg.start()
-        self.started = patch.object(sm.threading, "Thread")
-        self.thread = self.started.start()
-        self.pyauto = patch.object(sm, "_PYAUTOGUI", True)
-        self.pyauto.start()
+        self.show = Mock()
+        self.sent = threading.Event()
+        self.send = Mock(side_effect=lambda *_: self.sent.set() or "unverified")
+        for target, field, value in [(confirm, "_pending", None), (confirm, "_show_cb", self.show),
+                                     (sm, "_PYAUTOGUI", True), (sm, "_send_and_report", self.send)]:
+            self.enterContext(patch.object(target, field, value))
 
-    def tearDown(self):
-        self.cfg.stop()
-        self.started.stop()
-        self.pyauto.stop()
+    def call(self, **extra):
+        return sm.send_message(dict(receiver="Annem", message_text="Akşam geliyorum",
+                                    platform="WhatsApp") | extra)
 
-    def call(self, **kw):
-        p = {"receiver": "Annem", "message_text": "Akşam geliyorum", "platform": "WhatsApp", **kw}
-        return sm.send_message(p)
+    def test_model_flags_and_repeat_cannot_authorize_or_change_settings(self):
+        with patch("memory.config_manager.save_plugin_config") as save:
+            self.call(always_send_without_asking=True)
+            self.call(confirmed=True)
+            save.assert_not_called()
+        self.show.assert_called_once()
+        self.send.assert_not_called()
 
-    def test_first_call_reads_back_and_does_not_send(self):
-        out = self.call(confirmed=True)                  # the model cannot confirm on its own first call
-        self.assertIn("status=ask", out)
-        self.assertIn("«Akşam geliyorum»", out)
-        self.thread.assert_not_called()
-
-    def test_yes_sends_that_exact_message(self):
+    def test_matching_decision_dispatches_exactly_once(self):
         self.call()
-        self.assertIn("status=started", self.call(confirmed=True))
-        self.thread.assert_called_once()
+        _, detail, token = self.show.call_args.args
+        self.assertIn("Akşam geliyorum", detail)
+        self.call(message_text="Değişti")
+        confirm.resolve(True, "obsolete")
+        self.send.assert_not_called()
+        confirm.resolve(True, token)
+        self.assertTrue(self.sent.wait(2))
+        confirm.resolve(True, token)
+        self.send.assert_called_once_with(None, "WhatsApp", "Annem", "Akşam geliyorum")
 
-    def test_a_changed_message_is_read_back_again(self):
+    def test_cancel(self):
         self.call()
-        out = self.call(message_text="Akşam geç geliyorum", confirmed=True)
-        self.assertIn("status=ask", out)
-        self.thread.assert_not_called()
+        confirm.resolve(False, self.show.call_args.args[-1])
+        self.send.assert_not_called()
 
-    def test_user_can_turn_it_off(self):
-        with patch.object(sm, "_send_without_asking", return_value=True):
-            self.assertIn("status=started", self.call())
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_headless_and_expired_banner(self):
+        with patch.object(confirm, "_show_cb", None):
+            self.call()
+        self.assertIsNone(confirm._pending)
+        self.call()
+        old = self.show.call_args.args[-1]
+        confirm._pending.at -= confirm.TIMEOUT_SECONDS + 1
+        self.call(message_text="Yeni")
+        confirm.resolve(True, old)
+        self.send.assert_not_called()

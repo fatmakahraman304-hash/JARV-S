@@ -33,6 +33,14 @@ class JournalTest(unittest.TestCase):
         self.assertNotIn("UNFINISHED", self.c.prompt_context())
 
 
+    def test_old_pending_project_survives_many_completed_jobs(self):
+        pid = self.c.project_start("build", "Eski iş", "/site", "devam")
+        with self.c.connect() as db:
+            db.executemany("INSERT INTO projects(title,status) VALUES(?,?)", [("yeni", "bitti")] * 210)
+        self.assertEqual(self.c.projects(unfinished_only=True, limit=1)[0]["id"], pid)
+        self.assertEqual(self.c.project(pid)["title"], "Eski iş")
+
+
 class StagedBuildTest(unittest.TestCase):
     def test_stages_run_in_order_and_resume_skips_done(self):
         from actions import dev_agent
@@ -42,9 +50,14 @@ class StagedBuildTest(unittest.TestCase):
                                {"title": "Sayfalar", "goal": "sayfalar", "done": False}],
                     "present": {"type": "none"}}
             ran, journal = [], []
+            def checked_stage(folder, instruction, player, open_editor=True):
+                ran.append(instruction)
+                dev_agent._JOB["verification"] = "done"
+                return "Proje testleri geçti."
+            self.enterContext(mock.patch.object(dev_agent, "_JOB", {"finished": True, "phases": [], "steps": []}))
             with mock.patch.object(dev_agent, "PROJECTS_DIR", Path(d)), \
                  mock.patch.object(dev_agent, "_plan_stages", return_value=json.loads(json.dumps(plan))), \
-                 mock.patch.object(dev_agent, "_improve_folder", side_effect=lambda f, instr, pl, open_editor=True: ran.append(instr) or "ok"), \
+                 mock.patch.object(dev_agent, "_improve_folder", side_effect=checked_stage), \
                  mock.patch.object(dev_agent, "_journal", side_effect=lambda pid, **k: journal.append(k)), \
                  mock.patch.object(dev_agent, "_open_vscode"):
                 msg = dev_agent._build_staged("bana site yap", "html", "", None, 7)
@@ -60,6 +73,34 @@ class StagedBuildTest(unittest.TestCase):
                 dev_agent._build_staged("bana site yap", "html", "", None, 7, plan=half, folder=Path(d) / "site")
                 self.assertEqual(len(ran), 1)
                 self.assertIn("STAGE 2/2", ran[0])
+
+    def test_unverified_stage_stops_and_survives_restart(self):
+        from actions import dev_agent
+        from memory import continuity
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(continuity, "data_dir", return_value=Path(d)), \
+             mock.patch.object(dev_agent, "_JOB", {"finished": True, "verification": "done"}), \
+             mock.patch.object(dev_agent, "_improve_folder", return_value="Kontrol çalışmadı") as improve, \
+             mock.patch.object(dev_agent, "_present") as present:
+            plan = {"stages": [{"title": t, "goal": t, "done": False} for t in ("A", "B")]}
+            pid = continuity.project_start("build", "Site", d, "istek")
+            dev_agent._build_staged("istek", "html", "", None, pid, plan=plan, folder=Path(d))
+            continuity.recover_jobs()
+            saved = continuity.project(pid)
+            self.assertEqual(saved["stage"], 0)
+            stage = saved["stages"]["plan"]["stages"][0]
+            self.assertFalse(stage["done"])
+            self.assertEqual(stage["verification"], "unverified")
+            improve.assert_called_once()
+            present.assert_not_called()
+
+    def test_resume_ambiguous_or_unknown_never_starts_a_worker(self):
+        from actions import dev_agent
+        rows = [{"id": i, "title": "Site " + str(i), "folder": "/site" + str(i)} for i in (1, 2)]
+        with mock.patch("memory.continuity.projects", return_value=rows), mock.patch.object(dev_agent, "_run_job") as run:
+            for target in ("", "Site", "#75"):
+                reply = dev_agent._start_resume(target)
+                self.assertTrue("Hangi proje" in reply or "bulamadım" in reply)
+            run.assert_not_called()
 
     def test_resume_picks_interrupted_job(self):
         from actions import dev_agent

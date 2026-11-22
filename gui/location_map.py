@@ -8,7 +8,7 @@ import time
 from PyQt6.QtCore import QPointF, QRectF, QStandardPaths, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap, QPainterPath
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkReply, QNetworkRequest
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
 from gui.style import px_font
 from gui.theme import C
@@ -199,7 +199,7 @@ class CityMap(QWidget):
 
 
 class LocationPanel(QWidget):
-    def __init__(self, parent=None, *, auto_start=True):
+    def __init__(self, parent=None, *, auto_start=False):
         super().__init__(parent)
         self.network = QNetworkAccessManager(self)
         cache = QNetworkDiskCache(self.network)
@@ -211,7 +211,7 @@ class LocationPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
-        self.city = QLabel("Şehrin bulunuyor…")
+        self.city = QLabel("Yaklaşık şehir konumu")
         self.city.setTextFormat(Qt.TextFormat.PlainText)
         self.city.setWordWrap(True)
         self.city.setFont(px_font(16))
@@ -219,7 +219,11 @@ class LocationPanel(QWidget):
         layout.addWidget(self.city)
         self.map = CityMap(self.network)
         layout.addWidget(self.map, 1)
-        self.status = QLabel("IP üzerinden yaklaşık konum")
+        self.locate = QPushButton("Konumumu bul")
+        self.locate.setFont(px_font(11))
+        self.locate.clicked.connect(self.refresh)
+        layout.addWidget(self.locate)
+        self.status = QLabel("Konumumu bul düğmesi IP adresinizi ipwho.is ile paylaşır ve OpenStreetMap haritasını yükler.")
         self.status.setWordWrap(True)
         self.status.setFont(px_font(10))
         self.status.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
@@ -229,7 +233,7 @@ class LocationPanel(QWidget):
         attribution.setFont(px_font(9))
         attribution.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         layout.addWidget(attribution)
-        self.setToolTip("Bu bilgisayarın internet bağlantısından yaklaşık şehir konumu. VPN veya operatör nedeniyle farklı görünebilir. Beş dakikada bir yenilenir.")
+        self.setToolTip("Bu bilgisayarın internet bağlantısından yaklaşık şehir konumu. VPN veya operatör nedeniyle farklı görünebilir. Konumu düğmeyle yenileyebilirsiniz.")
         self.timer = QTimer(self)
         self.timer.setInterval(300000)
         self.timer.timeout.connect(self.refresh)
@@ -241,6 +245,7 @@ class LocationPanel(QWidget):
         if self._busy:
             return
         self._busy = True
+        self.locate.setEnabled(False)
         request = QNetworkRequest(QUrl(LOCATION_URL))
         request.setRawHeader(b"User-Agent", USER_AGENT)
         request.setTransferTimeout(10000)
@@ -250,6 +255,7 @@ class LocationPanel(QWidget):
 
     def _location_ready(self, reply):
         self._busy = False
+        self.locate.setEnabled(True)
         try:
             if reply.error() != QNetworkReply.NetworkError.NoError:
                 raise ValueError("Network unavailable")

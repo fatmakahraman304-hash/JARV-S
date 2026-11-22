@@ -1,6 +1,7 @@
 """User-triggered, pinned GitHub updates. No Qt or credentials in this module."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import io
 import json
@@ -11,6 +12,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
@@ -159,7 +161,135 @@ def _target(root, name):
     return path
 
 
-def _apply_zip(root, files, sha, branch):
+class _RecoveryRequired(RuntimeError):
+    """Keep the transaction marker until the saved copies can be restored."""
+
+
+def _replace_bytes(path, data):
+    # A private sibling directory keeps the replacement on the same volume and
+    # cannot collide with a user's files, even after an interrupted update.
+    with tempfile.TemporaryDirectory(dir=path.parent) as staging:
+        tmp = Path(staging) / path.name
+        tmp.write_bytes(data)
+        if path.suffix == ".py" and path.is_file():
+            # CPython validates timestamp-based bytecode using whole seconds
+            # and file size. A same-size edit in one second can run old code.
+            old = path.stat()
+            current = tmp.stat()
+            if old.st_size == current.st_size and int(old.st_mtime) == int(current.st_mtime):
+                os.utime(tmp, (current.st_atime, int(old.st_mtime) + 1))
+        os.replace(tmp, path)
+
+
+_ZIP_MARKER = b'MAYK/2 zip\n'
+_ROLLBACK_MARKER = b'MAYK/2 rollback\n'
+
+
+def _file_digest(path):
+    return _hash(path.read_bytes()) if path.exists() else None
+
+
+def _backup_directory(root, name):
+    if not re.fullmatch(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9]+", name):
+        raise _RecoveryRequired("ZIP yedek kaydı geçersiz.")
+    backup = _target(root, ".jarvis-backups/" + name)
+    if backup.parent.is_symlink() or not backup.is_dir():
+        raise _RecoveryRequired("ZIP yedek klasörü doğrulanamadı.")
+    return backup
+
+
+def _recover_zip(root, lock, raw, progress):
+    """Resolve a stopped ZIP transaction offline. Leave conflicts and backups intact."""
+    journal = json.loads(raw.split(b"\n", 1)[1])
+    backup = _backup_directory(root, journal["backup"])
+    rollback = raw.startswith(_ROLLBACK_MARKER)
+    manifest = _file_digest(_target(root, ".jarvis-update.json"))
+    committed = not rollback and manifest == journal["new_manifest"]
+    if manifest not in (journal["old_manifest"], journal["new_manifest"]):
+        raise _RecoveryRequired("Yerel sürüm kaydı değişmiş. Kurtarma durduruldu.")
+    before, after = journal["before"], journal["after"]
+    previous_manifest = None
+    if rollback and journal["old_manifest"] is not None:
+        previous_manifest = _target(backup, ".previous-manifest").read_bytes()
+        if _hash(previous_manifest) != journal["old_manifest"]:
+            raise _RecoveryRequired("Önceki sürüm kaydının yedeği doğrulanamadı.")
+    restore = []
+    for rel in sorted(before.keys() | after.keys()):
+        path_name = PurePosixPath(rel)
+        if (not path_name.parts or str(path_name) != rel or path_name.is_absolute()
+                or ".." in path_name.parts or ":" in rel or chr(92) in rel or _protected(rel)):
+            raise _RecoveryRequired("ZIP kurtarma kaydında geçersiz yol.")
+        target = _target(root, rel)
+        if target.resolve() != root.resolve() / rel:
+            raise _RecoveryRequired(f"Kurtarma yolu değişmiş: {rel}")
+        current = _file_digest(target)
+        expected = after.get(rel) if committed else before.get(rel)
+        if current == expected:
+            continue
+        if committed or current != after.get(rel):
+            raise _RecoveryRequired(f"Dosya beklenmeyen biçimde değişmiş: {rel}. Yerel içerik korunuyor.")
+        if expected is not None and _file_digest(_target(backup, rel)) != expected:
+            raise _RecoveryRequired(f"Yedek doğrulanamadı: {rel}")
+        restore.append((rel, expected))
+    progress("Kesilen ZIP güncellemesi doğrulanıyor…" if committed else "Önceki ZIP kurulumu geri yükleniyor…")
+    for rel, digest in restore:
+        target = _target(root, rel)
+        if _file_digest(target) != after.get(rel):
+            raise _RecoveryRequired(f"Kurtarma sırasında dosya değişti: {rel}")
+        if digest is None:
+            target.unlink()
+        else:
+            data = _target(backup, rel).read_bytes()
+            if _hash(data) != digest:
+                raise _RecoveryRequired(f"Yedek değişti: {rel}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _replace_bytes(target, data)
+        if _file_digest(target) != digest:
+            raise _RecoveryRequired(f"Geri yüklenen dosya doğrulanamadı: {rel}")
+    if rollback:
+        state_path = _target(root, ".jarvis-update.json")
+        if previous_manifest is None:
+            state_path.unlink(missing_ok=True)
+        else:
+            _replace_bytes(state_path, previous_manifest)
+        if _file_digest(state_path) != journal["old_manifest"]:
+            raise _RecoveryRequired("Önceki sürüm kaydı geri yüklenemedi.")
+    lock.unlink()
+    return (True, "Kurulan ZIP sürümü doğrulandı. MAYK yeniden başlatılacak." if committed
+            else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. MAYK yeniden başlatılacak.")
+
+
+def rollback_zip(root=ROOT, progress=print):
+    """Explicit offline downgrade of the last intact ZIP update, with the app closed."""
+    root = Path(root)
+    with _update_guard(root):
+        marker = _target(root, ".jarvis-update.lock")
+        if (root / ".git").exists() or marker.exists():
+            raise _RecoveryRequired("ZIP geri dönüşü için kurulumu ve bekleyen kurtarmayı kontrol edin.")
+        state_path = _target(root, ".jarvis-update.json")
+        state = json.loads(state_path.read_bytes())
+        if not state.get("backup"):
+            raise _RecoveryRequired("Bu sürüm doğrulanabilir geri dönüş kaydı içermiyor.")
+        backup = _backup_directory(root, state["backup"])
+        raw = _target(backup, ".rollback.json").read_bytes()
+        journal = json.loads(raw)
+        if journal.get("backup") != state["backup"] or _hash(state_path.read_bytes()) != journal.get("new_manifest"):
+            raise _RecoveryRequired("Geri dönüş kaydı kurulu sürümle eşleşmiyor.")
+        originals = json.dumps(journal["before"], sort_keys=True).encode("utf-8")
+        if (_hash(originals) != state.get("originals_digest") or journal["after"] != state["files"]
+                or journal["old_manifest"] != state.get("old_manifest")):
+            raise _RecoveryRequired("Geri dönüş dosya listesi kurulu sürümle eşleşmiyor.")
+        if "main.py" not in journal["before"]:
+            raise _RecoveryRequired("Yedekte önceki MAYK başlangıç dosyası yok.")
+        for rel in journal["before"].keys() | journal["after"].keys():
+            if _file_digest(_target(root, rel)) != journal["after"].get(rel):
+                raise _RecoveryRequired(f"Yerel değişiklik korunuyor: {rel}")
+        transaction = _ROLLBACK_MARKER + raw
+        _replace_bytes(marker, transaction)
+        return _recover_zip(root, marker, transaction, progress)
+
+
+def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marker=None):
     """Back up before writing; restore every changed/deleted file on failure."""
     state_path = root / '.jarvis-update.json'
     old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
@@ -186,37 +316,52 @@ def _apply_zip(root, files, sha, branch):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
             existed.add(name)
-    old_state = state_path.read_bytes() if state_path.exists() else None
+    state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
+    if marker is not None:
+        originals = {n: _file_digest(backup / n) for n in existed}
+        state["backup"] = backup.name
+        state["originals_digest"] = _hash(json.dumps(originals, sort_keys=True).encode("utf-8"))
+        state["old_manifest"] = _file_digest(state_path)
+    state_bytes = json.dumps(state).encode('utf-8')
+    if marker is not None:
+        journal = {"backup": backup.name, "before": originals,
+                   "after": state["files"], "old_manifest": state["old_manifest"],
+                   "new_manifest": _hash(state_bytes)}
+        raw = json.dumps(journal).encode("utf-8")
+        if state_path.exists():
+            _replace_bytes(backup / ".previous-manifest", state_path.read_bytes())
+        _replace_bytes(backup / ".rollback.json", raw)
+        _replace_bytes(marker, _ZIP_MARKER + raw)
     touched = []
     try:
+        progress('Yeni kod uygulanıyor…')
         for name in sorted(names):
             path = _target(root, name)
-            touched.append(name)
             if name in files:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                tmp = path.with_name(path.name + '.jarvis-new')
-                try:
-                    tmp.write_bytes(files[name])
-                    os.replace(tmp, path)
-                finally:
-                    tmp.unlink(missing_ok=True)
+                _replace_bytes(path, files[name])
             else:
                 path.unlink(missing_ok=True)
-        state = {'sha': sha, 'branch': branch, 'files': {n: _hash(b) for n, b in files.items()}}
-        temp_state = state_path.with_suffix('.tmp')
-        temp_state.write_text(json.dumps(state), encoding='utf-8')
-        os.replace(temp_state, state_path)
+            touched.append(name)
+        progress('Kurulan dosyalar doğrulanıyor…')
+        for name, digest in state['files'].items():
+            if _hash(_target(root, name).read_bytes()) != digest:
+                raise RuntimeError(f'Yazılan dosya doğrulanamadı: {name}')
+        _replace_bytes(state_path, state_bytes)
     except Exception:
+        failed = []
         for name in reversed(touched):
             path = root / name
-            if name in existed:
-                shutil.copy2(backup / name, path)
-            else:
-                path.unlink(missing_ok=True)
-        if old_state is None:
-            state_path.unlink(missing_ok=True)
-        else:
-            state_path.write_bytes(old_state)
+            try:
+                if name in existed:
+                    shutil.copy2(backup / name, path)
+                else:
+                    path.unlink(missing_ok=True)
+            except OSError:
+                failed.append(name)
+        if failed:
+            raise _RecoveryRequired(f'Geri alma tamamlanamadı. Yedek: {backup}. Dosyalar: {", ".join(failed[:5])}')
+        # The old manifest remains intact until the final atomic replace.
         raise
     return backup
 
@@ -242,16 +387,46 @@ def _needs_dependency_install(old, new):
     return not set(after).issubset(before)
 
 
+@contextmanager
+def _update_guard(root):
+    """The kernel releases this lock even if Windows terminates the process."""
+    with (root / '.jarvis-update.guard').open('a+b') as handle:
+        handle.seek(0)
+        try:
+            if os.name == 'nt':
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise RuntimeError('Başka bir güncelleme çalışıyor veya güncelleme kilidi alınamadı.') from exc
+        yield
+
+
 def update(root=ROOT, progress=lambda message: None):
     root = Path(root)
     if getattr(sys, 'frozen', False):
         raise RuntimeError('Bu paketli sürüm için kurulum paketi gerekir; kaynak güncellemesi uygulanmadı.')
+    with _update_guard(root):
+        return _update_locked(root, progress)
+
+
+def _update_locked(root, progress):
     lock = root / '.jarvis-update.lock'
+    checking = b'MAYK/1 checking'
     try:
-        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        with lock.open('xb') as marker:
+            marker.write(checking)
     except FileExistsError:
-        raise RuntimeError('Başka bir güncelleme çalışıyor. Önceki işlem kesildiyse .jarvis-update.lock dosyasını kaldırın.') from None
-    os.close(fd)
+        raw = lock.read_bytes()
+        if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
+            return _recover_zip(root, lock, raw, progress)
+        if raw != checking:
+            raise RuntimeError('Başka bir güncelleme veya yarım kalan kurulum var. '
+                               'Güncelleme kilidi ve yedekler korunuyor. docs/guncelleme-tr.md dosyasına bakın.') from None
+        progress('Kesilen kontrolün ardından yeniden deneniyor…')
+    release_marker = True
     try:
         is_git = (root / '.git').exists()
         state_file = root / '.jarvis-update.json'
@@ -291,7 +466,9 @@ def update(root=ROOT, progress=lambda message: None):
         old_req = (root / 'requirements.txt').read_text('utf-8')
         if _needs_dependency_install(old_req, new_req):
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. MAYK’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
-        progress('Yedek alınıyor ve güncelleme uygulanıyor…')
+        if is_git:
+            _replace_bytes(lock, b'MAYK/1 applying')
+        progress('Yedek alınıyor…')
         note = ''
         if is_git:
             if (_git(root, 'symbolic-ref', '--short', 'HEAD') != branch
@@ -304,26 +481,31 @@ def update(root=ROOT, progress=lambda message: None):
                 shown = ', '.join(real_changes[:5]) + (' …' if len(real_changes) > 5 else '')
                 progress(f'Yerel değişiklikler kenara alınıyor: {shown}')
                 label = _set_aside(root)
+            progress('Yeni kod uygulanıyor…')
             try:
                 if eol_only:
-                    # Only CRLF/LF differences: nothing to keep. The target is a
-                    # descendant (checked above), so this is a fast-forward.
-                    _git(root, 'reset', '--hard', sha)
-                else:
-                    _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
+                    # Normalize tracked files before the fast-forward. Git merge
+                    # then checks for collisions with personal untracked files.
+                    _git(root, 'restore', '--source=HEAD', '--staged', '--worktree', '--', '.')
+                _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
             except RuntimeError:
                 if label:
                     _restore(root, label)
                 raise
+            progress('Kurulan commit doğrulanıyor…')
             if _git(root, 'rev-parse', 'HEAD') != sha:
                 raise RuntimeError('Güncelleme sonucu doğrulanamadı.')
             if label:
                 note = _restore(root, label)
         else:
-            _apply_zip(root, files, sha, branch)
+            _apply_zip(root, files, sha, branch, progress, marker=lock)
         return True, f'Güncellendi · {sha[:8]}. MAYK otomatik yeniden başlatılıyor.{note}'
+    except _RecoveryRequired:
+        release_marker = False
+        raise
     finally:
-        lock.unlink(missing_ok=True)
+        if release_marker:
+            lock.unlink(missing_ok=True)
 
 
 def check(root=ROOT) -> dict:
@@ -350,3 +532,30 @@ def check(root=ROOT) -> dict:
     return {"newer": sha != state.get('sha'), "sha": sha, "current": state.get('sha') or "",
             "changes": str(commit.get('commit', {}).get('message', '')).splitlines()[:1] if sha != state.get('sha') else [],
             "branch": branch}
+
+if __name__ == "__main__":
+    if sys.stdout is not None and not sys.stdout.isatty():
+        sys.stdout.reconfigure(encoding="utf-8")
+    import argparse
+    parser = argparse.ArgumentParser(description="Kesilen MAYK ZIP güncellemesini çevrimdışı kurtar.")
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--recover", action="store_true")
+    action.add_argument("--rollback", action="store_true")
+    args = parser.parse_args()
+    try:
+        if args.rollback:
+            rollback_zip()
+            print("Önceki ZIP sürümü geri yüklendi ve doğrulandı.")
+            sys.exit(0)
+        with _update_guard(ROOT):
+            marker = ROOT / ".jarvis-update.lock"
+            raw = marker.read_bytes() if marker.exists() else b""
+            if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
+                _recover_zip(ROOT, marker, raw, print)
+                print("Kurtarma doğrulandı. MAYK'ı açabilirsiniz.")
+            elif marker.exists():
+                sys.exit("Bu kilit otomatik ZIP kurtarmasına uygun değil. Güncelleme kılavuzuna bakın.")
+            else:
+                print("Bekleyen ZIP kurtarması yok.")
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+        sys.exit(f"Kurtarma tamamlanamadı: {exc}")

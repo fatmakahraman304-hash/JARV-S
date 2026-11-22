@@ -74,7 +74,7 @@ class WakeWordDetector:
         self._running = False
         self._model = None
         self._ready = False
-        self._reset_pending = False
+        self._generation = 0
 
     def start(self) -> bool:
         """Load the model and spawn the inference thread. Returns True on success.
@@ -96,13 +96,16 @@ class WakeWordDetector:
             return False
         self._running = True
         self._ready = True
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="WakeWordThread")
+        self._queue = queue.Queue(maxsize=50)
+        self._thread = threading.Thread(target=self._loop, args=(self._queue, self._model),
+                                        daemon=True, name="WakeWordThread")
         self._thread.start()
         self._logger("Wake word: listening for 'Hey MAYK'.")
         return True
 
     def stop(self) -> None:
         self._running = False
+        self._generation += 1
         # unblock the thread if it's waiting on the queue
         try:
             self._queue.put_nowait(None)
@@ -119,15 +122,16 @@ class WakeWordDetector:
         """Forget what was heard so far — call it when the assistant goes to sleep.
         Done on the detector's own thread, which is the only one that touches
         the model."""
-        self._reset_pending = True
+        self._generation += 1
 
-    def _reset_model(self) -> None:
+    @staticmethod
+    def _reset_model(model) -> None:
         # The model keeps its recent audio features and scores. Left alone, one
         # "Hey MAYK" fired a dozen times in a row (measured: 12), and audio
         # from before the assistant woke was still in there when it went back
         # to sleep — so it could wake again on words said minutes earlier.
         try:
-            self._model.Reset()
+            model.Reset()
         except Exception:
             pass
 
@@ -137,46 +141,46 @@ class WakeWordDetector:
         if not self._running:
             return
         try:
+            frames, generation = self._queue, self._generation
             # frame_int16 is a numpy int16 array (possibly 2-D mono) — flatten to 1-D
             data = frame_int16[:, 0].copy() if getattr(frame_int16, "ndim", 1) > 1 else frame_int16.copy()
-            self._queue.put_nowait(data)
+            frames.put_nowait((generation, data))
         except queue.Full:
             pass
         except Exception:
             pass
 
-    def _loop(self) -> None:
+    def _loop(self, frames, model) -> None:
         import numpy as np
-        while self._running:
+        active_generation = None
+        while self._running and frames is self._queue:
             try:
-                frame = self._queue.get()
-                if frame is None or not self._running:
+                item = frames.get()
+                if item is None or not self._running or frames is not self._queue:
                     break
-                if self._reset_pending:
-                    self._reset_pending = False
-                    self._reset_model()
-                pcm = np.asarray(frame, dtype=np.int16).tobytes()
-                if not self._model.AcceptWaveform(pcm):
+                generation, frame = item
+                if generation != self._generation:
                     continue
-                result = json.loads(self._model.Result())
+                if active_generation != generation:
+                    self._reset_model(model)
+                    active_generation = generation
+                pcm = np.asarray(frame, dtype=np.int16).tobytes()
+                if not model.AcceptWaveform(pcm):
+                    continue
+                result = json.loads(model.Result())
                 # Vosk may retain preceding unknown speech across a pause. Match
                 # the last two tokens and their confidence, ignoring that prefix.
                 words = (result.get("result") or [])[-2:]
                 if ([word.get("word") for word in words] == KEYPHRASE.split()
                         and all(word.get("conf", 0) >= self._threshold for word in words)):
                     # drain any backlog and clear the model, so one utterance is one wake
-                    self._drain()
-                    self._reset_model()
+                    if generation != self._generation or frames is not self._queue or not self._running:
+                        continue
+                    self.reset()
+                    self._reset_model(model)
                     try:
                         self._on_detect()
                     except Exception as e:
                         self._logger(f"Wake word: on_detect error — {e}")
             except Exception as e:
                 self._logger(f"Wake word: inference error — {e}")
-
-    def _drain(self) -> None:
-        try:
-            while True:
-                self._queue.get_nowait()
-        except Exception:
-            pass

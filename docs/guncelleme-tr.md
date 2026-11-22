@@ -1,26 +1,69 @@
-# MAYK Güncelle düğmesi
+# MAYK kurulumu ve GÜNCELLE düğmesi
 
-Üst çubuktaki **GÜNCELLE** düğmesi GitHub’daki mevcut dalı kontrol eder,
-yeni kodu indirir ve uygular. İşlem arka planda çalışır. Sonuç hem bildirimde
-hem etkinlik günlüğünde görünür. Başarılı güncellemeden sonra uygulamayı kapatıp
-yeniden açın; çalışan ses oturumu zorla kesilmez.
+## Windows’ta kaynak kurulumu
 
-- Git kurulumu mevcut dalı takip eder; yalnızca ileri yönlü birleştirme yapar.
-  Yerel kod değişikliklerinde durur. Eski sürüm `jarvis-backup/` dalında tutulur.
-- ZIP kurulumu `update_channel.json` içindeki dalı takip eder. Yeni ana sürüm ZIP
-  kurulumları `main` dalını takip eder. Önceden güncellenmiş ZIP kurulumları
-  kayıtlı kanallarını, Git kurulumları mevcut dallarını korur.
-- ZIP kurulumu değişen dosyaları `.jarvis-backups/` içine yedekler. Yazma hatasında
-  değişiklikleri geri alır. Sonraki güncellemelerde yerel kod değişikliklerini korur.
-- Anahtarlar, ayarlar, hafıza verileri, günlükler ve özel dosyalar korunur.
-- Yeni bağımlılık gerektiren sürümlerde, Windows’un açık Qt/ses DLL’lerini
-  değiştirmek yerine işlem durur ve yeni sürümün `setup.py` kurulumu istenir.
-  EXE paketleri için de yeni kurulum paketi gerekir.
-- İnternet hatası başarı olarak gösterilmez. Kontrol/indirme sırasında kod değişmez.
-- İlk kez düğmeyi alabilmek için bu kodu içeren sürümün kurulması gerekir;
-  düğme eski kurulumda kendiliğinden belirmez.
+PowerShell’de Python 3.13 ve Git ile yeni bir klasöre kurun. Mevcut kurulumunuzdaki kişisel dosyaları bu işlem için taşımanız gerekmez.
 
-Otomatik testler ZIP kontrol/uygulama, güncel sürüm, ayar koruması, güvenli arşiv,
-yerel değişiklik, silinen kaynak dosyası, rollback, ağ hatası, eşzamanlı işlem
-kilidi ve bağımlılık değişimini kapsar. Gerçek Windows cihazında güncelleme ve
-uygulamanın tekrar açılması ayrıca denenmelidir.
+```powershell
+git clone --branch main https://github.com/fatmakahraman304-hash/JARV-S.git MAYK
+cd MAYK
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe setup.py
+.\.venv\Scripts\python.exe main.py
+```
+
+## Güncelleme
+
+**GÜNCELLE** düğmesi, kaynak kurulumda arka planda çalışır. Etkinlik günlüğünde kontrol, ZIP indirme, yedekleme, uygulama ve dosya veya commit doğrulaması görünür. Doğrulamadan sonra HUD yeniden başlatmayı zamanlar. Yardımcı süreç başlatılamazsa pencere açık kalır ve elle açma bilgisi gösterilir. Yeni süreçte HUD’ı ve gereken ses aygıtını kontrol edin.
+
+- Git kurulumu etkin dalı yalnızca ileri yönde günceller. Önceki commit için `jarvis-backup/` dalı oluşturur. Gerçek yerel düzenlemeleri adlandırılmış stash kaydına alır. Çakışma olursa kayıt saklanır. İzlenmeyen bir kullanıcı dosyası yeni sürümle çakışırsa işlem durur.
+- ZIP kurulumu ilk seferinde `update_channel.json` içindeki dalı, daha sonra kayıtlı kanalı izler. Üzerine yazacağı dosyaları `.jarvis-backups/` içine kopyalar. Dosyaları değiştirdikten sonra içerik özetlerini kontrol eder. Başarısız yazmada bu işlemde değişmiş dosyaları geri alır.
+- DNS veya bağlantı hatasından sonra bağlantı düzeldiğinde tekrar deneyin. Yeni sürüm ek bağımlılık istiyorsa ayrı bir klasöre yeni kurulum yapın ve orada açılışı sınayın. Çalışan Qt ve ses DLL’leri yerinde değiştirilmez. Paketli EXE için uygun kurulum paketi gerekir.
+
+## Kesintiden sonra
+
+Bu sürümle başlayan bir güncelleme, kontrol veya indirme sırasında kesildiyse **GÜNCELLE** yeniden denenebilir. İşletim sistemi canlı güncelleyicinin kilidini tutar ve süreç kapanınca bırakır.
+
+Bu sürümle başlatılan ZIP güncellemesi dosya yazarken kesilirse tekrar **GÜNCELLE** düğmesine basın. Kurtarma çevrimdışı çalışır. Sürüm kaydı henüz yazılmamışsa önceki sürüm geri yüklenir. Kayıt tamamlanmışsa yeni sürümün dosyaları doğrulanır. Kesintiden sonra sizin düzenlediğiniz bir dosya veya bozuk yedek tespit edilirse kurtarma durur ve yedekler saklanır.
+
+HUD açılmıyorsa MAYK kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa MAYK’ı normal şekilde açın.
+
+```powershell
+.\.venv\Scripts\python.exe -m core.app_updater --recover
+```
+
+Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya önceki sürümden kalan belirsiz bir kilit bildirilirse MAYK’ı kapatın. Kurulum klasörünü, gizli yedekleri ve kullanıcı verilerini ayrı bir konuma kopyalayın. Windows’ta kalıcı hafıza ve devamlılık kayıtları için `%LOCALAPPDATA%\JarvisMurat` klasörünü de koruyun. Güncelleme kilidini tek başına kaldırmak yarım işlemi onarmaz.
+
+- Git için `git status --short`, `git branch --list "jarvis-backup/*"`, `git stash list` ve `git rev-parse HEAD` ile durumu kaydedin. Önceki sürümü denemek için yedek dalı ayrı bir çalışma klasöründe açabilirsiniz.
+- ZIP için güncelleme günlüğündeki yedek konumunu ve `.jarvis-update.json` dosyasını saklayın. Yedek klasörü işlem öncesinde var olan dosyaları içerir. Yeni eklenmiş dosyalar veya yarıda kalmış işlem nedeniyle klasörün tek başına eksiksiz bir kurulum olduğu varsayılamaz. Bilinen çalışan sürümü ayrı klasörde açıp kişiselleştirme ve hafızayı doğrulayın.
+- Yardımcı süreç günlüğü Windows’ta `%LOCALAPPDATA%\Jarvis\logs\restart.log` yolundadır. Bu günlükteki başlatma kaydı, mikrofonun veya modelin hazır olduğunu tek başına doğrulamaz.
+
+
+## Dosyalar kurulduktan sonra HUD açılmıyorsa
+
+Normal yeniden başlatmada yardımcı süreç eski MAYK’ın çıkmasını bekler. Yeni pencere görünür olup Qt olay döngüsü çalıştığında açılış onayını `restart.log` dosyasına yazar. Süreç erken kapanırsa çıkış kodunu kaydeder. 90 saniyede onay gelmezse günlükte açılışın doğrulanamadığı belirtilir. Bu durumda Görev Yöneticisi’nde MAYK’ın hâlâ açık olup olmadığını kontrol edin.
+
+Yeni kod kurulmuş ancak çalışmıyorsa, MAYK kapalıyken bu sürümün güncellediği **ZIP kurulumunda** son güncellemeyi çevrimdışı geri almak için kurulum klasöründe çalıştırın.
+
+```powershell
+.\.venv\Scripts\python.exe -m core.app_updater --rollback
+.\.venv\Scripts\python.exe main.py
+```
+
+İkinci komutu yalnızca önceki sürümün geri yüklendiği doğrulandıktan sonra çalıştırın. Geri dönüş dosyaları ve önceki sürüm kaydını denetler. Yerel düzenleme varsa durur. Geri dönüşün kendisi kesilirse `--recover` ile devam edilir. Bu yol, geri dönüş kaydı içeren bir ZIP güncellemesi gerektirir. Git kurulumunda yukarıdaki yedek dal yöntemi geçerlidir.
+
+## Konuşma ve görev geçmişini yedekleme
+
+MAYK çalışırken, kendi hesabınıza özel yerel bir NTFS klasöründe yeni bir yedek oluşturabilirsiniz. Her yedek için yeni bir dosya adı seçin.
+
+```powershell
+.\.venv\Scripts\python.exe -m memory.continuity --backup "$env:LOCALAPPDATA\MAYK-Yedek\gecmis-01.sqlite3"
+```
+
+Yedek, SQLite’a kaydedilmiş konuşmaları, görevleri ve uygulama kayıtlarını içerir. Kişisel metinler içerdiği için erişimini sınırlayın. API anahtarları, persona ayarları ve diğer hafıza dosyaları ayrıca korunmalıdır.
+
+Yeni bir Windows kurulumu veya boş bir veri klasöründe, MAYK kapalıyken geri yükleyin. Komut mevcut geçmişi korur ve aynı adlı dosyanın üzerine yazmaz.
+
+```powershell
+.\.venv\Scripts\python.exe -m memory.continuity --restore "$env:LOCALAPPDATA\MAYK-Yedek\gecmis-01.sqlite3"
+```

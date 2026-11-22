@@ -1,6 +1,5 @@
 import json
 import time
-import shutil
 import os
 from datetime import datetime, timezone, timedelta
 from threading import RLock
@@ -28,7 +27,7 @@ def get_base_dir() -> Path:
 
 
 BASE_DIR         = get_base_dir()
-from memory.continuity import data_dir, memory_words, recall_terms
+from memory.continuity import data_dir, memory_words, recall_terms, related_word
 MEMORY_PATH      = data_dir() / "long_term.json"
 BACKUP_PATH      = MEMORY_PATH.with_suffix(".json.bak")        # the last good file, kept before every write
 ARCHIVE_PATH     = MEMORY_PATH.with_name("long_term_archive.json")   # what a full memory let go of — still searchable
@@ -77,6 +76,10 @@ def _empty_memory() -> dict:
 def load_memory() -> dict:
     if not MEMORY_PATH.exists():
         with _lock:
+            if not MEMORY_PATH.exists() and BACKUP_PATH.exists():
+                recovered = _recover(FileNotFoundError(MEMORY_PATH))
+                if MEMORY_PATH.exists():
+                    return {**_empty_memory(), **recovered}
             if not MEMORY_PATH.exists() and _LEGACY_MEMORY_PATH.exists():
                 try:
                     legacy = json.loads(_LEGACY_MEMORY_PATH.read_text(encoding="utf-8"))
@@ -177,9 +180,8 @@ def _trim_to_limit(memory: dict) -> dict:
 def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
         return
-    memory = _trim_to_limit(memory)
     with _lock:
-        _write_memory(memory)
+        _write_memory(_trim_to_limit(memory))
 
 
 def _write_memory(memory: dict) -> None:
@@ -190,13 +192,27 @@ def _write_memory(memory: dict) -> None:
         temporary.write_text(
             json.dumps(memory, indent=2, ensure_ascii=False), encoding="utf-8"
         )
-        if MEMORY_PATH.exists():                      # the current good file becomes the backup
+        if MEMORY_PATH.exists():
             try:
                 previous = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-                if isinstance(previous, dict):
-                    shutil.copyfile(MEMORY_PATH, BACKUP_PATH)
             except (OSError, ValueError):
-                pass                                   # never back up a broken file over a good backup
+                previous = None  # retain the last good backup
+            if isinstance(previous, dict):
+                for path, timestamp in memory.get("_deleted", {}).items():
+                    category, _, key = path.partition("/")
+                    entries = previous.get(category, {})
+                    if isinstance(entries, dict):
+                        entry = entries.get(key)
+                        if not isinstance(entry, dict) or str(entry.get("updated", "")) <= timestamp:
+                            entries.pop(key, None)
+                    tomb = previous.setdefault("_deleted", {})
+                    tomb[path] = max(tomb.get(path, ""), timestamp)
+                backup_tmp = BACKUP_PATH.with_name(BACKUP_PATH.name + ".tmp")
+                try:
+                    backup_tmp.write_text(json.dumps(previous, ensure_ascii=False), encoding="utf-8")
+                    os.replace(backup_tmp, BACKUP_PATH)
+                finally:
+                    backup_tmp.unlink(missing_ok=True)
         os.replace(temporary, MEMORY_PATH)
     finally:
         temporary.unlink(missing_ok=True)
@@ -457,7 +473,7 @@ def _score(query_words: set[str], cat: str, key: str, value: str) -> tuple[int, 
             weight += 6
         elif term in category:
             weight += 2
-        elif len(term) >= 4 and any(word.startswith(term) for word in words):
+        elif any(related_word(term, word) for word in words):
             weight += 1
         else:
             continue
@@ -551,8 +567,14 @@ def forget(key: str, category: str = "notes") -> str:
         cat    = memory.get(category, {})
         archived = _load_archive().get(category, {})
         if key in cat or (isinstance(archived, dict) and key in archived):
-            cat.pop(key, None)
-            memory.setdefault("_deleted", {})[f"{category}/{key}"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            entry = cat.pop(key, None)
+            deleted = memory.setdefault("_deleted", {})
+            path = f"{category}/{key}"
+            timestamps = [datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), str(deleted.get(path, ""))]
+            for version in (entry, archived.get(key) if isinstance(archived, dict) else None):
+                if isinstance(version, dict):
+                    timestamps.append(str(version.get("updated", "")))
+            deleted[path] = max(timestamps)
             memory[category] = cat
             save_memory(memory)
             return f"Forgotten: {category}/{key}"

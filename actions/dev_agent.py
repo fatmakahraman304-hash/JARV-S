@@ -1427,7 +1427,7 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
                                       static_problems, test_regressions)
     except Exception as e:
         _log(player, f"Testing unavailable: {str(e)[:120]}")
-        return {}
+        return {"(tests)": "Proje kontrolleri yüklenemedi."}
     stack = stack or detect_stack(folder)
     originals = originals or {}
     _update("testing")
@@ -1447,12 +1447,15 @@ def _test_and_fix(folder: Path, written: dict[str, str], changes: list,
             broke = ("The project test command could not start." if after is None
                      else test_regressions(baseline, after))
             if broke:
-                for rel in _blame(broke, written):
+                targets = _blame(broke, written)
+                if not targets or after is None:
+                    return {"(tests)": broke}
+                for rel in targets:
                     problems[rel] = (problems.get(rel, "") + " " + broke).strip()
             elif after["ok"]:
                 _log(player, "Projenin testleri başarılı.")
             else:
-                _log(player, "Projede önceden var olan test hataları var; yeni bir hata bulunmadı.")
+                return {"(tests)": "Önceden başarısız olan proje testleri hâlâ başarısız."}
         problems = {r: p for r, p in problems.items() if r in written}
         if not problems:
             _log(player, "Değiştirilen dosyalarda yeni bir hata bulunmadı.")
@@ -1587,7 +1590,7 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     plan["changes"] = changes
     summary = str(plan.get("summary") or "").strip()
     if not changes:
-        return summary or "Uygulanabilecek bir değişiklik belirlenemedi."
+        return "Uygulanabilecek bir değişiklik belirlenemedi."
     with _state_lock:
         if _JOB:                  # absent when called outside a background job
             _JOB["files"] = {c["path"]: {"action": c["action"],
@@ -1689,14 +1692,14 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
                 (folder / rel).write_text(new, encoding="utf-8", newline="")
                 written[rel] = new
             _update(file=rel, file_state="done")
-    still_broken = [rel for rel, text in written.items() if _syntax_error(rel, text)]
-    for rel in still_broken:
-        _update(file=rel, file_state="broken")
-
     # Test the result the way the app will use it, and fix what fails.
     failing = _test_and_fix(folder, written, changes, plan, instruction,
                             context, player, stack=stack, originals=texts,
                             baseline=baseline)
+
+    still_broken = [rel for rel, text in written.items() if _syntax_error(rel, text)]
+    for rel in still_broken:
+        _update(file=rel, file_state="broken")
 
     def restore() -> str:
         for rel in edited:
@@ -1727,24 +1730,26 @@ def _improve_folder(folder: Path, instruction: str, player=None, *, open_editor=
     took = time.monotonic() - started
     parts = []
     if edited:
-        parts.append(f"changed {len(edited)} file{'s' if len(edited) != 1 else ''} "
-                     f"({', '.join(edited)})")
+        parts.append(f"{len(edited)} dosya değiştirildi ({', '.join(edited)})")
     if created:
-        parts.append(f"created {len(created)} ({', '.join(created)})")
-    msg = f"Done with '{folder.name}' in {took:.0f}s: {' and '.join(parts)}."
-    if summary:
-        msg += f" {summary}"
+        parts.append(f"{len(created)} dosya oluşturuldu ({', '.join(created)})")
+    msg = f"'{folder.name}' için {took:.0f} saniyede " + ", ".join(parts) + "."
+    verification = "unverified"
     if still_broken:
-        msg += f" Şu dosyalarda sözdizimi hatası var: {', '.join(still_broken)}."
+        msg += f" Sözdizimi denetimi başarısız: {', '.join(still_broken)}."
     if failing:
-        msg += (" Şu testler hâlâ başarısız ve incelenmeli: "
-                + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + ".")
-    elif written:
-        msg += " Kontrollerde yeni bir test hatası bulunmadı."
-    if edited:
-        msg += f" Originals are in {_BACKUP_DIR}/{stamp}; say 'undo' to restore them."
+        msg += " Başarısız kontroller: " + "; ".join(f"{r} — {p[:160]}" for r, p in failing.items()) + "."
+    if failing or still_broken:
+        verification = "failed"
+    elif written and stack and stack.get("test_cmd"):
+        verification = "done"
+        msg += " Proje testleri geçti."
     else:
-        msg += " Say 'undo' to remove the new files."
+        msg += " Proje testleriyle doğrulanamadı."
+    with _state_lock:
+        if _JOB:
+            _JOB["verification"] = verification
+    msg += " Geri almak için 'geri al' diyebilirsiniz."
     _log(player, msg)
     return msg
 
@@ -1813,8 +1818,8 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
     try:
         from core.code_checks import (detect_stack, run_tests, runtime_problems,
                                       static_problems, test_regressions)
-    except Exception:
-        return {}
+    except ImportError as exc:
+        return {"(tests)": f"Test altyapısı yüklenemedi: {type(exc).__name__}"}
     stack = stack or detect_stack(folder)
     problems = static_problems(folder, written, stack)
     to_run = {r: t for r, t in written.items() if r not in problems}
@@ -1828,6 +1833,8 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                  else test_regressions(baseline, after))
         if broke:
             problems["(tests)"] = broke
+        elif after and not after["ok"]:
+            problems["(tests)"] = "Önceden başarısız olan proje testleri hâlâ başarısız."
     return {r: p for r, p in problems.items() if r in written or r == "(tests)"}
 
 
@@ -1840,6 +1847,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     _update("writing")
     _log(player, f"{who} proje klasöründe kod ajanı olarak çalışıyor: okuyor, düzenliyor, test ediyor…")
     before = agent_coding.snapshot(folder)
+    protection = Protection(folder)
     extra, summary, problems = "", "", {}
     changed: list[str] = []
     created: list[str] = []
@@ -1858,21 +1866,29 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         after = agent_coding.snapshot(folder)
         changed, created, deleted = agent_coding.diff(before, after)
         # Protected files (secrets, local settings) are put back, whatever the agent did.
-        protection = Protection(folder)
-        for rel in list(changed) + list(created):
-            why = protection.reason(rel)
-            if why:
-                _log(player, f"Put back {rel}: {why}.")
-                agent_coding.restore(folder, {rel: before[rel]} if rel in before else {}, [rel])
-                (changed if rel in changed else created).remove(rel)
+        for group in (changed, created, deleted):
+            for rel in group.copy():
+                why = protection.reason(rel)
+                if why:
+                    original = before.get(rel)
+                    agent_coding.restore(folder, {rel: original} if original else {}, [rel])
+                    path = folder / rel
+                    if original:
+                        restored = original[3] is not None and path.is_file() and path.read_bytes() == original[3]
+                    else:
+                        restored = not path.exists()
+                    if not restored:
+                        raise RuntimeError(f"Korunan dosyanın geri yüklenmesi doğrulanamadı: {rel}")
+                    _log(player, f"Korunan dosya önceki durumuna getirildi: {rel}")
+                    group.remove(rel)
         with _state_lock:
             if _JOB:
                 _JOB["files"] = {r: {"action": "edit", "state": "done"} for r in changed}
                 _JOB["files"].update({r: {"action": "create", "state": "done"} for r in created})
-                _JOB["summary"] = summary[:400]
+                _JOB["files"].update({r: {"action": "delete", "state": "done"} for r in deleted})
         _publish()
         written = _text_files(folder, changed + created)
-        if not written:
+        if not (changed or created or deleted):
             break
         _update("testing")
         _log(player, "Ajanın çalışması MAYK testleriyle doğrulanıyor…")
@@ -1888,7 +1904,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
             _update("writing")
 
     if not (changed or created or deleted):
-        return summary or f"{who} looked at '{folder.name}' but changed nothing."
+        return f"{who} looked at '{folder.name}' but changed nothing."
 
     final_after = list(agent_coding.snapshot(folder))
 
@@ -1912,8 +1928,9 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
     if deleted:
         parts.append(f"{len(deleted)} dosya silindi ({', '.join(deleted[:8])})")
     msg = f"'{folder.name}' projesi {who} tarafından {took:.0f} saniyede işlendi: {'; '.join(parts)}."
-    if summary:
-        msg += f" {summary.strip()[:700]}"
+    with _state_lock:
+        if _JOB:
+            _JOB["verification"] = "failed" if problems else ("done" if stack and stack.get("test_cmd") else "unverified")
     if problems:
         msg += (" Şu kontroller hâlâ başarısız: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
@@ -2024,12 +2041,19 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
     The caller must already hold `_job_lock`; it is released here."""
     def work():
         status = "done"
+        paused = False
         result = ""
         try:
             result = job()
             with _state_lock:
                 wrote = any(f.get("state") == "done" for f in _JOB["files"].values())
-            if not wrote:
+                verification = _JOB.get("verification")
+                paused = _JOB.get("stage_paused")
+            if verification == "failed":
+                status = "finished with problems"
+            elif verification == "unverified":
+                status = "unverified"
+            elif not wrote:
                 status = "nothing changed"
             elif ("couldn't fully fix" in result or "could not" in result.lower()
                   or "still fail their test" in result):
@@ -2039,16 +2063,19 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
             result = f"'{name}' kodlama görevi başarısız: {type(e).__name__}: {str(e)[:200]}"
             _log(player, result)
         finally:
-            _journal(pid, status={"done": "bitti", "nothing changed": "değişiklik yok",
-                                  "finished with problems": "sorunlu bitti",
-                                  "failed": "başarısız"}.get(status, status), note=result)
+            journal_status = {"done": "bitti", "nothing changed": "değişiklik yok",
+                              "finished with problems": "sorunlu bitti", "failed": "başarısız",
+                              "unverified": "doğrulanamadı"}.get(status, status)
+            if paused:
+                journal_status = "aşama bekliyor"
+            _journal(pid, status=journal_status, note=result)
             try:
                 _update(status, result=result, finished=time.time())
             finally:
                 _job_lock.release()
         try:
             from core import sync_hub           # the user is on the phone: tell it there too
-            sync_hub.deliver_to_voice(f"Kodlama işi bitti: {name} ({status})", result)
+            sync_hub.deliver_to_voice(f"Kodlama işi: {name} ({journal_status})", result)
         except Exception:
             pass
         if speak:
@@ -2219,9 +2246,19 @@ def _build_staged(description: str, language: str, project_name: str, player, pi
                        f"NOW DO STAGE {i + 1}/{len(stages)}: {st['title']} — {st['goal']}\n"
                        "The earlier stages are already in the files. Do only this stage, completely and "
                        "working; keep README.md (Turkish) up to date with how to run the project.")
+        with _state_lock:
+            _JOB["verification"] = "unverified"
         result = _improve_folder(folder, instruction, player, open_editor=False)
-        st["done"] = True
+        with _state_lock:
+            verdict = _JOB.get("verification")
+            _JOB["stage_paused"] = verdict != "done"
         st["result"] = result[:600]
+        st["verification"] = verdict
+        if verdict != "done":
+            _journal(pid, stage=i, stages={"plan": plan, "language": language})
+            reason = "kontroller başarısız" if verdict == "failed" else "sonuç doğrulanamadı"
+            return f"{i + 1}. aşamada durdum ({reason}). {result[:600]}"
+        st["done"] = True
         results.append(f"{i + 1}. {st['title']}")
         _journal(pid, stage=i + 1, stages={"plan": plan, "language": language})
     shown = _present(folder, plan.get("present") or {}, player)
@@ -2238,16 +2275,31 @@ def _start_resume(target: str, speak=None, player=None) -> str:
     global _job_name
     try:
         from memory.continuity import projects
-        pending = projects(unfinished_only=True, limit=10)
+        pending = projects(unfinished_only=True, limit=None)
     except Exception as e:
         return f"I could not read the job journal: {e}"
     if not pending:
-        return "There is no unfinished coding job to continue, sir."
+        return "Devam edilecek yarım bir kodlama işi bulunamadı."
     t = (target or "").strip().casefold().lstrip("#")
-    pick = next((p for p in pending if t and (str(p["id"]) == t or t in p["title"].casefold()
-                                               or t in str(p["folder"]).casefold())), pending[0])
+    if t.isdecimal():
+        matches = [p for p in pending if str(p["id"]) == t]
+    elif t:
+        matches = [p for p in pending if t in (p["title"].casefold(), str(p["folder"]).casefold())]
+        if not matches:
+            matches = [p for p in pending if t in p["title"].casefold() or t in str(p["folder"]).casefold()]
+    else:
+        matches = pending
+    if not matches:
+        return "Bu ad veya numarayla yarım bir kodlama işi bulamadım."
+    if len(matches) > 1:
+        choices = ", ".join(f"#{p['id']} {p['title']}" for p in matches[:5])
+        return f"Hangi projeye devam edeyim? {choices}"
+    pick = matches[0]
     if not _job_lock.acquire(blocking=False):
         return f"Üzerinde çalışmaya devam ediyorum: '{_job_name}', sir. One job at a time."
+    if not str(pick.get("folder") or "").strip():
+        _job_lock.release()
+        return "Bu projenin klasörü kaydedilmemiş. Proje kaydı saklandı."
     folder = Path(pick["folder"])
     _job_name = pick["title"]
     who = _coding_provider() or "kodlama modeli"
@@ -2262,8 +2314,8 @@ def _start_resume(target: str, speak=None, player=None) -> str:
                         pick["title"], who, speak, player, pid=pick["id"])
     if not folder.is_dir():
         _job_lock.release()
-        _journal(pick["id"], status="iptal", note="folder no longer exists")
-        return f"The folder of '{pick['title']}' no longer exists, so it cannot be resumed."
+        _journal(pick["id"], status="yarıda kaldı", note="Proje klasörüne erişilemiyor.")
+        return f"'{pick['title']}' klasörüne erişemiyorum. Proje kaydı saklandı."
     _new_job(folder, who, pick["instruction"], player, kind="improve", journal_id=pick["id"])
     instruction = (pick["instruction"] + "\n\n(This job was interrupted before it finished. Look at the "
                    "folder as it is now, keep what is already done, and complete the rest.)")

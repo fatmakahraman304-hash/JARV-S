@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
     _gesture_finished_sig = pyqtSignal(int, str)
     _scan_request_sig = pyqtSignal()
     _scan_result_sig = pyqtSignal(bytes, object)
+    _second_brain_sig = pyqtSignal()
     _codejob_sig    = pyqtSignal(object)     # dev_agent job state — live coding panel
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
@@ -131,7 +132,7 @@ class MainWindow(QMainWindow):
     _video_seek_sig  = pyqtSignal(float, bool)          # seconds, relative
     _video_pause_sig = pyqtSignal(bool)
     _clipboard_sig  = pyqtSignal(str)        # clipboard text changed (thread-safe)
-    _confirm_sig    = pyqtSignal(str, str)   # (title, detail) — irreversible-action gate
+    _confirm_sig    = pyqtSignal(str, str, str)   # (title, detail) — irreversible-action gate
     _confirm_hide_sig = pyqtSignal()
     _wake_dl_sig    = pyqtSignal(bool, str)  # wake-word install finished (ok, message)
     _quiz_sig       = pyqtSignal(str, object, object)  # (topic, questions, grader)
@@ -422,6 +423,7 @@ class MainWindow(QMainWindow):
         self._route_result_sig.connect(self._show_route)
         self._world_map_sig.connect(self._show_world_map)
         self._map_search_sig.connect(self._finish_map_search)
+        self._second_brain_sig.connect(self._open_second_brain)
         self._codejob_sig.connect(self._show_code_job)
         self._reconfig_sig.connect(self._show_setup)
         self._camera_sig.connect(self._show_camera_frame)
@@ -1575,7 +1577,12 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 self._update_done_sig.emit(False, f"Güncelleme uygulanamadı: {exc}")
         # Non-daemon: an ordinary window close must not interrupt a file transaction.
-        threading.Thread(target=work, name="jarvis-update", daemon=False).start()
+        self._update_worker = threading.Thread(target=work, name="jarvis-update", daemon=False)
+        try:
+            self._update_worker.start()
+        except RuntimeError as exc:
+            self._update_worker = None
+            self._update_done(False, f"Güncelleme başlatılamadı: {exc}")
 
     def _update_progress(self, message):
         if hasattr(self, "_update_btn"):
@@ -2023,6 +2030,14 @@ class MainWindow(QMainWindow):
         self._cc_btn.setToolTip("Kontrol Merkezi — sinir ağı ve canlı etkinlik")
         self._cc_btn.clicked.connect(lambda: self._set_control_center(self._cc_btn.isChecked()))
         row.addWidget(self._cc_btn)
+        self._brain_btn = QPushButton("2. BEYİN")
+        self._brain_btn.setCheckable(True)
+        self._brain_btn.setFont(px_font(11, QFont.Weight.DemiBold))
+        self._brain_btn.setFixedHeight(36)
+        self._brain_btn.setStyleSheet(btn_css("primary", align="center"))
+        self._brain_btn.setToolTip("İkinci Beyin — MAYK’ın gelişim alanı")
+        self._brain_btn.clicked.connect(lambda: self._set_second_brain(self._brain_btn.isChecked()))
+        row.addWidget(self._brain_btn)
         self._chess_btn = IconButton("knight", 42)
         self._chess_btn.setCheckable(True)
         self._chess_btn.setToolTip("Satranç — asistanla oyna")
@@ -3429,6 +3444,25 @@ class MainWindow(QMainWindow):
 
     # ── Memory panel ─────────────────────────────────────────────────────────
 
+    def _open_second_brain(self):
+        self._set_second_brain(True)
+
+    def _set_second_brain(self, opened):
+        panel = self.__dict__.get("_second_brain_panel")
+        if opened:
+            self._set_card_open(self._left_panel, False)
+            self._set_card_open(self._right_panel, False)
+            if panel is None:
+                from gui.second_brain import SecondBrainPanel
+                panel = self._second_brain_panel = SecondBrainPanel(self)
+                panel.back_requested.connect(lambda: self._set_second_brain(False))
+                self._hud_cam_stack.addWidget(panel)
+                self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
+            self._hud_cam_stack.setCurrentWidget(panel)
+        elif panel is not None and self._hud_cam_stack.currentWidget() is panel:
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+        self._sync_cc_btn()
+
     def _open_memory_panel(self):
         ov = MemoryOverlay(parent=self.centralWidget())
         self._centre_overlay(ov)
@@ -3436,10 +3470,10 @@ class MainWindow(QMainWindow):
 
     # ── Irreversible-action confirmation ─────────────────────────────────────
 
-    def _show_confirm_banner(self, title: str, detail: str):
+    def _show_confirm_banner(self, title: str, detail: str, token: str):
         self._hide_confirm_banner()
         ov = ConfirmBanner(title, detail, parent=self.centralWidget())
-        ov.answered.connect(self._on_confirm_answered)
+        ov.answered.connect(lambda accepted: self._on_confirm_answered(accepted, token))
         self._centre_overlay(ov)
         self._confirm_overlay = ov
 
@@ -3450,14 +3484,14 @@ class MainWindow(QMainWindow):
             ov.deleteLater()
             self._confirm_overlay = None
 
-    def _on_confirm_answered(self, accepted: bool):
+    def _on_confirm_answered(self, accepted: bool, token: str):
         # Tear the banner down first: core.confirm.resolve() may be about to
         # shut the machine down, and a live widget mid-callback is not where you
         # want to be when that happens.
         self._hide_confirm_banner()
         try:
             from core.confirm import resolve
-            resolve(bool(accepted))
+            resolve(bool(accepted), token)
         except Exception as e:
             self._log.append_log(f"ERR: Confirmation failed — {e}")
 
@@ -3602,7 +3636,8 @@ class MainWindow(QMainWindow):
         """Keep the dock's Control Centre and chess buttons in step with what
         the centre shows."""
         current = self._hud_cam_stack.currentWidget()
-        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel")):
+        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel"),
+                                    ("_brain_btn", "_second_brain_panel")):
             btn = getattr(self, btn_name, None) if btn_name in self.__dict__ else None
             page = self.__dict__.get(page_name)
             if btn is None:

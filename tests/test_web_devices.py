@@ -122,3 +122,26 @@ class DevkitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node not installed")
+class GistReadTests(unittest.TestCase):
+    def test_raw_read_failure_retains_previous_snapshot_and_etag(self):
+        self.assertEqual(node("""
+            const fs = require('node:fs'), assert = require('node:assert/strict');
+            const src = fs.readFileSync('web/app.js', 'utf8');
+            const impl = src.slice(src.indexOf('  async function gistContent'), src.indexOf('  const J ='));
+            const S = {tok:'test', gist:'example'}, GH = 'https://api.github.com';
+            const cloud = eval(impl + '\\nCloud');
+            cloud.etag = 'old'; cloud.cache = {'memory.json': 'previous'};
+            global.fetch = async url => String(url).startsWith(GH)
+              ? {ok:true, headers:{get:()=>'new'}, json:async()=>({files:{
+                  'memory.json':{truncated:true, raw_url:'https://gist.githubusercontent.com/file'}}})}
+              : {ok:false, status:503};
+            (async () => {
+              await assert.rejects(cloud.read());
+              assert.equal(cloud.etag, 'old');
+              assert.equal(cloud.cache['memory.json'], 'previous');
+              console.log('ok');
+            })().catch(e => {console.error(e); process.exitCode = 1;});
+        """), "ok")

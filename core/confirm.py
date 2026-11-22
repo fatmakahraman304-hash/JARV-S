@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -48,6 +49,7 @@ TIMEOUT_SECONDS = 90.0
 
 @dataclass
 class _Pending:
+    token:   str
     key:     str
     title:   str
     detail:  str
@@ -60,7 +62,7 @@ _lock = threading.Lock()
 
 # Set once at startup by main.py. Signature: (title, detail) -> None for show,
 # and () -> None for hide. Both are marshalled onto the Qt thread by the UI.
-_show_cb: Optional[Callable[[str, str], None]] = None
+_show_cb: Optional[Callable[[str, str, str], None]] = None
 _hide_cb: Optional[Callable[[], None]] = None
 _log_cb:  Optional[Callable[[str], None]] = None
 
@@ -94,14 +96,18 @@ def request(key: str, title: str, detail: str, run: Callable[[], str]) -> str:
                 f"not available, so I have not done it.")
 
     with _lock:
-        _pending = _Pending(key=key, title=title, detail=detail,
+        if _pending and time.monotonic() - _pending.at <= TIMEOUT_SECONDS:
+            return "On the HUD another request already awaits the user's decision. Nothing else was started."
+        token = uuid.uuid4().hex
+        _pending = _Pending(token=token, key=key, title=title, detail=detail,
                             run=run, at=time.monotonic())
 
     try:
-        _show_cb(title, detail)
+        _show_cb(title, detail, token)
     except Exception as e:
         with _lock:
-            _pending = None
+            if _pending and _pending.token == token:
+                _pending = None
         return f"Could not ask for confirmation: {e}. Nothing was done."
 
     _log(f"SYS: Awaiting confirmation — {title}")
@@ -112,7 +118,7 @@ def request(key: str, title: str, detail: str, run: Callable[[], str]) -> str:
     )
 
 
-def resolve(accepted: bool) -> None:
+def resolve(accepted: bool, token: str) -> None:
     """Called by the UI when the user presses CONFIRM or CANCEL.
 
     Runs the stored callable on a worker thread — this is invoked from the Qt
@@ -121,16 +127,9 @@ def resolve(accepted: bool) -> None:
     global _pending
 
     with _lock:
+        if _pending is None or _pending.token != token:
+            return
         p, _pending = _pending, None
-
-    if _hide_cb:
-        try:
-            _hide_cb()
-        except Exception:
-            pass
-
-    if p is None:
-        return
 
     if time.monotonic() - p.at > TIMEOUT_SECONDS:
         _log(f"SYS: Confirmation expired — {p.title}")

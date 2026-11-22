@@ -710,14 +710,17 @@ class ConfirmBanner(_HudOverlay):
         lay.addWidget(hdr)
 
         ttl = QLabel(title)
+        ttl.setTextFormat(Qt.TextFormat.PlainText)
         ttl.setWordWrap(True)
         ttl.setFont(hud_font(10, QFont.Weight.Bold))
         ttl.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
         lay.addWidget(ttl)
 
         if detail:
-            dtl = QLabel(detail)
-            dtl.setWordWrap(True)
+            dtl = QTextEdit()
+            dtl.setReadOnly(True)
+            dtl.setPlainText(detail)
+            dtl.setFixedHeight(120)
             dtl.setFont(hud_font(8))
             dtl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
             lay.addWidget(dtl)

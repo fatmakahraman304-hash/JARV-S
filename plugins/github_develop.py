@@ -385,6 +385,24 @@ def self_release(instruction, player):
 
 
 def run(parameters, player=None, session_memory=None):
+    mode = parameters.get("mode", "")
+    if mode in ("publish", "merge", "self_release"):
+        from core import confirm
+        files = parameters.get("files", [])
+        if not isinstance(files, list) or any(not isinstance(path, str) for path in files):
+            return "Yayınlanacak dosya listesi geçersiz."
+        request = {"mode": mode, "files": list(files), "instruction": str(parameters.get("instruction") or "")}
+        detail = f"Depo: {REPO}\nHedef: main\nİşlem: {mode}\nİstek: {request['instruction']}"
+        if files:
+            detail += "\nDosyalar:\n" + "\n".join(files)
+        if mode == "self_release":
+            detail += "\nKod üretimi, test, yayın, birleştirme ve uygulama güncellemesini onaylıyorsunuz."
+        return confirm.request("github_develop", "GitHub yayını ve birleştirme", detail,
+                               lambda: _start(request, player))
+    return _start(parameters, player)
+
+
+def _start(parameters, player):
     mode=parameters.get('mode','')
     instruction=str(parameters.get('instruction','')).strip()
     if mode == "self_edit":

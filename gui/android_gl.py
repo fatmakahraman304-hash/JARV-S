@@ -389,7 +389,18 @@ void main() {
     float H = 0.0;                                   // bump height, head units
     float poreL = lod(420.0);
     H += poreL * ((vnoise(p * 420.0) - 0.5) * 0.00045 + (vnoise(p * 160.0) - 0.5) * 0.0005);
-    float ks = 0.28, shin = 34.0, wet = 0.0, sss = 1.0;
+    // Skin has broad, uneven highlights. Strong uniform specular makes
+    // a low-resolution head read as wax, especially across the cheeks.
+    float skinGrain = vnoise(p * 85.0);
+    float ks = mix(0.11, 0.19, skinGrain), shin = mix(22.0, 38.0, skinGrain);
+    float wet = 0.0, sss = 1.0;
+    float faceFront = float(front);
+    float eyeFold = exp(-pow((p.y - (0.015 - 0.045 * pow((ax - 0.28) / 0.16, 2.0))) / 0.010, 2.0));
+    eyeFold *= exp(-pow((ax - 0.28) / 0.15, 4.0)) * faceFront;
+    float smileFold = exp(-pow((ax - (0.15 + 0.22 * clamp(-p.y - 0.20, 0.0, 0.50))) / 0.018, 2.0));
+    smileFold *= smoothstep(-0.70, -0.55, p.y) * (1.0 - smoothstep(-0.34, -0.22, p.y)) * faceFront;
+    alb *= 1.0 - 0.055 * eyeFold - 0.065 * smileFold;
+    H -= eyeFold * 0.0005 + smileFold * 0.0007;
 
     // ── ears ───────────────────────────────────────────────────────────────
     float er;
@@ -518,11 +529,11 @@ void main() {
 
     vec3 hk = normalize(KEY + VIEW), hf = normalize(FILL + VIEW);
     float nh = max(dot(n, hk), 0.0), nhf = max(dot(n, hf), 0.0);
-    float oily = 1.0 + 0.6 * float(front) * (nose + smoothstep(0.3, 0.5, p.y));
+    float oily = 1.0 + 0.25 * float(front) * (nose + smoothstep(0.3, 0.5, p.y));
     float spec = ks * oily * (0.55 * pow(nh, shin) + 0.25 * pow(nh, shin * 0.3)) * sh + 0.12 * ks * pow(nhf, shin * 0.5);
     float hs = 0.0;
     if (hairC > 0.0) {
-        hs = (0.22 * pow(nh, 26.0) + 0.06 * pow(nh, 6.0)) * (0.35 + 0.9 * strand);
+        hs = (0.13 * pow(nh, 32.0) + 0.035 * pow(nh, 8.0)) * (0.35 + 0.9 * strand);
         spec = mix(spec, hs, hairC);
         col *= mix(1.0, 0.8, hairC);
     }
@@ -540,7 +551,7 @@ void main() {
     // ── eyes ───────────────────────────────────────────────────────────────
     if (front && ax > u_eye_x.x - 0.02 && ax < u_eye_x.y + 0.02 && p.y > 0.0 && p.y < 0.20) {
         float xa = clamp(ax, u_eye_x.x, u_eye_x.y);
-        float yu = poly(u_eye_up, xa) + 0.008, yl = poly(u_eye_lo, xa) - 0.004;
+        float yu = poly(u_eye_up, xa) + 0.002, yl = poly(u_eye_lo, xa) - 0.001;
         float inX = smoothstep(u_eye_x.x - 0.001, u_eye_x.x + 0.006, ax) * (1.0 - smoothstep(u_eye_x.y - 0.006, u_eye_x.y + 0.001, ax));
         float lid = yl + (yu - yl) * clamp(u_open, 0.0, 1.0);
         float t = (ax - u_eye_x.x) / (u_eye_x.y - u_eye_x.x);   // 0 inner .. 1 outer
@@ -552,7 +563,7 @@ void main() {
             vec3 nb = normalize(n0 + vec3(d, 0.0) * 1.3);
             vec2 q = p.xy - ec - u_gaze * vec2(0.032, 0.018);
             float rr = length(q) / 0.042;
-            vec3 sc = vec3(0.72, 0.67, 0.62);
+            vec3 sc = vec3(0.62, 0.59, 0.55);
             sc = mix(sc, vec3(0.74, 0.46, 0.42), 0.55 * smoothstep(0.62, 1.0, abs(t - 0.45) * 1.9));
             sc *= 1.0 - 0.05 * vnoise(vec3(p.xy * 300.0, 2.0));
             float a = atan(q.y, q.x);

@@ -567,3 +567,16 @@ class WebPageWiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class PartialGistTests(unittest.TestCase):
+    def test_unreadable_file_invalidates_whole_snapshot(self):
+        from unittest.mock import patch
+        from core import sync_hub
+        files = {"recent.json": {"content": "[]"},
+                 "memory.json": {"truncated": True, "raw_url": "https://gist.githubusercontent.com/sample"}}
+        with patch.object(sync_hub, "_req", return_value=(200, {"files": files}, "new")), patch.object(
+                sync_hub.urllib.request, "urlopen", side_effect=TimeoutError) as read:
+            data, tag, error = sync_hub.read_gist("test", "123")
+        self.assertTrue(error)
+        self.assertEqual((data, tag), ({}, ""))
+        self.assertNotIn("Authorization", read.call_args.args[0].headers)

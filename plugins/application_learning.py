@@ -15,7 +15,13 @@ def run(parameters, player=None, session_memory=None):
             return report()
         if parameters.get("action") != "learn":
             return "Geçersiz işlem."
-        return start(parameters.get("name", ""), parameters.get("goal", ""), player,
-                     publish=parameters.get("publish") is True)
+        name = str(parameters.get("name") or "")
+        goal = str(parameters.get("goal") or "")
+        if parameters.get("publish") is True:
+            from core import confirm
+            return confirm.request("application_learning", "Geliştir, main dalına yayınla ve güncelle",
+                                   f"Uygulama: {name}\nİstenen değişiklik: {goal}",
+                                   lambda: start(name, goal, player, publish=True))
+        return start(name, goal, player)
     except Exception as exc:
         return f"Uygulama geliştirmesi başlatılamadı: {exc}"

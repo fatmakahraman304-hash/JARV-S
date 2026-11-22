@@ -13,6 +13,7 @@ class ContinuityTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.p = patch.object(c, 'data_dir', return_value=self.root)
         self.p.start()
+        self.enterContext(patch.object(m, "BACKUP_PATH", self.root / "memory.json.bak"))
     def tearDown(self):
         self.p.stop()
         self.tmp.cleanup()
@@ -132,3 +133,42 @@ class ContinuitySetupTests(unittest.TestCase):
             with ThreadPoolExecutor(max_workers=8) as pool:
                 list(pool.map(lambda i: cont.record('Kullanıcı', f'olay {i}'), range(80)))
             self.assertEqual(len(cont.recent(100)), 80)
+
+
+class HistoryBackupTests(unittest.TestCase):
+    def test_online_backup_restores_committed_wal_and_job_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            backup = base / "saved" / "history.sqlite3"
+            with patch.object(c, "data_dir", return_value=base / "original"):
+                with c.connect() as live:
+                    c.record("Kullanıcı", "İlk kayıt")
+                    pid = c.project_start("test", "MAYK", "proje", "ister")
+                    c.backup_history(backup)
+                    c.record("Kullanıcı", "Sonraki kayıt")
+                    self.assertEqual(live.execute("SELECT COUNT(*) FROM events").fetchone()[0], 2)
+                with self.assertRaises(FileExistsError):
+                    c.restore_history(backup)
+            with patch.object(c, "data_dir", return_value=base / "restored"):
+                c.restore_history(backup)
+                self.assertEqual([r[2] for r in c.recent()], ["İlk kayıt"])
+                self.assertEqual(c.project(pid)["title"], "MAYK")
+                c.record("Kullanıcı", "Geri dönüşten sonra")
+                self.assertEqual(len(c.recent()), 2)
+
+    def test_invalid_backup_or_leftover_wal_never_publishes_a_database(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as folder, patch.object(c, "data_dir", return_value=Path(folder)):
+            base = Path(folder)
+            bad = base / "bad.db"
+            bad.write_bytes(b"not sqlite")
+            with self.assertRaises(sqlite3.Error):
+                c.restore_history(bad)
+            target = base / "continuity.sqlite3"
+            self.assertFalse(target.exists())
+            wal = base / "continuity.sqlite3-wal"
+            wal.write_bytes(b"pending")
+            with self.assertRaises(FileExistsError):
+                c.restore_history(bad)
+            self.assertEqual(wal.read_bytes(), b"pending")
+            self.assertFalse(target.exists())

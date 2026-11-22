@@ -64,10 +64,10 @@ def _get_models(key: str, *, refresh: bool = False) -> tuple[list[str] | None, s
         return [], "missing"
     now = time.monotonic()
     with _LOCK:
-        if (not refresh and _CACHE["key"] == key
-                and _CACHE["models"] is not None
-                and now - _CACHE["at"] < _CACHE_TTL):
-            return list(_CACHE["models"]), str(_CACHE["reason"])
+        listing = _CACHE["models"]
+        ttl = _CACHE_TTL if listing is not None else 15
+        if not refresh and _CACHE["key"] == key and now - _CACHE["at"] < ttl:
+            return list(listing) if listing is not None else None, str(_CACHE["reason"])
     req = urllib.request.Request(
         f"{BASE_URL}/models", method="GET",
         headers={"Authorization": f"Bearer {key}", "Accept": "application/json"})
@@ -95,7 +95,7 @@ def _get_models(key: str, *, refresh: bool = False) -> tuple[list[str] | None, s
     return (list(models) if models is not None else None), reason
 
 
-def available_models(key: str | None = None, *, refresh: bool = False) -> list[str]:
+def available_models(key: str | None = None, *, refresh: bool = False, verified_only: bool = False) -> list[str]:
     """Seçili kodlama modelleri; gerçek model listesi varsa ona göre süzülür."""
     key = (key if key is not None else api_key()).strip()
     if not key:
@@ -125,7 +125,7 @@ def available_models(key: str | None = None, *, refresh: bool = False) -> list[s
         return preferred[:3]
     # 401/403/402/429: başarılı olamayacak isteği üretme. Ağ geçici olarak
     # kapalıysa daha önce doğrulanmış katalogdaki modeller denenebilir.
-    if reason in ("unauthorized", "quota", "limit"):
+    if verified_only or reason in ("unauthorized", "quota", "limit"):
         return []
     return preferred[:3]
 

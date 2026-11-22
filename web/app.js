@@ -200,6 +200,14 @@
   const sys = t => { transcript.push({ role: 'sys', text: t }); renderLog(); };
 
   // ── shared memory: the gist ─────────────────────────────────────────────
+  async function gistContent(file) {
+    if (!file.truncated) return file.content || '';
+    const url = new URL(file.raw_url);
+    if (url.origin !== 'https://gist.githubusercontent.com') throw new Error('Beklenmeyen Gist adresi');
+    const reply = await fetch(url, { cache: 'no-store', redirect: 'error' });
+    if (!reply.ok) throw new Error('Gist dosyası alınamadı (' + reply.status + ')');
+    return reply.text();
+  }
   const Cloud = {
     ok() { return !!(S.tok && S.gist); },
     async req(method, path, body) {
@@ -215,13 +223,13 @@
         headers: { 'Authorization': 'Bearer ' + S.tok, 'Accept': 'application/vnd.github+json', ...(this.etag && this.cache ? { 'If-None-Match': this.etag } : {}) } });
       if (r.status === 304 && this.cache) return this.cache;            // unchanged: free, not counted
       if (!r.ok) throw new Error('GitHub ' + r.status);
-      this.etag = r.headers.get('ETag') || '';
+      const tag = r.headers.get('ETag') || '';
       const g = await r.json();
       const out = {};
       for (const [name, f] of Object.entries(g.files || {})) {
-        if (f.truncated && f.raw_url) { try { out[name] = await (await fetch(f.raw_url, { cache: 'no-store' })).text(); } catch {} }
-        else out[name] = f.content || '';
+        out[name] = await gistContent(f);
       }
+      this.etag = tag;
       this.cache = out;
       return out;
     },
@@ -288,7 +296,7 @@
       const out = {};
       for (const [n, f] of Object.entries(g.files || {})) {
         if (!/^history-\d{4}-\d{2}\.json$/.test(n)) continue;
-        out[n] = f.truncated && f.raw_url ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : (f.content || '');
+        out[n] = await gistContent(f);
       }
       return out;
     },

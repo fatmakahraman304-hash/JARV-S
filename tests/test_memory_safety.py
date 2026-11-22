@@ -37,11 +37,38 @@ class MemorySafety(unittest.TestCase):
         self.assertIn("notes/secret", mm.load_memory()["_deleted"])
         self.assertFalse(any(r["category"] == "_deleted" for r in mm.all_entries_for_ui()))
 
+    def test_damaged_or_missing_primary_cannot_restore_forgotten_fact(self):
+        mm.remember("keep", "retained")
+        mm.remember("forgotten", "private")
+        mm.forget("forgotten")
+        for damage in ("missing", "corrupt"):
+            with self.subTest(damage=damage):
+                if damage == "missing":
+                    mm.MEMORY_PATH.unlink()
+                else:
+                    mm.MEMORY_PATH.write_text("{")
+                restored = mm.load_memory()
+                self.assertNotIn("forgotten", restored["notes"])
+                self.assertIn("notes/forgotten", restored["_deleted"])
+                self.assertEqual(restored["notes"]["keep"]["value"], "retained")
+
     def test_forgetting_an_archived_fact_hides_it_from_recall(self):
         mm.ARCHIVE_PATH.write_text(json.dumps({"notes": {"old": {"value": "private avocado"}}}))
         mm.forget("old")
         with patch("memory.continuity.search", return_value=""):
             self.assertNotIn("private avocado", mm.search_memory("avocado"))
+
+    def test_second_forget_beats_fast_relearning_on_another_device(self):
+        from datetime import datetime, timezone
+        from core.sync_hub import merge_memory
+        with patch.object(mm, "datetime", wraps=datetime) as clock:
+            clock.now.return_value = datetime(2026, 11, 21, tzinfo=timezone.utc)
+            mm.remember("item", "first")
+            mm.forget("item")
+            mm.remember("item", "second")
+            other_device = mm.load_memory()
+            mm.forget("item")
+        self.assertNotIn("item", merge_memory(mm.load_memory(), other_device)["notes"])
 
     def test_remembering_again_clears_local_deletion(self):
         mm.remember("item", "first")

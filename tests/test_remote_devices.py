@@ -118,3 +118,24 @@ class PageWiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SocketDeliveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_only_current_controller_and_intended_screen_receive_update(self):
+        import time
+        from dashboard.server import DashboardServer
+        dashboard = object.__new__(DashboardServer)
+        active, old, tv, other = [mock.AsyncMock() for _ in range(4)]
+        dashboard._clients = {active: "current", old: "expired", tv: "tv", other: "other"}
+        dashboard._tokens = {"current": time.time(), "expired": 0}
+        dashboard._token_keys = {}
+        dashboard._history = []
+        dashboard._screen_ws = {tv: "living", other: "bedroom"}
+        message = {"type": "screen", "target": "living"}
+        await dashboard.broadcast(message)
+        active.send_json.assert_awaited_once_with(message)
+        tv.send_json.assert_awaited_once_with(message)
+        other.send_json.assert_not_awaited()
+        old.send_json.assert_not_awaited()
+        old.close.assert_awaited_once()
+        self.assertNotIn(old, dashboard._clients)

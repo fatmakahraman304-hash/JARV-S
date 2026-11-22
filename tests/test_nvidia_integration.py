@@ -78,6 +78,14 @@ class NvidiaAccountTests(unittest.TestCase):
         self.assertIn("nvidia/nemotron-3.5-lightning-30b-a3b", available)
         self.assertEqual(nvidia._CACHE["reason"], "unavailable")
 
+    def test_offline_catalog_is_briefly_cached_and_cannot_confirm_a_selection(self):
+        with mock.patch.object(nvidia.urllib.request, "urlopen", side_effect=OSError("offline")) as req:
+            self.assertTrue(nvidia.available_models("test"))
+            self.assertEqual(nvidia.available_models("test", verified_only=True), [])
+            req.assert_called_once()
+            nvidia.available_models("test", refresh=True)
+            self.assertEqual(req.call_count, 2)
+
     def test_complete_request_and_secret_never_in_error(self):
         models = ["z-ai/glm-5.3-flash"]
         with mock.patch.object(nvidia, "api_key", return_value="private-key"), \
@@ -333,3 +341,22 @@ class NvidiaProbeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModelAttemptTests(unittest.TestCase):
+    def test_refused_key_skips_shared_credentials_but_keeps_provider(self):
+        from core import gemini
+        client = mock.Mock()
+        client.models.generate_content.side_effect = RuntimeError("401 UNAUTHENTICATED")
+        provider = gemini.PROVIDER_PREFIX + "fallback"
+        with mock.patch.dict(gemini._LADDERS, {gemini.FAST: ("one", "two")}), mock.patch.object(
+                gemini, "_provider_rungs", return_value=(provider,)), mock.patch.object(
+                gemini, "_provider_first", return_value=False), mock.patch.object(
+                gemini, "client", return_value=client), mock.patch.object(
+                gemini, "_provider_call", return_value="ok"), mock.patch.object(gemini, "_recent_attempts", []):
+            self.assertEqual(gemini.call("selam", key="test"), "ok")
+            stats = gemini.model_report()
+        client.models.generate_content.assert_called_once()
+        self.assertEqual(stats["one"]["last_error"], "auth")
+        self.assertEqual(stats[provider]["errors"], 0)
+        self.assertNotIn("two", stats)

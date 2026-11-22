@@ -101,11 +101,13 @@ class AgentModeTest(unittest.TestCase):
             root = Path(d)
             (root / "app.py").write_text("def total(x):\n    return x\n")
             (root / ".env").write_text("KEY=secret\n")
+            (root / ".env.local").write_text("private")
 
             def fake_run(provider, folder, instruction, guide, extra, log):
                 (folder / "app.py").write_text("def total(x):\n    return x * 2\n")
                 (folder / "test_app.py").write_text("from app import total\n")
                 (folder / ".env").write_text("KEY=leaked\n")
+                (folder / ".env.local").unlink()
                 return "İndirim eklendi, testler geçti."
             undo = {}
             with mock.patch.object(agent_coding, "run", side_effect=fake_run), \
@@ -116,6 +118,8 @@ class AgentModeTest(unittest.TestCase):
                 msg = self.da._improve_with_agent(root, "indirim", "", None, None,
                                                   {"app.py": "def total(x):\n    return x\n"},
                                                   "claude_code", None, 0.0, False)
+            self.assertNotIn("testler geçti", msg)
+            self.assertEqual((root / ".env.local").read_text(), "private")
             self.assertIn("app.py", msg)
             self.assertIn("test_app.py", msg)
             self.assertIn("otomatik test komutu algılanmadı", msg)

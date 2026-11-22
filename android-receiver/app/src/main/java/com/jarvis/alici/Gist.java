@@ -82,23 +82,42 @@ final class Gist {
         HttpURLConnection c = open("GET", "/gists/" + id);
         if (!etag.isEmpty() && cache != null) c.setRequestProperty("If-None-Match", etag);
         int code = c.getResponseCode();
-        if (code == 304 && cache != null) return cache;
-        if (code != 200) throw githubError(c, code);
-        etag = c.getHeaderField("ETag") == null ? "" : c.getHeaderField("ETag");
-        JSONObject files = new JSONObject(read(c.getInputStream())).getJSONObject("files");
+        if (code == 304 && cache != null) { c.disconnect(); return cache; }
+        if (code != 200) {
+            try { throw githubError(c, code); } finally { c.disconnect(); }
+        }
+        String nextTag = c.getHeaderField("ETag");
+        JSONObject files;
+        try (InputStream in = c.getInputStream()) {
+            files = new JSONObject(read(in)).getJSONObject("files");
+        } finally {
+            c.disconnect();
+        }
         Map<String, String> out = new HashMap<>();
         for (Iterator<String> it = files.keys(); it.hasNext(); ) {
             String name = it.next();
             JSONObject f = files.getJSONObject(name);
-            if (f.optBoolean("truncated") && f.has("raw_url")) {
+            if (f.optBoolean("truncated")) {
                 if (!name.startsWith("inbox-") && !name.startsWith("device-")) continue;   // not needed here
-                HttpURLConnection r = (HttpURLConnection) new URL(f.getString("raw_url")).openConnection();
+                URL raw = new URL(f.getString("raw_url"));
+                if (!"https".equals(raw.getProtocol()) || !"gist.githubusercontent.com".equalsIgnoreCase(raw.getAuthority()))
+                    throw new java.io.IOException("Beklenmeyen Gist dosya adresi.");
+                HttpURLConnection r = (HttpURLConnection) raw.openConnection();
+                r.setInstanceFollowRedirects(false);
+                r.setConnectTimeout(15000);
+                r.setReadTimeout(30000);
                 r.setRequestProperty("Authorization", "Bearer " + token);
-                out.put(name, read(r.getInputStream()));
+                try {
+                    if (r.getResponseCode() != 200) throw new java.io.IOException("Gist dosyası alınamadı.");
+                    try (InputStream in = r.getInputStream()) { out.put(name, read(in)); }
+                } finally {
+                    r.disconnect();
+                }
             } else {
                 out.put(name, f.optString("content", ""));
             }
         }
+        etag = nextTag == null ? "" : nextTag;
         cache = out;
         return out;
     }

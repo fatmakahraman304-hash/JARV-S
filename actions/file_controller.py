@@ -283,12 +283,23 @@ def delete_file(path: str, name: str = "") -> str:
         if target.resolve() in {p.resolve() for p in protected}:
             return f"Protected directory, cannot delete: {target.name}"
 
-        original = target.resolve()
-        result   = _safe_trash(target)
-        if result.startswith("Moved to Trash"):
-            push_undo(f"deleted {original.name}",
-                      lambda p=original: _restore_from_trash(p))
-        return result
+        from core import confirm
+        target = target.absolute()
+        original = target.resolve(strict=True)
+        identity = target.lstat()
+
+        def trash_confirmed_target():
+            if (not _is_safe_path(target) or target.resolve(strict=True) != original
+                    or not os.path.samestat(identity, target.lstat())):
+                return "failed — Onay beklenirken hedef değişti."
+            result = _safe_trash(target)
+            if result.startswith("Moved to Trash") and not os.path.lexists(target):
+                push_undo(f"deleted {target.name}", lambda: _restore_from_trash(target))
+                return f"done — {result}"
+            return f"unverified — {result}"
+
+        return confirm.request("delete-file", "Geri dönüşüm kutusuna taşı",
+                               str(target), trash_confirmed_target)
 
     except PermissionError:
         return f"Permission denied: {path}"

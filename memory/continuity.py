@@ -111,7 +111,7 @@ def prompt_context():
 # where, and which stage it reached. A job cut off by a shutdown or an update
 # is marked 'yarıda kaldı' at the next start and can be resumed from its stage.
 
-_DONE = ("bitti", "sorunlu bitti", "başarısız", "iptal")
+_DONE = ("bitti", "sorunlu bitti", "başarısız", "iptal", "değişiklik yok")
 
 
 def project_start(kind, title, folder, instruction, stages=None):
@@ -142,31 +142,34 @@ def project_update(pid, *, status=None, stage=None, stages=None, note=None, fold
         db.execute(f"UPDATE projects SET {', '.join(fields)} WHERE id=?", vals)
 
 
+_PROJECT_FIELDS = "id,kind,title,folder,instruction,status,stage,stages,note,started,updated"
+
+
+def _project_row(row):
+    p = dict(zip(_PROJECT_FIELDS.split(","), row))
+    try:
+        p["stages"] = json.loads(p["stages"] or "[]")
+    except ValueError:
+        p["stages"] = []
+    return p
+
+
 def projects(unfinished_only=False, limit=20):
+    statuses = _DONE if unfinished_only else ()
+    where = " WHERE status NOT IN (" + ",".join("?" for _ in statuses) + ")" if statuses else ""
+    sql = f"SELECT {_PROJECT_FIELDS} FROM projects{where} ORDER BY id DESC"
+    args = list(statuses)
+    if limit is not None:
+        sql += " LIMIT ?"
+        args.append(max(0, int(limit)))
     with connect() as db:
-        rows = db.execute("SELECT id,kind,title,folder,instruction,status,stage,stages,note,started,updated "
-                          "FROM projects ORDER BY id DESC LIMIT ?", (max(1, int(limit) * 4),)).fetchall()
-    out = []
-    for r in rows:
-        p = dict(zip(("id", "kind", "title", "folder", "instruction", "status", "stage", "stages",
-                      "note", "started", "updated"), r))
-        try:
-            p["stages"] = json.loads(p["stages"] or "[]")
-        except ValueError:
-            p["stages"] = []
-        if unfinished_only and p["status"] in _DONE:
-            continue
-        out.append(p)
-        if len(out) >= limit:
-            break
-    return out
+        return [_project_row(row) for row in db.execute(sql, args)]
 
 
 def project(pid):
-    for p in projects(limit=200):
-        if p["id"] == pid:
-            return p
-    return None
+    with connect() as db:
+        row = db.execute(f"SELECT {_PROJECT_FIELDS} FROM projects WHERE id=?", (pid,)).fetchone()
+    return _project_row(row) if row else None
 
 
 def set_application(name, status, detail):
@@ -191,6 +194,7 @@ def recover_jobs():
 
 
 _RECALL_STOP = {"bir", "ile", "icin", "olan", "bana", "benim", "hani", "ne", "diye",
+                "hatirliyor", "hatirlar", "musun", "misin", "miydi", "neydi",
                 "the", "and", "for", "was", "about", "what"}
 
 
@@ -202,6 +206,18 @@ def memory_words(value):
 
 def recall_terms(query):
     return {word for word in memory_words(str(query)) if len(word) >= 2} - _RECALL_STOP
+
+
+# Folded Turkish case and possessive endings for a query such as
+# "projemin" against the stored word "proje". Exact matches rank first.
+_QUERY_ENDINGS = {"i", "u", "yi", "yu", "mi", "mu", "min", "mun", "nin", "nun",
+                  "in", "un", "im", "um", "da", "de", "ta", "te", "dan", "den",
+                  "tan", "ten", "daki", "deki", "lar", "ler", "lari", "leri"}
+
+
+def related_word(term, word):
+    return ((len(term) >= 4 and word.startswith(term)) or
+            (len(word) >= 4 and term.startswith(word) and term[len(word):] in _QUERY_ENDINGS))
 
 
 def search(query, limit=8):
@@ -222,7 +238,7 @@ def search(query, limit=8):
                     words = memory_words(text)
                     exact = wanted & words
                     # Handles common Turkish endings such as 'kanat' / 'kanatları'.
-                    partial = sum(any(len(w) >= 4 and other.startswith(w) for other in words)
+                    partial = sum(any(related_word(w, other) for other in words)
                                   for w in wanted - exact)
                     coverage = len(exact) + partial
                     if coverage and coverage * 2 >= len(wanted):
@@ -230,3 +246,68 @@ def search(query, limit=8):
             with connect() as db:
                 rows = [item[-1] for item in heapq.nlargest(max(1, min(limit, 30)), candidates(db))]
     return "\n".join(f"{date[:16]} | {role}: {text[:800]}" for date, role, text in rows)
+
+
+def _copy_database(source, destination):
+    """Publish a validated SQLite snapshot without replacing another file."""
+    from contextlib import closing
+    import tempfile
+
+    source, destination = Path(source).resolve(), Path(destination).absolute()
+    if destination.exists() or destination.is_symlink():
+        raise FileExistsError(f"Hedef zaten var: {destination}")
+    if not source.is_file():
+        raise FileNotFoundError(f"Kaynak veritabanı bulunamadı: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=destination.parent) as staging:
+        snapshot = Path(staging) / "continuity.sqlite3"
+        with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=10)) as reader:
+            with closing(sqlite3.connect(snapshot)) as writer:
+                reader.backup(writer, pages=256)
+                writer.execute("PRAGMA journal_mode=DELETE")
+                writer.execute("PRAGMA trusted_schema=OFF")
+                if writer.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise ValueError("SQLite bütünlük denetimi başarısız.")
+                tables = {r[0] for r in writer.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                for table, columns in (
+                    ("events", "id,time,role,text"), ("applications", "name,status,detail,updated"),
+                    ("projects", "id,kind,title,folder,instruction,status,stage,stages,note,started,updated"),
+                ):
+                    if table not in tables:
+                        raise ValueError(f"MAYK tablosu eksik: {table}")
+                    writer.execute(f"SELECT {columns} FROM {table} LIMIT 0")
+        snapshot.chmod(0o600)
+        # Atomic no-clobber publish on NTFS and POSIX. A concurrent restore
+        # or first launch that created the destination keeps its own database.
+        os.link(snapshot, destination)
+    return destination
+
+
+def backup_history(destination):
+    """Include committed WAL pages even while MAYK is writing new events."""
+    return _copy_database(data_dir() / "continuity.sqlite3", destination)
+
+
+def restore_history(source):
+    """Restore into an empty data location while MAYK is closed."""
+    target = data_dir() / "continuity.sqlite3"
+    if any(Path(str(target) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
+        raise FileExistsError("Önceki SQLite işlem dosyaları korunuyor. Boş bir veri klasörü kullanın.")
+    return _copy_database(source, target)
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.stdout is not None and not sys.stdout.isatty():
+        sys.stdout.reconfigure(encoding="utf-8")
+    import argparse
+    parser = argparse.ArgumentParser(description="MAYK konuşma ve görev geçmişini yedekle veya geri yükle.")
+    actions = parser.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--backup", type=Path, metavar="HEDEF")
+    actions.add_argument("--restore", type=Path, metavar="YEDEK")
+    args = parser.parse_args()
+    try:
+        saved = backup_history(args.backup) if args.backup else restore_history(args.restore)
+        print(f"SQLite kopyası doğrulandı: {saved}")
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        parser.exit(1, f"İşlem tamamlanamadı: {exc}\n")

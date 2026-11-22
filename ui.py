@@ -23,7 +23,7 @@ import psutil
 # Before any Qt import: Qt's video backend prints signed stream URLs otherwise.
 os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*=false")
 
-from PyQt6.QtCore import QCoreApplication, Qt
+from PyQt6.QtCore import QCoreApplication, Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from gui import hud as _gui_hud
@@ -132,6 +132,16 @@ class MaykUI:
                 self.write_log(f'SYS: WhatsApp Business açılamadı: {exc}')
         self.root = _RootShim(self._app)
         self._win.show()
+        receipt = os.environ.pop("MAYK_RESTART_RECEIPT", "")
+        if receipt:
+            def acknowledge():
+                try:
+                    if self._win.isVisible():
+                        with open(receipt, "xb"):
+                            pass
+                except OSError as exc:
+                    self.write_log(f"SYS: Yeniden açılış doğrulaması iletilemedi: {exc}")
+            QTimer.singleShot(0, acknowledge)
 
     @property
     def muted(self) -> bool:
@@ -186,10 +196,10 @@ class MaykUI:
     def on_audio_device_change(self, cb):
         self._win.on_audio_device_change = cb
 
-    def show_confirm(self, title: str, detail: str) -> None:
+    def show_confirm(self, title: str, detail: str, token: str) -> None:
         """Thread-safe: raise the irreversible-action gate. Called from action
         handlers running in executor threads, so it goes through a signal."""
-        self._win._confirm_sig.emit(str(title)[:120], str(detail)[:300])
+        self._win._confirm_sig.emit(str(title), str(detail), token)
 
     def hide_confirm(self) -> None:
         """Thread-safe: take the gate down."""
@@ -345,6 +355,9 @@ class MaykUI:
     def show_world_map(self, visible: bool) -> None:
         """Thread-safe: show the native world map or close it."""
         self._win._world_map_sig.emit(visible)
+
+    def show_second_brain(self):
+        self._win._second_brain_sig.emit()
 
     def show_code_job(self, job: dict) -> None:
         """Thread-safe: draw the coding agent's live progress in the panel."""
