@@ -265,7 +265,7 @@ class AdvancedAgentReliabilityTest(unittest.TestCase):
             ])
             with self.assertRaisesRegex(RuntimeError, "test etmeden"):
                 ja.run(Path(temp), "Python yaz", log=lambda _: None, brain_list=[brain])
-            self.assertIn("doğrulama", str(brain.seen[2]).lower())
+            self.assertIn("test, derleme", str(brain.seen[2]).lower())
 
     def test_test_after_last_edit_allows_finish(self):
         with tempfile.TemporaryDirectory() as temp:
