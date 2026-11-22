@@ -162,6 +162,7 @@ class HoloAvatar:
         self._lut_cache: list = []
         self._lut_key = None
         self._mesh = mesh
+        self._n_head = mesh["n_head"]
         self._gl = None
         self._projection = None
         self._muted = False
@@ -526,6 +527,8 @@ class HoloAvatar:
 
         if self.style == "holographic":
             if self._paint_android(p, xs, ys, verts, norms, primary, accent, amp):
+                from core.hologram_finish import details
+                details(p, xs, ys, self._n_head, self._lm, amp)
                 return
         if self.style == "projection":
             if self._projection is None:
@@ -570,6 +573,9 @@ class HoloAvatar:
             if img is None:
                 raise RuntimeError(self._gl.error or "OpenGL çizimi başarısız")
             img.setDevicePixelRatio(dpr)
+            if self.style == "holographic":
+                from core.hologram_finish import bloom
+                bloom(p, img, x0, y0, amp)
             p.drawImage(QPointF(x0, y0), img)
             return True
         except Exception as exc:
