@@ -1,6 +1,6 @@
 # MAYK İkinci Beyin
 
-Ana pencerenin üstündeki **İKİNCİ BEYİN** düğmesi ayrı gelişim panelini açar. Sesli olarak ikinci beyni açmasını veya bir geliştirme fikrini kaydetmesini de isteyebilirsiniz. Fikirler yerel devamlılık veritabanında tutulur ve geçmiş yedeğine dahil edilir.
+Alt konuşma çubuğunda, Kontrol Merkezi düğmesinin yanındaki **2. BEYİN** düğmesi gelişim panelini MAYK’ın orta alanında açar. **MAYK’a dön** düğmesi yüz ekranına döner. Sesli olarak ikinci beyni açmasını veya bir geliştirme fikrini kaydetmesini de isteyebilirsiniz. Fikirler yerel devamlılık veritabanında tutulur ve geçmiş yedeğine dahil edilir.
 
 Panel ilk açıldığında yerel kod işi günlüğünü tarar. Başarısız ve doğrulanmamış aşamalar bir kez öneriye dönüşür. İzleme açıkken, panel kapatılsa da MAYK oturumu boyunca her dakika taranır. Kutunun işaretini kaldırarak izlemeyi durdurabilirsiniz. MAYK yeniden açıldığında paneli tekrar açın.
 

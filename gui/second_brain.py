@@ -2,7 +2,7 @@
 import threading
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                             QLineEdit, QListWidget, QListWidgetItem, QTextEdit, QCheckBox)
 from gui.theme import C
 from gui.style import px_font, btn_css, scroll_css
@@ -20,13 +20,13 @@ class _AgentUI:
         self.job.emit(dict(job))
 
 
-class SecondBrainPanel(QDialog):
+class SecondBrainPanel(QWidget):
     completed = pyqtSignal(str)
+    back_requested = pyqtSignal()
 
     def __init__(self, window):
         super().__init__(window)
         self.setWindowTitle("MAYK · İkinci Beyin")
-        self.resize(860, 620)
         self.setFont(px_font(13))
         self.setStyleSheet(f"background: {C.BG}; color: {C.TEXT};")
         self.agent_ui = _AgentUI(window)
@@ -34,7 +34,13 @@ class SecondBrainPanel(QDialog):
         layout = QVBoxLayout(self)
         title = QLabel("İKİNCİ BEYİN")
         title.setFont(px_font(24))
-        layout.addWidget(title)
+        heading = QHBoxLayout()
+        back = QPushButton("‹ MAYK’a dön")
+        back.setStyleSheet(btn_css("dim", align="center"))
+        back.clicked.connect(self.back_requested.emit)
+        heading.addWidget(back)
+        heading.addWidget(title, 1)
+        layout.addLayout(heading)
         description = QLabel("MAYK’ın gelişim defteri. Yerel kod işi hatalarını izler, fikirleri saklar ve seçtiğiniz geliştirmeyi ayrı çalışma alanında hazırlar.")
         description.setWordWrap(True)
         layout.addWidget(description)

@@ -1541,12 +1541,6 @@ class MainWindow(QMainWindow):
         self._drawer_btn.setCheckable(True)
         self._drawer_btn.setToolTip("Ayarlar — bir kez yapılandırılan her şey")
         self._drawer_btn.clicked.connect(self._open_settings_page)
-        brain_btn = QPushButton("İKİNCİ BEYİN")
-        brain_btn.setFont(px_font(11, QFont.Weight.DemiBold))
-        brain_btn.setStyleSheet(btn_css("primary", align="center"))
-        brain_btn.setFixedHeight(38)
-        brain_btn.clicked.connect(self._open_second_brain)
-        lay.addWidget(brain_btn)
         lay.addWidget(self._drawer_btn)
 
         grid.addWidget(left, 0, 0)
@@ -2036,6 +2030,14 @@ class MainWindow(QMainWindow):
         self._cc_btn.setToolTip("Kontrol Merkezi — sinir ağı ve canlı etkinlik")
         self._cc_btn.clicked.connect(lambda: self._set_control_center(self._cc_btn.isChecked()))
         row.addWidget(self._cc_btn)
+        self._brain_btn = QPushButton("2. BEYİN")
+        self._brain_btn.setCheckable(True)
+        self._brain_btn.setFont(px_font(11, QFont.Weight.DemiBold))
+        self._brain_btn.setFixedHeight(36)
+        self._brain_btn.setStyleSheet(btn_css("primary", align="center"))
+        self._brain_btn.setToolTip("İkinci Beyin — MAYK’ın gelişim alanı")
+        self._brain_btn.clicked.connect(lambda: self._set_second_brain(self._brain_btn.isChecked()))
+        row.addWidget(self._brain_btn)
         self._chess_btn = IconButton("knight", 42)
         self._chess_btn.setCheckable(True)
         self._chess_btn.setToolTip("Satranç — asistanla oyna")
@@ -3443,13 +3445,23 @@ class MainWindow(QMainWindow):
     # ── Memory panel ─────────────────────────────────────────────────────────
 
     def _open_second_brain(self):
-        from gui.second_brain import SecondBrainPanel
+        self._set_second_brain(True)
+
+    def _set_second_brain(self, opened):
         panel = self.__dict__.get("_second_brain_panel")
-        if panel is None:
-            panel = self._second_brain_panel = SecondBrainPanel(self)
-        panel.show()
-        panel.raise_()
-        panel.activateWindow()
+        if opened:
+            self._set_card_open(self._left_panel, False)
+            self._set_card_open(self._right_panel, False)
+            if panel is None:
+                from gui.second_brain import SecondBrainPanel
+                panel = self._second_brain_panel = SecondBrainPanel(self)
+                panel.back_requested.connect(lambda: self._set_second_brain(False))
+                self._hud_cam_stack.addWidget(panel)
+                self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
+            self._hud_cam_stack.setCurrentWidget(panel)
+        elif panel is not None and self._hud_cam_stack.currentWidget() is panel:
+            self._hud_cam_stack.setCurrentWidget(self.hud)
+        self._sync_cc_btn()
 
     def _open_memory_panel(self):
         ov = MemoryOverlay(parent=self.centralWidget())
@@ -3624,7 +3636,8 @@ class MainWindow(QMainWindow):
         """Keep the dock's Control Centre and chess buttons in step with what
         the centre shows."""
         current = self._hud_cam_stack.currentWidget()
-        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel")):
+        for btn_name, page_name in (("_cc_btn", "_control_center"), ("_chess_btn", "_chess_panel"),
+                                    ("_brain_btn", "_second_brain_panel")):
             btn = getattr(self, btn_name, None) if btn_name in self.__dict__ else None
             page = self.__dict__.get(page_name)
             if btn is None:

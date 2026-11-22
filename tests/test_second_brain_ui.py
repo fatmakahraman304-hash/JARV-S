@@ -24,6 +24,7 @@ class SecondBrainUI(unittest.TestCase):
         entered, release = threading.Event(), threading.Event()
         with tempfile.TemporaryDirectory() as directory, patch.object(continuity, "data_dir", return_value=Path(directory)):
             window = Window()
+            window.show()
             with patch("core.second_brain.scan", side_effect=lambda: (entered.set(), release.wait(2))):
                 panel = SecondBrainPanel(window)
                 panel.show()
@@ -52,3 +53,35 @@ class SecondBrainUI(unittest.TestCase):
             restored.timer.stop()
             restored.close()
             window.close()
+
+
+    def test_dock_opens_in_center_and_returns_to_face(self):
+        from gui.window import MainWindow
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as directory, patch.object(continuity, "data_dir", return_value=Path(directory)):
+            window = MainWindow("")
+            try:
+                window.show()
+                window._brain_btn.click()
+                panel = window._second_brain_panel
+                app.processEvents()
+                self.assertIs(window._hud_cam_stack.currentWidget(), panel)
+                self.assertFalse(panel.isWindow())
+                self.assertTrue(window._brain_btn.isChecked())
+                panel.back_requested.emit()
+                self.assertIs(window._hud_cam_stack.currentWidget(), window.hud)
+                self.assertFalse(window._brain_btn.isChecked())
+                window._brain_btn.click()
+                self.assertIs(window._second_brain_panel, panel)
+                window._set_control_center(True)
+                self.assertFalse(window._brain_btn.isChecked())
+                self.assertTrue(window._cc_btn.isChecked())
+            finally:
+                panel = window.__dict__.get("_second_brain_panel")
+                if panel is not None:
+                    panel.timer.stop()
+                    deadline = time.monotonic() + 3
+                    while panel.busy and time.monotonic() < deadline:
+                        app.processEvents()
+                        time.sleep(.01)
+                window.close()
