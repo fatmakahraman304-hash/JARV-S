@@ -65,6 +65,82 @@ class AgentLoopTest(unittest.TestCase):
             ja.run(Path(d), "x", brain_list=[])
 
 
+class ErrorHandlingTest(unittest.TestCase):
+    def test_unfinished_chat_only_answer_is_not_success(self):
+        brain = ScriptedBrain([
+            ("Yapıyorum", [], None),
+            ("Her şey hazır", [], None),
+        ])
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(RuntimeError, "dosya aracı kullanmadan"):
+                ja.run(Path(d), "Kod yaz", brain_list=[brain], log=lambda _: None)
+
+    def test_exhausted_step_budget_is_not_success(self):
+        brain = ScriptedBrain([("Hazırlanıyor", [], None)])
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(RuntimeError, "adım sınırına"):
+                ja.run(Path(d), "Kod yaz", brain_list=[brain],
+                       max_steps=1, log=lambda _: None)
+
+    def test_one_quota_retry_then_fallback(self):
+        a = ScriptedBrain([
+            ja.BrainError('429 retry in 0.01s'),
+            ja.BrainError('429 retry in 0.01s'),
+        ])
+        b = ScriptedBrain([("", [call("finish", summary="yedek çalıştı")], None)])
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ja.time, "sleep") as sleep:
+            result = ja.run(Path(d), "Kod yaz", brain_list=[a, b], log=lambda _: None)
+        self.assertEqual(result, "yedek çalıştı")
+        self.assertEqual(sleep.call_count, 1)
+
+    def test_gemini_missing_candidates_falls_back(self):
+        brain = ja.GeminiBrain("test-key", "gemini-flash-latest")
+        with mock.patch.object(ja, "_http_json", return_value={"candidates": []}):
+            with self.assertRaisesRegex(ja.BrainError, "aday yanıt"):
+                brain.turn([{"role": "user", "text": "Kod yaz"}])
+
+    def test_gemini_truncated_tool_call_is_not_accepted(self):
+        brain = ja.GeminiBrain("test-key", "gemini-flash-latest")
+        response = {"candidates": [{
+            "finishReason": "MAX_TOKENS",
+            "content": {"parts": [{"text": "eksik"}]}}]}
+        with mock.patch.object(ja, "_http_json", return_value=response):
+            with self.assertRaisesRegex(ja.BrainError, "MAX_TOKENS"):
+                brain.turn([{"role": "user", "text": "Kod yaz"}])
+
+    def test_nvidia_invalid_tool_args_fallbacks(self):
+        brain = ja.OpenAIBrain("https://example.invalid", "key",
+                               "nvidia/model", "NVIDIA")
+        response = {"choices": [{"message": {"tool_calls": [{
+            "id": "tool1", "function": {"name": "write_file",
+                                        "arguments": "{broken"}}]}}]}
+        with mock.patch.object(ja, "_http_json", return_value=response):
+            with self.assertRaisesRegex(ja.BrainError, "parametreleri bozuk"):
+                brain.turn([{"role": "user", "text": "Kod yaz"}])
+
+    def test_nvidia_truncated_output_fallbacks(self):
+        brain = ja.OpenAIBrain("https://example.invalid", "key",
+                               "nvidia/model", "NVIDIA")
+        response = {"choices": [{"finish_reason": "length",
+                                  "message": {"content": "partial"}}]}
+        with mock.patch.object(ja, "_http_json", return_value=response):
+            with self.assertRaisesRegex(ja.BrainError, "token sınırında"):
+                brain.turn([{"role": "user", "text": "Kod yaz"}])
+
+    def test_invalid_http_json_triggers_model_fallback(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return b'<html>bad gateway</html>'
+
+        with mock.patch.object(ja.urllib.request, "urlopen", return_value=FakeResponse()):
+            with self.assertRaisesRegex(ja.BrainError, "geçersiz JSON"):
+                ja._http_json("https://example.invalid", {"x": "y"}, {})
+
+
 class ToolSafetyTest(unittest.TestCase):
     def test_stays_inside_the_folder(self):
         with tempfile.TemporaryDirectory() as d:

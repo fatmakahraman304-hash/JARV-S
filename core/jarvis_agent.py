@@ -256,7 +256,14 @@ def _http_json(url: str, body: dict | None, headers: dict, timeout: int = 180) -
         ctx = None
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-            return json.loads(r.read().decode("utf-8"))
+            raw = r.read().decode("utf-8", errors="replace")
+        try:
+            response = json.loads(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            raise BrainError("Model sunucusu geçersiz JSON yanıtı döndürdü.") from None
+        if not isinstance(response, dict):
+            raise BrainError("Model sunucusu beklenen JSON nesnesini döndürmedi.")
+        return response
     except urllib.error.HTTPError as e:
         try:
             msg = e.read().decode("utf-8", errors="replace")[:600]
@@ -316,13 +323,30 @@ class GeminiBrain:
                     for t in TOOLS]}],
                 "generationConfig": {"temperature": 0.2}}
         js = _http_json(f"{GEMINI_API}/models/{self.model}:generateContent", body, {"x-goog-api-key": self.key})
-        cand = (js.get("candidates") or [{}])[0]
+        candidates = js.get("candidates") or []
+        if not candidates or not isinstance(candidates[0], dict):
+            raise BrainError("Gemini aday yanıt üretmedi; başka model deneniyor.")
+        cand = candidates[0]
+        reason = str(cand.get("finishReason") or "")
+        if reason not in ("", "STOP"):
+            # MAX_TOKENS / SAFETY / RECITATION must never be treated as a
+            # successful answer: incomplete tool calls can corrupt a job.
+            raise BrainError(f"Gemini yanıtı tamamlanamadı ({reason}).")
         parts = (cand.get("content") or {}).get("parts") or []
-        text = "".join(p.get("text", "") for p in parts if p.get("text") and not p.get("thought"))
-        calls = [{"id": f"c{i}", "name": p["functionCall"]["name"], "args": p["functionCall"].get("args") or {}}
-                 for i, p in enumerate(parts) if p.get("functionCall")]
-        if not parts and cand.get("finishReason") not in (None, "STOP"):
-            raise BrainError(f"model stopped: {cand.get('finishReason')}")
+        if not isinstance(parts, list):
+            raise BrainError("Gemini geçersiz içerik biçimi döndürdü.")
+        text = "".join(p.get("text", "") for p in parts
+                       if isinstance(p, dict) and p.get("text") and not p.get("thought"))
+        calls = []
+        for i, p in enumerate(parts):
+            if not isinstance(p, dict) or not p.get("functionCall"):
+                continue
+            fn = p["functionCall"]
+            if not isinstance(fn, dict) or not isinstance(fn.get("name"), str) or not isinstance(fn.get("args") or {}, dict):
+                raise BrainError("Gemini geçersiz araç çağrısı döndürdü.")
+            calls.append({"id": f"c{i}", "name": fn["name"], "args": fn.get("args") or {}})
+        if not parts:
+            raise BrainError("Gemini boş yanıt verdi.")
         return text, calls, parts
 
 
@@ -366,16 +390,31 @@ class OpenAIBrain:
             raise
         if js.get("error"):
             raise BrainError(str(js["error"])[:300])
-        msg = ((js.get("choices") or [{}])[0].get("message")) or {}
+        choices = js.get("choices") or []
+        if not choices or not isinstance(choices[0], dict):
+            raise BrainError("NVIDIA modelinden geçerli yanıt alınamadı.")
+        choice = choices[0]
+        if choice.get("finish_reason") == "length":
+            raise BrainError("NVIDIA yanıtı token sınırında kesildi.")
+        msg = choice.get("message") or {}
+        if not isinstance(msg, dict):
+            raise BrainError("NVIDIA modelinin yanıt biçimi geçersiz.")
         calls = []
         for i, c in enumerate(msg.get("tool_calls") or []):
             fn = c.get("function") or {}
             try:
                 args = json.loads(fn.get("arguments") or "{}")
-            except ValueError:
-                args = {}
-            calls.append({"id": c.get("id") or f"c{i}", "name": fn.get("name", ""), "args": args})
-        return msg.get("content") or "", calls, None
+            except (ValueError, TypeError):
+                raise BrainError("NVIDIA modelinin araç parametreleri bozuk.") from None
+            if not isinstance(args, dict) or not fn.get("name"):
+                raise BrainError("NVIDIA modelinin araç çağrısı geçersiz.")
+            calls.append({"id": c.get("id") or f"c{i}", "name": fn["name"], "args": args})
+        content = msg.get("content") or ""
+        if isinstance(content, list):
+            content = "\n".join(part.get("text", "") for part in content if isinstance(part, dict))
+        if not calls and not str(content).strip():
+            raise BrainError("NVIDIA modeli boş yanıt verdi.")
+        return str(content), calls, None
 
 
 # ── which brains are there, best first ───────────────────────────────────────
@@ -475,25 +514,37 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     brain = pool.pop(0)
     log(f"  MAYK ajanı: {brain.name}")
     idle = 0
+    short_retries = 0
+    last_error = ""
     for step in range(max_steps):
         _shrink(history)
         try:
             text, calls, raw = brain.turn(history)
         except BrainError as e:
             err = str(e)
+            last_error = err
             wait = _retry_after(err)
-            if "429" in err and 0 < wait <= 60 and "limit: 0" not in err:
-                log(f"  {brain.name} dakikalık sınırda; {int(wait) + 1} sn bekliyor.")
+            # A permanent 429 used to consume every loop step, then return
+            # an apparently successful "step limit" message. Retry only once
+            # per model and move on to the next provider on another failure.
+            if ("429" in err and 0 < wait <= 20 and short_retries == 0
+                    and "limit: 0" not in err):
+                short_retries += 1
+                log(f"  {brain.name} geçici kota sınırında; bir kez yeniden deneniyor.")
                 time.sleep(wait + 1)
                 continue
+            log(f"  Kod modeli yanıt hatası: {brain.name} — {err[:140]}")
             if not pool:
-                raise RuntimeError(f"Kod ajanının bütün beyinleri sınırda ya da ulaşılamıyor: {err[:200]}")
-            # a model change mid-job: the new brain sees the same history, minus
-            # the old model's private parts
+                raise RuntimeError(
+                    f"Kod ajanının kullanılabilir modelleri yanıt vermedi. "
+                    f"Son model: {brain.name}; neden: {err[:180]}") from None
+            # On model change retain tool results but discard proprietary
+            # Gemini thought signatures from the previous model's history.
             for h in history:
                 h.pop("raw_gemini", None)
             brain = pool.pop(0)
-            log(f"  Önceki model kullanılamadı ({err[:80]}); {brain.name} ile devam.")
+            short_retries = 0
+            log(f"  Yedek kodlama modeline geçildi: {brain.name}.")
             continue
         item = {"role": "assistant", "text": text, "calls": calls}
         if isinstance(brain, GeminiBrain) and raw:
@@ -502,8 +553,11 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
         if not calls:
             idle += 1
             if idle >= 2:
-                # answered in words without tools: take it as the summary
-                return text.strip() or "İş bitti."
+                # A chat-only response is not proof that any requested code
+                # was written or verified. Surface this instead of "İş bitti".
+                raise RuntimeError(
+                    f"Kod ajanı dosya aracı kullanmadan iki kez yanıt verdi; "
+                    f"görev tamamlandı olarak işaretlenmedi. Model: {brain.name}.")
             history.append({"role": "user", "text": "Araçları kullanarak işi tamamla; ardından finish çağır."})
             continue
         idle = 0
@@ -513,5 +567,8 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
                 return summary
             result = ws.call(c["name"], c.get("args") or {})
             history.append({"role": "tool", "id": c["id"], "name": c["name"], "result": result})
-    return ("Kod ajanı adım sınırına ulaştı; yapılanlar kaydedildi: "
-            + (", ".join(sorted(ws.changed)[:12]) or "hiçbir dosya değişmedi") + ".")
+    raise RuntimeError(
+        "Kod ajanı adım sınırına ulaştı; tamamlandığı doğrulanmadı. "
+        "Değiştirilen dosyalar: "
+        + (", ".join(sorted(ws.changed)[:12]) or "yok") + ". "
+        + (f"Son model hatası: {last_error[:120]}" if last_error else ""))
