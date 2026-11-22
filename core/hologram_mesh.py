@@ -1,13 +1,13 @@
-"""Extend the measured male face with a smooth, rig-safe 3D shoulder base."""
+"""Extend the feminine AETHER face with a smooth, rig-safe 3D shoulder base."""
 import numpy as np
 from core.avatar_mesh import _vertex_normals, _unique_edges
 
 
 def with_shoulders(mesh):
     result = dict(mesh)
-    # Match the reference's rounded cranium and tapered, defined male jaw.
-    # This warp applies ONLY to the hologram; the optional human head keeps
-    # its measured anatomy. Preserve indices for the existing speech rig.
+    # Sculpt a soft oval crown and narrow tapered feminine jaw.
+    # This warp applies ONLY to the hologram. Preserve vertex indices,
+    # the speaking jaw and the existing eyelid and lip animations.
     original = mesh["verts"].copy()
     count_head = int(mesh["n_head"])
     y = original[:count_head, 1]
@@ -18,8 +18,8 @@ def with_shoulders(mesh):
     # of the wide, nearly vertical capsule that appeared on the user's HUD.
     # Smoothly reduce width at the crown while keeping measured eyes/jaw and
     # the existing landmark-based lip/blink animation intact.
-    original[:count_head, 0] *= (1.035 + .035 * forehead -
-                                 .085 * crown - .025 * jaw)
+    original[:count_head, 0] *= (1.022 + .040 * forehead -
+                                 .070 * crown - .100 * jaw)
     segments = 14  # The existing neck ends with a 14-vertex elliptical ring.
     base = original[-segments:].copy()
     vertices = [original]

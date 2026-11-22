@@ -226,24 +226,23 @@ def save_push_to_talk_enabled(enabled: bool) -> None:
     _save_flag("push_to_talk_enabled", enabled)
 
 
-HUD_STYLES = ("core",)
+HUD_STYLES = ("core", "face")
 
 
 def get_hud_style() -> str:
     """Which centrepiece the HUD draws: the animated head, or the reactor core.
 
     Taste, not capability — both render in the same software painter and cost
-    about the same. Defaults to the head because that is what earlier versions shipped
-    with; anyone who preferred the older look can switch back in ⚙ and the
-    choice survives a restart.
+    about the same. Defaults to the animated reactor; the user can choose the code-rendered
+    female hologram in Controls and the choice persists after a restart.
     """
-    v = str(load_api_keys().get("hud_style", "face")).strip().lower()
-    return "core"
+    v = str(load_api_keys().get("hud_style", "core")).strip().lower()
+    return v if v in HUD_STYLES else "core"
 
 
 def save_hud_style(style: str) -> None:
     s = str(style or "").strip().lower()
-    _save_flag("hud_style", "core")
+    _save_flag("hud_style", s if s in HUD_STYLES else "core")
 
 
 def get_ui_scale() -> float:

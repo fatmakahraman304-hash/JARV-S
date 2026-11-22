@@ -83,7 +83,7 @@ class HudCanvas(QWidget):
         # back is instant and costs no reload.
         try:
             from memory.config_manager import get_hud_style
-            self.hud_style = "core"
+            self.hud_style = get_hud_style()
         except Exception:
             self.hud_style = "core"
         self._core_phase = 0.0

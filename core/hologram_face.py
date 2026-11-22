@@ -1,4 +1,4 @@
-"""Animated male face projection made from scan contours, without a GPU."""
+"""Animated feminine face projection made from 3D scan contours, without a GPU."""
 import numpy as np
 from PyQt6.QtCore import QLineF, QPointF
 from PyQt6.QtGui import QColor, QPen, QPolygonF, QBrush, QPainterPath, QRadialGradient, QPainter

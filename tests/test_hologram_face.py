@@ -1,4 +1,4 @@
-"""The default male projection animates from the existing voice-driven rig."""
+"""The default feminine projection animates from the existing voice-driven rig."""
 import os
 import unittest
 from unittest.mock import patch

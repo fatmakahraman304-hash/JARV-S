@@ -16,17 +16,16 @@ sharp drawing. That is far cheaper than blurring a full-resolution frame.
 Software QPainter only: no GPU, no new dependency. Everything that moves means
 something: the spin rate is the assistant's state, and the core, the rays, the
 arcs and the particles brighten and grow with the real audio level. The
-palette is a fixed fire-orange; muted falls back to the muted colour handed in
-by the HUD.
+palette is an electric cyan/ice-blue glow; muted uses the muted colour handed in
+by the HUD. No downloaded pictures or image assets are involved.
 """
 from __future__ import annotations
-from pathlib import Path
 
 import math
 
 import numpy as np
 from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
-from PyQt6.QtGui import (QBrush, QColor, QFont, QImage, QPixmap, QLinearGradient, QPainter, QPen,
+from PyQt6.QtGui import (QBrush, QColor, QFont, QImage, QLinearGradient, QPainter, QPen,
                          QPolygonF, QRadialGradient)
 
 _DISPLAY = ["Bahnschrift", "Segoe UI", "SF Pro Display", "Helvetica Neue",
@@ -44,11 +43,11 @@ _N_SHELL = 600          # loose particles on the sphere's surface
 _N_DUST = 260           # sparse outer dust
 _GLOW_DIV = 4           # the glow image is this many times smaller than the widget
 
-# fire palette, hottest first
-_HOT = QColor("#fff2bf")
-_GOLD = QColor("#ffad2a")
-_ORANGE = QColor("#ff7410")
-_EMBER = QColor("#ff4a00")
+# Electric cyan palette; the original 3D geometry and motion are unchanged.
+_HOT = QColor("#f1feff")
+_GOLD = QColor("#a9f5ff")
+_ORANGE = QColor("#27cfff")
+_EMBER = QColor("#0759c9")
 
 
 def _rx(a):
@@ -168,7 +167,6 @@ class Reactor3D:
         self.spin = 0.0
         self.t = 0.0
         self._glow: QImage | None = None
-        self._aether_art = QPixmap(str(Path(__file__).resolve().parent / "assets" / "aether-core.webp"))
 
     # ── motion ────────────────────────────────────────────────────────────────
     def step(self, dt: float, speaking: bool, thinking: bool, muted: bool) -> None:
@@ -265,33 +263,6 @@ class Reactor3D:
               white: QColor, amp: float, live: bool, name: str = "",
               muted: bool = False) -> None:
         amp = max(0.0, min(1.0, amp))
-        if not self._aether_art.isNull():
-            p.save()
-            p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            art_rect = QRectF(cx - r * 2.08, cy - r * 1.20, r * 4.16, r * 2.34)
-            p.setOpacity(0.45 if muted else min(1.0, 0.91 + amp * 0.09))
-            p.drawPixmap(art_rect, self._aether_art, QRectF(self._aether_art.rect()))
-            p.setOpacity(0.14 if muted else 0.30 + amp * 0.26)
-            p.setPen(QPen(QColor("#39eaff"), max(1.2, r * 0.013)))
-            p.drawArc(QRectF(cx - r * 1.73, cy - r * 0.50,
-                             r * 3.46, r * 1.0),
-                      int(self.spin * 960) % (360 * 16), 74 * 16)
-            p.drawArc(QRectF(cx - r * 1.73, cy - r * 0.50,
-                             r * 3.46, r * 1.0),
-                      (int(self.spin * 960) + 180 * 16) % (360 * 16), 48 * 16)
-            p.setOpacity(1.0)
-            if name:
-                font = QFont()
-                font.setFamilies(_DISPLAY)
-                font.setPixelSize(max(12, int(r * 0.13)))
-                font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, max(2.0, r * 0.025))
-                p.setFont(font)
-                p.setPen(QColor("#a9edff"))
-                p.drawText(QRectF(cx - r * 1.8, cy + r * 1.29, r * 3.6, r * 0.3),
-                           Qt.AlignmentFlag.AlignHCenter, name)
-            p.restore()
-            return
         if muted:
             pal = (QColor(white), QColor(main), QColor(main), QColor(main))
             dim = 0.50
@@ -371,7 +342,7 @@ class Reactor3D:
             p.setPen(pen)
             p.drawLine(QLineF(cx, cy, x1r, y1r))
 
-        # 5. thick arc segments: an orange body with a hot line down the middle
+        # 5. thick arc segments: a cyan body with an ice-white line down the middle
         for X, Y, Z, aw in arcs:
             xs, ys = X.tolist(), Y.tolist()
             zmid = ((Z[:-1] + Z[1:]) * 0.5).tolist()
