@@ -1,5 +1,5 @@
 """
-Screen & webcam capture for MAYK vision.
+Screen & webcam capture for AETHER vision.
 
 Provides the two capture entry points main.py uses — `_capture_screen()` and
 `_capture_camera()` — plus their helpers (compression, camera auto-detection,

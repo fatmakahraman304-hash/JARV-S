@@ -132,7 +132,7 @@ class AetherUI:
                 self.write_log(f'SYS: WhatsApp Business açılamadı: {exc}')
         self.root = _RootShim(self._app)
         self._win.show()
-        receipt = os.environ.pop("MAYK_RESTART_RECEIPT", "")
+        receipt = os.environ.pop("AETHER_RESTART_RECEIPT", "")
         if receipt:
             def acknowledge():
                 try:

@@ -1,5 +1,5 @@
 """
-memory/learner.py — MAYK learns about the user from the conversation itself.
+memory/learner.py — AETHER learns about the user from the conversation itself.
 
 Every so often (after a pause, or every ten things the user says) Gemini's
 text model reads the latest conversation and files lasting facts about the
@@ -40,7 +40,7 @@ def turn(role: str, text: str) -> None:
         return
     user = str(role).lower().startswith(("kullan", "user"))
     with _lock:
-        _buf.append(("user" if user else "jarvis", text[:600]))
+        _buf.append(("user" if user else "aether", text[:600]))
         n_user = sum(1 for r, _ in _buf if r == "user")
         if _timer:
             _timer.cancel()
@@ -54,7 +54,7 @@ def turn(role: str, text: str) -> None:
 
 
 def build_prompt(turns: list[tuple[str, str]], known: list[str]) -> str:
-    convo = "\n".join(f"{'Kullanıcı' if r == 'user' else 'MAYK'}: {t}" for r, t in turns)[-6000:]
+    convo = "\n".join(f"{'Kullanıcı' if r == 'user' else 'AETHER'}: {t}" for r, t in turns)[-6000:]
     return ("Aşağıdaki konuşmadan kullanıcı hakkında KALICI ve işe yarar yeni bilgileri çıkar (kim olduğu, "
             "ailesi ve yakınları, tercihleri, alışkanlıkları, projeleri, istekleri, önemli tarihler). Geçici "
             "şeyleri (bugünkü ruh hali, tek seferlik istekler), sağlık, din, siyaset, para bilgilerini ve zaten "

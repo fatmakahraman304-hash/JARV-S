@@ -1,4 +1,4 @@
-"""MAYK's own coding agent: the loop, the tools, the safety rules, the
+"""AETHER's own coding agent: the loop, the tools, the safety rules, the
 brain hand-over and the Gemini request format."""
 import json
 import sys
@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from core import jarvis_agent as ja
+from core import aether_agent as ja
 
 
 class ScriptedBrain:
@@ -272,7 +272,7 @@ class AdvancedAgentReliabilityTest(unittest.TestCase):
                     "path": "src.py", "content": "partial = 2\n"})
             self.assertIn("Hata", result)
             self.assertEqual(p.read_text(), "original = 1\n")
-            self.assertEqual(list(Path(temp).glob(".mayk-write-*")), [])
+            self.assertEqual(list(Path(temp).glob(".aether-write-*")), [])
 
     def test_configuration_key_loss_is_blocked(self):
         with tempfile.TemporaryDirectory() as temp:

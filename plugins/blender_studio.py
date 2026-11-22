@@ -14,12 +14,12 @@ PLUGIN = {
     "description": ("Masaüstü Blender'da Türkçe tarifle proje oluştur (new), son projeyi veya verilen "
                     ".blend dosyasının kopyasını düzenle (edit), sahneyi incele (inspect), görüntü al "
                     "(render), zaman çizelgesini PNG kare dizisi olarak işle (animation), GLB dışa aktar (glb), Blender'da göster (open), son işlemi bildir (status). Blender araçlarını öğretmek için guide kullan. "
-                    "Her şeyi Python ile yapmak için script (MAYK bpy betiği yazar, hata çıkarsa kendisi düzeltir ve öğrenir). "
-                    "Kullanıcı Blender hakkında bir şey öğretirse teach; MAYK'ın bir konuyu kendi kendine öğrenmesi için study "
+                    "Her şeyi Python ile yapmak için script (AETHER bpy betiği yazar, hata çıkarsa kendisi düzeltir ve öğrenir). "
+                    "Kullanıcı Blender hakkında bir şey öğretirse teach; AETHER'ın bir konuyu kendi kendine öğrenmesi için study "
                     "(notlar çıkarır, Blender'da deneyip doğrular); öğrendiklerini sormak için lessons. "
                     "Blender yüklü değilse install. "
                     "Kullanıcının AÇIK Blender penceresinde çalışmak için edit/script yeterli: canlı bağlantı varsa değişiklik "
-                    "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir, 'onu/biraz daha' MAYK'ın son değiştirdiğidir; "
+                    "açık sahnede yapılır ve 'bunu/şunu' Blender'da seçili nesnedir, 'onu/biraz daha' AETHER'ın son değiştirdiğidir; "
                     "undo = geri al, redo = yinele; render = açık sahnenin render'ı (pencere donmaz); preview = açık sahneyi göster. "
                     "Kullanıcı tasarımcıdır: isteğini request alanına kendi sözleriyle, eksiksiz yaz. "
                     "'Blender'ın her şeyini öğren' = learn_all (kurulu Blender'ın tüm API'si + resmi kılavuz); ne bildiğini sormak "
@@ -42,7 +42,7 @@ PLUGIN_SETTINGS = {
                 "placeholder": "Otomatik bulmak için boş bırak"}],
 }
 
-ROOT = Path.home() / "JARVIS" / "Blender"
+ROOT = Path.home() / "AETHER" / "Blender"
 WORKER = Path(__file__).with_name("_blender_scene.py")
 _lock = threading.Lock()
 _status = "Henüz bir Blender işlemi başlatılmadı."
@@ -196,12 +196,12 @@ def deep_search():
 
 def executable():
     from memory.config_manager import get_plugin_setting
-    override = get_plugin_setting("blender_studio", "executable") or os.environ.get("JARVIS_BLENDER_EXE")
+    override = get_plugin_setting("blender_studio", "executable") or os.environ.get("AETHER_BLENDER_EXE")
     if override:
         path = Path(override.strip('"')).expanduser()
         if path.is_file() and (os.name != "nt" or path.name.lower() == "blender.exe"):
             return str(path)
-        raise ValueError("Blender yolu geçersiz. Eklenti ayarındaki veya JARVIS_BLENDER_EXE değişkenindeki yolu kontrol et.")
+        raise ValueError("Blender yolu geçersiz. Eklenti ayarındaki veya AETHER_BLENDER_EXE değişkenindeki yolu kontrol et.")
     if os.name == "nt":
         for path in windows_candidates():
             if path.is_file():
@@ -428,7 +428,7 @@ def building_project(binary, folder, request, plan=None, player=None):
             run_script(binary, None, folder, code)
             break
         except ValueError as exc:
-            hits = re.findall(r"RuntimeError: JARVIS_EXTRA_FAILED::(.+?)::(.*)", str(exc))
+            hits = re.findall(r"RuntimeError: AETHER_EXTRA_FAILED::(.+?)::(.*)", str(exc))
             if not hits:
                 raise
             name, why = hits[-1]
@@ -459,7 +459,7 @@ def edit_building(binary, folder, source, instruction, player=None):
 
 
 def refine(binary, folder, output, request, player=None, rounds=MAX_ROUNDS):
-    """MAYK looks at its own work and improves it: render from several sides, have the model
+    """AETHER looks at its own work and improves it: render from several sides, have the model
     score it and list concrete problems (plus the measured floating parts), fix them with a script,
     and keep the best version. What fixed what is learned."""
     from plugins import _blender_brain as brain
@@ -563,7 +563,7 @@ def make_it_match(binary, source, folder, output, request):
 
 
 def study(binary, topic, request=""):
-    """MAYK teaches itself a Blender topic: notes + a tiny demo script, kept only if the demo really runs."""
+    """AETHER teaches itself a Blender topic: notes + a tiny demo script, kept only if the demo really runs."""
     from core import gemini
     from plugins import _blender_brain as brain
     with tempfile.TemporaryDirectory() as temp:
@@ -683,14 +683,14 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
             out = live.render(player)
             return f"Render hazır: {out}"
         if action == "preview":
-            return "Açık bir Blender penceresine bağlı değilim. Blender'ı aç (MAYK bağlantısı kuruluysa kendiliğinden bağlanır)."
+            return "Açık bir Blender penceresine bağlı değilim. Blender'ı aç (AETHER bağlantısı kuruluysa kendiliğinden bağlanır)."
     if action in ("edit", "script") and not project:
         from plugins import _blender_live as live
         if live.available():                           # the user's open window: change it in place
             st = live.state()
             opened = Path(st.get("file") or "")
             if opened.name and (opened.parent / "plan.json").is_file():
-                # a MAYK building is open: change its plan exactly, then show the result in the same window
+                # a AETHER building is open: change its plan exactly, then show the result in the same window
                 result_text = process(action, request, str(opened), binary=binary or executable(), player=player)
                 try:
                     live.open_file(str(project_path(None)))
@@ -783,7 +783,7 @@ def process(action, request, project, topic="", *, binary=None, result="save", p
             big = brain.is_big(request)
             rounds = 2 if action == "edit" else 6 if big else MAX_ROUNDS
             output, score = refine(binary, folder, output, request, player=player, rounds=rounds)
-            if player is not None and hasattr(player, "show_image"):     # show the result in MAYK's window
+            if player is not None and hasattr(player, "show_image"):     # show the result in AETHER's window
                 try:
                     shot = Path(tempfile.mkdtemp(prefix="sonuc-", dir=folder))
                     png, _ = views_sheet(binary, output, shot)

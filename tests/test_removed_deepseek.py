@@ -1,4 +1,4 @@
-"""MAYK: kaldırılan DeepSeek'in yeniden etkinleşmemesi ve anahtar temizliği."""
+"""AETHER: kaldırılan DeepSeek'in yeniden etkinleşmemesi ve anahtar temizliği."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from core import coding_router, jarvis_agent, nvidia_account
+from core import coding_router, aether_agent, nvidia_account
 from memory import config_manager as cfg
 
 
@@ -99,18 +99,18 @@ class RemovedDeepSeekTests(unittest.TestCase):
         with mock.patch.object(coding_router, "resting", return_value=0):
             self.assertEqual(coding_router.ladder("openai_compat@deepseek",
                                                   lambda _: True),
-                             [jarvis_agent.PROVIDER_ID, coding_router.GEMINI])
+                             [aether_agent.PROVIDER_ID, coding_router.GEMINI])
 
     def test_nvidia_and_gemini_are_only_auto_brains(self):
         with mock.patch.object(nvidia_account, "api_key", return_value="nvidia-key"), \
              mock.patch.object(nvidia_account, "available_models",
                                return_value=["nvidia/nemotron-3.5-lightning-30b-a3b"]), \
-             mock.patch.object(jarvis_agent, "_gemini_key", return_value="gemini-key"), \
-             mock.patch.object(jarvis_agent, "_settings", return_value={}), \
-             mock.patch.object(jarvis_agent, "gemini_models",
+             mock.patch.object(aether_agent, "_gemini_key", return_value="gemini-key"), \
+             mock.patch.object(aether_agent, "_settings", return_value={}), \
+             mock.patch.object(aether_agent, "gemini_models",
                                return_value=["gemini-2.5-flash"]), \
              mock.patch.dict("os.environ", {"DEEPSEEK_API_KEY": "removed-key"}):
-            names = [brain.name for brain in jarvis_agent.brains()]
+            names = [brain.name for brain in aether_agent.brains()]
         self.assertEqual(names, [
             "NVIDIA (nvidia/nemotron-3.5-lightning-30b-a3b)",
             "Gemini (gemini-2.5-flash)",

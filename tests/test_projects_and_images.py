@@ -1,4 +1,4 @@
-"""Projects survive restarts (journal, staged builds, resume) and MAYK draws pictures."""
+"""Projects survive restarts (journal, staged builds, resume) and AETHER draws pictures."""
 import base64
 import json
 import tempfile
@@ -23,7 +23,7 @@ class JournalTest(unittest.TestCase):
         pid = self.c.project_start("build", "site", "/x/site", "bana site yap")
         self.c.project_update(pid, stage=2, stages={"plan": {"stages": [{"title": "a"}, {"title": "b"}, {"title": "c"}]}})
         self.assertEqual(self.c.projects(unfinished_only=True)[0]["status"], "çalışıyor")
-        self.c.recover_jobs()                               # MAYK restarted mid-job
+        self.c.recover_jobs()                               # AETHER restarted mid-job
         p = self.c.project(pid)
         self.assertEqual(p["status"], "yarıda kaldı")
         self.assertEqual(p["stage"], 2)

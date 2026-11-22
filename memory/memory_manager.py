@@ -65,7 +65,7 @@ PROMPT_MAX_PER_CATEGORY = 6
 def _empty_memory() -> dict:
     return {
         "identity":      {},
-        "instructions":  {},      # how the user wants MAYK to behave — always in the prompt, never trimmed
+        "instructions":  {},      # how the user wants AETHER to behave — always in the prompt, never trimmed
         "preferences":   {},
         "projects":      {},
         "relationships": {},
@@ -156,7 +156,7 @@ def _trim_to_limit(memory: dict) -> dict:
     if len(json.dumps(memory, ensure_ascii=False)) <= MEMORY_MAX_CHARS:
         return memory
     entries = [e for e in _all_entries(memory) if e[0] not in ("identity", "instructions")]   # who they are and
-    entries.sort(key=lambda t: t[2].get("updated", "0000-00-00"))                           # what they told MAYK stay
+    entries.sort(key=lambda t: t[2].get("updated", "0000-00-00"))                           # what they told AETHER stay
     dropped, archived = [], {}
     for cat, key, entry in entries:
         if len(json.dumps(memory, ensure_ascii=False)) <= MEMORY_MAX_CHARS:
@@ -533,7 +533,7 @@ def search_memory(query: str, limit: int = 8) -> str:
 
 
 def all_entries_for_ui() -> list[dict]:
-    """Flat list for the memory panel: what MAYK knows, and when it learned it.
+    """Flat list for the memory panel: what AETHER knows, and when it learned it.
     Sorted newest first so the panel opens on what changed most recently."""
     memory = load_memory()
     rows = []

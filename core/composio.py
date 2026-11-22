@@ -1,8 +1,8 @@
-"""core/composio.py — MAYK's bridge to 1000+ apps through Composio.
+"""core/composio.py — AETHER's bridge to 1000+ apps through Composio.
 
 Composio's Tool Router gives one session per user that can search every app
 Composio supports, connect the user's account with Composio-managed login (no
-OAuth app of our own to register), and run the app's actions. MAYK uses it
+OAuth app of our own to register), and run the app's actions. AETHER uses it
 through four calls:
 
     search(use_case)       which tools fit a task, their inputs, and whether the
@@ -103,7 +103,7 @@ def user_id() -> str:
         uid = str(_cfg().get("user_id") or "").strip()
         if not uid:
             from memory.config_manager import save_plugin_config
-            uid = f"jarvis-{uuid.uuid4().hex[:12]}"
+            uid = f"aether-{uuid.uuid4().hex[:12]}"
             try:
                 save_plugin_config(_NS, {"user_id": uid})
             except Exception as exc:

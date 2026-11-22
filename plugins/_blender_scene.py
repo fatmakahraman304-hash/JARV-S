@@ -284,8 +284,8 @@ def apply(step):
 
 
 def run_script(job, request):
-    """A bpy script MAYK wrote: run it; a failure becomes a report with the traceback
-    (MAYK reads it and fixes the script)."""
+    """A bpy script AETHER wrote: run it; a failure becomes a report with the traceback
+    (AETHER reads it and fixes the script)."""
     import traceback
     if request.get("empty"):
         for obj in list(bpy.context.scene.objects):
@@ -293,19 +293,19 @@ def run_script(job, request):
     code = (job / "script.py").read_text(encoding="utf8")
     out = job / "out"
     out.mkdir(exist_ok=True)
-    env = {"__name__": "jarvis_kit", "OUT": out, "bpy": bpy}
+    env = {"__name__": "aether_kit", "OUT": out, "bpy": bpy}
     for name in ("_blender_kit.py", "_blender_arch.py"):   # box(), wood(), place_on(), studio(), building() …
         kit = Path(__file__).with_name(name)
         if kit.is_file():
             exec(compile(kit.read_text(encoding="utf8"), str(kit), "exec"), env)
     env["__name__"] = "__main__"
     try:
-        exec(compile(code, "jarvis_script.py", "exec"), env)
+        exec(compile(code, "aether_script.py", "exec"), env)
         bpy.context.view_layer.update()
     except Exception:
         tb = traceback.format_exc()
         lines = code.splitlines()
-        hit = [int(n) for n in __import__("re").findall(r'jarvis_script.py", line (\d+)', tb)]
+        hit = [int(n) for n in __import__("re").findall(r'aether_script.py", line (\d+)', tb)]
         if hit and 0 < hit[-1] <= len(lines):
             tb += f"\nFailing line {hit[-1]}: {lines[hit[-1] - 1].strip()}"
         return tb
@@ -321,7 +321,7 @@ def geometry_issues(limit=40):
     bpy.context.view_layer.update()
     boxes = []
     for o in bpy.context.scene.objects:
-        if o.type not in ("MESH", "CURVE", "FONT") or o.get("jarvis_floor") or o.hide_render:
+        if o.type not in ("MESH", "CURVE", "FONT") or o.get("aether_floor") or o.hide_render:
             continue
         pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
         lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
@@ -348,11 +348,11 @@ def geometry_issues(limit=40):
 
 
 def views(job, request):
-    """Quick Cycles previews from several sides — what MAYK looks at to judge its own work."""
+    """Quick Cycles previews from several sides — what AETHER looks at to judge its own work."""
     import math
     from mathutils import Vector
     scene = bpy.context.scene
-    objs = [o for o in scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("jarvis_floor") and not o.hide_render]
+    objs = [o for o in scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("aether_floor") and not o.hide_render]
     r = scene.render
     r.engine = "CYCLES"
     scene.cycles.samples = int(request.get("samples", 12))
@@ -371,7 +371,7 @@ def views(job, request):
         bg = world.node_tree.nodes.get("Background")
         if bg:
             bg.inputs["Strength"].default_value = 2.5
-    env = {"__name__": "jarvis_kit", "bpy": bpy}
+    env = {"__name__": "aether_kit", "bpy": bpy}
     exec(compile(Path(__file__).with_name("_blender_kit.py").read_text(encoding="utf8"), "kit", "exec"), env)
     original = scene.camera
     shots = []
@@ -379,7 +379,7 @@ def views(job, request):
         shots.append(("kamera", None))
     shots += [("ön", (0.0, 6.0)), ("çapraz", (-40.0, 28.0)), ("yan", (90.0, 6.0)), ("üst", (-20.0, 72.0))]
     out = []
-    temp = bpy.data.objects.new("_jarvis_view", bpy.data.cameras.new("_jarvis_view"))
+    temp = bpy.data.objects.new("_aether_view", bpy.data.cameras.new("_aether_view"))
     scene.collection.objects.link(temp)
     for name, angle in shots[:4]:
         if angle is None:
@@ -442,13 +442,13 @@ def build_index(job):
                                    "f": [f.identifier for f in rna.functions][:40]})
         except Exception:
             continue
-    mat = bpy.data.materials.new("_jarvis_index")
+    mat = bpy.data.materials.new("_aether_index")
     mat.use_nodes = True
-    trees = {"ShaderNode": mat.node_tree, "GeometryNode": bpy.data.node_groups.new("_jarvis_gn", "GeometryNodeTree"),
+    trees = {"ShaderNode": mat.node_tree, "GeometryNode": bpy.data.node_groups.new("_aether_gn", "GeometryNodeTree"),
              "FunctionNode": None}
     trees["FunctionNode"] = trees["GeometryNode"]
     try:
-        trees["CompositorNode"] = bpy.data.node_groups.new("_jarvis_comp", "CompositorNodeTree")
+        trees["CompositorNode"] = bpy.data.node_groups.new("_aether_comp", "CompositorNodeTree")
     except Exception:
         pass
     for name in dir(bpy.types):
@@ -514,7 +514,7 @@ def main():
             if not getattr(_cycles, "with_openimagedenoise", True):
                 scene.cycles.use_denoising = False
         if scene.camera is None and request.get("auto_camera"):
-            env = {"__name__": "jarvis_kit", "bpy": bpy}            # the user's scene has no camera: frame one
+            env = {"__name__": "aether_kit", "bpy": bpy}            # the user's scene has no camera: frame one
             exec(compile(Path(__file__).with_name("_blender_kit.py").read_text(encoding="utf8"), "kit", "exec"), env)
             env["frame_camera"]()
             if not any(o.type == "LIGHT" for o in scene.objects):

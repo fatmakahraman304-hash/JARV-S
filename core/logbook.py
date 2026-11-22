@@ -1,4 +1,4 @@
-"""MAYK's logbook: everything printed, every traceback and every crash, kept on disk.
+"""AETHER's logbook: everything printed, every traceback and every crash, kept on disk.
 
 Before this the console was the only record — closed with the window, so "why did
 it stop yesterday?" had no answer. `install()` (called first thing at startup)
@@ -25,15 +25,15 @@ _path: Path | None = None
 
 def log_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "JarvisMurat" / "logs"
+    return (Path(base) if base else Path.home() / ".local" / "share") / "AetherMurat" / "logs"
 
 
 def path() -> Path:
-    return _path or (log_dir() / "jarvis.log")
+    return _path or (log_dir() / "aether.log")
 
 
 def _rotate():
-    """jarvis.log → jarvis.log.1 → … → jarvis.log.KEEP (the oldest is dropped) once it passes MAX_BYTES."""
+    """aether.log → aether.log.1 → … → aether.log.KEEP (the oldest is dropped) once it passes MAX_BYTES."""
     global _file
     p = path()
     try:
@@ -102,10 +102,10 @@ def install(directory: Path | None = None) -> Path:
         return path()
     d = Path(directory) if directory else log_dir()
     d.mkdir(parents=True, exist_ok=True)
-    _path = d / "jarvis.log"
+    _path = d / "aether.log"
     _file = open(_path, "a", encoding="utf-8", errors="replace")
     _installed = True
-    write(f"──────── MAYK başladı (Python {sys.version.split()[0]}, {sys.platform}) ────────")
+    write(f"──────── AETHER başladı (Python {sys.version.split()[0]}, {sys.platform}) ────────")
     sys.stdout = _Tee(sys.stdout)
     sys.stderr = _Tee(sys.stderr)
     old_hook = sys.excepthook

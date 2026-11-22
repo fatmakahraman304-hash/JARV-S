@@ -1,8 +1,8 @@
 """
-Drop-in MAYK plugin template.
+Drop-in AETHER plugin template.
 
 Copy this file, rename it (no leading underscore), fill in PLUGIN and run().
-No other file needs to change — MAYK discovers this automatically at startup.
+No other file needs to change — AETHER discovers this automatically at startup.
 
 ONE RULE IF YOUR PLUGIN NEEDS TO ASK A MODEL SOMETHING
     Go through `core.gemini`. Never build your own `genai.Client`.
@@ -44,7 +44,7 @@ PLUGIN = {
 def run(parameters: dict, player=None, session_memory=None) -> str:
     """
     parameters: dict of the args Gemini extracted, matching PLUGIN['parameters'].
-    player: the MaykUI instance — use player.write_log(f"MAYK: ...") to log,
+    player: the AetherUI instance — use player.write_log(f"AETHER: ...") to log,
             same as actions/*.py. May be None.
     session_memory: reserved, usually None today (core tools mostly pass None too).
     Return a short natural-language string — this is spoken back to the user.
@@ -58,7 +58,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return f"Sir, my_plugin failed: {e}"
     if player:
         try:
-            player.write_log(f"MAYK: {result_text}")
+            player.write_log(f"AETHER: {result_text}")
         except Exception:
             pass
     return result_text

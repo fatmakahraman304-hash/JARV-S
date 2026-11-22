@@ -16,7 +16,7 @@ class LearnerTest(unittest.TestCase):
 
     def test_run_files_what_the_model_found(self):
         from memory import learner
-        learner._buf[:] = [("user", "annemin adı Ayşe"), ("jarvis", "Not ettim"), ("user", "kahveyi şekersiz içerim")]
+        learner._buf[:] = [("user", "annemin adı Ayşe"), ("aether", "Not ettim"), ("user", "kahveyi şekersiz içerim")]
         saved = []
         with mock.patch("memory.memory_manager.load_memory", return_value={}), \
              mock.patch("memory.memory_manager.update_memory", side_effect=saved.append), \

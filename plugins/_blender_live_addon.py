@@ -1,15 +1,15 @@
-"""MAYK live link — runs INSIDE the user's open Blender.
+"""AETHER live link — runs INSIDE the user's open Blender.
 
-MAYK copies this file into Blender's scripts/startup folder, so every Blender
-the user opens listens on 127.0.0.1 for MAYK (with a token only MAYK knows).
-MAYK can then read what the user has selected and change the open scene in
+AETHER copies this file into Blender's scripts/startup folder, so every Blender
+the user opens listens on 127.0.0.1 for AETHER (with a token only AETHER knows).
+AETHER can then read what the user has selected and change the open scene in
 place: "şunu kırmızı yap" means the selected object, the result appears in the
 window at once, and Ctrl+Z (or "geri al") undoes it like any other edit.
 
 Everything runs on Blender's main thread from a timer; one request at a time.
 Requests and replies are one JSON object per connection:
     {"token": ..., "op": "state"}                 -> scene, selection, file
-    {"token": ..., "op": "exec", "code": "..."}   -> runs code with MAYK's toolkit; error = traceback
+    {"token": ..., "op": "exec", "code": "..."}   -> runs code with AETHER's toolkit; error = traceback
     {"token": ..., "op": "undo"} / {"op": "redo"}
     {"token": ..., "op": "issues"}                -> floating / disconnected parts
 """
@@ -22,8 +22,8 @@ from pathlib import Path
 
 import bpy
 
-# filled in by MAYK when it installs the file
-JARVIS_DIR = r"__JARVIS_DIR__"
+# filled in by AETHER when it installs the file
+AETHER_DIR = r"__AETHER_DIR__"
 PORT = 47863
 
 _server = None
@@ -31,15 +31,15 @@ _server = None
 
 def _token():
     try:
-        return (Path(JARVIS_DIR) / "memory" / "blender_live.token").read_text(encoding="utf8").strip()
+        return (Path(AETHER_DIR) / "memory" / "blender_live.token").read_text(encoding="utf8").strip()
     except OSError:
         return ""
 
 
 def _kit_env():
-    env = {"__name__": "jarvis_kit", "bpy": bpy}
+    env = {"__name__": "aether_kit", "bpy": bpy}
     for name in ("_blender_kit.py", "_blender_arch.py"):
-        f = Path(JARVIS_DIR) / "plugins" / name
+        f = Path(AETHER_DIR) / "plugins" / name
         if f.is_file():
             exec(compile(f.read_text(encoding="utf8"), str(f), "exec"), env)
     env["__name__"] = "__main__"
@@ -62,7 +62,7 @@ def _state():
 
 
 def _snapshot():
-    """What every object looks like now — to tell afterwards exactly what MAYK changed."""
+    """What every object looks like now — to tell afterwards exactly what AETHER changed."""
     snap = {}
     for o in bpy.context.scene.objects:
         mw = o.matrix_world
@@ -85,7 +85,7 @@ def _issues():
     ctx.view_layer.update()
     boxes = []
     for o in ctx.scene.objects:
-        if o.type not in ("MESH", "CURVE", "FONT") or o.get("jarvis_floor") or o.hide_render:
+        if o.type not in ("MESH", "CURVE", "FONT") or o.get("aether_floor") or o.hide_render:
             continue
         pts = [o.matrix_world @ Vector(c) for c in o.bound_box]
         boxes.append((o.name, Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts))),
@@ -131,23 +131,23 @@ def handle(req: dict) -> dict:
         if op == "exec":
             env = _kit_env()
             try:
-                _in_window(lambda: bpy.ops.ed.undo_push(message="MAYK öncesi"))
+                _in_window(lambda: bpy.ops.ed.undo_push(message="AETHER öncesi"))
             except Exception:
                 pass
             before = _snapshot()
             try:
-                exec(compile(req.get("code", ""), "jarvis_script.py", "exec"), env)
+                exec(compile(req.get("code", ""), "aether_script.py", "exec"), env)
                 bpy.context.view_layer.update()
             except Exception:
                 tb = traceback.format_exc()
                 lines = req.get("code", "").splitlines()
                 import re
-                hit = [int(n) for n in re.findall(r'jarvis_script.py", line (\d+)', tb)]
+                hit = [int(n) for n in re.findall(r'aether_script.py", line (\d+)', tb)]
                 if hit and 0 < hit[-1] <= len(lines):
                     tb += f"\nFailing line {hit[-1]}: {lines[hit[-1] - 1].strip()}"
                 return {"ok": False, "error": tb}
             try:
-                _in_window(lambda: bpy.ops.ed.undo_push(message="MAYK: " + (req.get("label") or "değişiklik")[:60]))
+                _in_window(lambda: bpy.ops.ed.undo_push(message="AETHER: " + (req.get("label") or "değişiklik")[:60]))
             except Exception:
                 pass
             return {"ok": True, "state": _state(), "diff": _diff(before, _snapshot())}

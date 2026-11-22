@@ -11,7 +11,7 @@ class Capabilities(unittest.TestCase):
         self.assertGreater(len(tools), 50)
         text = cap.overview()
         self.assertIn(f"Şu an {len(tools)} yeteneğim var", text)
-        for label in ("Bilgisayarı yönetme", "3B ve tasarım", "MAYK'ın kendisi"):
+        for label in ("Bilgisayarı yönetme", "3B ve tasarım", "AETHER'ın kendisi"):
             self.assertIn(label, text)
         self.assertIn("«Blender'da ahşap bir masa yap»", text)
 

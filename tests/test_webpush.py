@@ -37,7 +37,7 @@ class WebPushTest(unittest.TestCase):
         ua = ec.generate_private_key(ec.SECP256R1())
         ua_pub = ua.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
         auth = os.urandom(16)
-        msg = json.dumps({"title": "⏰ MAYK", "body": "ilaç zamanı"}, ensure_ascii=False).encode()
+        msg = json.dumps({"title": "⏰ AETHER", "body": "ilaç zamanı"}, ensure_ascii=False).encode()
         body = webpush.encrypt(msg, webpush.b64u(ua_pub), webpush.b64u(auth))
         self.assertEqual(_decrypt(body, ua, auth), msg)
 

@@ -1,4 +1,4 @@
-"""MAYK arka plan kodlama görevleri: canlı durum, geçmiş, başlatma doğrulaması."""
+"""AETHER arka plan kodlama görevleri: canlı durum, geçmiş, başlatma doğrulaması."""
 import tempfile
 import threading
 import time
@@ -81,7 +81,7 @@ class BackgroundJobTrackingTests(unittest.TestCase):
 
     def test_panel_shows_actual_brain_not_just_initial_choice(self):
         self._new()
-        dev_agent._agent_progress(None, "  MAYK ajanı: NVIDIA (coding-model)")
+        dev_agent._agent_progress(None, "  AETHER ajanı: NVIDIA (coding-model)")
         attempted = dev_agent._job_snapshot()
         self.assertEqual(attempted["model_attempt"], "NVIDIA (coding-model)")
         self.assertIsNone(attempted.get("model_used"))
@@ -100,7 +100,7 @@ class BackgroundJobTrackingTests(unittest.TestCase):
                          "Gemini (flash)")
 
     def test_cancel_command_reaches_running_code_agent(self):
-        from core import jarvis_agent
+        from core import aether_agent
         self._new()
         self.assertTrue(dev_agent._job_lock.acquire(blocking=False))
         try:
@@ -108,16 +108,16 @@ class BackgroundJobTrackingTests(unittest.TestCase):
                  mock.patch("core.jobs.cancel", return_value=[]):
                 message = job_control.run({"action": "cancel", "which": "kod ajanı"})
             self.assertIn("iptal isteği gönderildi", message)
-            self.assertTrue(jarvis_agent.cancel_requested())
+            self.assertTrue(aether_agent.cancel_requested())
             snapshot = dev_agent._job_snapshot()
             self.assertEqual(snapshot["status"], "cancelling")
             self.assertIsNone(snapshot["finished"])
         finally:
             dev_agent._job_lock.release()
-            jarvis_agent.reset_cancel()
+            aether_agent.reset_cancel()
 
     def test_cancel_does_not_claim_worker_has_stopped(self):
-        from core import jarvis_agent
+        from core import aether_agent
         self._new()
         self.assertTrue(dev_agent._job_lock.acquire(blocking=False))
         try:
@@ -126,7 +126,7 @@ class BackgroundJobTrackingTests(unittest.TestCase):
             self.assertIsNone(dev_agent._job_snapshot()["finished"])
         finally:
             dev_agent._job_lock.release()
-            jarvis_agent.reset_cancel()
+            aether_agent.reset_cancel()
 
     def test_job_control_list_includes_running_code_agent(self):
         self._new()

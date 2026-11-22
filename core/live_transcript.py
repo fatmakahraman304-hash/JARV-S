@@ -32,7 +32,7 @@ def merge_input_chunk(chunks: list[str], text: str) -> list[str]:
     current_words = _tokens(current)
     previous_words = _tokens(out[-1])
 
-    # "MAYK" gibi tek kelimelik bir kısmi dökümün ardından tüm cümle
+    # "AETHER" gibi tek kelimelik bir kısmi dökümün ardından tüm cümle
     # gelirse adı iki defa yazma. "evet, evet" gibi doğal tekrarları koru.
     if (len(current_words) == 1 and len(incoming_words) > 1
             and incoming_words[0] == current_words[0]

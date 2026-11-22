@@ -1456,12 +1456,12 @@ S.name = "AETHER";
   async function sendLanCommand(kind, arg, extra = {}) {
     const link = parseLanUrl(S.lanRemote);
     if (!link) return 'Yerel projeksiyon bağlantısı kaydedilmemiş.';
-    if (!window.MAYKRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. AETHER sayfasını güncelle.';
+    if (!window.AETHERRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. AETHER sayfasını güncelle.';
     // Unlike a local http:// fetch or a popup, this uses an encrypted HTTPS
     // channel and preserves the exact existing AETHER UI and voice session.
     const result = $('rm-lan-result');
     if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
-    const reply = await window.MAYKRelay.send(link, kind, arg, { where: extra.where || 'youtube' });
+    const reply = await window.AETHERRelay.send(link, kind, arg, { where: extra.where || 'youtube' });
     if (result) { result.textContent = '📽️ ' + reply; result.hidden = false; }
     const failed = /(?:yanıt vermedi|başarısız|kurulamadı|desteklenmiyor|geçersiz)/i.test(reply);
     $('rm-lan-state').textContent = failed

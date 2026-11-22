@@ -1,4 +1,4 @@
-# ── MAYK — what never belongs in the repository ──────────────────────────
+# ── AETHER — what never belongs in the repository ──────────────────────────
 # Everything listed here is created by the app on first run. A fresh clone with
 # none of it present boots straight to the setup screen, which is the intended
 # first experience — so nothing here needs to be committed, and some of it must
@@ -26,7 +26,7 @@ memory/*.db-*
 /config/night_shift_report.*
 /reports/
 /uploads/
-/.jarvis_backup/
+/.aether_backup/
 
 # ── Python build noise ────────────────────────────────────────────────────────
 __pycache__/
@@ -59,12 +59,12 @@ downloads/
 screenshots/
 
 # Local updater transaction metadata and recovery copies
-.jarvis-update*
-.jarvis-backups/
-*.jarvis-new
+.aether-update*
+.aether-backups/
+*.aether-new
 /config/coding_cooldown.json
 /config/device_id
-/config/jarvis_kurulum_qr.png
+/config/aether_kurulum_qr.png
 /config/shared_reminders.json
 /tools/platform-tools/
 /config/android_devices.json

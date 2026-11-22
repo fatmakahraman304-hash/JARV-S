@@ -1,4 +1,4 @@
-"""Web MAYK device modules (web/devkit.js, web/dev-*.js).
+"""Web AETHER device modules (web/devkit.js, web/dev-*.js).
 
 devkit.js is pure, so its helpers run under Node here; the device modules are
 checked for syntax and wiring. Skipped where Node is not installed.
@@ -49,7 +49,7 @@ class WiringTests(unittest.TestCase):
                 self.assertLess(scripts.index("dev-common.js"), scripts.index(f.name))
 
     def test_modules_use_only_the_public_api(self):
-        api = re.search(r"window\.JARVIS = \{(.*?)\n  \};", self.app, re.S).group(1)
+        api = re.search(r"window\.AETHER = \{(.*?)\n  \};", self.app, re.S).group(1)
         common = (WEB / "dev-common.js").read_text(encoding="utf-8")
         added = set(re.findall(r"\bJ\.(\w+) =", common))
         for f in sorted(WEB.glob("dev-*.js")):

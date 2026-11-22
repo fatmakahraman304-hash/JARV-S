@@ -18,7 +18,7 @@ class BookPanelKeyTests(unittest.TestCase):
         # for example one made by another test module, and creates one only
         # when there is none. It never makes a second instance. This is the
         # same pattern as tests/test_location_map.py.
-        cls.app = QApplication.instance() or QApplication(['jarvis-book-test'])
+        cls.app = QApplication.instance() or QApplication(['aether-book-test'])
 
     def make_panel(self, count):
         panel = BookPanel()

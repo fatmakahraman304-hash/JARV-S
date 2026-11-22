@@ -7,23 +7,23 @@ import time
 import unittest
 from pathlib import Path
 
-from core import agent_process, jarvis_agent
+from core import agent_process, aether_agent
 
 
 class AgentProcessTests(unittest.TestCase):
     def tearDown(self):
-        jarvis_agent.reset_cancel()
+        aether_agent.reset_cancel()
 
     def test_running_python_test_can_be_cancelled(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "slow.py").write_text("import time\ntime.sleep(15)\n")
-            ws = jarvis_agent.Workspace(root, log=lambda _: None)
-            timer = threading.Timer(.30, jarvis_agent.request_cancel)
+            ws = aether_agent.Workspace(root, log=lambda _: None)
+            timer = threading.Timer(.30, aether_agent.request_cancel)
             started = time.monotonic()
             timer.start()
             try:
-                with self.assertRaises(jarvis_agent.AgentCancelled):
+                with self.assertRaises(aether_agent.AgentCancelled):
                     ws.t_run("python slow.py", timeout=25)
             finally:
                 timer.join(timeout=2)
@@ -73,13 +73,13 @@ class AgentProcessTests(unittest.TestCase):
                 "subprocess.Popen([sys.executable,'child.py'])\n"
                 "time.sleep(15)\n"
             )
-            timer = threading.Timer(.3, jarvis_agent.request_cancel)
+            timer = threading.Timer(.3, aether_agent.request_cancel)
             timer.start()
             try:
-                with self.assertRaises(jarvis_agent.AgentCancelled):
+                with self.assertRaises(aether_agent.AgentCancelled):
                     agent_process.execute(
                         [sys.executable, "parent.py"], root, timeout=20,
-                        cancel_check=jarvis_agent._check_cancel,
+                        cancel_check=aether_agent._check_cancel,
                     )
             finally:
                 timer.join(timeout=2)

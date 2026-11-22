@@ -1,1 +1,1 @@
-"""MAYK test suite."""
+"""AETHER test suite."""

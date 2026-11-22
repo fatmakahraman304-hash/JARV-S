@@ -1,7 +1,7 @@
 # Kalıcı hafıza ve uygulama geliştirme
 
 Konuşma kayıtları ve uygulama işlerinin sonuçları Windows'ta
-`%LOCALAPPDATA%/JarvisMurat/continuity.sqlite3` içinde tutulur. Bilgi hafızası
+`%LOCALAPPDATA%/AetherMurat/continuity.sqlite3` içinde tutulur. Bilgi hafızası
 aynı dizindeki `long_term.json` dosyasında saklanır; eski kurulumdaki dosya ilk
 kullanımda kopyalanır, aslı silinmez. Güncelleyici bu dizini değiştirmez.
 Kayıtlar yereldir; son konuşma bölümü model bağlamına eklenir, eski konuşmalar
@@ -20,7 +20,7 @@ Bilgisayar kapanırsa iş 'yarıda kaldı' olur; dış uygulama eylemleri tekrar
 Uygulamaların sunduğu işlemler ve gereken izinler değişir. Kod testleri,
 gerçek Windows uygulamasında yapılan denemenin yerini tutmaz.
 
-Windows kabul denemesi: kısa bir konuşma yap, MAYK'ı kapatıp yeniden aç;
+Windows kabul denemesi: kısa bir konuşma yap, AETHER'ı kapatıp yeniden aç;
 Nerede kaldık panelini ve hafıza sorgusunu kontrol et. Güncellemeden sonra
 aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama seç,
 önce otomatik yayını kapatarak araştırma ve geliştirme sonuçlarını incele.
@@ -31,7 +31,7 @@ aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama
 Ayarlar → Uygulamalar → WhatsApp Business → Ayarla. Twilio WhatsApp
 Business göndericisinin numarasını, Auth Token'ı ve dışarıdan erişilebilen
 HTTPS alan adını gir. HTTPS'te yalnızca aşağıdaki iki webhook yolunu,
-MAYK'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
+AETHER'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
 
 - Twilio göndericisinin gelen mesaj webhook'u **POST `/whatsapp/message`**
   olmalı. WhatsApp Sandbox üzerinden mesaj akışı da denenebilir.
@@ -40,10 +40,10 @@ MAYK'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
   olmalı. Proxy, sesli konuşma sırasındaki `?turn=` sorgusunu korumalı.
 
 Mesaj ve arama için ayrı açma/kapama seçenekleri var. Mesajlara tanımladığın
-metin döner. Aramalarda MAYK kendini otomatik asistan olarak tanıtır ve
+metin döner. Aramalarda AETHER kendini otomatik asistan olarak tanıtır ve
 sık sorulan sorular alanındaki anahtar kelimelerle eşleşen cevapları Türkçe
 okur. Örnek kural `çalışma saatleri = Hafta içi 9–18.`. Arama sesi Twilio
-tarafında işlenir. MAYK arama transkriptini diske yazmaz. MAYK ve HTTPS
+tarafında işlenir. AETHER arama transkriptini diske yazmaz. AETHER ve HTTPS
 bağlantısı açık olduğu sürece çalışır. Bu bağlantı Twilio'ya kayıtlı Business
 numarası içindir. Yerel dinleyicinin açılması dış bağlantının kurulduğunu
 belirtmez. Gerçek telefondan önce mesaj, ardından sesli arama yaparak doğrula.

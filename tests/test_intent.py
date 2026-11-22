@@ -10,7 +10,7 @@ CASES = {
     "Blender'ı kur": "task", "duvar yap": "task", "Blender'da ahşap bir masa yap": "task", "onu iki kat büyüt": "task",
     "şunu kırmızı yap": "task", "geri al": "task", "make it red": "task",
     "Blender'da bevel nasıl yapılır?": "how", "geometri düğümleri nedir?": "how", "how do I add a light?": "how",
-    "ileride ev istesem nasıl yapacak acaba": "hypothetical", "şimdi jarvis duvar yap desem yapar": "hypothetical",
+    "ileride ev istesem nasıl yapacak acaba": "hypothetical", "şimdi aether duvar yap desem yapar": "hypothetical",
     "apartman yapabilir mi?": "hypothetical",
     "beğenmedim": "feedback", "olmamış": "feedback", "güzel olmuş": "feedback",
     "Blender'da masa yapar mısın?": "task", "Blender'ı kurabilir misin?": "task", "lütfen pencere ekle": "task",

@@ -1,10 +1,10 @@
 """
-Televizyon ekranı — MAYK'ın TV'ye bir şey göstermesi.
+Televizyon ekranı — AETHER'ın TV'ye bir şey göstermesi.
 
-TV, tarayıcısında MAYK'ın /tv sayfasını açmış ve telefondan eşlenmiş bir
+TV, tarayıcısında AETHER'ın /tv sayfasını açmış ve telefondan eşlenmiş bir
 ekrandır (ya da bilgisayara HDMI ile bağlı televizyon). Bu araç oraya YouTube
 videosu, web sayfası, resim ya da yazı gönderir, ekranı kapatır, ya da
-bilgisayarın kendi TV'sinde MAYK ekranını açar.
+bilgisayarın kendi TV'sinde AETHER ekranını açar.
 """
 
 import threading
@@ -12,12 +12,12 @@ import threading
 PLUGIN = {
     "name": "tv_screen",
     "description": (
-        "Show something on the TV / big screen paired with MAYK: play a YouTube "
+        "Show something on the TV / big screen paired with AETHER: play a YouTube "
         "video ('televizyonda X videosunu aç', 'TV'de şarkı aç'), open a web page, "
-        "show a picture or a text, close what is on the TV, or open the MAYK "
-        "screen on the TV plugged into this computer ('TV ekranını aç', 'MAYK'ı "
+        "show a picture or a text, close what is on the TV, or open the AETHER "
+        "screen on the TV plugged into this computer ('TV ekranını aç', 'AETHER'ı "
         "televizyona yansıt'). Use this only for the TV; for playing a video in "
-        "MAYK's own window use the normal video tools."
+        "AETHER's own window use the normal video tools."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -59,7 +59,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         value = str((parameters or {}).get("value") or "").strip()
         srv = _server()
         if srv is None:
-            return "Telefon ve TV bağlantısı şu an kapalı; MAYK'ı yeniden başlatmayı dene."
+            return "Telefon ve TV bağlantısı şu an kapalı; AETHER'ı yeniden başlatmayı dene."
 
         if action in ("open_screen", "open", "screen"):
             def _open():
@@ -69,7 +69,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 ok, msg = remote_control.open_screen_page(f"{scheme}://127.0.0.1:{port}/tv?local=1")
                 _log(player, msg)
             threading.Thread(target=_open, daemon=True, name="tv-open").start()
-            return "MAYK ekranını televizyonda açıyorum."
+            return "AETHER ekranını televizyonda açıyorum."
 
         if action in ("clear", "close", "kapat", "home"):
             return srv.send_to_screen("home")

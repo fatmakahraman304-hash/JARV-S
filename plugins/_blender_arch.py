@@ -1,4 +1,4 @@
-"""MAYK's architecture engine — loaded inside Blender after _blender_kit.py
+"""AETHER's architecture engine — loaded inside Blender after _blender_kit.py
 (it uses box(), assign(), the materials …). The model describes a building as
 a plan (a dict); this file turns the plan into exact geometry, so walls meet,
 slabs sit on walls, windows and doors are real holes with frames and glass,
@@ -590,7 +590,7 @@ def building(plan):
         try:
             exec(compile(code, f"ek: {ex.get('name', 'ek')}", "exec"), globals())
         except Exception as exc:
-            raise RuntimeError(f"JARVIS_EXTRA_FAILED::{ex.get('name', 'ek')}::{type(exc).__name__}: {exc}") from exc
+            raise RuntimeError(f"AETHER_EXTRA_FAILED::{ex.get('name', 'ek')}::{type(exc).__name__}: {exc}") from exc
     bpy.context.view_layer.update()
     root = bpy.data.objects.new(name, None)
     bpy.context.scene.collection.objects.link(root)
@@ -600,7 +600,7 @@ def building(plan):
 def outdoor(target=None, samples=128, yaw=-32.0, pitch=10.0):
     """Grass site, sun and sky for buildings, and an architectural camera (35 mm)."""
     scene = bpy.context.scene
-    objs = [o for o in scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("jarvis_floor")]
+    objs = [o for o in scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("aether_floor")]
     span = max((size(o).length for o in objs), default=10.0)
     bm = bmesh.new()
     bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=span * 6)
@@ -609,7 +609,7 @@ def outdoor(target=None, samples=128, yaw=-32.0, pitch=10.0):
     bm.free()
     site = bpy.data.objects.new("Arazi", me)
     scene.collection.objects.link(site)
-    site["jarvis_floor"] = True
+    site["aether_floor"] = True
     site.location.z = -0.001
     mat, nt, bsdf = _principled("Çim")
     noise = nt.nodes.new("ShaderNodeTexNoise")

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MAYK Alıcı</string>
-    <string name="a11y_label">MAYK Alıcı — kumanda tuşları, yazı ve ekran görüntüsü</string>
-    <string name="a11y_desc">Telefondaki MAYK projeksiyonu kontrol edebilsin diye: kumanda tuşlarını basar, kutulara yazı yazar ve ekranın görüntüsünü alır.</string>
+    <string name="app_name">AETHER Alıcı</string>
+    <string name="a11y_label">AETHER Alıcı — kumanda tuşları, yazı ve ekran görüntüsü</string>
+    <string name="a11y_desc">Telefondaki AETHER projeksiyonu kontrol edebilsin diye: kumanda tuşlarını basar, kutulara yazı yazar ve ekranın görüntüsünü alır.</string>
 </resources>

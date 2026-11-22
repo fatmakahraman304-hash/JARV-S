@@ -49,7 +49,7 @@ class SettingsPage(QDialog):
     def __init__(self, owner):
         super().__init__(owner)
         from memory import config_manager as cfg
-        self.setWindowTitle('M.A.Y.K — Ayarlar')
+        self.setWindowTitle('AETHER — Ayarlar')
         available = self.screen().availableGeometry()
         self.resize(min(980, available.width()-80), min(650, available.height()-100))
         self.setFont(px_font(13))
@@ -75,7 +75,7 @@ class SettingsPage(QDialog):
         root.setSpacing(22)
         top = QHBoxLayout()
         heading = QVBoxLayout()
-        brand = QLabel('M.A.Y.K  /  KONTROL MERKEZİ')
+        brand = QLabel('AETHER  /  KONTROL MERKEZİ')
         brand.setFont(px_font(10, spacing=2))
         brand.setStyleSheet(f'color: {C.PRI};')
         heading.addWidget(brand)
@@ -193,18 +193,18 @@ class SettingsPage(QDialog):
             button.clicked.connect(open_panel)
             card(rows, title, detail).addWidget(button)
         general = page('Genel', 'Başlangıç ve günlük kullanım tercihlerin.')
-        update_row = card(general, 'MAYK güncellemesi', 'GitHub’daki yeni sürümü kontrol et ve yükle.')
+        update_row = card(general, 'AETHER güncellemesi', 'GitHub’daki yeni sürümü kontrol et ve yükle.')
         update_row.addWidget(owner._build_update_button())
-        switch(general, 'Windows ile başlat', 'Bilgisayar açıldığında MAYK hazır olsun.', owner._check_autostart, owner._toggle_autostart)
+        switch(general, 'Windows ile başlat', 'Bilgisayar açıldığında AETHER hazır olsun.', owner._check_autostart, owner._toggle_autostart)
         switch(general, 'Günlük özet', 'Günlük bilgilendirme rutinini etkinleştir.', cfg.get_brief_enabled, owner._toggle_brief)
-        action(general, 'Masaüstü kısayolu', 'MAYK’a masaüstünden hızlı eriş.', owner._create_desktop_shortcut)
+        action(general, 'Masaüstü kısayolu', 'AETHER’a masaüstünden hızlı eriş.', owner._create_desktop_shortcut)
         voice = page('Ses ve mikrofon', 'Dinleme şeklini ve ses cihazlarını yönet.')
-        switch(voice, 'Uyandırma kelimesi', '“Hey MAYK” diyerek uyandır. İlk kullanımda çevrimdışı ses modeli indirilir.', lambda: owner._wake_state().get('enabled', False), owner._toggle_wake_word,
+        switch(voice, 'Uyandırma kelimesi', '“Hey AETHER” diyerek uyandır. İlk kullanımda çevrimdışı ses modeli indirilir.', lambda: owner._wake_state().get('enabled', False), owner._toggle_wake_word,
                feedback=lambda: (owner._wake_busy, owner._wake_feedback))
         switch(voice, 'Basılı tutarak konuş', 'Yalnızca konuşma tuşunu basılı tutarken dinle.', cfg.get_push_to_talk_enabled, owner._toggle_ptt)
         action(voice, 'Ses cihazları', 'Mikrofon ve hoparlör seçimini değiştir.', owner._open_audio_devices)
         action(voice, 'Uyut / uyandır', 'Geçerli dinleme durumunu değiştir.', owner._tap_wake_manual)
-        look = page('Görünüm', 'MAYK’ın görünümünü kendine göre düzenle.')
+        look = page('Görünüm', 'AETHER’ın görünümünü kendine göre düzenle.')
         switch(look, 'Tam ekran', 'Arayüzü ekranın tamamında göster.', owner.isFullScreen, owner._toggle_fullscreen)
         action(look, 'Kişiselleştirme', 'Renkleri ve asistan kimliğini düzenle.', owner._open_customize)
         action(look, 'Merkez görünümü', 'CORE ile animasyonlu yüz arasında geçiş yap.', owner._toggle_hud_style)
@@ -243,10 +243,10 @@ class SettingsPage(QDialog):
                 app_state.setText(f'Kayıt okunamadı: {exc}')
         def learn_app():
             from plugins.application_learning import run
-            # Route output through the existing thread-safe MaykUI bridge.
+            # Route output through the existing thread-safe AetherUI bridge.
             player = getattr(owner, '_application_player', None)
             if player is None:
-                app_state.setText('MAYK başlatılınca tekrar dene.')
+                app_state.setText('AETHER başlatılınca tekrar dene.')
                 return
             app_state.setText(run({'action': 'learn', 'name': app_name.text(),
                                   'goal': app_goal.text(), 'publish': auto_publish.isChecked()}, player=player))

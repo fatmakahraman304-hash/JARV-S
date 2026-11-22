@@ -1,4 +1,4 @@
-"""MAYK Alıcı (android-receiver/): the files it shares with the other
+"""AETHER Alıcı (android-receiver/): the files it shares with the other
 devices must match what web/app.js and core/sync_hub.py use."""
 import re
 import unittest
@@ -11,7 +11,7 @@ SRC = ROOT / "android-receiver" / "app" / "src" / "main"
 
 class AliciTest(unittest.TestCase):
     def java(self, name):
-        return (SRC / "java" / "com" / "jarvis" / "alici" / name).read_text(encoding="utf-8")
+        return (SRC / "java" / "com" / "aether" / "alici" / name).read_text(encoding="utf-8")
 
     def test_same_files_and_commands_as_the_web(self):
         svc = self.java("ReceiverService.java")
@@ -20,11 +20,11 @@ class AliciTest(unittest.TestCase):
         self.assertIn('.put("kind", "receiver")', svc)
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         ops = set(re.findall(r'case "(\w+)":', svc))
-        for op in ("key", "app", "url", "search", "type", "look", "wifi", "jarvis"):
+        for op in ("key", "app", "url", "search", "type", "look", "wifi", "aether"):
             self.assertIn(op, ops)
         self.assertIn("sendToReceiver(rx, { op", js)
-        self.assertIn("jarvisalici://setup?s=", js)
-        self.assertIn('android:scheme="jarvisalici"', (SRC / "AndroidManifest.xml").read_text(encoding="utf-8"))
+        self.assertIn("aetheralici://setup?s=", js)
+        self.assertIn('android:scheme="aetheralici"', (SRC / "AndroidManifest.xml").read_text(encoding="utf-8"))
 
     def test_receivers_are_not_normal_targets(self):
         from core import sync_hub
@@ -34,8 +34,8 @@ class AliciTest(unittest.TestCase):
 
     def test_build_is_published(self):
         wf = (ROOT / ".github" / "workflows" / "android-receiver.yml").read_text(encoding="utf-8")
-        self.assertIn("gh release upload alici out/jarvis-alici.apk", wf)
-        self.assertTrue((ROOT / "android-receiver" / "app" / "jarvis-alici.jks").is_file())
+        self.assertIn("gh release upload alici out/aether-alici.apk", wf)
+        self.assertTrue((ROOT / "android-receiver" / "app" / "aether-alici.jks").is_file())
 
 
 if __name__ == "__main__":

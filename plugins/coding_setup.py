@@ -1,11 +1,11 @@
-"""MAYK kodlama model kontrolü: NVIDIA Build → Gemini."""
+"""AETHER kodlama model kontrolü: NVIDIA Build → Gemini."""
 
 from core import coding_router
 
 PLUGIN = {
     "name": "coding_setup",
     "description": (
-        "MAYK kodlama modellerini Türkçe kontrol et. Öncelik NVIDIA Build'dir, "
+        "AETHER kodlama modellerini Türkçe kontrol et. Öncelik NVIDIA Build'dir, "
         "NVIDIA kullanılamazsa Gemini'ye geçilir. "
         "'Kodlama durumunu kontrol et', 'NVIDIA API durumunu kontrol et', "
         "'kodlama sırasını göster', 'NVIDIA modelini değiştir' komutları. "

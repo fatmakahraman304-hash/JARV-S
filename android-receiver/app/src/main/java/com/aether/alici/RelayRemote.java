@@ -1,4 +1,4 @@
-package com.jarvis.alici;
+package com.aether.alici;
 
 import android.content.Context;
 import android.util.Base64;
@@ -21,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Encrypted HTTPS bridge for the HTTPS MAYK web UI.
+ * Encrypted HTTPS bridge for the HTTPS AETHER web UI.
  *
  * ntfy.sh only relays opaque AES-256-GCM messages under unguessable topics.
  * The receiver's existing private LAN capability token is never uploaded.
@@ -58,7 +58,7 @@ final class RelayRemote {
 
     private SecretKeySpec key() throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(("mayk-v1-key:" + secret).getBytes(StandardCharsets.UTF_8));
+                .digest(("aether-v1-key:" + secret).getBytes(StandardCharsets.UTF_8));
         return new SecretKeySpec(digest, "AES");
     }
 
@@ -91,14 +91,14 @@ final class RelayRemote {
             return;
         }
         try {
-            inboundTopic = "mayk-" + digestHex("mayk-v1-cmd:" + secret).substring(0, 40);
-            outboundTopic = "mayk-" + digestHex("mayk-v1-res:" + secret).substring(0, 40);
+            inboundTopic = "aether-" + digestHex("aether-v1-cmd:" + secret).substring(0, 40);
+            outboundTopic = "aether-" + digestHex("aether-v1-res:" + secret).substring(0, 40);
         } catch (Exception e) {
             status = "kriptografi hatası";
             return;
         }
         running = true;
-        worker = new Thread(this::loop, "mayk-https-relay");
+        worker = new Thread(this::loop, "aether-https-relay");
         worker.start();
     }
 
@@ -138,13 +138,13 @@ final class RelayRemote {
                         String eventId = event.optString("id", "");
                         if (!eventId.isEmpty()) lastEventId = eventId;
                         try { process(event.optString("message", "")); }
-                        catch (Exception bad) { Log.w("MAYK-Relay", "Rejected invalid relay event", bad); }
+                        catch (Exception bad) { Log.w("AETHER-Relay", "Rejected invalid relay event", bad); }
                     }
                 } finally { con.disconnect(); current = null; }
             } catch (Exception error) {
                 if (!running) break;
                 status = "HTTPS bağlantı hatası: " + String.valueOf(error.getMessage());
-                Log.w("MAYK-Relay", "Reconnecting", error);
+                Log.w("AETHER-Relay", "Reconnecting", error);
                 backoff = Math.min(backoff * 2, 60000);
             }
             if (!running) break;

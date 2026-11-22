@@ -1,5 +1,5 @@
 """
-Text-to-Speech engines for MAYK.
+Text-to-Speech engines for AETHER.
 
 EdgeTTS     – free Microsoft TTS (internet required, no API key)
 Kokoro      – fully offline neural TTS (~330 MB model)

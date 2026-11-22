@@ -81,7 +81,7 @@ class ComposioTests(_Setup, unittest.TestCase):
         self.assertEqual(len(sessions), 1)                       # reused
         self.assertEqual(sessions[0][4]["x-api-key"], "k123")
         uid = sessions[0][2]["user_id"]
-        self.assertTrue(uid.startswith("jarvis-"))
+        self.assertTrue(uid.startswith("aether-"))
         self.assertEqual(self.c.user_id(), uid)                  # stable
         from core import activity
         self.assertIn("gmail", activity.connected())

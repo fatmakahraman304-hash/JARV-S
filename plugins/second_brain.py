@@ -1,7 +1,7 @@
-"""Voice entry into MAYK's local improvement notebook."""
+"""Voice entry into AETHER's local improvement notebook."""
 PLUGIN = {
     "name": "second_brain",
-    "description": "Open the İkinci Beyin improvement panel or save the user's explicit MAYK improvement idea. The panel monitors local code-job failures and lets the user select isolated code development.",
+    "description": "Open the İkinci Beyin improvement panel or save the user's explicit AETHER improvement idea. The panel monitors local code-job failures and lets the user select isolated code development.",
     "parameters": {"type": "OBJECT", "properties": {
         "action": {"type": "STRING", "enum": ["open", "add"]},
         "idea": {"type": "STRING"}}, "required": ["action"]}
@@ -22,6 +22,6 @@ def run(parameters, player=None, session_memory=None):
         if callable(show):
             show()
             return message
-        return message if parameters.get("action") == "add" else "İkinci Beyin paneli için MAYK masaüstü arayüzünü açın."
+        return message if parameters.get("action") == "add" else "İkinci Beyin paneli için AETHER masaüstü arayüzünü açın."
     except Exception as exc:
         return f"İkinci Beyin işlemi tamamlanamadı: {exc}"

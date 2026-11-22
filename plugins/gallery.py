@@ -44,7 +44,7 @@ def _pick(items: list[dict], number, query: str) -> dict | None:
 def _show(g: dict, player) -> None:
     try:
         from core import image_studio
-        req = urllib.request.Request(g["url"], headers={"User-Agent": "JARVIS/1.0"})
+        req = urllib.request.Request(g["url"], headers={"User-Agent": "AETHER/1.0"})
         with urllib.request.urlopen(req, timeout=150) as r:
             data = r.read()
         path = image_studio.out_dir() / f"{time.strftime('%Y%m%d-%H%M%S')}_galeri.jpg"
@@ -56,7 +56,7 @@ def _show(g: dict, player) -> None:
     except Exception as exc:
         if player:
             try:
-                player.write_log(f"MAYK: Galerideki resim açılamadı: {exc}")
+                player.write_log(f"AETHER: Galerideki resim açılamadı: {exc}")
             except Exception:
                 pass
 

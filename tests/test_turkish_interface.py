@@ -1,4 +1,4 @@
-"""MAYK Türkçe masaüstü arayüzü ve pano hızlı işlemleri."""
+"""AETHER Türkçe masaüstü arayüzü ve pano hızlı işlemleri."""
 
 import ast
 import os
@@ -52,9 +52,9 @@ assert any('PANODAKİ METİN ALGILANDI' in l.text() for l in panel.findChildren(
 messages = []
 panel.action_requested.connect(messages.append)
 for label in ('ÇEVİR', 'ÖZETLE', 'AÇIKLA', 'DÜZELT'):
-    panel.show_clipboard('Hello world from MAYK')
+    panel.show_clipboard('Hello world from AETHER')
     buttons[label].click()
-    assert messages and 'Hello world from MAYK' in messages[-1], label
+    assert messages and 'Hello world from AETHER' in messages[-1], label
     assert any(x in messages[-1] for x in ('Türkçeye', 'Türkçe', 'dil bilgisi')), messages[-1]
 assert 'İngilizceye çevir' not in messages[0]
 panel.close()

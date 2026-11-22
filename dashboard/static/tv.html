@@ -100,8 +100,8 @@
   <script src="/assets/reactor.js"></script>
   <script>
     const qs = new URLSearchParams(location.search);
-    let token = localStorage.getItem('jarvis_screen_token') || '';
-    let screenId = localStorage.getItem('jarvis_screen_id') || '';
+    let token = localStorage.getItem('aether_screen_token') || '';
+    let screenId = localStorage.getItem('aether_screen_id') || '';
     const $ = id => document.getElementById(id);
     const STATES = {
       idle: ['Hazır', 'Komut bekleniyor.'], thinking: ['Düşünüyor...', 'Komut bağlamı analiz ediliyor.'],
@@ -173,9 +173,9 @@
     }
     function saveToken(id, tok) {
       screenId = id; token = tok;
-      localStorage.setItem('jarvis_screen_id', id); localStorage.setItem('jarvis_screen_token', tok);
+      localStorage.setItem('aether_screen_id', id); localStorage.setItem('aether_screen_token', tok);
     }
-    function forget() { localStorage.removeItem('jarvis_screen_token'); localStorage.removeItem('jarvis_screen_id'); token = ''; }
+    function forget() { localStorage.removeItem('aether_screen_token'); localStorage.removeItem('aether_screen_id'); token = ''; }
 
     // devices
     const ICON = { desktop: '🖥️', laptop: '💻', tv: '📺' };

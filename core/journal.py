@@ -1,5 +1,5 @@
 """
-MAYK's work journal — what it actually did, day by day, kept on disk.
+AETHER's work journal — what it actually did, day by day, kept on disk.
 
 The Control Centre's activity log lives only for one run. This keeps the gist
 of every finished tool call (which tool, whether it worked, a short line) in one

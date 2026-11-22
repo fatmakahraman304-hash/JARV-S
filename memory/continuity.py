@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 def data_dir():
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "JarvisMurat"
+    return (Path(base) if base else Path.home() / ".local" / "share") / "AetherMurat"
 
 
 _setup_lock = threading.Lock()
@@ -189,7 +189,7 @@ def recover_jobs():
         db.execute("UPDATE projects SET status=?, updated=? WHERE status=?",
                    ("yarıda kaldı", datetime.now(timezone.utc).isoformat(), "çalışıyor"))
         db.execute("UPDATE applications SET status=?,detail=detail || ? WHERE status IN (?,?)",
-                   ("yarıda kaldı", "\nJARVIS kapandı. Yeniden başlatmak için Uygulamalar ekranını kullan.",
+                   ("yarıda kaldı", "\nAETHER kapandı. Yeniden başlatmak için Uygulamalar ekranını kullan.",
                     "araştırılıyor", "geliştiriliyor"))
 
 
@@ -274,7 +274,7 @@ def _copy_database(source, destination):
                     ("projects", "id,kind,title,folder,instruction,status,stage,stages,note,started,updated"),
                 ):
                     if table not in tables:
-                        raise ValueError(f"MAYK tablosu eksik: {table}")
+                        raise ValueError(f"AETHER tablosu eksik: {table}")
                     writer.execute(f"SELECT {columns} FROM {table} LIMIT 0")
         snapshot.chmod(0o600)
         # Atomic no-clobber publish on NTFS and POSIX. A concurrent restore
@@ -284,12 +284,12 @@ def _copy_database(source, destination):
 
 
 def backup_history(destination):
-    """Include committed WAL pages even while MAYK is writing new events."""
+    """Include committed WAL pages even while AETHER is writing new events."""
     return _copy_database(data_dir() / "continuity.sqlite3", destination)
 
 
 def restore_history(source):
-    """Restore into an empty data location while MAYK is closed."""
+    """Restore into an empty data location while AETHER is closed."""
     target = data_dir() / "continuity.sqlite3"
     if any(Path(str(target) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
         raise FileExistsError("Önceki SQLite işlem dosyaları korunuyor. Boş bir veri klasörü kullanın.")
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     if sys.stdout is not None and not sys.stdout.isatty():
         sys.stdout.reconfigure(encoding="utf-8")
     import argparse
-    parser = argparse.ArgumentParser(description="MAYK konuşma ve görev geçmişini yedekle veya geri yükle.")
+    parser = argparse.ArgumentParser(description="AETHER konuşma ve görev geçmişini yedekle veya geri yükle.")
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--backup", type=Path, metavar="HEDEF")
     actions.add_argument("--restore", type=Path, metavar="YEDEK")

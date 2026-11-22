@@ -1,4 +1,4 @@
-"""MAYK's Blender toolkit — loaded inside Blender before every script MAYK
+"""AETHER's Blender toolkit — loaded inside Blender before every script AETHER
 writes, so a script can say `wood("Ceviz")` or `place_on(leg, floor)` instead of
 fighting node trees and bounding boxes. Everything here uses real metres.
 
@@ -395,7 +395,7 @@ def group(name, objs):
 # ── studio ───────────────────────────────────────────────────────────────────
 
 def _meshes():
-    return [o for o in bpy.context.scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("jarvis_floor")]
+    return [o for o in bpy.context.scene.objects if o.type in ("MESH", "CURVE", "FONT") and not o.get("aether_floor")]
 
 
 def frame_camera(objs=None, yaw=-35.0, pitch=18.0, lens=60.0, margin=1.08):
@@ -443,7 +443,7 @@ def studio(target=None, floor=True, samples=128):
         bm = bmesh.new()
         bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=s * 20)
         fl = _mesh_obj("Zemin", bm)
-        fl["jarvis_floor"] = True
+        fl["aether_floor"] = True
         fl.location.z = min(lo.z, 0.0)
         fl.data.materials.append(plastic("Zemin", (0.16, 0.155, 0.15), 0.55))
     for name, loc, power, sz in (("Ana ışık", (-1.6, -1.4, 1.9), 110, 1.4), ("Dolgu", (1.9, -1.0, 0.9), 30, 2.0),

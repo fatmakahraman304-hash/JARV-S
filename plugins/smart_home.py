@@ -1,9 +1,9 @@
 """
-Smart home through Home Assistant — "MAYK, salonun ışığını aç", "klimayı 22 dereceye ayarla",
+Smart home through Home Assistant — "AETHER, salonun ışığını aç", "klimayı 22 dereceye ayarla",
 "film sahnesini başlat", "kapı kilitli mi?".
 
 Home Assistant is the hub most smart devices already talk to (Hue, Tuya, Xiaomi, Shelly,
-Sonoff, TVs, thermostats …), so one connection covers them all. MAYK uses its REST API
+Sonoff, TVs, thermostats …), so one connection covers them all. AETHER uses its REST API
 with a long-lived access token the user creates in Home Assistant (Profile → Security →
 Long-lived access tokens). Both are stored through memory/config_manager like every other
 setting; nothing leaves the home network.
@@ -243,7 +243,7 @@ def _service_for(action: str, dom: str, params: dict) -> tuple[str, str, dict]:
 
 
 # ── later: "yarım saat sonra ışıkları kapat" ─────────────────────────────────
-# Kept on disk and run by MAYK's background loop (main._watch_sentinel → run_due_timers),
+# Kept on disk and run by AETHER's background loop (main._watch_sentinel → run_due_timers),
 # so a restart in between does not lose them.
 
 def _timers_path():
@@ -318,8 +318,8 @@ def run_due_timers(now: float | None = None) -> list[str]:
     out = []
     for t in due:
         if now - float(t.get("at", 0)) > TIMER_GRACE:
-            # MAYK was off at that time: switching lights at a random later hour helps nobody
-            out.append(f"Skipped (missed by {int((now - float(t['at'])) // 60)} min while MAYK was off): "
+            # AETHER was off at that time: switching lights at a random later hour helps nobody
+            out.append(f"Skipped (missed by {int((now - float(t['at'])) // 60)} min while AETHER was off): "
                        f"{t['params'].get('action')} {t['params'].get('target', '')}")
             continue
         params = dict(t.get("params") or {})

@@ -10,7 +10,7 @@ raises, so it can be called from the voice loop, a tool thread or a plugin
 without anyone needing to guard it.
 
 Nodes are a fixed catalogue so the network keeps its shape: five inner
-capabilities around the core, and the apps and tools MAYK actually drives on
+capabilities around the core, and the apps and tools AETHER actually drives on
 the outer ring. A node lights up and counts once something in this session has
 gone through it — the count is real activity, never decoration.
 """

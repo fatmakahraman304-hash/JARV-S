@@ -38,7 +38,7 @@ class UpdatedHudTests(unittest.TestCase):
             (root / "update_channel.json").write_text('{"branch":"main"}')
             cfg = root / "config/api_keys.json"
             cfg.parent.mkdir()
-            cfg.write_text('{"assistant_name":"MAYK test"}')
+            cfg.write_text('{"assistant_name":"AETHER test"}')
             def update(version):
                 sha = str(version) * 40
                 with patch.object(app_updater, "_get", side_effect=[
@@ -48,16 +48,16 @@ class UpdatedHudTests(unittest.TestCase):
             def launch(version):
                 script = (
                     "from acceptance_version import version\n"
-                    "from ui import MaykUI\n"
+                    "from ui import AetherUI\n"
                     "import os\n"
                     "from pathlib import Path\n"
                     "receipt = Path('hud-ready')\n"
-                    "os.environ['MAYK_RESTART_RECEIPT'] = str(receipt.resolve())\n"
+                    "os.environ['AETHER_RESTART_RECEIPT'] = str(receipt.resolve())\n"
                     "from PyQt6.QtCore import QTimer\n"
                     "from PyQt6.QtWidgets import QTextEdit\n"
                     "from core import confirm\n"
-                    "ui = MaykUI('')\n"
-                    "assert ui._win._assistant_name == 'MAYK test'\n"
+                    "ui = AetherUI('')\n"
+                    "assert ui._win._assistant_name == 'AETHER test'\n"
                     "confirm.bind(ui.show_confirm, ui.hide_confirm)\n"
                     "detail = '<b>literal</b>' * 60\n"
                     "confirm.request('test', 'Onay', detail, lambda: 'ok')\n"
@@ -120,5 +120,5 @@ class UpdatedHudTests(unittest.TestCase):
             launch(2)
             app_updater.rollback_zip(root)
             launch(1)
-            self.assertEqual(json.loads((root / ".jarvis-update.json").read_text())["sha"], "1" * 40)
-            self.assertEqual(json.loads(cfg.read_text())["assistant_name"], "MAYK test")
+            self.assertEqual(json.loads((root / ".aether-update.json").read_text())["sha"], "1" * 40)
+            self.assertEqual(json.loads(cfg.read_text())["assistant_name"], "AETHER test")

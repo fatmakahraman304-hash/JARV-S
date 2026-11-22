@@ -51,7 +51,7 @@ class Habits(unittest.TestCase):
         self.assertEqual(len(got), 1)
         self.assertIn(got[0]["time"], ("23:55", "00:00", "23:50"))
 
-    def test_jarvis_own_tools_are_not_habits(self):
+    def test_aether_own_tools_are_not_habits(self):
         for d in range(1, 6):
             self.at(d, 21, 0, "self_check", {})
         self.assertEqual(habits.suggestions(self.now.timestamp()), [])

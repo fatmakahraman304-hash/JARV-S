@@ -1,4 +1,4 @@
-"""The live link: a real Blender runs the add-on; MAYK reads the selection
+"""The live link: a real Blender runs the add-on; AETHER reads the selection
 and changes the open scene in place ("bunu kırmızı yap")."""
 import os
 import shutil
@@ -18,9 +18,9 @@ import sys, time, bpy
 from pathlib import Path
 args = sys.argv[sys.argv.index("--") + 1:]
 root, token, stop = args
-env = {"__name__": "jarvis_live"}
-code = Path(root, "plugins", "_blender_live_addon.py").read_text(encoding="utf8").replace("__JARVIS_DIR__", root)
-exec(compile(code, "jarvis_live", "exec"), env)
+env = {"__name__": "aether_live"}
+code = Path(root, "plugins", "_blender_live_addon.py").read_text(encoding="utf8").replace("__AETHER_DIR__", root)
+exec(compile(code, "aether_live", "exec"), env)
 env["_token"] = lambda: token
 end = time.time() + 400
 while time.time() < end and not Path(stop).exists():
@@ -91,7 +91,7 @@ class LiveLink(unittest.TestCase):
             live.edit("bunu kırmızı yap")
         self.assertIn("pant", model.call_args_list[1].args[0])               # the traceback went back
 
-    def test_3b_it_means_what_jarvis_changed_last(self):
+    def test_3b_it_means_what_aether_changed_last(self):
         from core import gemini
         live.run("import bpy\nfor o in bpy.context.view_layer.objects: o.select_set(o.name == 'Cube')\n", "seç")
         with patch.object(gemini, "text", return_value=RED), patch.object(brain, "look", return_value={}):
@@ -143,10 +143,10 @@ class Install(unittest.TestCase):
     def test_addon_goes_to_blenders_startup_folder(self):
         with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {"HOME": home, "APPDATA": home}):
             target = live.install(shutil.which("blender"))
-            self.assertEqual(target.name, "jarvis_live.py")
+            self.assertEqual(target.name, "aether_live.py")
             self.assertEqual(target.parent.name, "startup")
             text = target.read_text(encoding="utf8")
-            self.assertNotIn("__JARVIS_DIR__", text)
+            self.assertNotIn("__AETHER_DIR__", text)
             self.assertIn(str(ROOT), text.replace("\\\\", "\\"))
 
 

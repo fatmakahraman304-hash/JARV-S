@@ -1,11 +1,11 @@
 """
 Quiet mode — "Mute, sir." / "Bir saat rahatsız etme." / "Toplantıdayım."
 
-While it is on MAYK volunteers nothing: finished jobs, things it noticed, care
+While it is on AETHER volunteers nothing: finished jobs, things it noticed, care
 notes, offers, check-ins and news all wait (in the same digest as when the user
 is away, core/away.py) and are told in one short report when quiet ends. What
 the user asked to be reminded of still comes — they asked for that moment — and
-MAYK still answers whenever it is spoken to.
+AETHER still answers whenever it is spoken to.
 
 It ends by itself after the time given, or when the user says so. State is on
 disk, so a restart in the middle of a meeting does not break the silence.
@@ -41,7 +41,7 @@ def _write(data: dict) -> None:
 
 def start(minutes: float | None = None, reason: str = "", now: float | None = None, listen: bool = True) -> dict:
     """Quiet for `minutes` (None: until the user says, at most MAX_HOURS). listen=False (a meeting, a
-    call): MAYK also stops listening — asleep, so other people's words are not taken as commands —
+    call): AETHER also stops listening — asleep, so other people's words are not taken as commands —
     and wakes by itself when the quiet ends."""
     now = time.time() if now is None else now
     mins = MAX_HOURS * 60 if not minutes or minutes <= 0 else min(float(minutes), MAX_HOURS * 60)
@@ -101,7 +101,7 @@ def describe(now: float | None = None) -> str:
 def ended_instruction(items: list[dict], describe_items) -> str:
     """What the session is told when quiet ends with things waiting."""
     return ("[QUIET_ENDED] Quiet mode is over. While it was on, these came up and were held back:\n"
-            + describe_items(items) + "\nTell the user, MAYK-style, in at most three short "
+            + describe_items(items) + "\nTell the user, AETHER-style, in at most three short "
             "sentences, most important first: merge related items, drop progress a later item makes "
             "stale, outcomes not steps. Do not call any tool, and do not repeat them later.")
 

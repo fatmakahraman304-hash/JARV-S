@@ -16,7 +16,7 @@ PLUGIN = {
 
 
 def _own_state() -> str:
-    """MAYK's own side of the report: what it is doing, whether it is keeping quiet, what waits to be told."""
+    """AETHER's own side of the report: what it is doing, whether it is keeping quiet, what waits to be told."""
     lines = []
     try:
         from core import jobs
@@ -44,7 +44,7 @@ def _own_state() -> str:
             lines.append("- son fark edilenler: " + "; ".join(i["text"] for i in last))
     except Exception:
         pass
-    return "MAYK:\n" + ("\n".join(lines) or "- her şey sakin")
+    return "AETHER:\n" + ("\n".join(lines) or "- her şey sakin")
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:

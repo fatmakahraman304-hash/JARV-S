@@ -1,4 +1,4 @@
-package com.jarvis.alici;
+package com.aether.alici;
 
 import android.util.Base64;
 
@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-/** The shared gist every MAYK device uses (desktop: core/sync_hub.py). */
+/** The shared gist every AETHER device uses (desktop: core/sync_hub.py). */
 final class Gist {
     private final String token, id;
     private String etag = "";
@@ -36,7 +36,7 @@ final class Gist {
         c.setReadTimeout(30000);
         c.setRequestProperty("Authorization", "Bearer " + token);
         c.setRequestProperty("Accept", "application/vnd.github+json");
-        c.setRequestProperty("User-Agent", "JARVIS-Alici");
+        c.setRequestProperty("User-Agent", "AETHER-Alici");
         return c;
     }
 
@@ -136,7 +136,7 @@ final class Gist {
         cache = null;
     }
 
-    /** {g: gemini, t: token, i: gist, n: name} from a MAYK setup link (…#s=…). */
+    /** {g: gemini, t: token, i: gist, n: name} from a AETHER setup link (…#s=…). */
     static JSONObject parseSetup(String text) {
         try {
             String s = text.trim();

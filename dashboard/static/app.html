@@ -1040,7 +1040,7 @@
       if (!txt) return;
       inp.value = '';
       const scanCommand = txt.replaceAll('İ', 'i').toLowerCase()
-        .replace(/^(aether|friday)[, ]+/, '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, ' ');
+        .replace(/^(aether|aether)[, ]+/, '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, ' ');
       if (['verileri aktar ve yansıt', 'kamerayı tara', 'kamerayı tara ve yansıt'].includes(scanCommand)) {
         if (!scanDialog.open) scanDialog.showModal();
         return;

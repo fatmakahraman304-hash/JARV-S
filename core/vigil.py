@@ -1,7 +1,7 @@
 """
-Keeping watch over the user, the way MAYK does over Tony.
+Keeping watch over the user, the way AETHER does over Tony.
 
-In the films MAYK notices when Tony has been at it all night and says so
+In the films AETHER notices when Tony has been at it all night and says so
 — once, dryly, and then lets him get on with it. This module is that, grounded
 in what actually happened rather than guessed: it measures the current work
 stretch from real activity (mouse/keyboard input, or speech) and notices two
@@ -113,7 +113,7 @@ def instruction(note: dict) -> str:
     else:
         fact = f"The user has been working for {_span(note['minutes'])} without a real break."
         example = "'Efendim, üç saattir aralıksız çalışıyorsunuz. Kısa bir mola fena olmazdı.'"
-    return ("[CARE_NOTE] " + fact + " Say so once, the way MAYK would — one warm, dry sentence "
+    return ("[CARE_NOTE] " + fact + " Say so once, the way AETHER would — one warm, dry sentence "
             f"with the real figure, e.g. {example} No lecture, no health advice, no repeating it. "
             "If they say they will keep going, accept it at once ('Peki, efendim.'). Do not call any tool. "
             "If they ask not to be reminded again, call care_notes(action='off').")

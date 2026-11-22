@@ -1,6 +1,6 @@
-/* MAYK HTTPS projector control — encrypted relay, no new page or GitHub API.
+/* AETHER HTTPS projector control — encrypted relay, no new page or GitHub API.
  *
- * Android MAYK Alıcı subscribes to an opaque topic on ntfy.sh; this HTTPS
+ * Android AETHER Alıcı subscribes to an opaque topic on ntfy.sh; this HTTPS
  * page publishes AES-256-GCM encrypted commands and receives encrypted replies.
  * The existing local pairing secret is held only in browser localStorage and
  * on the projector; it is never sent to the relay.
@@ -53,10 +53,10 @@
     reset();
     state.secret = secret;
     const [cmd, res, keyBytes] = await Promise.all([
-      hash('mayk-v1-cmd:' + secret), hash('mayk-v1-res:' + secret), hash('mayk-v1-key:' + secret)
+      hash('aether-v1-cmd:' + secret), hash('aether-v1-res:' + secret), hash('aether-v1-key:' + secret)
     ]);
-    state.cmd = 'mayk-' + hex(cmd).slice(0, 40);
-    state.res = 'mayk-' + hex(res).slice(0, 40);
+    state.cmd = 'aether-' + hex(cmd).slice(0, 40);
+    state.res = 'aether-' + hex(res).slice(0, 40);
     state.key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     state.status = 'bağlanıyor';
     let readyResolve, readyReject;
@@ -113,7 +113,7 @@
       const result = new Promise(resolve => {
         const timer = setTimeout(() => {
           state.pending.delete(id);
-          resolve('Projeksiyon HTTPS komutuna yanıt vermedi. MAYK Alıcı içindeki HTTPS köprü durumunu kontrol et.');
+          resolve('Projeksiyon HTTPS komutuna yanıt vermedi. AETHER Alıcı içindeki HTTPS köprü durumunu kontrol et.');
         }, 16000);
         state.pending.set(id, { resolve, timer });
       });
@@ -134,5 +134,5 @@
     }
   }
 
-  window.MAYKRelay = { send, configure, get status() { return state.status; }, reset };
+  window.AETHERRelay = { send, configure, get status() { return state.status; }, reset };
 })();

@@ -120,7 +120,7 @@ def perform(action: str, times: int = 1) -> tuple[bool, str, dict]:
 
 
 def open_screen_page(url: str, monitor: int = 0) -> tuple[bool, str]:
-    """Open the MAYK screen page full-screen on this computer — on the TV if
+    """Open the AETHER screen page full-screen on this computer — on the TV if
     one is plugged in. monitor: 0 = the last connected display (usually the TV),
     1 = the primary one."""
     left = top = 0

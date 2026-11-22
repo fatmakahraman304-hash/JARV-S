@@ -39,7 +39,7 @@ def _log(message: str, player=None) -> None:
         print(f"[Weather] {message}".encode("ascii", "replace").decode())
     if player:
         try:
-            player.write_log(f"MAYK: {message}")
+            player.write_log(f"AETHER: {message}")
         except Exception:
             pass
 

@@ -1,6 +1,6 @@
 # Otonom İkinci Beyin
 
-Alt konuşma çubuğundaki **beyin simgesi**, MAYK’ın orta alanında gelişim ağını açar. Merkezde CORE, çevresinde ses, hafıza, model zekâsı, kod ajanı, testler, güncelleme, güvenlik, cihazlar, arayüz, araştırma, otomasyon, eklentiler ve uzun işler bulunur. Bir noktaya dokununca o alanın kayıtları süzülür. MAYK’a dön yüz ekranına döner.
+Alt konuşma çubuğundaki **beyin simgesi**, AETHER’ın orta alanında gelişim ağını açar. Merkezde CORE, çevresinde ses, hafıza, model zekâsı, kod ajanı, testler, güncelleme, güvenlik, cihazlar, arayüz, araştırma, otomasyon, eklentiler ve uzun işler bulunur. Bir noktaya dokununca o alanın kayıtları süzülür. AETHER’a dön yüz ekranına döner.
 
 ## Otomatik çalışma
 
