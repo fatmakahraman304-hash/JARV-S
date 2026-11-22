@@ -1269,14 +1269,14 @@ class DashboardServer:
                 None, remote_control.perform, action, int(body.get("times") or 1))
             return JSONResponse({"ok": ok, "message": message, **extra})
 
-        _ASSETS = {"reactor.js": "application/javascript"}
+        _ASSETS = {"reactor.js": "application/javascript", "aether-core.webp": "image/webp"}
 
         @app.get("/assets/{name}")
         async def asset(name: str):
             if name not in _ASSETS:
                 return JSONResponse({"error": "Not found"}, status_code=404)
             from fastapi.responses import Response
-            return Response(_read(name), media_type=_ASSETS[name],
+            return Response((STATIC_DIR / name).read_bytes() if name == "aether-core.webp" else _read(name), media_type=_ASSETS[name],
                             headers={"Cache-Control": "no-cache"})
 
         @app.get("/tv", response_class=HTMLResponse)

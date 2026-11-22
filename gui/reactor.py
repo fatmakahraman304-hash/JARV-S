@@ -1,4 +1,4 @@
-"""gui/reactor.py — the reactor core: an orange energy sphere.
+"""gui/reactor.py — the reactor core: the AETHER cyan orbital energy sphere.
 
 A small white-hot core sits inside a geodesic wireframe sphere. Straight light
 rays shoot out of the core in three dimensions, a handful of thick arc
@@ -168,7 +168,7 @@ class Reactor3D:
         self.spin = 0.0
         self.t = 0.0
         self._glow: QImage | None = None
-        self._aether_art = QPixmap(str(Path(__file__).resolve().parent / "assets" / "aether-core.jpg"))
+        self._aether_art = QPixmap(str(Path(__file__).resolve().parent / "assets" / "aether-core.webp"))
 
     # ── motion ────────────────────────────────────────────────────────────────
     def step(self, dt: float, speaking: bool, thinking: bool, muted: bool) -> None:

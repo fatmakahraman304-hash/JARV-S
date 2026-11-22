@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
         _ui_color = (_cfg.get("ui_color") or "").strip()
         # "#28e0ff" was the old cyan default; a saved copy of it is not a
         # choice the user made, so it no longer overrides the orange look.
-        if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#28e0ff"):
+        if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#28e0ff", "#ff8a1c"):
             apply_ui_accent(_ui_color)
 
         self.setWindowTitle(f"{self._wordmark(_display)} — {APP_VERSION}")

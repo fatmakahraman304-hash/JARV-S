@@ -98,19 +98,19 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    # "Reactor" palette: near-black ground, warm orange light. Stylesheets use
+    # AETHER reactor palette: deep-space navy, high-energy cyan.
     # these exact hex strings so the live accent picker can still re-tint them.
-    BG        = "#050403"
-    PANEL     = "#110d0a"
-    PANEL2    = "#1a130d"
-    BORDER    = "#3a2717"
-    BORDER_B  = "#8a4f1d"
-    BORDER_A  = "#55341a"
-    PRI       = "#ff8a1c"
-    PRI_DIM   = "#c9864a"
-    PRI_GHO   = "#2b1a0b"
-    ACC       = "#ffc04d"
-    ACC2      = "#ffdc94"
+    BG        = "#030915"
+    PANEL     = "#071322"
+    PANEL2    = "#0a2033"
+    BORDER    = "#17435c"
+    BORDER_B  = "#136c96"
+    BORDER_A  = "#0d3c59"
+    PRI       = "#26d9ff"
+    PRI_DIM   = "#50b5d8"
+    PRI_GHO   = "#061c30"
+    ACC       = "#a3efff"
+    ACC2      = "#effcff"
     GREEN     = "#5ef0a8"
     GREEN_D   = "#3d8c68"
     RED       = "#ff5f5f"
@@ -118,9 +118,9 @@ class C:
     TEXT      = "#f3ece5"
     TEXT_DIM  = "#9b9087"
     TEXT_MED  = "#d2c7bd"
-    WHITE     = "#fff8f0"
-    DARK      = "#0a0806"
-    BAR_BG    = "#1e150d"
+    WHITE     = "#e9f9ff"
+    DARK      = "#030d19"
+    BAR_BG    = "#06192b"
 
 
 # Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed
