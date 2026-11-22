@@ -47,6 +47,7 @@ public class ReceiverService extends Service {
     static volatile String status = "kapalı";
     private volatile boolean running;
     private LanRemote lanRemote;
+    private RelayRemote relayRemote;
     static volatile String lanAddress = "";
     private final Set<String> done = new LinkedHashSet<>();
 
@@ -87,13 +88,23 @@ public class ReceiverService extends Service {
                 });
                 lanRemote.start(); lanAddress = lanRemote.address();
             } catch (Exception e) { lanAddress = "Yerel bağlantı hatası: " + e.getMessage(); }
+            // The encrypted relay is independent of GitHub and local HTTP.
+            // It uses the existing saved LAN pairing key; no new QR scan.
+            relayRemote = new RelayRemote(this, command ->
+                    run(command, new HashMap<>(), new HashMap<>()));
+            relayRemote.start();
             running = true;
             new Thread(this::loop, "alici").start();
         }
         return START_STICKY;
     }
 
-    @Override public void onDestroy() { running = false; if (lanRemote != null) lanRemote.stop(); lanAddress = ""; status = "kapalı"; super.onDestroy(); }
+    @Override public void onDestroy() {
+        running = false;
+        if (lanRemote != null) lanRemote.stop();
+        if (relayRemote != null) relayRemote.stop();
+        lanAddress = ""; status = "kapalı"; super.onDestroy();
+    }
 
     private static String now() {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
