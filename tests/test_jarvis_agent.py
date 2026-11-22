@@ -314,13 +314,42 @@ class AdvancedAgentReliabilityTest(unittest.TestCase):
     def test_run_uses_argv_without_shell_and_marks_test_success(self):
         with tempfile.TemporaryDirectory() as temp:
             ws = ja.Workspace(Path(temp), log=lambda _: None)
-            proc = mock.Mock(returncode=0, stdout="4 passed", stderr="")
-            with mock.patch.object(ja.subprocess, "run", return_value=proc) as run:
+            with mock.patch("core.agent_process.execute",
+                            return_value=(0, "4 passed", "")) as execute:
                 result = ws.t_run("python -m pytest -q")
             self.assertIn("exit code 0", result)
             self.assertTrue(ws.test_passed)
-            self.assertFalse(run.call_args.kwargs["shell"])
-            self.assertIsInstance(run.call_args.args[0], list)
+            self.assertIsInstance(execute.call_args.args[0], list)
+            self.assertIn("cancel_check", execute.call_args.kwargs)
+            self.assertNotIn("shell", execute.call_args.kwargs)
+
+    def test_unrelated_script_does_not_count_as_verification(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ws = ja.Workspace(Path(temp), log=lambda _: None)
+            ws.changed.add("app.py")
+            self.assertFalse(ws._is_verification(["python", "other.py"]))
+            self.assertFalse(ws._is_verification(["echo", "pytest"]))
+            self.assertFalse(ws._is_verification(["npm", "install"]))
+            self.assertTrue(ws._is_verification(["python", "app.py"]))
+            self.assertTrue(ws._is_verification(["python", "-m", "pytest", "-q"]))
+            self.assertTrue(ws._is_verification(["npm", "test"]))
+
+    def test_subprocess_environment_excludes_live_api_keys(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ws = ja.Workspace(Path(temp), log=lambda _: None)
+            with mock.patch.dict(ja.os.environ, {
+                    "OPENAI_API_KEY": "danger",
+                    "GEMINI_API_KEY": "danger",
+                    "MY_REFRESH_TOKEN": "danger",
+                    "PATH": ja.os.environ.get("PATH", "")}), \
+                 mock.patch("core.agent_process.execute",
+                            return_value=(0, "PASS", "")) as execute:
+                ws.t_run("python -m pytest -q")
+            env = execute.call_args.kwargs["env"]
+            self.assertNotIn("OPENAI_API_KEY", env)
+            self.assertNotIn("GEMINI_API_KEY", env)
+            self.assertNotIn("MY_REFRESH_TOKEN", env)
+            self.assertIn("PATH", env)
 
     def test_finish_is_blocked_until_code_is_tested(self):
         with tempfile.TemporaryDirectory() as temp:
