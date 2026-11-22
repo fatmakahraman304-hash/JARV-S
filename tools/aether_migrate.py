@@ -50,7 +50,7 @@ def main() -> None:
     # Rewrite contents and paths in two passes, so no file is missed because a
     # directory moved while being traversed.
     for rel in names:
-        if not rel or rel == "tools/aether_migrate.py":
+        if not rel or rel == "tools/aether_migrate.py" or rel.startswith(".github/workflows/"):
             continue
         p = ROOT / rel
         if not p.is_file():
@@ -68,7 +68,7 @@ def main() -> None:
             updated += 1
 
     for rel in sorted(filter(None, names), key=lambda s: (-s.count("/"), -len(s))):
-        if rel == "tools/aether_migrate.py":
+        if rel == "tools/aether_migrate.py" or rel.startswith(".github/workflows/"):
             continue
         new_rel = rebrand(rel)
         if new_rel == rel:

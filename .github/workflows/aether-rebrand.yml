@@ -5,6 +5,7 @@ on:
       - aether-rebrand-core
     paths:
       - .github/workflows/aether-rebrand.yml
+      - tools/aether_migrate.py
 permissions:
   contents: write
 jobs:
