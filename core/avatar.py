@@ -128,7 +128,7 @@ class HoloAvatar:
     # screen's own resolution (gui/android_gl.py). "hologram": the QPainter
     # drawing below. Android falls back to hologram by itself if this machine
     # has no usable OpenGL, and says why in `render_note`.
-    style = "human"          # "human" | "android" (GPU) | "hologram" (wireframe)
+    style = "projection"          # "human" | "android" (GPU) | "hologram" (wireframe)
 
     def __init__(self) -> None:
         mesh = get_head_mesh()
@@ -159,6 +159,7 @@ class HoloAvatar:
         self._lut_key = None
         self._mesh = mesh
         self._gl = None
+        self._projection = None
         self._muted = False
         self.render_note = ""
 
@@ -497,6 +498,8 @@ class HoloAvatar:
         """
         if bg is None:
             bg = QColor(0, 0, 0)
+        if self.style == "projection":
+            primary = QColor(70, 188, 255)
         amp = self._glow
         verts, norms = self._pose()
 
@@ -517,6 +520,13 @@ class HoloAvatar:
         xs = cx + verts[:, 0] * k
         ys = cy - verts[:, 1] * k
 
+        if self.style == "projection":
+            if self._projection is None:
+                from core.hologram_face import ProjectionFace
+                self._projection = ProjectionFace(self._mesh)
+            self._projection.paint(p, xs, ys, norms, verts, self._scan, amp,
+                                   (1.0 - self._blink) * self._lids)
+            return
         if self.style in ("human", "android") and self._paint_android(p, xs, ys, verts, norms,
                                                            primary, accent, amp):
             return

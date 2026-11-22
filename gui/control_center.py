@@ -57,8 +57,15 @@ class NetworkCanvas(QWidget):
     core_clicked = pyqtSignal()
     connect_requested = pyqtSignal(str)   # an app node that is not connected yet
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, nodes=None):
         super().__init__(parent)
+        self.nodes = tuple(activity.NODES if nodes is None else nodes)
+        self.labels = {key: label for key, label, icon, ring in self.nodes}
+        self.app_nodes = activity.APP_NODES if nodes is None else set()
+        self.custom_nodes = nodes is not None
+        self.heading = "SİNİR AĞI"
+        self.footer = "Konuşmak için çekirdeğe dokun ya da aşağıya bir görev yaz"
+        self.core_label = ""
         self.setMouseTracking(True)
         self.setMinimumSize(520, 420)
         self._reactor = Reactor3D() if Reactor3D is not None else None
@@ -82,10 +89,10 @@ class NetworkCanvas(QWidget):
 
     def _is_app_off(self, key: str) -> bool:
         """An app reached through Composio whose account is not connected."""
-        return key in activity.APP_NODES and key not in self._connected
+        return key in self.app_nodes and key not in self._connected
 
     def _is_on(self, key: str) -> bool:
-        return bool(self._counts.get(key)) or (key in activity.APP_NODES and key in self._connected)
+        return bool(self._counts.get(key)) or (key in self.app_nodes and key in self._connected)
 
     def set_filter(self, key: str) -> None:
         self._filter = key
@@ -105,10 +112,10 @@ class NetworkCanvas(QWidget):
         self._core = QPointF(cx, cy)
         m = min(W, H)
         self._core_r = m * 0.11
-        inner = [k for k, _l, _i, ring in activity.NODES if ring == 0]
-        outer = [k for k, _l, _i, ring in activity.NODES if ring == 1]
+        inner = [k for k, _l, _i, ring in self.nodes if ring == 0]
+        outer = [k for k, _l, _i, ring in self.nodes if ring == 1]
         r1x, r1y = m * 0.27, m * 0.25
-        r2x, r2y = W * 0.42, H * 0.38
+        r2x, r2y = W * 0.42, H * (0.32 if self.custom_nodes else 0.38)
         self._pos = {}
         for i, k in enumerate(inner):
             a = -math.pi / 2 + i * 2 * math.pi / len(inner) + 0.35
@@ -143,11 +150,11 @@ class NetworkCanvas(QWidget):
             if k:
                 n = self._counts.get(k, 0)
                 if k in self._pending:
-                    self.setToolTip(f"{activity.NODE_LABEL[k]} · tarayıcı onayı bekleniyor")
+                    self.setToolTip(f"{self.labels[k]} · tarayıcı onayı bekleniyor")
                 elif self._is_app_off(k):
-                    self.setToolTip(f"{activity.NODE_LABEL[k]} · bağlı değil — bağlamak için tıkla")
+                    self.setToolTip(f"{self.labels[k]} · bağlı değil — bağlamak için tıkla")
                 else:
-                    self.setToolTip(f"{activity.NODE_LABEL[k]} · bu oturumda {n} işlem")
+                    self.setToolTip(f"{self.labels[k]} · bu oturumda {n} işlem")
             else:
                 self.setToolTip("")
 
@@ -197,17 +204,17 @@ class NetworkCanvas(QWidget):
             y += step
 
         # header: title, active links
-        active = sum(1 for k, *_r in activity.NODES if self._is_on(k))
+        active = sum(1 for k, *_r in self.nodes if self._is_on(k))
         p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2.4))
         p.setPen(QPen(qcol(C.TEXT_DIM)))
-        p.drawText(QRectF(24, 18, 300, 18), Qt.AlignmentFlag.AlignVCenter, "SİNİR AĞI")
+        p.drawText(QRectF(24, 18, 300, 18), Qt.AlignmentFlag.AlignVCenter, self.heading)
         p.setFont(px_font(13))
         p.setPen(QPen(qcol(C.TEXT_MED)))
         p.drawText(QRectF(24, 38, 400, 20), Qt.AlignmentFlag.AlignVCenter,
-                   f"{active} / {len(activity.NODES)} bağlantı aktif")
+                   f"{active} / {len(self.nodes)} bağlantı aktif")
 
         # mesh: faint links between neighbouring outer nodes
-        outer = [k for k, _l, _i, ring in activity.NODES if ring == 1]
+        outer = [k for k, _l, _i, ring in self.nodes if ring == 1]
         p.setPen(QPen(with_alpha(C.TEXT_DIM, 0.10), 1, Qt.PenStyle.DashLine))
         for i, k in enumerate(outer):
             a, b = self._pos[k], self._pos[outer[(i + 1) % len(outer)]]
@@ -215,7 +222,7 @@ class NetworkCanvas(QWidget):
 
         # links from the core
         core = self._core
-        for k, _label, _icon, ring in activity.NODES:
+        for k, _label, _icon, ring in self.nodes:
             c = self._pos[k]
             n = self._counts.get(k, 0)
             dim = self._filter and self._filter != k
@@ -246,7 +253,7 @@ class NetworkCanvas(QWidget):
         # the core
         if self._reactor is not None:
             self._reactor.paint(p, core.x(), core.y(), self._core_r, qcol(C.PRI), qcol(C.ACC),
-                                qcol(C.WHITE), 0.0, False, "")
+                                qcol(C.WHITE), 0.0, False, self.core_label)
         else:
             cg = QRadialGradient(core, self._core_r)
             cg.setColorAt(0.0, qcol(C.WHITE))
@@ -257,7 +264,7 @@ class NetworkCanvas(QWidget):
             p.drawEllipse(core, self._core_r, self._core_r)
 
         # nodes
-        for k, label, icon, ring in activity.NODES:
+        for k, label, icon, ring in self.nodes:
             c = self._pos[k]
             n = self._counts.get(k, 0)
             hot = k == self._hover or k == self._filter
@@ -282,7 +289,7 @@ class NetworkCanvas(QWidget):
             p.setFont(px_font(11, QFont.Weight.Medium))
             p.setPen(QPen(with_alpha(C.TEXT if on else C.TEXT_DIM, alpha)))
             p.drawText(QRectF(c.x() - 70, c.y() + r + 4, 140, 16), Qt.AlignmentFlag.AlignHCenter, label)
-            if k in activity.APP_NODES:
+            if k in self.app_nodes:
                 pending = k in self._pending
                 status = "bağlanıyor…" if pending else "bağlı" if k in self._connected else "bağla ›"
                 p.setFont(px_font(10, QFont.Weight.DemiBold))
@@ -310,7 +317,7 @@ class NetworkCanvas(QWidget):
         p.setFont(px_font(11))
         p.setPen(QPen(qcol(C.TEXT_DIM)))
         p.drawText(QRectF(40, H - 28, W - 80, 16), Qt.AlignmentFlag.AlignCenter,
-                   "Konuşmak için çekirdeğe dokun ya da aşağıya bir görev yaz")
+                   self.footer)
         p.end()
 
 

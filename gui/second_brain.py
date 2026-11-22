@@ -1,11 +1,31 @@
-"""Second brain controls. Workers return through a Qt signal."""
+"""Live autonomous improvement graph. All analysis runs outside the Qt thread."""
 import threading
+import time
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-                            QLineEdit, QListWidget, QListWidgetItem, QTextEdit, QCheckBox)
+from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit
+from gui.control_center import NetworkCanvas
+from gui.style import btn_css, px_font, scroll_css
 from gui.theme import C
-from gui.style import px_font, btn_css, scroll_css
+
+NODES = (
+    ("voice", "Ses ve konuşma", "pulse", 0),
+    ("memory", "Hafıza", "brain", 0),
+    ("models", "Model zekâsı", "grid", 0),
+    ("coding", "Kod ajanı", "code", 0),
+    ("testing", "Testler", "code", 0),
+    ("updates", "Güncelleme", "gear", 1),
+    ("security", "Güvenlik", "eye", 1),
+    ("devices", "Cihazlar", "monitor", 1),
+    ("interface", "Arayüz", "grid", 1),
+    ("research", "Araştırma", "globe", 1),
+    ("automation", "Otomasyon", "monitor", 1),
+    ("integrations", "Eklentiler", "gear", 1),
+    ("tasks", "Uzun işler", "calendar", 1),
+)
+LABELS = {key: name for key, name, icon, ring in NODES}
+ACTIVE = {"Analiz", "Planlama", "Geliştirme hazırlanıyor", "Kod ajanına aktarıldı",
+          "Kaynaklar okunuyor", "Kod yazılıyor", "Kod denetimi", "Test"}
 
 
 class _AgentUI:
@@ -21,153 +41,136 @@ class _AgentUI:
 
 
 class SecondBrainPanel(QWidget):
-    completed = pyqtSignal(str)
+    completed = pyqtSignal(object)
     back_requested = pyqtSignal()
 
     def __init__(self, window):
         super().__init__(window)
-        self.setWindowTitle("MAYK · İkinci Beyin")
-        self.setFont(px_font(13))
-        self.setStyleSheet(f"background: {C.BG}; color: {C.TEXT};")
-        self.agent_ui = _AgentUI(window)
+        self.timer = QTimer(self)
+        self.animation = QTimer(self)
+        from core.second_brain_service import Controller
+        self.controller = window.__dict__.get("_brain_controller") or Controller(_AgentUI(window))
         self.busy = False
+        self.data = {}
+        self.filter = ""
+        self.setFont(px_font(12))
+        self.setStyleSheet(f"color: {C.TEXT}; background: {C.BG};")
         layout = QVBoxLayout(self)
-        title = QLabel("İKİNCİ BEYİN")
-        title.setFont(px_font(24))
-        heading = QHBoxLayout()
+        layout.setContentsMargins(12, 12, 12, 12)
+        header = QHBoxLayout()
         back = QPushButton("‹ MAYK’a dön")
         back.setStyleSheet(btn_css("dim", align="center"))
         back.clicked.connect(self.back_requested.emit)
-        heading.addWidget(back)
-        heading.addWidget(title, 1)
-        layout.addLayout(heading)
-        description = QLabel("MAYK’ın gelişim defteri. Yerel kod işi hatalarını izler, fikirleri saklar ve seçtiğiniz geliştirmeyi ayrı çalışma alanında hazırlar.")
-        description.setWordWrap(True)
-        layout.addWidget(description)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(12)
-        self.monitor = QCheckBox("Yerel kod işi hatalarını her dakika izle")
-        self.monitor.setChecked(True)
-        layout.addWidget(self.monitor)
-        self.auto_plan = QCheckBox("Yeni fikirleri arka planda planla · API kullanır")
-        layout.addWidget(self.auto_plan)
-        row = QHBoxLayout()
-        self.input = QLineEdit()
-        self.input.setPlaceholderText("MAYK neyi daha iyi yapabilsin?")
-        row.addWidget(self.input)
-        add = QPushButton("Fikir ekle")
-        add.setStyleSheet(btn_css("primary", align="center"))
-        add.setMinimumHeight(34)
-        add.clicked.connect(self.add)
-        self.input.returnPressed.connect(self.add)
-        row.addWidget(add)
-        layout.addLayout(row)
-        self.list = QListWidget()
-        self.list.setStyleSheet(f"QListWidget {{ border: 1px solid {C.PRI_DIM}; padding: 8px; }}"
-                                f"QListWidget::item {{ padding: 8px; }}"
-                                f"QListWidget::item:selected {{ background: {C.PRI_GHO}; color: {C.WHITE}; }}" + scroll_css())
-        self.list.currentItemChanged.connect(self.selected)
-        layout.addWidget(self.list, 1)
-        self.detail = QTextEdit()
-        self.detail.setReadOnly(True)
-        self.detail.setStyleSheet(f"QTextEdit {{ border: 1px solid {C.PRI_DIM}; padding: 10px; }}" + scroll_css())
-        layout.addWidget(self.detail, 1)
-        buttons = QHBoxLayout()
-        for title, action in (("Şimdi tara", "scan"), ("Plan oluştur", "analyze"),
-                              ("Seçileni geliştir", "develop"), ("Arşivle", "dismiss")):
-            button = QPushButton(title)
-            button.setStyleSheet(btn_css("primary", align="center"))
-            button.setMinimumHeight(36)
-            button.clicked.connect(lambda checked=False, action=action: self.run(action))
-            buttons.addWidget(button)
-        layout.addLayout(buttons)
-        self.status = QLabel("Plan oluştur seçilen fikri yapılandırılmış modele gönderir. Geliştirme sonucunu ve testleri burada takip edin.")
+        header.addWidget(back)
+        title = QLabel("İKİNCİ BEYİN")
+        title.setFont(px_font(18))
+        header.addWidget(title, 1)
+        self.pause = QPushButton("Duraklat")
+        self.pause.setStyleSheet(btn_css("primary", align="center"))
+        self.pause.clicked.connect(self.toggle)
+        header.addWidget(self.pause)
+        layout.addLayout(header)
+        self.status = QLabel("MAYK açılışından sonra otomatik öz denetim başlar.")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        row = QHBoxLayout()
+        self.canvas = NetworkCanvas(self, nodes=NODES)
+        self.canvas.setMinimumSize(400, 360)
+        self.canvas.heading = "OTONOM GELİŞİM"
+        self.canvas.core_label = "CORE"
+        self.canvas.footer = "Bir gelişim alanına dokunarak kayıtlarını incele"
+        self.canvas.node_clicked.connect(self.select)
+        self.canvas.core_clicked.connect(lambda: self.select(""))
+        row.addWidget(self.canvas, 3)
+        self.detail = QTextEdit()
+        self.detail.setReadOnly(True)
+        self.detail.setMinimumWidth(240)
+        self.detail.setStyleSheet(f"QTextEdit {{ border: 1px solid {C.PRI_DIM}; padding: 8px; }}" + scroll_css())
+        row.addWidget(self.detail, 2)
+        layout.addLayout(row, 1)
+        note = QLabel("15 dakikada bir kaynak analizi → plan → ayrı alanda kod → test sonucu. Yapılandırılmış model API’si kullanılır. Yayın için mevcut onay akışı geçerlidir.")
+        note.setWordWrap(True)
+        layout.addWidget(note)
         self.completed.connect(self.finished)
-        self.timer = QTimer(self)
-        self.timer.setInterval(60000)
-        self.timer.timeout.connect(self.tick)
-        self.monitor.toggled.connect(lambda on: self.timer.start() if on else self.timer.stop())
-        self.timer.start()
-        self.run("scan")
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.refresh)
+        self.animation.setInterval(33)
+        self.animation.timeout.connect(self.advance)
 
-    def add(self):
-        from core import second_brain as brain
-        try:
-            brain.add(self.input.text())
-            self.input.clear()
-            self.refresh()
-        except Exception as exc:
-            self.status.setText(str(exc))
+    def select(self, key):
+        self.filter = key
+        self.canvas.set_filter(key)
+        self.render()
 
-    def refresh(self):
-        from core import second_brain as brain
-        selected = self.current()
-        self.list.clear()
-        for entry in brain.items():
-            item = QListWidgetItem(f"{brain._LABELS[entry['state']]} · {entry['title']}")
-            item.setData(Qt.ItemDataRole.UserRole, entry)
-            self.list.addItem(item)
-            if selected and selected["id"] == entry["id"]:
-                self.list.setCurrentItem(item)
-        if self.list.currentItem() is None and self.list.count():
-            self.list.setCurrentRow(0)
+    def toggle(self):
+        if not self.busy:
+            self.refresh(toggle=True)
 
-    def current(self):
-        item = self.list.currentItem()
-        return item.data(Qt.ItemDataRole.UserRole) if item else None
-
-    def selected(self, *args):
-        entry = self.current()
-        self.detail.setPlainText((entry["detail"] + "\n\n" + entry["analysis"] + "\n\n" + entry["result"]) if entry else "")
-
-    def tick(self):
-        if self.monitor.isChecked():
-            self.run("scan")
-
-    def run(self, action):
-        from core import second_brain as brain
+    def refresh(self, toggle=False):
         if self.busy:
             return
-        entry = self.current()
-        automatic_plan = self.auto_plan.isChecked()
-        if action != "scan" and entry is None:
-            self.status.setText("Önce bir geliştirme fikri seçin.")
-            return
         self.busy = True
-        self.status.setText("İşleniyor…")
         def work():
             try:
-                message = "Yerel kayıtlar tarandı."
-                if action == "scan":
-                    brain.scan()
-                    if automatic_plan:
-                        pending = next((item for item in brain.items()
-                                        if item["state"] == "idea" and not item["analysis"] and not item["result"]), None)
-                        if pending:
-                            try:
-                                brain.analyze(pending["id"])
-                                message = "Yeni fikir için plan hazır."
-                            except Exception as exc:
-                                brain.update(pending["id"], result=str(exc))
-                                raise
-                elif action == "analyze":
-                    brain.analyze(entry["id"])
-                    message = "Plan hazır. İnceleyip geliştirmeyi başlatabilirsiniz."
-                elif action == "develop":
-                    message = brain.develop(entry["id"], self.agent_ui)
-                else:
-                    if entry["state"] in ("requested", "running"):
-                        raise ValueError("Çalışan iş arşivlenemez. Kod ajanının sonucunu bekleyin.")
-                    brain.update(entry["id"], state="dismissed")
-                    message = "Fikir arşivlendi."
+                if toggle:
+                    from core.second_brain_service import set_enabled, settings
+                    set_enabled(not settings()["enabled"])
+                result = self.controller.snapshot()
             except Exception as exc:
-                message = str(exc)
-            self.completed.emit(message)
-        threading.Thread(target=work, daemon=True, name="second-brain").start()
+                result = {"error": str(exc)}
+            self.completed.emit(result)
+        threading.Thread(target=work, daemon=True, name="brain-view").start()
 
-    def finished(self, message):
+    def finished(self, result):
         self.busy = False
-        self.status.setText(message)
+        if "error" in result:
+            self.status.setText("Durum okunamadı · " + result["error"])
+            return
+        self.data = result
+        self.render()
+
+    def render(self):
+        from core import second_brain
+        enabled = self.data.get("enabled", True)
+        phase = self.data.get("phase", "Başlangıç bekleniyor")
+        area = self.data.get("area", "")
+        self.pause.setText("Duraklat" if enabled else "Devam ettir")
+        self.status.setText((LABELS.get(area, "Öz denetim") + " · " + phase) if enabled
+                            else "Otomatik geliştirme duraklatıldı. Başlamış kod işinin sonucu izlenir.")
+        due = self.data.get("next_due", 0)
+        if enabled and due > time.time() and phase not in ACTIVE:
+            self.status.setText(self.status.text() + " · Sonraki denetim " + time.strftime("%H:%M", time.localtime(due)))
+        records = self.data.get("events", [])
+        active = bool(enabled and phase in ACTIVE and area in LABELS)
+        hits = {area: time.time()} if active else {}
+        self.canvas.set_data({area: 1} if active else {}, hits, phase)
+        lines = []
+        for event in records:
+            if self.filter and event["area"] != self.filter:
+                continue
+            when = time.strftime("%H:%M:%S", time.localtime(event["time"]))
+            lines.append(f"{when} · {LABELS.get(event['area'], event['area'])}\n{event['phase']}\n{event['detail']}")
+        if not self.filter:
+            for item in self.data.get("items", []):
+                lines.append(f"{second_brain._LABELS[item['state']]} · {item['title']}\n"
+                             f"{item['analysis']}\n{item['result']}")
+        text = "\n\n".join(lines) or "İlk öz denetim kaydı bekleniyor. Kaynak incelemesi açılıştan kısa süre sonra başlar."
+        if text != self.detail.toPlainText():
+            self.detail.setPlainText(text)
+        self.canvas.update()
+
+    def advance(self):
+        enabled = self.data.get("enabled", True)
+        phase = self.data.get("phase", "")
+        self.canvas.advance(.033, thinking=enabled and phase in ACTIVE)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.timer.start()
+        self.animation.start()
         self.refresh()
+
+    def hideEvent(self, event):
+        self.timer.stop()
+        self.animation.stop()
+        super().hideEvent(event)

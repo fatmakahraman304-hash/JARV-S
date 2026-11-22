@@ -1,14 +1,14 @@
-"""Qt event loop remains responsive while the improvement scanner is waiting."""
+"""The autonomous brain graph shows evidence while workers stay off Qt."""
 import os
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QWidget, QLineEdit
 from gui.second_brain import SecondBrainPanel
 from memory import continuity
 
@@ -19,41 +19,48 @@ class Window(QWidget):
 
 
 class SecondBrainUI(unittest.TestCase):
-    def test_background_scan_add_and_reopen_preserve_queue(self):
+    def wait(self, app, panel):
+        deadline = time.monotonic() + 3
+        while panel.busy and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(.01)
+        self.assertFalse(panel.busy)
+
+    def test_graph_follows_real_phase_and_pausing_stops_flow(self):
         app = QApplication.instance() or QApplication([])
         entered, release = threading.Event(), threading.Event()
-        with tempfile.TemporaryDirectory() as directory, patch.object(continuity, "data_dir", return_value=Path(directory)):
-            window = Window()
-            window.show()
-            with patch("core.second_brain.scan", side_effect=lambda: (entered.set(), release.wait(2))):
-                panel = SecondBrainPanel(window)
-                panel.show()
-                self.assertTrue(entered.wait(1))
-                app.processEvents()
-                self.assertTrue(panel.isVisible())
-                self.assertTrue(panel.busy)
-                panel.input.setText("Konuşma akışını iyileştir")
-                panel.add()
-                self.assertEqual(panel.list.count(), 1)
-                release.set()
-                deadline = time.monotonic() + 3
-                while panel.busy and time.monotonic() < deadline:
-                    app.processEvents()
-                    time.sleep(.01)
-                self.assertFalse(panel.busy)
+        data = {"enabled": True, "area": "memory", "phase": "Analiz",
+                "events": [{"time": time.time(), "area": "memory", "phase": "Analiz",
+                            "detail": "Hafıza kaynakları inceleniyor."}], "items": []}
+        def snapshot():
+            entered.set()
+            release.wait(2)
+            return data
+        window = Window()
+        window._brain_controller = Mock(snapshot=snapshot)
+        window.show()
+        panel = SecondBrainPanel(window)
+        try:
+            panel.show()
+            app.processEvents()
+            self.assertTrue(entered.wait(1))
+            self.assertTrue(panel.busy)
+            self.assertTrue(panel.isVisible())
+            self.assertEqual(panel.findChildren(QLineEdit), [])
+            release.set()
+            self.wait(app, panel)
+            self.assertEqual(panel.canvas._counts, {"memory": 1})
+            self.assertIn("Hafıza kaynakları", panel.detail.toPlainText())
+            panel.finished(dict(data, enabled=False))
+            self.assertEqual(panel.canvas._counts, {})
+            panel.hide()
+            self.assertFalse(panel.animation.isActive())
+        finally:
+            release.set()
             panel.timer.stop()
+            panel.animation.stop()
             panel.close()
-            restored = SecondBrainPanel(window)
-            deadline = time.monotonic() + 3
-            while restored.busy and time.monotonic() < deadline:
-                app.processEvents()
-                time.sleep(.01)
-            self.assertEqual(restored.list.count(), 1)
-            self.assertFalse(restored.auto_plan.isChecked())
-            restored.timer.stop()
-            restored.close()
             window.close()
-
 
     def test_dock_opens_in_center_and_returns_to_face(self):
         from gui.window import MainWindow
@@ -62,17 +69,18 @@ class SecondBrainUI(unittest.TestCase):
             window = MainWindow("")
             try:
                 window.show()
+                self.assertEqual(window._brain_btn._kind, "brain")
+                self.assertEqual(window._brain_btn.text(), "")
                 window._brain_btn.click()
                 panel = window._second_brain_panel
-                app.processEvents()
+                self.wait(app, panel)
                 self.assertIs(window._hud_cam_stack.currentWidget(), panel)
                 self.assertFalse(panel.isWindow())
-                self.assertTrue(window._brain_btn.isChecked())
                 panel.back_requested.emit()
                 self.assertIs(window._hud_cam_stack.currentWidget(), window.hud)
                 self.assertFalse(window._brain_btn.isChecked())
                 window._brain_btn.click()
-                self.assertIs(window._second_brain_panel, panel)
+                self.wait(app, panel)
                 window._set_control_center(True)
                 self.assertFalse(window._brain_btn.isChecked())
                 self.assertTrue(window._cc_btn.isChecked())
@@ -80,8 +88,6 @@ class SecondBrainUI(unittest.TestCase):
                 panel = window.__dict__.get("_second_brain_panel")
                 if panel is not None:
                     panel.timer.stop()
-                    deadline = time.monotonic() + 3
-                    while panel.busy and time.monotonic() < deadline:
-                        app.processEvents()
-                        time.sleep(.01)
+                    panel.animation.stop()
+                    self.wait(app, panel)
                 window.close()
