@@ -26,7 +26,8 @@ class SecondBrainTests(unittest.TestCase):
         brain.add("Türkçe konuşma")
         item = brain.items()[0]
         player = Mock()
-        with patch("plugins.github_develop.run", return_value="MAYK kod değişikliği için ayrı geliştirme alanı hazırlanıyor.") as develop:
+        from plugins import github_develop
+        with patch.object(github_develop, "run", return_value="MAYK kod değişikliği için ayrı geliştirme alanı hazırlanıyor.") as develop:
             brain.develop(item["id"], player)
             with self.assertRaises(ValueError):
                 brain.develop(item["id"], player)
@@ -58,7 +59,8 @@ class SecondBrainTests(unittest.TestCase):
         def start(parameters, player):
             player.write_log("GELİŞTİRME: Git bağlantısı kurulamadı.")
             return "MAYK kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
-        with patch("plugins.github_develop.run", side_effect=start):
+        from plugins import github_develop
+        with patch.object(github_develop, "run", side_effect=start):
             brain.develop(item["id"], Mock())
         brain.scan()
         result = brain._get(item["id"])
