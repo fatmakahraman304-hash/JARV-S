@@ -48,7 +48,9 @@ void main() {
     float halfwidth = clamp(0.075 + 0.25 * fwidth(phase), 0.10, 0.35);
     float bands = 1.0 - smoothstep(halfwidth * 0.48, halfwidth, d);
 
-    float relief = 0.38 + 0.50 * key + 0.25 * rim;
+    // Reference: interior lines stay dark blue; only the silhouette and
+    // facial ridges bloom to bright cyan. Avoid an overexposed white mask.
+    float relief = 0.20 + 0.36 * key + 0.57 * rim;
     float lineLight = bands * relief;
     float front = (p.z > 0.05 && v_misc.w < 0.5 && ndv > 0.10) ? 1.0 : 0.0;
     float ax = abs(p.x);
@@ -58,11 +60,15 @@ void main() {
                         max(0.015, u_eye_x.y - u_eye_x.x), 0.0, 1.0);
         float ends = smoothstep(0.0, 0.10, t) *
                      (1.0 - smoothstep(0.88, 1.0, t));
-        float upper = poly(u_eye_up, ax);
-        float lower = poly(u_eye_lo, ax);
+        // Almond lid arcs, not large pupil-less geometric ellipses.
+        float arc = sin(3.14159265 * t);
+        float upper = poly(u_eye_up, ax) + 0.008 * arc;
+        float lower = poly(u_eye_lo, ax) - 0.004 * arc;
         float lid = mix(lower, upper, clamp(u_open, 0.0, 1.0));
-        eyes = max(contour(p.y - lid, 0.0015),
-                   contour(p.y - lower, 0.0015)) * ends;
+        eyes = max(contour(p.y - lid, 0.0012),
+                   contour(p.y - lower, 0.0012)) * ends;
+        eyes += 0.28 * contour(p.y - upper - 0.036 * arc,
+                               0.0023) * ends;
     }
 
     // Only a luminous lip contour and an animated opening, not teeth or skin.
@@ -74,30 +80,36 @@ void main() {
         float lower = poly(u_lip_lo, ax);
         float innerUpper = poly(u_lip_ui, ax);
         float innerLower = poly(u_lip_li, ax);
-        float opening = 0.050 * clamp(u_mouth, 0.0, 1.0) * taper;
-        lips = max(contour(p.y - upper, 0.002),
-                   contour(p.y - (lower - opening), 0.002)) * taper;
-        lips += 0.5 * contour(p.y - innerUpper, 0.0015) * taper;
+        // At rest the mouth is a thin single luminous line, like the user's
+        // image. Split into independently moving lips only while talking.
+        float talk = smoothstep(0.10, 0.48, clamp(u_mouth, 0.0, 1.0));
+        float mid = 0.5 * (upper + lower);
+        float opening = 0.057 * talk * taper;
+        float topLine = mix(mid, upper, talk);
+        float bottomLine = mix(mid, lower - opening, talk);
+        lips = max(contour(p.y - topLine, 0.0014),
+                   talk * contour(p.y - bottomLine, 0.0014)) * taper;
+        lips += talk * 0.20 * contour(p.y - innerUpper, 0.0015) * taper;
         mouthCavity = smoothstep(innerLower - opening - 0.003,
                                  innerLower + 0.003, p.y);
         mouthCavity *= 1.0 - smoothstep(innerUpper - 0.003,
                                        innerUpper + 0.003, p.y);
-        mouthCavity *= taper * clamp(0.3 + 2.0 * u_mouth, 0.0, 1.0);
+        mouthCavity *= taper * talk;
     }
     float features = front * (0.90 * eyes + 0.75 * lips);
     float pulse = 0.95 + 0.05 * sin(u_time * 1.4) + 0.13 * u_glow;
 
     // Dark translucent interior, bright electric cyan scan lines and edge.
-    vec3 night = vec3(0.002, 0.075, 0.17);
-    vec3 neon = vec3(0.020, 0.80, 1.42);
-    vec3 ice = vec3(0.52, 1.14, 1.48);
+    vec3 night = vec3(0.002, 0.050, 0.14);
+    vec3 neon = vec3(0.010, 0.70, 1.25);
+    vec3 ice = vec3(0.23, 0.96, 1.39);
     vec3 col = night * (0.18 + 0.12 * key);
     // Intentionally emissive: the reference is a lit projection, not an
     // opaque blue mannequin. The edge is several times brighter than
     // the inter-line interior, with dynamic voice-synchronised highlights.
-    col += neon * lineLight * (1.82 + 0.22 * u_glow);
-    col += ice * rim * (2.20 + 0.42 * u_glow);
-    col += ice * features * 1.75;
+    col += neon * lineLight * (1.45 + 0.24 * u_glow);
+    col += ice * rim * (2.55 + 0.48 * u_glow);
+    col += ice * features * 1.38;
     col *= 1.0 - 0.75 * mouthCavity;
     col *= pulse * (1.0 - 0.44 * u_muted);
     float alpha = clamp(0.080 + 1.33 * lineLight + 1.40 * rim +
