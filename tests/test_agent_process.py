@@ -55,7 +55,7 @@ class AgentProcessTests(unittest.TestCase):
                 Path(temp), timeout=10, cancel_check=lambda: None,
             )
             self.assertEqual(code, 0)
-            self.assertTrue(out.endswith("PASS\n"))
+            self.assertEqual(out.splitlines()[-1], "PASS")
             self.assertLessEqual(len(out), agent_process.MAX_CAPTURE)
             self.assertEqual(err, "")
 
