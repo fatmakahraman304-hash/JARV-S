@@ -1,4 +1,4 @@
-"""MAYK kodlama ajanı: NVIDIA öncelikli yerleşik kod ajanı.
+"""AETHER kodlama ajanı: NVIDIA öncelikli yerleşik kod ajanı.
 
 Eski Claude Code ve Codex CLI kodlama ajanı olarak seçilemez veya çalıştırılamaz.
 Dosya yedeği, değişiklik denetimi ve geri alma işlemleri korunur.
@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import claude_coding, codex_coding, jarvis_agent
+from core import claude_coding, codex_coding, aether_agent
 
 AGENT_TIMEOUT = 45 * 60          # one agent round, seconds (a whole site or app takes a while)
 
@@ -43,20 +43,20 @@ _CLAUDE_TOOLS = ["Read", "Edit", "MultiEdit", "Write", "Glob", "Grep", "LS", "To
                  "WebSearch", "WebFetch", "NotebookEdit"] + \
     [f"Bash({c}:*)" for c in _CLAUDE_BASH]
 
-AGENT_PROVIDERS = {jarvis_agent.PROVIDER_ID}
+AGENT_PROVIDERS = {aether_agent.PROVIDER_ID}
 
 
 def available(provider: str) -> bool:
     """Is this provider one that can work as an agent, and is it installed?"""
     try:
-        return provider == jarvis_agent.PROVIDER_ID and jarvis_agent.available()
+        return provider == aether_agent.PROVIDER_ID and aether_agent.available()
     except Exception:
         return False
 
 
 def _brief(instruction: str, guide: str, extra: str) -> str:
     return (
-        "You are the coding agent of MAYK, working directly in this project folder. Work like a "
+        "You are the coding agent of AETHER, working directly in this project folder. Work like a "
         "senior engineer who owns the result: the user asked by voice and will not review your diff, "
         "so what you hand back must simply work.\n\n"
         f"TASK (from the user, often in Turkish):\n{instruction}\n\n"
@@ -261,7 +261,7 @@ def _codex_event(line: str, log) -> None:
 
 def _run_codex(folder: Path, prompt: str, log) -> str:
     import tempfile
-    with tempfile.TemporaryDirectory(prefix="jarvis-codex-agent-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="aether-codex-agent-") as tmp:
         reply = Path(tmp) / "reply.txt"
         cmd = [*codex_coding._command(), "--ask-for-approval", "never", "exec",
                "--sandbox", "workspace-write", "--skip-git-repo-check", "--json",
@@ -285,15 +285,15 @@ def run(provider: str, folder: Path, instruction: str, guide: str = "", extra: s
         log=print) -> str:
     """One agent round in `folder`. Returns the agent's own summary."""
     prompt = _brief(instruction, guide, extra)
-    if provider == jarvis_agent.PROVIDER_ID:
-        return jarvis_agent.run(folder, prompt, log)
+    if provider == aether_agent.PROVIDER_ID:
+        return aether_agent.run(folder, prompt, log)
     raise RuntimeError("Bu model ajan olarak çalışamıyor.")
 
 
 # ── snapshot: what the agent really changed, and undo ───────────────────────
 
 _SKIP = {".git", ".hg", ".svn", "node_modules", "venv", ".venv", "env", "__pycache__",
-         ".jarvis_backup", "dist", "build", ".idea", ".vscode", ".mypy_cache", ".pytest_cache"}
+         ".aether_backup", "dist", "build", ".idea", ".vscode", ".mypy_cache", ".pytest_cache"}
 _MAX_BYTES = 2_000_000
 _MAX_TOTAL = 300_000_000         # content kept for undo; past this only hashes
 
@@ -304,7 +304,7 @@ def snapshot(folder: Path) -> dict[str, tuple[float, int, bytes]]:
     out = {}
     kept = 0
     for root, dirs, files in os.walk(folder):
-        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".jarvis")]
+        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith(".aether")]
         for name in files:
             p = Path(root) / name
             try:
@@ -381,7 +381,7 @@ def restore_checked(folder: Path, before: dict, after: dict) -> list[str]:
             temp_name = None
             try:
                 with tempfile.NamedTemporaryFile(
-                    mode="wb", dir=target.parent, prefix=".mayk-restore-",
+                    mode="wb", dir=target.parent, prefix=".aether-restore-",
                     delete=False,
                 ) as temp:
                     temp_name = Path(temp.name)

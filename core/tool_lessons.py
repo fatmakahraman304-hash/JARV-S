@@ -1,4 +1,4 @@
-"""MAYK learns from its own mistakes with any tool.
+"""AETHER learns from its own mistakes with any tool.
 
 A tool call fails; a few minutes later the same tool succeeds with different
 arguments (the app's real name, the right folder, another platform). That pair
@@ -22,7 +22,7 @@ _last_fail: dict[str, dict] = {}
 
 def _path() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "JarvisMurat" / "tool_lessons.json"
+    return (Path(base) if base else Path.home() / ".local" / "share") / "AetherMurat" / "tool_lessons.json"
 
 
 PATH = _path()

@@ -1,11 +1,11 @@
-"""MAYK NVIDIA Build API: anahtar gizliliği, model seçimi ve otomatik yedekler."""
+"""AETHER NVIDIA Build API: anahtar gizliliği, model seçimi ve otomatik yedekler."""
 import json
 import unittest
 import urllib.error
 from unittest import mock
 
 from core import nvidia_account as nvidia
-from core import jarvis_agent
+from core import aether_agent
 
 
 class _Reply:
@@ -116,11 +116,11 @@ class NvidiaRoutingTests(unittest.TestCase):
         with mock.patch.object(nvidia, "api_key", return_value="nvapi-secret"), \
              mock.patch.object(nvidia, "available_models",
                                return_value=["z-ai/glm-5.3-flash"]), \
-             mock.patch.object(jarvis_agent, "_settings", return_value={}), \
-             mock.patch.object(jarvis_agent, "_gemini_key", return_value="gemini"), \
-             mock.patch.object(jarvis_agent, "gemini_models",
+             mock.patch.object(aether_agent, "_settings", return_value={}), \
+             mock.patch.object(aether_agent, "_gemini_key", return_value="gemini"), \
+             mock.patch.object(aether_agent, "gemini_models",
                                return_value=["gemini-2.5-pro"]):
-            names = [model.name for model in jarvis_agent.brains()]
+            names = [model.name for model in aether_agent.brains()]
         self.assertEqual(names, [
             "NVIDIA (z-ai/glm-5.3-flash)", "Gemini (gemini-2.5-pro)"])
 
@@ -128,8 +128,8 @@ class NvidiaRoutingTests(unittest.TestCase):
         response = {"choices": [{"message": {"tool_calls": [
             {"id": "a", "function": {"name": "read_file",
                                      "arguments": '{"path":"main.py"}'}}]}}]}
-        brain = jarvis_agent.OpenAIBrain(nvidia.BASE_URL, "secret", "z-ai/glm-5.3-flash", "NVIDIA")
-        with mock.patch.object(jarvis_agent, "_http_json", return_value=response) as request:
+        brain = aether_agent.OpenAIBrain(nvidia.BASE_URL, "secret", "z-ai/glm-5.3-flash", "NVIDIA")
+        with mock.patch.object(aether_agent, "_http_json", return_value=response) as request:
             _, calls, _ = brain.turn([{"role": "user", "text": "dosyayı oku"}])
         self.assertEqual(calls[0]["name"], "read_file")
         self.assertEqual(request.call_args.args[0],
@@ -140,7 +140,7 @@ class NvidiaRoutingTests(unittest.TestCase):
         from actions import dev_agent
         from core import coding_router
         with mock.patch.object(coding_router, "ladder",
-                               return_value=[jarvis_agent.PROVIDER_ID, ""]), \
+                               return_value=[aether_agent.PROVIDER_ID, ""]), \
              mock.patch.object(nvidia, "api_key", return_value="nvidia"), \
              mock.patch.object(nvidia, "available_models",
                                return_value=["z-ai/glm-5.3-flash"]), \
@@ -155,7 +155,7 @@ class NvidiaRoutingTests(unittest.TestCase):
         from actions import dev_agent
         from core import coding_router
         with mock.patch.object(coding_router, "ladder",
-                               return_value=[jarvis_agent.PROVIDER_ID, ""]), \
+                               return_value=[aether_agent.PROVIDER_ID, ""]), \
              mock.patch.object(coding_router, "rest", return_value=3600), \
              mock.patch.object(nvidia, "api_key", return_value="nvidia"), \
              mock.patch.object(nvidia, "available_models",

@@ -1,13 +1,13 @@
-"""gui/control_center.py — the Control Centre: MAYK's network and live activity.
+"""gui/control_center.py — the Control Centre: AETHER's network and live activity.
 
 Left, the network: the reactor core in the middle, the five capabilities on an
-inner ring (voice, chat, web, files, memory) and the apps and tools MAYK
+inner ring (voice, chat, web, files, memory) and the apps and tools AETHER
 drives on the outer ring. A node lights up, with a count, once something in
 this session has gone through it; its link to the core glows and carries a
 pulse towards the node whenever it is used. Click a node to filter the feed to
 it; click the core to unmute and talk.
 
-Right, the live activity feed: every action MAYK takes, as it happens, read
+Right, the live activity feed: every action AETHER takes, as it happens, read
 from core.activity. Failures and unconfirmed results are shown as what they
 are, never as successes.
 
@@ -307,7 +307,7 @@ class NetworkCanvas(QWidget):
                 p.setPen(QPen(qcol(C.DARK)))
                 p.drawText(br, Qt.AlignmentFlag.AlignCenter, txt)
 
-        # caption: the latest thing MAYK said, under the network
+        # caption: the latest thing AETHER said, under the network
         if self._caption:
             p.setFont(px_font(14))
             p.setPen(QPen(qcol(C.TEXT_MED)))
@@ -322,7 +322,7 @@ class NetworkCanvas(QWidget):
 
 
 class ActivityFeed(QWidget):
-    """Every action MAYK takes, newest first. Scrolls with the wheel."""
+    """Every action AETHER takes, newest first. Scrolls with the wheel."""
 
     ROW = 46
 
@@ -383,7 +383,7 @@ class ActivityFeed(QWidget):
         p.setFont(px_font(11))
         p.setPen(QPen(qcol(C.TEXT_DIM)))
         p.drawText(QRectF(22, 40, W - 44, 18), Qt.AlignmentFlag.AlignVCenter,
-                   "MAYK'ın yaptığı her işlem, anında.")
+                   "AETHER'ın yaptığı her işlem, anında.")
         p.setPen(QPen(with_alpha(C.PRI, 0.18), 1))
         p.drawLine(QPointF(18, 68), QPointF(W - 18, 68))
 
@@ -394,7 +394,7 @@ class ActivityFeed(QWidget):
             p.setFont(px_font(12))
             p.setPen(QPen(qcol(C.TEXT_DIM)))
             p.drawText(QRectF(22, 90, W - 44, 60), int(Qt.AlignmentFlag.AlignLeft.value | Qt.TextFlag.TextWordWrap.value),
-                       "Henüz bir işlem yok. MAYK'a bir şey söyle ya da yaz; yaptığı her şey burada görünür.")
+                       "Henüz bir işlem yok. AETHER'a bir şey söyle ya da yaz; yaptığı her şey burada görünür.")
         y = 78 - self._scroll
         for e in shown:
             if y > H:

@@ -122,11 +122,8 @@ def save_api_keys(gemini_api_key: str) -> None:
     _write_config(data)
 
 def normalized_assistant_name(value):
-    name = str(value or "").strip()
-    if not name or name.replace(".", "").casefold() in {"jarvis", "jarvi̇s", "mayk"}:
-        return "MAYK"
-    return name
-
+    """AETHER is the single assistant identity, including upgraded settings."""
+    return "AETHER"
 
 def _normalize_identity(data):
     if isinstance(data, dict) and "assistant_name" in data:
@@ -163,8 +160,8 @@ def is_configured() -> bool:
 
 
 def get_assistant_name() -> str:
-    """Return the configured assistant name, or 'MAYK' if not set."""
-    return load_api_keys().get("assistant_name", "MAYK") or "MAYK"
+    """Return the configured assistant name, or 'AETHER' if not set."""
+    return load_api_keys().get("assistant_name", "AETHER") or "AETHER"
 
 
 def get_user_name() -> str:
@@ -208,7 +205,7 @@ def save_voice(voice_name: str) -> None:
 
 
 def get_wake_word_enabled() -> bool:
-    """Whether local wake-word gating is on (assistant sleeps until 'Hey MAYK')."""
+    """Whether local wake-word gating is on (assistant sleeps until 'Hey AETHER')."""
     return load_api_keys().get("wake_word_enabled", False)
 
 
@@ -229,7 +226,7 @@ def save_push_to_talk_enabled(enabled: bool) -> None:
     _save_flag("push_to_talk_enabled", enabled)
 
 
-HUD_STYLES = ("face", "core")
+HUD_STYLES = ("core",)
 
 
 def get_hud_style() -> str:
@@ -241,12 +238,12 @@ def get_hud_style() -> str:
     choice survives a restart.
     """
     v = str(load_api_keys().get("hud_style", "face")).strip().lower()
-    return v if v in HUD_STYLES else "face"
+    return "core"
 
 
 def save_hud_style(style: str) -> None:
     s = str(style or "").strip().lower()
-    _save_flag("hud_style", s if s in HUD_STYLES else "face")
+    _save_flag("hud_style", "core")
 
 
 def get_ui_scale() -> float:
@@ -609,7 +606,7 @@ def _purged_deepseek_data(data: dict) -> dict:
 
 @_locked
 def purge_deepseek_settings() -> bool:
-    """MAYK'ın kaldırılan DeepSeek ayarlarını bir kez yerel dosyadan temizle.
+    """AETHER'ın kaldırılan DeepSeek ayarlarını bir kez yerel dosyadan temizle.
 
     Başka modellerin anahtarlarına veya uygulama ayarlarına dokunmaz.
     Kullanıcının eski yedek dosyasında da kaldırılan anahtar kalmamasını sağlar.

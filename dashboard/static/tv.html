@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAYK · Ekran</title>
+  <title>AETHER · Ekran</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --line: rgba(255,150,60,.18); --line2: rgba(255,150,60,.35); --blue: #ff8a1c; --cyan: #ffc04d;
+    :root { --line: rgba(38,217,255,.18); --line2: rgba(38,217,255,.35); --blue: #26d9ff; --cyan: #a3efff;
             --text: #f3ece5; --muted: #9b9087; --green: #3ddc97; --card: rgba(26,19,13,.6); }
     html, body { height: 100%; overflow: hidden; }
     body { background: radial-gradient(90% 80% at 50% 45%, #2a1607 0%, #110904 45%, #050403 85%); color: var(--text);
@@ -64,8 +64,8 @@
 <body class="st-idle">
   <section id="pair" hidden>
     <div>
-      <h1>MAYK</h1>
-      <p>Telefonda MAYK'ı aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
+      <h1>AETHER</h1>
+      <p>Telefonda AETHER'ı aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
       <div id="code">······</div>
       <small id="pair-note">Kod 5 dakika geçerli, sonra kendiliğinden yenilenir.</small>
     </div>
@@ -77,9 +77,9 @@
       <div id="date"></div>
       <div class="sys"><div class="ring"></div><div><b>SİSTEM DURUMU</b><span id="sys-st">Hazır</span></div></div>
     </div>
-    <div class="brand"><b>MAYK</b><small id="brand-dev">YAPAY ZEKÂ SİSTEMİ</small></div>
+    <div class="brand"><b>AETHER</b><small id="brand-dev">YAPAY ZEKÂ SİSTEMİ</small></div>
     <div class="center">
-      <div class="reactor" id="reactor"><canvas id="core" aria-label="MAYK çekirdeği"></canvas></div>
+      <div class="reactor" id="reactor"><canvas id="core" aria-label="AETHER çekirdeği"></canvas></div>
       <div id="st-title">Hazır</div>
       <div id="st-sub">Komut bekleniyor.</div>
       <canvas id="wave" width="800" height="90"></canvas>
@@ -93,15 +93,15 @@
     </aside>
   </section>
 
-  <button id="tv-update" type="button" style="position:fixed;left:2vw;bottom:2vw;z-index:4;background:rgba(26,19,13,.6);color:#d2c7bd;border:1px solid rgba(255,150,60,.25);border-radius:.6vw;padding:.5vw 1vw;font:inherit;font-size:.9vw;cursor:pointer">⬆ Güncelle</button>
+  <button id="tv-update" type="button" style="position:fixed;left:2vw;bottom:2vw;z-index:4;background:rgba(26,19,13,.6);color:#d2c7bd;border:1px solid rgba(38,217,255,.25);border-radius:.6vw;padding:.5vw 1vw;font:inherit;font-size:.9vw;cursor:pointer">⬆ Güncelle</button>
   <div id="stage" hidden></div>
   <div id="stage-title" hidden></div>
 
   <script src="/assets/reactor.js"></script>
   <script>
     const qs = new URLSearchParams(location.search);
-    let token = localStorage.getItem('jarvis_screen_token') || '';
-    let screenId = localStorage.getItem('jarvis_screen_id') || '';
+    let token = localStorage.getItem('aether_screen_token') || '';
+    let screenId = localStorage.getItem('aether_screen_id') || '';
     const $ = id => document.getElementById(id);
     const STATES = {
       idle: ['Hazır', 'Komut bekleniyor.'], thinking: ['Düşünüyor...', 'Komut bağlamı analiz ediliyor.'],
@@ -126,7 +126,7 @@
     setInterval(tick, 1000); tick();
 
     // reactor + wave
-    const core = JarvisReactor($('core'));
+    const core = AetherReactor($('core'));
     const wave = $('wave'), wc = wave.getContext('2d');
     let level = 0, levelT = 0, levelAt = 0;
     function frame(t) {
@@ -173,9 +173,9 @@
     }
     function saveToken(id, tok) {
       screenId = id; token = tok;
-      localStorage.setItem('jarvis_screen_id', id); localStorage.setItem('jarvis_screen_token', tok);
+      localStorage.setItem('aether_screen_id', id); localStorage.setItem('aether_screen_token', tok);
     }
-    function forget() { localStorage.removeItem('jarvis_screen_token'); localStorage.removeItem('jarvis_screen_id'); token = ''; }
+    function forget() { localStorage.removeItem('aether_screen_token'); localStorage.removeItem('aether_screen_id'); token = ''; }
 
     // devices
     const ICON = { desktop: '🖥️', laptop: '💻', tv: '📺' };
@@ -231,14 +231,14 @@
           if (m.speaker === 'user') { $('q').textContent = '“' + m.text + '”'; $('a').textContent = ''; }
           else $('a').textContent = m.text;
           const row = document.createElement('div');
-          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'MAYK'}:</b> ${esc(m.text).slice(0, 160)}`;
+          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'AETHER'}:</b> ${esc(m.text).slice(0, 160)}`;
           $('log').appendChild(row);
           while ($('log').children.length > 12) $('log').firstChild.remove();
         }
       };
     }
     setInterval(() => { if (token && cur !== 'offline') devices(); }, 10000);
-    // a new MAYK version on the computer: the TV reloads by itself
+    // a new AETHER version on the computer: the TV reloads by itself
     let tvVersion = null;
     setInterval(async () => {
       try {

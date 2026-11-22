@@ -1,4 +1,4 @@
-"""Offline 'Hey MAYK' detection on 16 kHz microphone frames."""
+"""Offline 'Hey AETHER' detection on 16 kHz microphone frames."""
 from __future__ import annotations
 
 from importlib.util import find_spec
@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import Callable
 
 MODEL_NAME = "vosk-model-small-en-us-0.15"
-# The English acoustic dictionary spells the sound of MAYK as "mike".
-KEYPHRASE = "hey mike"
+# Vosk may transcribe the AETHER (EY-TIR) wake word as "either".
+KEYPHRASE = "hey either"
+KEYPHRASES = ("hey either", "hey aether", "hey ether")
 DEFAULT_THRESHOLD = 0.8
 SAMPLE_RATE = 16000
 
@@ -40,14 +41,14 @@ def install_and_download(logger: Callable[[str], None] = print,
             if not _pip("vosk", log=logger):
                 return False, "Çevrimdışı ses tanıyıcı kurulamadı."
         from vosk import Model
-        message = "Hey MAYK için çevrimdışı ses modeli hazırlanıyor…"
+        message = "Hey AETHER için çevrimdışı ses modeli hazırlanıyor…"
         logger(message)
         if notify:
             notify(message)
         Model(model_name=MODEL_NAME)
         if not is_ready():
             return False, "Ses modeli bulunamadı."
-        return True, "Hazır. Uyandırmak için ‘Hey MAYK’ de."
+        return True, "Hazır. Uyandırmak için ‘Hey AETHER’ de."
     except (Exception, SystemExit) as exc:
         return False, f"Ses modeli kurulamadı: {exc}"
 
@@ -87,7 +88,7 @@ class WakeWordDetector:
             if model_path is None:
                 raise FileNotFoundError(MODEL_NAME)
             self._model = KaldiRecognizer(Model(str(model_path)), SAMPLE_RATE,
-                                          json.dumps([KEYPHRASE, "[unk]"]))
+                                          json.dumps([*KEYPHRASES, "[unk]"]))
             self._model.SetWords(True)
         except Exception as e:
             self._logger(f"Wake word: could not load model — {e}")
@@ -100,7 +101,7 @@ class WakeWordDetector:
         self._thread = threading.Thread(target=self._loop, args=(self._queue, self._model),
                                         daemon=True, name="WakeWordThread")
         self._thread.start()
-        self._logger("Wake word: listening for 'Hey MAYK'.")
+        self._logger("Wake word: listening for 'Hey AETHER'.")
         return True
 
     def stop(self) -> None:
@@ -127,7 +128,7 @@ class WakeWordDetector:
     @staticmethod
     def _reset_model(model) -> None:
         # The model keeps its recent audio features and scores. Left alone, one
-        # "Hey MAYK" fired a dozen times in a row (measured: 12), and audio
+        # "Hey AETHER" fired a dozen times in a row (measured: 12), and audio
         # from before the assistant woke was still in there when it went back
         # to sleep — so it could wake again on words said minutes earlier.
         try:
@@ -171,7 +172,7 @@ class WakeWordDetector:
                 # Vosk may retain preceding unknown speech across a pause. Match
                 # the last two tokens and their confidence, ignoring that prefix.
                 words = (result.get("result") or [])[-2:]
-                if ([word.get("word") for word in words] == KEYPHRASE.split()
+                if (" ".join(word.get("word", "") for word in words) in KEYPHRASES
                         and all(word.get("conf", 0) >= self._threshold for word in words)):
                     # drain any backlog and clear the model, so one utterance is one wake
                     if generation != self._generation or frames is not self._queue or not self._running:

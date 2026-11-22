@@ -13,7 +13,7 @@ class RestartTests(unittest.TestCase):
         events = []
         def launch(*args, **kwargs):
             events.append("launch")
-            Path(kwargs["env"]["MAYK_RESTART_RECEIPT"]).touch()
+            Path(kwargs["env"]["AETHER_RESTART_RECEIPT"]).touch()
         with patch('tools.restart_app.psutil.Process') as process, patch('tools.restart_app.subprocess.Popen', side_effect=launch):
             process.return_value.wait.side_effect = lambda **kw: events.append('exit')
             self.assertEqual(restart(123, '.'), 0)

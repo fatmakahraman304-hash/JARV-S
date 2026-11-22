@@ -33,7 +33,7 @@ class UpdaterTests(unittest.TestCase):
         with patch.object(u, '_get', return_value=json.dumps({'sha': self.sha}).encode()) as get:
             self.assertFalse(u.update(self.root)[0])
             self.assertEqual(get.call_count, 1)
-        self.assertFalse((self.root / '.jarvis-update.lock').exists())
+        self.assertFalse((self.root / '.aether-update.lock').exists())
 
     def test_zip_check_accepts_empty_commit_message(self):
         with patch.object(u, '_get', return_value=json.dumps({'sha': self.sha, 'commit': {'message': ''}}).encode()):
@@ -68,7 +68,7 @@ class UpdaterTests(unittest.TestCase):
                 u, '_get', side_effect=AssertionError('Git update must not use the HTTP API')):
             self.assertTrue(u.update(self.root)[0])
         self.assertEqual(git('rev-parse', 'HEAD'), new)
-        self.assertIn('jarvis-backup/', git('branch', '--list'))
+        self.assertIn('aether-backup/', git('branch', '--list'))
         self.assertEqual((self.root / 'main.py').read_bytes(), b'new')
 
     def test_personal_data_untouched(self):
@@ -106,7 +106,7 @@ class UpdaterTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'custom.py'):
             u._apply_zip(self.root, {**self.files, 'custom.py': b'upstream'}, 'b' * 40, 'main')
         self.assertEqual(local.read_bytes(), b'personal')
-        self.assertEqual(json.loads((self.root / '.jarvis-update.json').read_text())['sha'], self.sha)
+        self.assertEqual(json.loads((self.root / '.aether-update.json').read_text())['sha'], self.sha)
 
     def test_removed_tracked_file_deleted_custom_file_kept(self):
         u._apply_zip(self.root, {**self.files, 'obsolete.py': b'old'}, self.sha, 'main')
@@ -116,10 +116,10 @@ class UpdaterTests(unittest.TestCase):
         self.assertTrue((self.root / 'custom.py').exists())
 
     def test_zip_preserves_existing_temporary_names(self):
-        for name in ("main.py.jarvis-new", ".jarvis-update.tmp"):
+        for name in ("main.py.aether-new", ".aether-update.tmp"):
             (self.root / name).write_bytes(b"local")
         u._apply_zip(self.root, self.files, self.sha, "main")
-        for name in ("main.py.jarvis-new", ".jarvis-update.tmp"):
+        for name in ("main.py.aether-new", ".aether-update.tmp"):
             self.assertEqual((self.root / name).read_bytes(), b"local")
 
     def test_same_second_same_size_python_update_runs_new_code(self):
@@ -169,13 +169,13 @@ class UpdaterTests(unittest.TestCase):
                 u._apply_zip(self.root, self.files, self.sha, 'main')
         self.assertEqual((self.root / 'main.py').read_bytes(), b'original')
         self.assertFalse((self.root / 'gui/window.py').exists())
-        self.assertFalse((self.root / '.jarvis-update.json').exists())
+        self.assertFalse((self.root / '.aether-update.json').exists())
 
     def test_network_failure_unlocks(self):
         with patch.object(u, '_get', side_effect=TimeoutError('offline')):
             with self.assertRaises(TimeoutError):
                 u.update(self.root)
-        self.assertFalse((self.root / '.jarvis-update.lock').exists())
+        self.assertFalse((self.root / '.aether-update.lock').exists())
 
     def test_dependency_removal_does_not_block_zip_update(self):
         (self.root / 'requirements.txt').write_text('test==1\nold-package>=1\n')
@@ -200,10 +200,10 @@ class UpdaterTests(unittest.TestCase):
         self.assertFalse((self.root / 'main.py').exists())
 
     def test_interrupted_read_only_phase_retries(self):
-        (self.root / '.jarvis-update.lock').write_bytes(b'MAYK/1 checking')
+        (self.root / '.aether-update.lock').write_bytes(b'AETHER/1 checking')
         with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):
             self.assertTrue(u.update(self.root)[0])
-        self.assertFalse((self.root / '.jarvis-update.lock').exists())
+        self.assertFalse((self.root / '.aether-update.lock').exists())
 
     def test_guard_blocks_a_second_process_and_releases_after_abrupt_exit(self):
         import subprocess
@@ -223,10 +223,10 @@ class UpdaterTests(unittest.TestCase):
             pass
 
     def test_lock_prevents_concurrent_update(self):
-        (self.root / '.jarvis-update.lock').touch()
+        (self.root / '.aether-update.lock').touch()
         with self.assertRaisesRegex(RuntimeError, 'Başka bir güncelleme'):
             u.update(self.root)
-        self.assertTrue((self.root / '.jarvis-update.lock').exists())
+        self.assertTrue((self.root / '.aether-update.lock').exists())
 
     def test_symlink_escape_rejected(self):
         with tempfile.TemporaryDirectory() as outside:
@@ -315,7 +315,7 @@ class GitLocalChangesTests(unittest.TestCase):
         self.assertIn('stash', msg)
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.new)
         self.assertIn(b'line three', (self.root / 'main.py').read_bytes())
-        self.assertIn('jarvis-update', self.git('stash', 'list'))
+        self.assertIn('aether-update', self.git('stash', 'list'))
         self.assertIn('MY VERSION', self.git('stash', 'show', '-p', 'stash@{0}'))
         self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')
 
@@ -372,7 +372,7 @@ with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_e
         child = subprocess.run([sys.executable, "-c", script, str(self.root), stop_at],
                                capture_output=True, timeout=20)
         self.assertEqual(child.returncode, 79, child.stderr)
-        self.assertTrue((self.root / ".jarvis-update.lock").exists())
+        self.assertTrue((self.root / ".aether-update.lock").exists())
 
     def recover(self):
         with patch.object(u, "_get", side_effect=AssertionError("recovery must be offline")):
@@ -385,14 +385,14 @@ with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_e
         for rel, data in self.old.items():
             self.assertEqual((self.root / rel).read_bytes(), data)
         self.assertEqual(self.private.read_bytes(), b"local settings")
-        self.assertFalse((self.root / ".jarvis-update.lock").exists())
+        self.assertFalse((self.root / ".aether-update.lock").exists())
 
     def test_committed_update_survives_process_exit_before_unlock(self):
-        self.interrupt(".jarvis-update.json")
+        self.interrupt(".aether-update.json")
         self.assertTrue(self.recover()[0])
         self.assertEqual((self.root / "main.py").read_bytes(), b"new main")
         self.assertFalse((self.root / "a-removed.py").exists())
-        state = json.loads((self.root / ".jarvis-update.json").read_text())
+        state = json.loads((self.root / ".aether-update.json").read_text())
         self.assertEqual(state["sha"], "b" * 40)
 
     def test_personal_edit_stops_recovery_before_any_files_are_changed(self):
@@ -402,7 +402,7 @@ with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_e
             self.recover()
         self.assertEqual((self.root / "main.py").read_bytes(), b"personal edit")
         self.assertTrue((self.root / "a-added.py").exists())
-        self.assertTrue((self.root / ".jarvis-update.lock").exists())
+        self.assertTrue((self.root / ".aether-update.lock").exists())
 
     def test_offline_command_can_be_run_twice_without_starting_the_hud(self):
         import subprocess
@@ -421,9 +421,9 @@ with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_e
 
     def test_corrupt_backup_blocks_changes_and_keeps_marker(self):
         self.interrupt("main.py")
-        marker = self.root / ".jarvis-update.lock"
+        marker = self.root / ".aether-update.lock"
         journal = json.loads(marker.read_bytes()[len(u._ZIP_MARKER):])
-        (self.root / ".jarvis-backups" / journal["backup"] / "main.py").write_bytes(b"broken")
+        (self.root / ".aether-backups" / journal["backup"] / "main.py").write_bytes(b"broken")
         with self.assertRaisesRegex(RuntimeError, "Yedek doğrulanamadı"):
             self.recover()
         self.assertTrue(marker.exists())
@@ -431,7 +431,7 @@ with patch.object(u.os,'replace',side_effect=stop), patch.object(u,'_get',side_e
         self.assertTrue((self.root / "a-added.py").is_file())
 
     def test_committed_rollback_preserves_personal_edits_and_is_resumable(self):
-        self.interrupt(".jarvis-update.json")
+        self.interrupt(".aether-update.json")
         self.recover()
         edited = self.root / "main.py"
         edited.write_bytes(b"my edit")
@@ -460,6 +460,6 @@ with patch.object(u.os, 'replace', side_effect=stop):
         self.assertTrue(self.recover()[0])
         for rel, content in self.old.items():
             self.assertEqual((self.root / rel).read_bytes(), content)
-        self.assertEqual(json.loads((self.root / ".jarvis-update.json").read_bytes())["sha"], "a" * 40)
+        self.assertEqual(json.loads((self.root / ".aether-update.json").read_bytes())["sha"], "a" * 40)
         self.assertFalse((self.root / "a-added.py").exists())
         self.assertEqual(self.private.read_bytes(), b"local settings")

@@ -6,13 +6,13 @@ import threading
 from urllib.request import Request, urlopen
 from plugins.normal_map import search
 
-PLUGIN = {'name':'map_route', 'description':'Draw a driving route between two explicit places on the normal map INSIDE MAYK. Ask for origin when missing; never use approximate IP location as a precise start. Not live traffic or turn-by-turn navigation. Use for rota oluştur/yol tarifi.', 'parameters':{'type':'OBJECT','properties':{'origin':{'type':'STRING'},'destination':{'type':'STRING'}},'required':['origin','destination']}}
+PLUGIN = {'name':'map_route', 'description':'Draw a driving route between two explicit places on the normal map INSIDE AETHER. Ask for origin when missing; never use approximate IP location as a precise start. Not live traffic or turn-by-turn navigation. Use for rota oluştur/yol tarifi.', 'parameters':{'type':'OBJECT','properties':{'origin':{'type':'STRING'},'destination':{'type':'STRING'}},'required':['origin','destination']}}
 
 
 def route(start, end):
     coords = f"{start['lon']},{start['lat']};{end['lon']},{end['lat']}"
-    endpoint = os.environ.get('JARVIS_ROUTER_URL', 'https://router.project-osrm.org').rstrip('/')
-    req = Request(endpoint+'/route/v1/driving/'+coords+'?overview=full&geometries=geojson', headers={'User-Agent':'JarvisPersonalMap/1.0'})
+    endpoint = os.environ.get('AETHER_ROUTER_URL', 'https://router.project-osrm.org').rstrip('/')
+    req = Request(endpoint+'/route/v1/driving/'+coords+'?overview=full&geometries=geojson', headers={'User-Agent':'AetherPersonalMap/1.0'})
     with urlopen(req, timeout=20) as response:
         data=json.loads(response.read(4000000))
     if data.get('code') != 'Ok' or not data.get('routes'):
@@ -36,7 +36,7 @@ def run(parameters, player=None, session_memory=None):
     if not origin or not destination or max(len(origin),len(destination))>500:
         return 'Başlangıç ve varış yerini şehir/ülke bilgisiyle söyleyin.'
     if not callable(getattr(player,'show_route_choices',None)):
-        return 'Rota için MAYK arayüzü açık olmalı.'
+        return 'Rota için AETHER arayüzü açık olmalı.'
     def work():
         try:
             start,end=search(origin),search(destination)

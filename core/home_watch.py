@@ -1,7 +1,7 @@
 """
 The house, watched — "Ön kapı açıldı, efendim." / "Mutfakta su kaçağı algılandı!"
 
-When Home Assistant is connected (plugins/smart_home.py), MAYK keeps an eye on
+When Home Assistant is connected (plugins/smart_home.py), AETHER keeps an eye on
 the sensors that matter and says when they change:
 
   * doors, windows and the garage door opening or closing;
@@ -109,7 +109,7 @@ def leaving_note(names: list[str], left_on: list[str], rain: dict | None = None)
         parts.append(f"Saat {rain['at']} civarı yağmur ihtimali %{rain['prob']}; şemsiye almak isteyebilirsiniz.")
     if not parts:
         return None
-    return ("MAYK — evden çıktınız", f"{', '.join(names)}: " + " ".join(parts))
+    return ("AETHER — evden çıktınız", f"{', '.join(names)}: " + " ".join(parts))
 
 
 def instruction(notes: list[tuple[str, str]]) -> str:
@@ -123,5 +123,5 @@ def instruction(notes: list[tuple[str, str]]) -> str:
         return ("[HOME_ALARM] " + text + " Tell the user at once, calmly and clearly, in one or two sentences "
                 "(e.g. 'Efendim, mutfakta su kaçağı algılandı.'), and offer the obvious step (turning a valve "
                 "or device off through smart_home, if there is one).")
-    return ("[ENVIRONMENT] " + text + " Mention it the way MAYK would — one short sentence "
+    return ("[ENVIRONMENT] " + text + " Mention it the way AETHER would — one short sentence "
             "('Ön kapı açıldı, efendim.'). Do not call any tool.")

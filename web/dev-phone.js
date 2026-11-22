@@ -1,4 +1,4 @@
-/* MAYK on the phone (iPhone 14 Pro Max first, any phone works).
+/* AETHER on the phone (iPhone 14 Pro Max first, any phone works).
  *
  *  1. Hold the mic to talk, let go to stop (a short tap still toggles).
  *  2. Swipe up on the core: conversation · swipe down: agenda · swipe a sheet down: close.
@@ -9,11 +9,11 @@
  *  7. The mic closes itself after 45 s of silence, so a forgotten mic doesn't drain the battery.
  *  8. Landscape layout: core on the left, answer and controls on the right.
  *  9. Tool chips in one swipeable row — more room for the core.
- * 10. Shake the phone while MAYK is talking: it stops.
+ * 10. Shake the phone while AETHER is talking: it stops.
  */
 (() => {
   'use strict';
-  const J = window.JARVIS, K = window.JarvisKit; if (!J || !K) return;
+  const J = window.AETHER, K = window.AetherKit; if (!J || !K) return;
   const phone = J.is('phone'), handheld = J.is('phone', 'tablet');
   if (!handheld) return;
   const $ = J.$, S = J.S;
@@ -131,7 +131,7 @@
     }, 1000);
   }
 
-  // 10 ── shake to stop MAYK talking ──────────────────────────────────────
+  // 10 ── shake to stop AETHER talking ──────────────────────────────────────
   let motionAsked = false; const jolts = [];
   function askMotion() {
     if (motionAsked) return; motionAsked = true;

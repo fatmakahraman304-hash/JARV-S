@@ -9,25 +9,25 @@ from core.live_transcript import combined_text, merge_input_chunk
 class InputTranscriptTests(unittest.TestCase):
     def test_independent_segments_keep_utterance_in_order(self):
         parts = []
-        for new in ("MAYK", "bilgisayarın sesini", "kıs"):
+        for new in ("AETHER", "bilgisayarın sesini", "kıs"):
             parts = merge_input_chunk(parts, new)
-        self.assertEqual(combined_text(parts), "MAYK bilgisayarın sesini kıs")
+        self.assertEqual(combined_text(parts), "AETHER bilgisayarın sesini kıs")
 
     def test_cumulative_audio_transcription_does_not_duplicate(self):
         parts = []
-        for new in ("MAYK ışığı", "MAYK ışığı aç", "MAYK ışığı aç"):
+        for new in ("AETHER ışığı", "AETHER ışığı aç", "AETHER ışığı aç"):
             parts = merge_input_chunk(parts, new)
-        self.assertEqual(combined_text(parts), "MAYK ışığı aç")
+        self.assertEqual(combined_text(parts), "AETHER ışığı aç")
 
-    def test_short_mayk_partial_then_full_phrase(self):
-        parts = merge_input_chunk(["MAYK"], "MAYK sesi biraz kıs")
-        self.assertEqual(combined_text(parts), "MAYK sesi biraz kıs")
+    def test_short_aether_partial_then_full_phrase(self):
+        parts = merge_input_chunk(["AETHER"], "AETHER sesi biraz kıs")
+        self.assertEqual(combined_text(parts), "AETHER sesi biraz kıs")
 
     def test_word_boundary_overlap_only_once(self):
         parts = []
-        for new in ("MAYK Spotify'ı aç", "Spotify'ı aç sonra sesi kıs"):
+        for new in ("AETHER Spotify'ı aç", "Spotify'ı aç sonra sesi kıs"):
             parts = merge_input_chunk(parts, new)
-        self.assertEqual(combined_text(parts), "MAYK Spotify'ı aç sonra sesi kıs")
+        self.assertEqual(combined_text(parts), "AETHER Spotify'ı aç sonra sesi kıs")
 
     def test_legitimate_single_word_repetition_is_kept(self):
         self.assertEqual(combined_text(merge_input_chunk(["evet"], "evet")), "evet evet")
@@ -37,19 +37,19 @@ class InputTranscriptTests(unittest.TestCase):
         self.assertEqual(combined_text(parts), "ev evet")
 
     def test_corrections_and_punctuation_are_not_dropped(self):
-        parts = merge_input_chunk(["Mayk bilgisayarı"], "Mayk bilgisayarı kapatma")
-        self.assertEqual(combined_text(parts), "Mayk bilgisayarı kapatma")
+        parts = merge_input_chunk(["Aether bilgisayarı"], "Aether bilgisayarı kapatma")
+        self.assertEqual(combined_text(parts), "Aether bilgisayarı kapatma")
 
     def test_empty_chunks_not_added_or_mutated(self):
-        previous = ["MAYK kamera aç"]
+        previous = ["AETHER kamera aç"]
         self.assertEqual(merge_input_chunk(previous, "  "), previous)
-        self.assertEqual(previous, ["MAYK kamera aç"])
+        self.assertEqual(previous, ["AETHER kamera aç"])
 
 
 class MisunderstandingFeedbackTests(unittest.TestCase):
     def test_user_corrections_are_feedback(self):
         for phrase in ("Beni yanlış anladın", "Öyle demedim", "Yanlış duydun",
-                       "Beni anlamıyorsun", "MAYK yanlış anlıyorsun"):
+                       "Beni anlamıyorsun", "AETHER yanlış anlıyorsun"):
             with self.subTest(phrase=phrase):
                 self.assertEqual(kind(phrase), "feedback")
                 self.assertTrue(should_act(phrase))

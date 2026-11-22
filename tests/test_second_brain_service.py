@@ -25,14 +25,14 @@ class AutonomousBrain(unittest.TestCase):
         found = {"title": "Hafıza hatası", "detail": "Tekrarlanabilir hata", "source": "audit:memory:abc"}
         def start(parameters, player):
             self.request = parameters
-            return "MAYK kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
+            return "AETHER kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
         with patch.object(service, "discover", return_value=found), patch.object(brain, "analyze"), \
              patch.object(self.github, "run", side_effect=start):
             self.controller.cycle(now=100)
         self.assertEqual(self.request["mode"], "self_edit")
         self.assertIn("[SECOND_BRAIN:", self.request["instruction"])
         self.assertEqual(brain.items()[0]["state"], "requested")
-        pid = continuity.project_start("improve", "MAYK", "/checkout", self.request["instruction"])
+        pid = continuity.project_start("improve", "AETHER", "/checkout", self.request["instruction"])
         continuity.project_update(pid, status="bitti", note="Unittest geçti.")
         self.controller.reconcile()
         self.assertEqual(brain.items()[0]["state"], "verified")

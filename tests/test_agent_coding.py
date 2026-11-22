@@ -136,7 +136,7 @@ class AgentModeTest(unittest.TestCase):
         self.assertFalse(self.da._use_agent(""))
         self.assertFalse(self.da._use_agent("openai_compat@openai"))
         with mock.patch.object(agent_coding, "available", return_value=True):
-            self.assertTrue(self.da._use_agent("jarvis_agent"))
+            self.assertTrue(self.da._use_agent("aether_agent"))
             self.assertFalse(self.da._use_agent("claude_code"))
             self.assertFalse(self.da._use_agent("codex_cli"))
 
@@ -167,7 +167,7 @@ class AgentModeTest(unittest.TestCase):
             self.assertIn("app.py", msg)
             self.assertIn("test_app.py", msg)
             self.assertIn("otomatik test komutu algılanmadı", msg)
-            self.assertNotIn("MAYK'ın kendi testleri başarılı", msg)
+            self.assertNotIn("AETHER'ın kendi testleri başarılı", msg)
             self.assertEqual((root / ".env").read_text(), "KEY=secret\n")   # secrets put back
             undo["fn"]()
             self.assertEqual((root / "app.py").read_text(), "def total(x):\n    return x\n")
@@ -190,11 +190,11 @@ class AgentModeTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "geri alındı"):
                     self.da._improve_with_agent(root, "fix", "", {}, None,
                                                 {"app.py": "original"},
-                                                "jarvis_agent", None, 0.0, False)
+                                                "aether_agent", None, 0.0, False)
             self.assertEqual((root / "app.py").read_text(), "original")
 
     def test_cancel_during_second_fix_round_reverts_all_changes(self):
-        from core.jarvis_agent import AgentCancelled
+        from core.aether_agent import AgentCancelled
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             (root / "app.py").write_text("original")
@@ -214,7 +214,7 @@ class AgentModeTest(unittest.TestCase):
                 with self.assertRaises(AgentCancelled):
                     self.da._improve_with_agent(root, "fix", "", {}, None,
                                                 {"app.py": "original"},
-                                                "jarvis_agent", None, 0.0, False)
+                                                "aether_agent", None, 0.0, False)
             self.assertEqual((root / "app.py").read_text(), "original")
 
 
@@ -255,15 +255,15 @@ class RouterTest(unittest.TestCase):
     def test_order_and_rest(self):
         both = lambda p: True
         self.assertEqual(self.r.ladder("openai_compat@deepseek", both),
-                         ["jarvis_agent", ""])  # Eski kayıt yeniden etkinleşmez
-        self.assertEqual(self.r.ladder("claude_code", both), ["jarvis_agent", ""])
-        self.assertEqual(self.r.ladder("codex_cli", both), ["jarvis_agent", ""])
+                         ["aether_agent", ""])  # Eski kayıt yeniden etkinleşmez
+        self.assertEqual(self.r.ladder("claude_code", both), ["aether_agent", ""])
+        self.assertEqual(self.r.ladder("codex_cli", both), ["aether_agent", ""])
         self.assertEqual(self.r.ladder("", lambda p: p == "codex_cli"), [""])
-        secs = self.r.rest("jarvis_agent", RuntimeError("429: kullanım sınırı"))
+        secs = self.r.rest("aether_agent", RuntimeError("429: kullanım sınırı"))
         self.assertEqual(secs, self.r.LIMIT_REST)
         self.assertEqual(self.r.ladder("", both), [""])
         with mock.patch.object(self.r.time, "time", return_value=time.time() + self.r.LIMIT_REST + 5):
-            self.assertEqual(self.r.ladder("", both), ["jarvis_agent", ""])
+            self.assertEqual(self.r.ladder("", both), ["aether_agent", ""])
         self.assertEqual(self.r.rest("openai_compat@nvidia", RuntimeError("401")),
                          self.r.DOWN_REST)
 
@@ -276,7 +276,7 @@ class RouterTest(unittest.TestCase):
         from actions import dev_agent
         from core import nvidia_account
         model = mock.Mock(text="Gemini yanıtı")
-        with mock.patch.object(self.r, "ladder", return_value=["jarvis_agent", ""]), \
+        with mock.patch.object(self.r, "ladder", return_value=["aether_agent", ""]), \
              mock.patch.object(nvidia_account, "api_key", return_value=""), \
              mock.patch.object(dev_agent.gemini, "call", return_value=model) as gem:
             self.assertEqual(dev_agent._get_model().generate_content("kod").text,

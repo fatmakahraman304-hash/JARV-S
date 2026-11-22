@@ -1,4 +1,4 @@
-"""MAYK speaks like the films: 'efendim', the 'siz' forms, dry wit, calm reports — overridable by the user."""
+"""AETHER speaks like the films: 'efendim', the 'siz' forms, dry wit, calm reports — overridable by the user."""
 import unittest
 from pathlib import Path
 
@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class Persona(unittest.TestCase):
     def test_prompt_carries_the_film_manner(self):
         p = (ROOT / "core" / "prompt.txt").read_text(encoding="utf-8")
-        self.assertIn("[ADDRESS AND MANNER — MAYK]", p)
+        self.assertIn("[ADDRESS AND MANNER — AETHER]", p)
         for must in ('"efendim"', '"siz"', "Never in every sentence", "STANDING INSTRUCTIONS FROM THE USER",
                      "Never during a failure", "No exclamation marks, no emoji"):
             self.assertIn(must, p)

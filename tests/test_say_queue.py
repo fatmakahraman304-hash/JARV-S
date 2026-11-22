@@ -25,13 +25,13 @@ class SayQueueTest(unittest.TestCase):
             _say_queue=deque(), _last_said_at=float("-inf"), _is_speaking=speaking,
             _speaking_lock=threading.Lock(), audio_in_queue=None, session=Session(),
             _last_user_speech=time.monotonic() + last_user, _outbox=[],
-            _SAY_GAP=0.3, _SAY_CALM=main.MaykLive._SAY_CALM, _SAY_MAX_WAIT=60.0)
-        fake._calm_for_say = lambda now: main.MaykLive._calm_for_say(fake, now)
+            _SAY_GAP=0.3, _SAY_CALM=main.AetherLive._SAY_CALM, _SAY_MAX_WAIT=60.0)
+        fake._calm_for_say = lambda now: main.AetherLive._calm_for_say(fake, now)
         return fake, sent
 
     def run_drain(self, main, fake, seconds):
         async def go():
-            task = asyncio.create_task(main.MaykLive._drain_say(fake))
+            task = asyncio.create_task(main.AetherLive._drain_say(fake))
             await asyncio.sleep(seconds)
             task.cancel()
         asyncio.run(go())

@@ -1,5 +1,5 @@
 """
-dashboard/server.py — MAYK Local HTTP Dashboard
+dashboard/server.py — AETHER Local HTTP Dashboard
 
 LAN dashboard with bearer sessions and optional HTTPS. An explicit HTTPS
 configuration must have a usable local certificate before serving controls.
@@ -60,11 +60,11 @@ ACTIVE = None
 
 
 def _app_version() -> str:
-    """Which version of MAYK is running (the commit), so open phone and TV
+    """Which version of AETHER is running (the commit), so open phone and TV
     pages can notice an update and reload themselves."""
     try:
         import json as _json
-        st = BASE_DIR / ".jarvis-update.json"
+        st = BASE_DIR / ".aether-update.json"
         if st.exists():
             sha = _json.loads(st.read_text("utf-8")).get("sha", "")
             if sha:
@@ -89,8 +89,8 @@ def _app_version() -> str:
 def _make_uploads_dir() -> Path:
     """Return (and create) the cross-platform uploads folder."""
     for candidate in [
-        Path.home() / "Downloads" / "MAYK Uploads",
-        Path.home() / "Documents" / "MAYK Uploads",
+        Path.home() / "Downloads" / "AETHER Uploads",
+        Path.home() / "Documents" / "AETHER Uploads",
         BASE_DIR / "uploads",
     ]:
         try:
@@ -115,7 +115,7 @@ _KEY_CHARS = [c for c in (string.ascii_uppercase + string.digits)
               if c not in ('O', 'I', 'L', '0', '1')]
 
 # ── AES-256-CBC ───────────────────────────────────────────────────────────────
-_AES_SALT = b'JARVIS-DASHBOARD-v1'
+_AES_SALT = b'AETHER-DASHBOARD-v1'
 
 
 # Rounds for the pairing key -> AES key derivation.
@@ -294,8 +294,8 @@ def _ensure_network_access(*ports: int) -> None:
         # elevation once per port — two UAC dialogs for one dashboard, and two
         # racing .bat files whose output interleaved into contradictory
         # messages on the console.
-        port_rules = {pt: f"MAYK Dashboard Port {pt}" for pt in ports}
-        prog_rule  = "MAYK Dashboard Python"
+        port_rules = {pt: f"AETHER Dashboard Port {pt}" for pt in ports}
+        prog_rule  = "AETHER Dashboard Python"
 
         # BOTH interpreters, because the app runs under either one.
         #
@@ -346,7 +346,7 @@ def _ensure_network_access(*ports: int) -> None:
         if _network_is_public():
             print("[Dashboard] This network is set to Public in Windows, which "
                   "blocks phones on it. If it is your own network, set it to "
-                  "Private in Settings > Network & internet. MAYK will not "
+                  "Private in Settings > Network & internet. AETHER will not "
                   "change that for you — on public Wi-Fi it would expose this "
                   "computer.")
         need_private = False
@@ -402,12 +402,12 @@ def _ensure_network_access(*ports: int) -> None:
         # Say what will be attempted, so a UAC prompt nobody expected has a
         # reason attached to it in the terminal.
         if blocked:
-            print("[Dashboard] The Windows prompt about to appear is MAYK "
+            print("[Dashboard] The Windows prompt about to appear is AETHER "
                   "removing those block rules. Declining it leaves the phone "
                   "dashboard unreachable, and nothing else is affected.")
 
         bat_body = "\r\n".join(bat_lines) + "\r\n"
-        fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="jarvis_fw_")
+        fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="aether_fw_")
         try:
             os.write(fd, bat_body.encode("mbcs"))   # Windows cmd.exe expects ANSI
             os.close(fd)
@@ -473,11 +473,11 @@ def _ensure_network_access(*ports: int) -> None:
                           "until this is done: Windows has block rules for "
                           + ", ".join(sorted({n for n, _ in blocked}))
                           + " which override every allow rule.")
-                    print("[Dashboard] Either restart MAYK and accept the "
+                    print("[Dashboard] Either restart AETHER and accept the "
                           "prompt, or delete those rules in Windows Defender "
                           "Firewall > Inbound Rules.")
                 else:
-                    print("[Dashboard] Phone connections may fail until MAYK "
+                    print("[Dashboard] Phone connections may fail until AETHER "
                           "is run as Administrator.")
         except Exception as e:
             print(f"[Dashboard] Firewall setup error: {e}")
@@ -624,8 +624,8 @@ def _ensure_certs() -> bool:
     plain HTTP, which still works — the QR code simply encodes http:// instead.
     """
     certs = BASE_DIR / "config" / "certs"
-    key_p = certs / "jarvis.key"
-    crt_p = certs / "jarvis.crt"
+    key_p = certs / "aether.key"
+    crt_p = certs / "aether.crt"
     if key_p.exists() and crt_p.exists():
         return True
 
@@ -646,8 +646,8 @@ def _ensure_certs() -> bool:
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
         who = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, "MAYK Dashboard"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "MAYK"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "AETHER Dashboard"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "AETHER"),
         ])
 
         # The SAN has to cover every address the phone might use: the LAN IP the
@@ -777,7 +777,7 @@ class DashboardServer:
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
         self._tv_html                     = _read("tv.html")
-        # Devices: the other computers running MAYK (found by broadcast) and
+        # Devices: the other computers running AETHER (found by broadcast) and
         # the big screens paired to this one. See dashboard/devices.py.
         from dashboard.devices import Discovery, ScreenRegistry, self_info
         self._self_info                   = lambda: self_info(self.get_url())
@@ -841,7 +841,7 @@ class DashboardServer:
         except Exception:
             return False
         certs = BASE_DIR / "config" / "certs"
-        return (certs / "jarvis.key").exists() and (certs / "jarvis.crt").exists()
+        return (certs / "aether.key").exists() and (certs / "aether.crt").exists()
 
     def get_url(self) -> str:
         """The full URL the QR code carries — always with its scheme, so a
@@ -945,7 +945,7 @@ class DashboardServer:
         self.notify({"type": "state", "state": state})
 
     def level(self, value: float) -> None:
-        """MAYK's voice level while speaking, at most ~8 times a second."""
+        """AETHER's voice level while speaking, at most ~8 times a second."""
         now = time.monotonic()
         if now - self._last_level_at < 0.12:
             return
@@ -974,7 +974,7 @@ class DashboardServer:
 
     def _build_app(self) -> "FastAPI":
         app = FastAPI(docs_url=None, redoc_url=None)
-        # The phone page of one computer talks to the other MAYK computers'
+        # The phone page of one computer talks to the other AETHER computers'
         # dashboards directly. Auth is a bearer token in a header (no cookies),
         # so allowing any origin exposes nothing a token does not already gate.
         try:
@@ -1057,7 +1057,7 @@ class DashboardServer:
   h2{color:#f87171;margin-bottom:12px}p{color:#5e6a7e;font-size:14px}
 </style></head>
 <body><div><h2>Link Expired</h2>
-<p>Press <strong style="color:#dde3ed">Remote Control</strong> in MAYK to get a new QR code.</p>
+<p>Press <strong style="color:#dde3ed">Remote Control</strong> in AETHER to get a new QR code.</p>
 </div></body></html>""")
 
             del self._pending_keys[key]
@@ -1083,12 +1083,12 @@ class DashboardServer:
 </style></head>
 <body>
 <script>
-  sessionStorage.setItem('jarvis_token','{tok}');
-  sessionStorage.setItem('jarvis_key','{key}');
-  localStorage.setItem('jarvis_device_token','{dev_tok}');
+  sessionStorage.setItem('aether_token','{tok}');
+  sessionStorage.setItem('aether_key','{key}');
+  localStorage.setItem('aether_device_token','{dev_tok}');
   setTimeout(function(){{location.replace('/')}},400);
 </script>
-<p>Connecting to MAYK…</p>
+<p>Connecting to AETHER…</p>
 </body></html>""")
 
         @app.post("/api/device-login")
@@ -1190,7 +1190,7 @@ class DashboardServer:
                     return JSONResponse({"error": "Fotoğraf yüklenirken süre doldu."}, status_code=408)
                 except Exception:
                     return JSONResponse(
-                        {"error": "Gemini fotoğrafı yorumlayamadı. MAYK’ın API anahtarını, bağlantısını ve kotasını kontrol et."},
+                        {"error": "Gemini fotoğrafı yorumlayamadı. AETHER’ın API anahtarını, bağlantısını ve kotasını kontrol et."},
                         status_code=502,
                     )
                 return JSONResponse({"reading": result}, headers={"Cache-Control": "no-store"})
@@ -1203,7 +1203,7 @@ class DashboardServer:
             if content_type not in camera_photo.PHOTO_TYPES:
                 return JSONResponse({"error": "JPEG, PNG veya WebP fotoğrafı seç."}, status_code=415)
             if self._scan_callback is None:
-                return JSONResponse({"error": "MAYK masaüstü bağlantısı hazır değil."}, status_code=503)
+                return JSONResponse({"error": "AETHER masaüstü bağlantısı hazır değil."}, status_code=503)
 
             from core.camera_scan import analyze, ScanBusy
 
@@ -1244,7 +1244,7 @@ class DashboardServer:
             except Exception as exc:
                 return JSONResponse({"ok": False, "message": f"Güncelleme başlatılamadı: {exc}"})
             asyncio.create_task(self.broadcast({"type": "sys", "text": "Güncelleme başladı."}))
-            return JSONResponse({"ok": True, "message": "Güncelleme başladı; MAYK kendini yeniden açacak."})
+            return JSONResponse({"ok": True, "message": "Güncelleme başladı; AETHER kendini yeniden açacak."})
 
         @app.get("/api/devices")
         async def devices_ep(req: Request):
@@ -1269,14 +1269,14 @@ class DashboardServer:
                 None, remote_control.perform, action, int(body.get("times") or 1))
             return JSONResponse({"ok": ok, "message": message, **extra})
 
-        _ASSETS = {"reactor.js": "application/javascript"}
+        _ASSETS = {"reactor.js": "application/javascript", "aether-core.webp": "image/webp"}
 
         @app.get("/assets/{name}")
         async def asset(name: str):
             if name not in _ASSETS:
                 return JSONResponse({"error": "Not found"}, status_code=404)
             from fastapi.responses import Response
-            return Response(_read(name), media_type=_ASSETS[name],
+            return Response((STATIC_DIR / name).read_bytes() if name == "aether-core.webp" else _read(name), media_type=_ASSETS[name],
                             headers={"Cache-Control": "no-cache"})
 
         @app.get("/tv", response_class=HTMLResponse)
@@ -1607,8 +1607,8 @@ class DashboardServer:
             print(self._bind_error)
             return
 
-        ssl_key = BASE_DIR / "config" / "certs" / "jarvis.key"
-        ssl_cert = BASE_DIR / "config" / "certs" / "jarvis.crt"
+        ssl_key = BASE_DIR / "config" / "certs" / "aether.key"
+        ssl_cert = BASE_DIR / "config" / "certs" / "aether.crt"
         if use_ssl:
             asyncio.create_task(self._serve_redirector())
         else:
@@ -1628,7 +1628,7 @@ class DashboardServer:
         # CAN THIS PORT ACTUALLY BE TAKEN?
         #
         # uvicorn raises when the port is busy, and under pythonw.exe there is
-        # no console for that to be seen in — so a second MAYK, or anything
+        # no console for that to be seen in — so a second AETHER, or anything
         # else already on 8000, produced a dashboard that was silently dead
         # while the HUD went on showing a QR code pointing at it. The phone
         # then reports ERR_CONNECTION_REFUSED, which is true and impossible to
@@ -1646,7 +1646,7 @@ class DashboardServer:
             _probe.close()
             self._bind_error = (
                 f"port {SECURE_PORT if use_ssl else PORT} is already in use — "
-                f"another copy of MAYK is probably running. Close it and "
+                f"another copy of AETHER is probably running. Close it and "
                 f"restart, or the phone dashboard will stay unreachable "
                 f"({exc.__class__.__name__})")
             print(f"[Dashboard] {self._bind_error}")
@@ -1654,5 +1654,5 @@ class DashboardServer:
         _probe.close()
 
         print(f"[Dashboard] {self.get_url()}")
-        print("[Dashboard] Press 'Remote Control' in MAYK UI to get the QR code.")
+        print("[Dashboard] Press 'Remote Control' in AETHER UI to get the QR code.")
         await uvicorn.Server(cfg).serve()

@@ -1,4 +1,4 @@
-package com.jarvis.alici;
+package com.aether.alici;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

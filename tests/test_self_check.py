@@ -1,4 +1,4 @@
-"""MAYK's self check: every check runs, problems come with a fix, a hung check cannot hold it up."""
+"""AETHER's self check: every check runs, problems come with a fix, a hung check cannot hold it up."""
 import time
 import unittest
 from unittest.mock import patch
@@ -66,19 +66,19 @@ class Logbook(unittest.TestCase):
                 sys.path.insert(0, {str(root)!r})
                 from core import logbook
                 logbook.install({d!r})
-                print("[MAYK] normal bir satır")
+                print("[AETHER] normal bir satır")
                 print("[Blender] Error: bağlantı koptu")
                 t = threading.Thread(target=lambda: 1 / 0, name="arka-is"); t.start(); t.join()
                 raise RuntimeError("ana iş çöktü")
             """)
             subprocess.run([sys.executable, "-c", code], capture_output=True, timeout=30)
-            text = (Path(d) / "jarvis.log").read_text(encoding="utf-8")
+            text = (Path(d) / "aether.log").read_text(encoding="utf-8")
             self.assertIn("normal bir satır", text)
             self.assertIn("ÇÖKME (arka-is)", text)
             self.assertIn("ZeroDivisionError", text)
             self.assertIn("RuntimeError: ana iş çöktü", text)
             from core import logbook
-            with patch.object(logbook, "_path", Path(d) / "jarvis.log"):
+            with patch.object(logbook, "_path", Path(d) / "aether.log"):
                 errs = logbook.recent_errors()
             self.assertTrue(any("bağlantı koptu" in e for e in errs))
             self.assertTrue(any("ÇÖKME" in e for e in errs))
@@ -88,13 +88,13 @@ class Logbook(unittest.TestCase):
         from pathlib import Path
         from core import logbook
         with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "jarvis.log"
+            p = Path(d) / "aether.log"
             with patch.object(logbook, "_path", p), patch.object(logbook, "MAX_BYTES", 2000):
                 logbook._file = open(p, "a", encoding="utf-8")
                 for i in range(400):
                     logbook.write(f"satır {i} " + "x" * 40)
                 logbook._file.close()
                 logbook._file = None
-            sizes = [f.stat().st_size for f in Path(d).glob("jarvis.log*")]
+            sizes = [f.stat().st_size for f in Path(d).glob("aether.log*")]
             self.assertLessEqual(len(sizes), logbook.KEEP + 1)
             self.assertTrue(all(s < 4000 for s in sizes))

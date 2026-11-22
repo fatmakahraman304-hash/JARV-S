@@ -1,7 +1,7 @@
-/* MAYK web — app shell cache. Network first, so an update reaches every
+/* AETHER web — app shell cache. Network first, so an update reaches every
  * device on its next open; the cache only answers when offline. */
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'development';
-const PREFIX = 'mayk-web:' + self.registration.scope + ':';
+const PREFIX = 'aether-web:' + self.registration.scope + ':';
 const CACHE = PREFIX + BUILD;
 const SCRIPTS = ['reactor', 'chess', 'devkit', 'relay', 'app', 'dev-common', 'dev-phone',
                  'dev-tablet', 'dev-tv', 'dev-projector', 'dev-watch'];
@@ -41,8 +41,8 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'MAYK', {
-    body: d.body || '', tag: d.tag || 'jarvis', renotify: true, icon: 'icon-192.png', badge: 'icon-192.png',
+  e.waitUntil(self.registration.showNotification(d.title || 'AETHER', {
+    body: d.body || '', tag: d.tag || 'aether', renotify: true, icon: 'icon-192.png', badge: 'icon-192.png',
     vibrate: d.tag === 'alarm' ? [500, 200, 500, 200, 500] : [200, 100, 200], data: { url: './' } }));
 });
 self.addEventListener('notificationclick', e => {

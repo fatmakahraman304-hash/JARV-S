@@ -170,7 +170,7 @@ class FakeTTS:
 
 class Cfg:
     """Stands in for the LiveConnectConfig main.py builds."""
-    system_instruction = "You are MAYK."
+    system_instruction = "You are AETHER."
     tools = [{"function_declarations": [
         {"name": "open_app", "description": "Opens an application.",
          "parameters": {"type": "OBJECT",
@@ -974,7 +974,7 @@ def test_panel_settings_survive():
     except Exception as e:
         check("PyQt6 available", False, str(e))
         return
-    app = QApplication.instance() or QApplication(["jarvis-providers-test"])
+    app = QApplication.instance() or QApplication(["aether-providers-test"])
 
     import ui as UI
     from memory.config_manager import (get_pipeline, get_provider_config,

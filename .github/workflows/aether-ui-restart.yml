@@ -1,4 +1,4 @@
-name: MAYK left-controls and restart tests
+name: AETHER left-controls and restart tests
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - "gui/window.py"
       - "core/restart_manager.py"
       - "tests/test_restart_and_layout.py"
-      - ".github/workflows/jarvis-ui-restart.yml"
+      - ".github/workflows/aether-ui-restart.yml"
 
 permissions:
   contents: read

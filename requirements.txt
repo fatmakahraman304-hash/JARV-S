@@ -134,7 +134,7 @@ pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
 # only ever uses Gemini should not pay for them. Deleting providers/ removes
 # the whole feature and the app runs exactly as it did before it existed.
 
-# ── Optional: local wake word ("Hey MAYK") ──────────────────────────────────
+# ── Optional: local wake word ("Hey AETHER") ──────────────────────────────────
 # Deliberately NOT installed by default — it's opt-in. Enable it (and download
 # the Vosk acoustic model) from ⚙ → WAKE WORD in the app.
 #

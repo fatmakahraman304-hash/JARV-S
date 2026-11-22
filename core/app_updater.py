@@ -57,7 +57,7 @@ def _local_changes(root):
 
 def _set_aside(root):
     """Keep real local edits in a named stash so the update can proceed."""
-    label = f'jarvis-update {time.strftime("%Y-%m-%d %H:%M:%S")}'
+    label = f'aether-update {time.strftime("%Y-%m-%d %H:%M:%S")}'
     _git(root, 'stash', 'push', '-m', label)
     return label
 
@@ -84,7 +84,7 @@ def _restore(root, label):
 
 
 def _get(url):
-    req = Request(url, headers={'User-Agent': 'Jarvis-Updater', 'Accept': 'application/vnd.github+json'})
+    req = Request(url, headers={'User-Agent': 'Aether-Updater', 'Accept': 'application/vnd.github+json'})
     for attempt in range(3):
         try:
             with urlopen(req, timeout=45) as response:
@@ -123,7 +123,7 @@ def _protected(name):
     p = PurePosixPath(name)
     return (any(part.startswith('.') for part in p.parts)
             or p.parts[0] in {'venv', 'env', 'ENV', 'logs', 'downloads', 'screenshots', '__pycache__', 'uploads', 'reports'}
-            or (p.parts[0] == 'config' and name not in {'config/__init__.py', 'config/jarvis.ico'})
+            or (p.parts[0] == 'config' and name not in {'config/__init__.py', 'config/aether.ico'})
             or p.suffix.lower() in {'.db', '.log', '.pyc'}
             or (p.parts[0] == 'memory' and (p.suffix != '.py' or p.parts[1:2] == ('tasks',)))
             or any(x in p.name.lower() for x in ('token', 'credential', 'client_secret')))
@@ -150,7 +150,7 @@ def _archive(data):
                 raise RuntimeError('Geçersiz veya çok büyük güncelleme arşivi.')
             files[name] = archive.read(info)
     if not {'main.py', 'requirements.txt', 'gui/window.py'} <= files.keys():
-        raise RuntimeError('Eksik MAYK arşivi.')
+        raise RuntimeError('Eksik AETHER arşivi.')
     return files
 
 
@@ -181,8 +181,8 @@ def _replace_bytes(path, data):
         os.replace(tmp, path)
 
 
-_ZIP_MARKER = b'MAYK/2 zip\n'
-_ROLLBACK_MARKER = b'MAYK/2 rollback\n'
+_ZIP_MARKER = b'AETHER/2 zip\n'
+_ROLLBACK_MARKER = b'AETHER/2 rollback\n'
 
 
 def _file_digest(path):
@@ -192,7 +192,7 @@ def _file_digest(path):
 def _backup_directory(root, name):
     if not re.fullmatch(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9]+", name):
         raise _RecoveryRequired("ZIP yedek kaydı geçersiz.")
-    backup = _target(root, ".jarvis-backups/" + name)
+    backup = _target(root, ".aether-backups/" + name)
     if backup.parent.is_symlink() or not backup.is_dir():
         raise _RecoveryRequired("ZIP yedek klasörü doğrulanamadı.")
     return backup
@@ -203,7 +203,7 @@ def _recover_zip(root, lock, raw, progress):
     journal = json.loads(raw.split(b"\n", 1)[1])
     backup = _backup_directory(root, journal["backup"])
     rollback = raw.startswith(_ROLLBACK_MARKER)
-    manifest = _file_digest(_target(root, ".jarvis-update.json"))
+    manifest = _file_digest(_target(root, ".aether-update.json"))
     committed = not rollback and manifest == journal["new_manifest"]
     if manifest not in (journal["old_manifest"], journal["new_manifest"]):
         raise _RecoveryRequired("Yerel sürüm kaydı değişmiş. Kurtarma durduruldu.")
@@ -247,7 +247,7 @@ def _recover_zip(root, lock, raw, progress):
         if _file_digest(target) != digest:
             raise _RecoveryRequired(f"Geri yüklenen dosya doğrulanamadı: {rel}")
     if rollback:
-        state_path = _target(root, ".jarvis-update.json")
+        state_path = _target(root, ".aether-update.json")
         if previous_manifest is None:
             state_path.unlink(missing_ok=True)
         else:
@@ -255,18 +255,18 @@ def _recover_zip(root, lock, raw, progress):
         if _file_digest(state_path) != journal["old_manifest"]:
             raise _RecoveryRequired("Önceki sürüm kaydı geri yüklenemedi.")
     lock.unlink()
-    return (True, "Kurulan ZIP sürümü doğrulandı. MAYK yeniden başlatılacak." if committed
-            else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. MAYK yeniden başlatılacak.")
+    return (True, "Kurulan ZIP sürümü doğrulandı. AETHER yeniden başlatılacak." if committed
+            else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. AETHER yeniden başlatılacak.")
 
 
 def rollback_zip(root=ROOT, progress=print):
     """Explicit offline downgrade of the last intact ZIP update, with the app closed."""
     root = Path(root)
     with _update_guard(root):
-        marker = _target(root, ".jarvis-update.lock")
+        marker = _target(root, ".aether-update.lock")
         if (root / ".git").exists() or marker.exists():
             raise _RecoveryRequired("ZIP geri dönüşü için kurulumu ve bekleyen kurtarmayı kontrol edin.")
-        state_path = _target(root, ".jarvis-update.json")
+        state_path = _target(root, ".aether-update.json")
         state = json.loads(state_path.read_bytes())
         if not state.get("backup"):
             raise _RecoveryRequired("Bu sürüm doğrulanabilir geri dönüş kaydı içermiyor.")
@@ -280,7 +280,7 @@ def rollback_zip(root=ROOT, progress=print):
                 or journal["old_manifest"] != state.get("old_manifest")):
             raise _RecoveryRequired("Geri dönüş dosya listesi kurulu sürümle eşleşmiyor.")
         if "main.py" not in journal["before"]:
-            raise _RecoveryRequired("Yedekte önceki MAYK başlangıç dosyası yok.")
+            raise _RecoveryRequired("Yedekte önceki AETHER başlangıç dosyası yok.")
         for rel in journal["before"].keys() | journal["after"].keys():
             if _file_digest(_target(root, rel)) != journal["after"].get(rel):
                 raise _RecoveryRequired(f"Yerel değişiklik korunuyor: {rel}")
@@ -291,7 +291,7 @@ def rollback_zip(root=ROOT, progress=print):
 
 def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marker=None):
     """Back up before writing; restore every changed/deleted file on failure."""
-    state_path = root / '.jarvis-update.json'
+    state_path = root / '.aether-update.json'
     old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
     previous = old.get('files', {})
     for name, digest in previous.items():
@@ -306,7 +306,7 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marke
             if path.exists() and (not path.is_file() or _hash(path.read_bytes()) != _hash(files[name])):
                 raise RuntimeError(f'Yeni sürümdeki dosya yerel dosyayla çakışıyor: {name}. Güncelleme uygulanmadı.')
     names = set(files) | {n for n in previous if not _protected(n)}
-    backup = root / '.jarvis-backups' / (time.strftime('%Y%m%d-%H%M%S') + '-' + sha[:8] + '-' + str(time.time_ns()))
+    backup = root / '.aether-backups' / (time.strftime('%Y%m%d-%H%M%S') + '-' + sha[:8] + '-' + str(time.time_ns()))
     backup.mkdir(parents=True, exist_ok=False)
     existed = set()
     for name in names:
@@ -390,7 +390,7 @@ def _needs_dependency_install(old, new):
 @contextmanager
 def _update_guard(root):
     """The kernel releases this lock even if Windows terminates the process."""
-    with (root / '.jarvis-update.guard').open('a+b') as handle:
+    with (root / '.aether-update.guard').open('a+b') as handle:
         handle.seek(0)
         try:
             if os.name == 'nt':
@@ -413,8 +413,8 @@ def update(root=ROOT, progress=lambda message: None):
 
 
 def _update_locked(root, progress):
-    lock = root / '.jarvis-update.lock'
-    checking = b'MAYK/1 checking'
+    lock = root / '.aether-update.lock'
+    checking = b'AETHER/1 checking'
     try:
         with lock.open('xb') as marker:
             marker.write(checking)
@@ -429,7 +429,7 @@ def _update_locked(root, progress):
     release_marker = True
     try:
         is_git = (root / '.git').exists()
-        state_file = root / '.jarvis-update.json'
+        state_file = root / '.aether-update.json'
         state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
         eol_only, real_changes = False, []
         if is_git:
@@ -452,7 +452,7 @@ def _update_locked(root, progress):
         if not re.fullmatch('[0-9a-f]{40}', sha):
             raise RuntimeError('Geçersiz GitHub sürüm kimliği.')
         if current == sha:
-            return False, f'MAYK güncel · {sha[:8]}'
+            return False, f'AETHER güncel · {sha[:8]}'
 
         if is_git:
             if int(_git(root, 'rev-list', '--count', f'{sha}..{current}')):
@@ -465,9 +465,9 @@ def _update_locked(root, progress):
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
         if _needs_dependency_install(old_req, new_req):
-            raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. MAYK’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
+            raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. AETHER’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
         if is_git:
-            _replace_bytes(lock, b'MAYK/1 applying')
+            _replace_bytes(lock, b'AETHER/1 applying')
         progress('Yedek alınıyor…')
         note = ''
         if is_git:
@@ -475,7 +475,7 @@ def _update_locked(root, progress):
                     or _git(root, 'rev-parse', 'HEAD') != current
                     or _local_changes(root) != (real_changes, eol_only)):
                 raise RuntimeError('Kontrol sırasında yerel kod değişti; güncelleme durduruldu.')
-            _git(root, 'branch', f'jarvis-backup/{time.time_ns()}', current)
+            _git(root, 'branch', f'aether-backup/{time.time_ns()}', current)
             label = None
             if real_changes:
                 shown = ', '.join(real_changes[:5]) + (' …' if len(real_changes) > 5 else '')
@@ -499,7 +499,7 @@ def _update_locked(root, progress):
                 note = _restore(root, label)
         else:
             _apply_zip(root, files, sha, branch, progress, marker=lock)
-        return True, f'Güncellendi · {sha[:8]}. MAYK otomatik yeniden başlatılıyor.{note}'
+        return True, f'Güncellendi · {sha[:8]}. AETHER otomatik yeniden başlatılıyor.{note}'
     except _RecoveryRequired:
         release_marker = False
         raise
@@ -509,7 +509,7 @@ def _update_locked(root, progress):
 
 
 def check(root=ROOT) -> dict:
-    """Read-only: is there a newer MAYK on GitHub, and what changed?
+    """Read-only: is there a newer AETHER on GitHub, and what changed?
     {"newer": bool, "sha": str, "current": str, "changes": [first lines of the new commits]}"""
     root = Path(root)
     if (root / '.git').exists():
@@ -523,7 +523,7 @@ def check(root=ROOT) -> dict:
             changes = _git(root, 'log', '-15', '--format=%s', f'{current}..{sha}').splitlines()
         return {"newer": bool(behind and not ahead), "sha": sha, "current": current, "changes": changes,
                 "branch": branch, "ahead": ahead, "behind": behind}
-    state_file = root / '.jarvis-update.json'
+    state_file = root / '.aether-update.json'
     state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
     channel = json.loads((root / 'update_channel.json').read_text('utf-8'))
     branch = state.get('branch', channel['branch'])
@@ -537,7 +537,7 @@ if __name__ == "__main__":
     if sys.stdout is not None and not sys.stdout.isatty():
         sys.stdout.reconfigure(encoding="utf-8")
     import argparse
-    parser = argparse.ArgumentParser(description="Kesilen MAYK ZIP güncellemesini çevrimdışı kurtar.")
+    parser = argparse.ArgumentParser(description="Kesilen AETHER ZIP güncellemesini çevrimdışı kurtar.")
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--recover", action="store_true")
     action.add_argument("--rollback", action="store_true")
@@ -548,11 +548,11 @@ if __name__ == "__main__":
             print("Önceki ZIP sürümü geri yüklendi ve doğrulandı.")
             sys.exit(0)
         with _update_guard(ROOT):
-            marker = ROOT / ".jarvis-update.lock"
+            marker = ROOT / ".aether-update.lock"
             raw = marker.read_bytes() if marker.exists() else b""
             if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
                 _recover_zip(ROOT, marker, raw, print)
-                print("Kurtarma doğrulandı. MAYK'ı açabilirsiniz.")
+                print("Kurtarma doğrulandı. AETHER'ı açabilirsiniz.")
             elif marker.exists():
                 sys.exit("Bu kilit otomatik ZIP kurtarmasına uygun değil. Güncelleme kılavuzuna bakın.")
             else:

@@ -143,7 +143,7 @@ class HistoryBackupTests(unittest.TestCase):
             with patch.object(c, "data_dir", return_value=base / "original"):
                 with c.connect() as live:
                     c.record("Kullanıcı", "İlk kayıt")
-                    pid = c.project_start("test", "MAYK", "proje", "ister")
+                    pid = c.project_start("test", "AETHER", "proje", "ister")
                     c.backup_history(backup)
                     c.record("Kullanıcı", "Sonraki kayıt")
                     self.assertEqual(live.execute("SELECT COUNT(*) FROM events").fetchone()[0], 2)
@@ -152,7 +152,7 @@ class HistoryBackupTests(unittest.TestCase):
             with patch.object(c, "data_dir", return_value=base / "restored"):
                 c.restore_history(backup)
                 self.assertEqual([r[2] for r in c.recent()], ["İlk kayıt"])
-                self.assertEqual(c.project(pid)["title"], "MAYK")
+                self.assertEqual(c.project(pid)["title"], "AETHER")
                 c.record("Kullanıcı", "Geri dönüşten sonra")
                 self.assertEqual(len(c.recent()), 2)
 

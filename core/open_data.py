@@ -24,7 +24,7 @@ DAYS_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi",
 
 
 def _get(url: str, timeout: int = 12) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": "JARVIS/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "AETHER/1.0"})
     ctx = None
     try:
         from core import tls

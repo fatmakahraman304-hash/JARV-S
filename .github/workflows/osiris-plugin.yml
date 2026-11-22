@@ -1,4 +1,4 @@
-name: MAYK regression tests
+name: AETHER regression tests
 on:
   push:
     branches: [main, feature/osiris-world-command]

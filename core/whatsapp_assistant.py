@@ -158,9 +158,9 @@ def assistant_name():
     """The name the user gave the assistant (Settings), for what callers hear."""
     try:
         from memory.config_manager import get_assistant_name
-        return (get_assistant_name() or 'MAYK').strip() or 'MAYK'
+        return (get_assistant_name() or 'AETHER').strip() or 'AETHER'
     except Exception:
-        return 'MAYK'
+        return 'AETHER'
 
 
 def load_settings():

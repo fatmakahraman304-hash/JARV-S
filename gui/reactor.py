@@ -1,4 +1,4 @@
-"""gui/reactor.py — the reactor core: an orange energy sphere.
+"""gui/reactor.py — the reactor core: the AETHER cyan orbital energy sphere.
 
 A small white-hot core sits inside a geodesic wireframe sphere. Straight light
 rays shoot out of the core in three dimensions, a handful of thick arc
@@ -20,12 +20,13 @@ palette is a fixed fire-orange; muted falls back to the muted colour handed in
 by the HUD.
 """
 from __future__ import annotations
+from pathlib import Path
 
 import math
 
 import numpy as np
 from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
-from PyQt6.QtGui import (QBrush, QColor, QFont, QImage, QLinearGradient, QPainter, QPen,
+from PyQt6.QtGui import (QBrush, QColor, QFont, QImage, QPixmap, QLinearGradient, QPainter, QPen,
                          QPolygonF, QRadialGradient)
 
 _DISPLAY = ["Bahnschrift", "Segoe UI", "SF Pro Display", "Helvetica Neue",
@@ -167,6 +168,7 @@ class Reactor3D:
         self.spin = 0.0
         self.t = 0.0
         self._glow: QImage | None = None
+        self._aether_art = QPixmap(str(Path(__file__).resolve().parent / "assets" / "aether-core.webp"))
 
     # ── motion ────────────────────────────────────────────────────────────────
     def step(self, dt: float, speaking: bool, thinking: bool, muted: bool) -> None:
@@ -263,6 +265,33 @@ class Reactor3D:
               white: QColor, amp: float, live: bool, name: str = "",
               muted: bool = False) -> None:
         amp = max(0.0, min(1.0, amp))
+        if not self._aether_art.isNull():
+            p.save()
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            art_rect = QRectF(cx - r * 2.08, cy - r * 1.20, r * 4.16, r * 2.34)
+            p.setOpacity(0.45 if muted else min(1.0, 0.91 + amp * 0.09))
+            p.drawPixmap(art_rect, self._aether_art, QRectF(self._aether_art.rect()))
+            p.setOpacity(0.14 if muted else 0.30 + amp * 0.26)
+            p.setPen(QPen(QColor("#39eaff"), max(1.2, r * 0.013)))
+            p.drawArc(QRectF(cx - r * 1.73, cy - r * 0.50,
+                             r * 3.46, r * 1.0),
+                      int(self.spin * 960) % (360 * 16), 74 * 16)
+            p.drawArc(QRectF(cx - r * 1.73, cy - r * 0.50,
+                             r * 3.46, r * 1.0),
+                      (int(self.spin * 960) + 180 * 16) % (360 * 16), 48 * 16)
+            p.setOpacity(1.0)
+            if name:
+                font = QFont()
+                font.setFamilies(_DISPLAY)
+                font.setPixelSize(max(12, int(r * 0.13)))
+                font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, max(2.0, r * 0.025))
+                p.setFont(font)
+                p.setPen(QColor("#a9edff"))
+                p.drawText(QRectF(cx - r * 1.8, cy + r * 1.29, r * 3.6, r * 0.3),
+                           Qt.AlignmentFlag.AlignHCenter, name)
+            p.restore()
+            return
         if muted:
             pal = (QColor(white), QColor(main), QColor(main), QColor(main))
             dim = 0.50

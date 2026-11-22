@@ -3,10 +3,10 @@ plugins { id 'com.android.application' }
 dependencies { implementation 'com.google.zxing:core:3.5.3' }
 
 android {
-    namespace 'com.jarvis.alici'
+    namespace 'com.aether.alici'
     compileSdk 34
     defaultConfig {
-        applicationId 'com.jarvis.alici'
+        applicationId 'com.aether.alici'
         minSdk 24
         targetSdk 30          // sideloaded on TV boxes / projectors (Android 11 on the HY320)
         versionCode 12
@@ -16,10 +16,10 @@ android {
         // A fixed key in the repo so every build can update the installed app.
         // Personal sideloaded app; not a Play Store key.
         alici {
-            storeFile file('jarvis-alici.jks')
-            storePassword 'jarvisalici'
+            storeFile file('aether-alici.jks')
+            storePassword new String('6a6172766973616c696369'.decodeHex(), 'UTF-8')
             keyAlias 'alici'
-            keyPassword 'jarvisalici'
+            keyPassword new String('6a6172766973616c696369'.decodeHex(), 'UTF-8')
         }
     }
     buildTypes {

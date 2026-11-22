@@ -50,7 +50,7 @@ def save(name: str, value) -> None:
 def log(player, text: str) -> None:
     if player:
         try:
-            player.write_log(f"MAYK: {text}")
+            player.write_log(f"AETHER: {text}")
         except Exception:
             pass
     out(f"[pc] {text}")

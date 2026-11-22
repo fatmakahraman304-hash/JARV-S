@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 from gui.style import px_font
 from gui.theme import C
 
-USER_AGENT = b"JarvisMuratMap/1.0 (+https://github.com/fatmakahraman304-hash/JARV-S)"
+USER_AGENT = b"AetherMuratMap/1.0 (+https://github.com/fatmakahraman304-hash/JARV-S)"
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 LOCATION_URL = "https://ipwho.is/"
 
@@ -203,7 +203,7 @@ class LocationPanel(QWidget):
         super().__init__(parent)
         self.network = QNetworkAccessManager(self)
         cache = QNetworkDiskCache(self.network)
-        cache.setCacheDirectory(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation) + "/jarvis-map")
+        cache.setCacheDirectory(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation) + "/aether-map")
         cache.setMaximumCacheSize(32 * 1024 * 1024)
         self.network.setCache(cache)
         self._busy = False

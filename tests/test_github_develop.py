@@ -116,7 +116,7 @@ class PublishRecoveryTests(unittest.TestCase):
             files = "\0".join(scope) + "\0"
             with patch.object(g, "WORK", root), patch.object(g, "tests"), patch.object(
                 g, "command", side_effect=[
-                    "jarvis-dev/book", "", "", "base", files, "", "", "head", files, "",
+                    "aether-dev/book", "", "", "base", files, "", "", "head", files, "",
                     '[{"number": 42}]',
                     json.dumps({"headRefOid": "head", "baseRefName": "main", "state": "OPEN",
                                 "statusCheckRollup": [{"status": "IN_PROGRESS", "conclusion": None}],
@@ -125,7 +125,7 @@ class PublishRecoveryTests(unittest.TestCase):
             ) as command:
                 result = g.workflow("publish", "Book shortcuts", scope)
             self.assertIn("/pull/42", result)
-            self.assertTrue(any("head:refs/heads/jarvis-dev/book" in call.args[0]
+            self.assertTrue(any("head:refs/heads/aether-dev/book" in call.args[0]
                                 for call in command.call_args_list))
             self.assertFalse(any("commit" in call.args[0] or "merge" in call.args[0]
                                  for call in command.call_args_list))

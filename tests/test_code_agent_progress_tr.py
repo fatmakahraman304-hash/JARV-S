@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest import TestCase, mock
 
 from actions import dev_agent
-from core import coding_router, jarvis_agent, nvidia_account
+from core import coding_router, aether_agent, nvidia_account
 
 
 class CodeAgentModelReportTests(TestCase):
@@ -20,7 +20,7 @@ class CodeAgentModelReportTests(TestCase):
     def test_successful_nvidia_model_is_reported(self):
         self._start()
         with mock.patch.object(coding_router, "ladder",
-                               return_value=[jarvis_agent.PROVIDER_ID, ""]), \
+                               return_value=[aether_agent.PROVIDER_ID, ""]), \
              mock.patch.object(nvidia_account, "api_key",
                                return_value="private-test-key"), \
              mock.patch.object(nvidia_account, "available_models",
@@ -46,7 +46,7 @@ class CodeAgentModelReportTests(TestCase):
             return "İkinci model yanıtı"
 
         with mock.patch.object(coding_router, "ladder",
-                               return_value=[jarvis_agent.PROVIDER_ID, ""]), \
+                               return_value=[aether_agent.PROVIDER_ID, ""]), \
              mock.patch.object(nvidia_account, "api_key", return_value="key"), \
              mock.patch.object(nvidia_account, "available_models", return_value=models), \
              mock.patch.object(nvidia_account, "complete_text", side_effect=complete):
@@ -58,7 +58,7 @@ class CodeAgentModelReportTests(TestCase):
     def test_only_attempt_is_reported_without_success(self):
         self._start()
         with mock.patch.object(coding_router, "ladder",
-                               return_value=[jarvis_agent.PROVIDER_ID]), \
+                               return_value=[aether_agent.PROVIDER_ID]), \
              mock.patch.object(nvidia_account, "api_key", return_value="key"), \
              mock.patch.object(nvidia_account, "available_models",
                                return_value=["nvidia/nemotron-3.5-lightning-30b-a3b"]), \

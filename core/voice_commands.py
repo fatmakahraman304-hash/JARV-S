@@ -1,7 +1,7 @@
-"""Türkçe öncelikli, yalnızca açıkça belirtilen MAYK uygulama komutları.
+"""Türkçe öncelikli, yalnızca açıkça belirtilen AETHER uygulama komutları.
 
 Komutlar hem ses dökümünden hem de yazılı girişten gelir. Burada yalnızca
-MAYK uygulamasını kapatan kesin ifadeler eşleştirilir; "bilgisayarı kapat",
+AETHER uygulamasını kapatan kesin ifadeler eşleştirilir; "bilgisayarı kapat",
 "pencereyi kapat" gibi başka hedeflere dokunulmaz.
 """
 
@@ -19,35 +19,35 @@ def normalize_command(text: str) -> str:
 
 
 _CLOSE_COMMANDS = {
-    "mayk uygulamasini kapat",
-    "mayk uygulamasini kapatir misin",
-    "mayk uygulamasini kapatin",
-    "mayk uygulamasini kapat lutfen",
-    "lutfen mayk uygulamasini kapat",
-    "mayk uygulamasindan cik",
-    "mayk programini kapat",
-    "mayk programindan cik",
-    "mayk i kapat",
-    "mayk i kapatir misin",
-    "mayki kapat",
-    "mayki kapatir misin",
-    "mayk kapat kendini",
-    "mayk kendini kapat",
-    "mayk kapan",
-    "mayk cik",
-    "mayk cikis yap",
-    "mayktan cik",
-    "mayk tan cik",
-    "mayk i sonlandir",
-    "mayki sonlandir",
+    "aether uygulamasini kapat",
+    "aether uygulamasini kapatir misin",
+    "aether uygulamasini kapatin",
+    "aether uygulamasini kapat lutfen",
+    "lutfen aether uygulamasini kapat",
+    "aether uygulamasindan cik",
+    "aether programini kapat",
+    "aether programindan cik",
+    "aether i kapat",
+    "aether i kapatir misin",
+    "aetheri kapat",
+    "aetheri kapatir misin",
+    "aether kapat kendini",
+    "aether kendini kapat",
+    "aether kapan",
+    "aether cik",
+    "aether cikis yap",
+    "aethertan cik",
+    "aether tan cik",
+    "aether i sonlandir",
+    "aetheri sonlandir",
     "uygulamadan cik",
     "programdan cik",
     # Eski komutları kullananlar için geriye dönük uyumluluk.
-    "close the mayk app",
-    "quit mayk",
+    "close the aether app",
+    "quit aether",
 }
 
 
 def is_close_command(text: str) -> bool:
-    """Yalnızca MAYK'ı kapatma niyeti açık olan tam komutları kabul et."""
+    """Yalnızca AETHER'ı kapatma niyeti açık olan tam komutları kabul et."""
     return normalize_command(text) in _CLOSE_COMMANDS

@@ -13,7 +13,7 @@ def is_sleep_command(text: str) -> bool:
     )
     text = "".join(ch for ch in text if not unicodedata.combining(ch)).replace("ı", "i")
     words = re.findall(r"[^\W_]+", text, re.UNICODE)
-    if words and words[0] in {"mayk", "friday"}:
+    if words and words[0] in {"aether", "aether"}:
         words = words[1:]
     return words in (
         ["uyu"],

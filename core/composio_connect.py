@@ -105,7 +105,7 @@ class McpClient:
         if self._sid is not None:
             return
         self._rpc("initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
-                                 "clientInfo": {"name": "jarvis", "version": "1.0"}})
+                                 "clientInfo": {"name": "aether", "version": "1.0"}})
         if self._sid is None:
             self._sid = ""            # stateless server: no session header needed
         try:
@@ -255,7 +255,7 @@ def _fill_required(schema: dict, args: dict) -> dict:
         if enum:
             args[name] = enum[0]
         elif name in ("thought", "reasoning"):
-            args[name] = "MAYK is carrying out the user's spoken request."
+            args[name] = "AETHER is carrying out the user's spoken request."
         elif name in ("current_step", "step"):
             args[name] = "EXECUTING"
         elif typ == "boolean":

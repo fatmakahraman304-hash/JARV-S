@@ -1,7 +1,7 @@
-/* MAYK device kit — small pure helpers the device modules (dev-*.js) share.
+/* AETHER device kit — small pure helpers the device modules (dev-*.js) share.
  *
  * Nothing here touches the page, so tests/test_web_devices.py runs every
- * function under Node. In the browser it is window.JarvisKit.
+ * function under Node. In the browser it is window.AetherKit.
  */
 (function (root) {
   'use strict';
@@ -126,5 +126,5 @@
     return `${min < 60 ? min + ' dk' : K.fmtMinutes(min)} sonra: ${r.text}`;
   };
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = K; else root.JarvisKit = K;
+  if (typeof module !== 'undefined' && module.exports) module.exports = K; else root.AetherKit = K;
 })(typeof self !== 'undefined' ? self : this);

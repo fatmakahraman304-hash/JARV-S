@@ -1,5 +1,5 @@
 """
-MAYK action — open an application, and know whether it actually opened.
+AETHER action — open an application, and know whether it actually opened.
 
 WHAT WAS WRONG WITH THIS FILE
     It answered "Opened Spotify." whenever its launcher returned True, and on
@@ -263,14 +263,14 @@ def _launch_and_verify(player, spoken: str, launcher_name: str,
             spoken, before, timeout=_LAUNCH_TIMEOUT
         )
         if appeared is not None:
-            _log(player, f"MAYK: {appeared.label} is open.")
+            _log(player, f"AETHER: {appeared.label} is open.")
             return
 
         # Slow, single-instance apps may reuse a window instead of creating a PID.
         matches = appidentity.running(spoken)
         if matches and matches[0].titles and (len(matches) == 1 or matches[0].score > matches[1].score):
             if appidentity.focus(matches[0]):
-                _log(player, f"MAYK: {matches[0].label} is open.")
+                _log(player, f"AETHER: {matches[0].label} is open.")
                 return
 
         # Only retry a known local executable when the first launch was rejected.
@@ -285,7 +285,7 @@ def _launch_and_verify(player, spoken: str, launcher_name: str,
                 requested = True
                 appeared = appidentity.wait_for_launch(spoken, before, timeout=_LAUNCH_TIMEOUT)
                 if appeared is not None:
-                    _log(player, f"MAYK: {appeared.label} is open.")
+                    _log(player, f"AETHER: {appeared.label} is open.")
                     return
 
         if not requested:
@@ -297,7 +297,7 @@ def _launch_and_verify(player, spoken: str, launcher_name: str,
                        f"is NOT confirmed open - it may be slow to load, or not "
                        f"installed under that name")
 
-        _log(player, f"MAYK: {trouble}")
+        _log(player, f"AETHER: {trouble}")
         _say(player, "Tell the user, in one short sentence in their own "
                      f"language: {trouble}")
     except Exception as exc:
@@ -364,7 +364,7 @@ def open_app(parameters=None, response=None, player=None,
         # running Store app, and that is the path that ends up serving them.
         for candidate in existing[:8]:
             if appidentity.focus(candidate):
-                _log(player, f"MAYK: {candidate.label} brought to the front.")
+                _log(player, f"AETHER: {candidate.label} brought to the front.")
                 return outcome.done(
                     "open_app", app=spoken, matched=candidate.label,
                     already_running=True, focused=True, verified=True,
@@ -375,7 +375,7 @@ def open_app(parameters=None, response=None, player=None,
 
     launcher_name = appidentity.launcher_name(spoken)
     before = appidentity.snapshot()
-    _log(player, f"MAYK: Opening {spoken}…")
+    _log(player, f"AETHER: Opening {spoken}…")
 
     threading.Thread(
         target=_launch_and_verify,

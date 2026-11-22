@@ -24,7 +24,7 @@ class Reply:
 class LocationMapTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication(['jarvis-map-test'])
+        cls.app = QApplication.instance() or QApplication(['aether-map-test'])
 
     def test_rejects_failed_or_malformed_locations(self):
         for value in [None, [], {}, {"success": False}, {"success": True, "city": "X", "latitude": 91, "longitude": 0},

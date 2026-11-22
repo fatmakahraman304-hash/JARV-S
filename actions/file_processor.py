@@ -1,5 +1,5 @@
 """
-file_processor.py — MAYK Universal File Processor
+file_processor.py — AETHER Universal File Processor
 
 Supported types:
   image   → describe, ocr, resize, convert, compress, crop

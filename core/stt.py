@@ -1,5 +1,5 @@
 """
-Speech-to-Text engines for MAYK.
+Speech-to-Text engines for AETHER.
 
 Whisper  – offline transcription via faster-whisper (VAD-buffered)
 Vosk     – offline streaming transcription (lighter)

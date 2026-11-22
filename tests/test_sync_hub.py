@@ -1,4 +1,4 @@
-"""MAYK everywhere: memory merge, setup link, remote commands, web page wiring."""
+"""AETHER everywhere: memory merge, setup link, remote commands, web page wiring."""
 import base64
 import json
 import re
@@ -64,12 +64,12 @@ class VoiceOwnerTest(unittest.TestCase):
 class SetupLinkTest(unittest.TestCase):
     def test_link_carries_settings(self):
         with mock.patch.object(sync_hub, "settings", return_value={"github_token": "ghp_x", "gist_id": "abc"}), \
-             mock.patch.object(sync_hub, "_assistant_name", return_value="MAYK"):
+             mock.patch.object(sync_hub, "_assistant_name", return_value="AETHER"):
             link = sync_hub.setup_link("AIzaKEY")
         self.assertTrue(link.startswith(sync_hub.WEB_URL + "#s="))
         blob = link.split("#s=", 1)[1]
         data = json.loads(base64.urlsafe_b64decode(blob + "=" * (-len(blob) % 4)))
-        self.assertEqual(data, {"g": "AIzaKEY", "t": "ghp_x", "i": "abc", "n": "MAYK"})
+        self.assertEqual(data, {"g": "AIzaKEY", "t": "ghp_x", "i": "abc", "n": "AETHER"})
 
 
 class CommandTest(unittest.TestCase):
@@ -490,7 +490,7 @@ class ArchiveTest(unittest.TestCase):
     def setUp(self):
         self.store = {"old": json.dumps([{"ts": "2026-10-01T10:00:00Z", "device": "Telefon", "role": "user",
                                           "text": "annemin doğum günü 3 Mart"},
-                                         {"ts": "2026-10-01T10:00:05Z", "device": "Telefon", "role": "jarvis",
+                                         {"ts": "2026-10-01T10:00:05Z", "device": "Telefon", "role": "aether",
                                           "text": "Not ettim efendim."}])}
         self.writes = []
 

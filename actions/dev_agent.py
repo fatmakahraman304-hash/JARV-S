@@ -18,7 +18,7 @@ def get_base_dir():
 
 BASE_DIR         = get_base_dir()
 API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
-PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
+PROJECTS_DIR     = Path.home() / "Desktop" / "AetherProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
 from core import gemini
@@ -43,7 +43,7 @@ def _coding_provider() -> str:
 
 def _get_model(model_name: str = gemini.SMART):
     """Kod üretiminde NVIDIA Build → Gemini; DeepSeek kullanılmaz."""
-    from core import coding_router, jarvis_agent, nvidia_account
+    from core import coding_router, aether_agent, nvidia_account
     from types import SimpleNamespace
 
     class _Routed:
@@ -51,7 +51,7 @@ def _get_model(model_name: str = gemini.SMART):
             chosen = _coding_provider()
             for p in coding_router.ladder(chosen):
                 try:
-                    if p == jarvis_agent.PROVIDER_ID:
+                    if p == aether_agent.PROVIDER_ID:
                         key = nvidia_account.api_key()
                         if not key:
                             raise RuntimeError("NVIDIA API anahtarı bulunamadı.")
@@ -550,7 +550,7 @@ def _build_project(
         if speak: speak(msg)
         return msg
 
-    proj_name    = project_name or plan.get("project_name", "jarvis_project")
+    proj_name    = project_name or plan.get("project_name", "aether_project")
     proj_name    = re.sub(r"[^\w\-]", "_", proj_name)
     project_dir  = PROJECTS_DIR / proj_name
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -701,26 +701,26 @@ def _build_project(
 #     mistake that is not cheap to undo, so the plan cannot ask for it.
 #   * Run the project. A folder somebody hands over may be a server, a GUI or a
 #     script that sends email. What IS run, in a separate process: changed
-#     modules are imported, and in a MAYK project each changed plugin is
+#     modules are imported, and in a AETHER project each changed plugin is
 #     called the way the app calls it — unless its code can act on the world
 #     (send, delete, launch), in which case it is only loaded and validated.
 #     See core/code_checks.py.
 #
 # WHAT IT READS FIRST
 #   The project's own rules (AGENTS.md, CLAUDE.md or CONTRIBUTING.md) and, for
-#   MAYK itself, the thread-safe `player` methods read out of ui.py. Without
+#   AETHER itself, the thread-safe `player` methods read out of ui.py. Without
 #   them a model writes code that is valid and wrong for this app — widgets
 #   built off the Qt thread, a separate window instead of the quiz board.
 #
 # WHAT MAKES IT SAFE TO SAY YES TO
-#   Every file is copied to .jarvis_backup/<time>/ inside the folder before it
+#   Every file is copied to .aether_backup/<time>/ inside the folder before it
 #   is changed, and the whole job is one entry on the shared undo stack: "undo"
 #   puts every file back and removes the ones it created.
 
 _SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", "venv", ".venv", "env",
               "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build",
-              ".idea", ".vscode", ".next", "target", ".jarvis_backup"}
-_BACKUP_DIR     = ".jarvis_backup"
+              ".idea", ".vscode", ".next", "target", ".aether_backup"}
+_BACKUP_DIR     = ".aether_backup"
 _MAX_FILE_CHARS = 120_000     # bigger than this is generated or data, not code
 _CONTEXT_CHARS  = 350_000     # file text sent to plan; MiniMax M3.1 takes 512K tokens
 _MAX_TREE       = 1500        # paths listed for the model
@@ -751,8 +751,8 @@ def _new_job(folder: Path, model: str, instruction: str, player,
     global _JOB, _player_ref
     # One coding job at a time. A new job clears the previous cancellation
     # request; resuming an agent round must NOT clear it.
-    from core import jarvis_agent
-    jarvis_agent.reset_cancel()
+    from core import aether_agent
+    aether_agent.reset_cancel()
     now = time.time()
     with _state_lock:
         _JOB = {"folder": folder.name, "path": str(folder), "model": model,
@@ -770,13 +770,13 @@ def request_code_agent_cancel() -> bool:
     The current HTTP turn/subprocess may need to return first; the agent checks
     between model and tool calls, and the job status changes only when it exits.
     """
-    from core import jarvis_agent
+    from core import aether_agent
     if not _job_lock.locked():
         return False
     snap = _job_snapshot()
     if not snap or snap.get("finished") is not None:
         return False
-    jarvis_agent.request_cancel()
+    aether_agent.request_cancel()
     _update("cancelling", cancel_requested=True)
     _log(None, "Kodlama ajanı için iptal istendi; çalışan adım sonlandırılıyor.")
     return True
@@ -855,7 +855,7 @@ def _agent_progress(player, message: str) -> None:
     Selection isn't proof of a response. Report attempts and successful
     replies separately, including NVIDIA -> Gemini failover, without keys.
     """
-    started = "  MAYK ajanı: "
+    started = "  AETHER ajanı: "
     switched = "  Yedek kodlama modeline geçildi: "
     answered = "  Kodlama modeli yanıt verdi: "
     if message.startswith(started):
@@ -1840,7 +1840,7 @@ def _with_agents(agents: list[str], job, player):
     return None
 
 
-_AGENT_ROUNDS = 2           # agent → MAYK checks → agent fixes what failed
+_AGENT_ROUNDS = 2           # agent → AETHER checks → agent fixes what failed
 
 
 def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
@@ -1854,7 +1854,7 @@ def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
 
 def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                   originals: dict[str, str], baseline: dict | None, player) -> dict[str, str]:
-    """MAYK's own verdict on what the agent wrote: syntax, safe imports,
+    """AETHER's own verdict on what the agent wrote: syntax, safe imports,
     project rules, and the project's tests against how they stood before."""
     try:
         from core.code_checks import (detect_stack, run_tests, runtime_problems,
@@ -1868,7 +1868,7 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                                    log=lambda m: _log(player, m)).items():
         problems[rel] = (problems.get(rel, "") + " " + p).strip()
     if stack.get("test_cmd") and not problems:
-        _log(player, f"MAYK projenin testlerini çalıştırıyor ({stack['test_name']})…")
+        _log(player, f"AETHER projenin testlerini çalıştırıyor ({stack['test_name']})…")
         after = run_tests(folder, stack)
         broke = ("The project test command could not start." if after is None
                  else test_regressions(baseline, after))
@@ -1884,7 +1884,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
                         open_editor: bool) -> str:
     from core import agent_coding
     from core.code_checks import Protection
-    who = "MAYK kod ajanı"
+    who = "AETHER kod ajanı"
     _update("writing")
     _log(player, f"{who} proje klasöründe kod ajanı olarak çalışıyor: okuyor, düzenliyor, test ediyor…")
     before = agent_coding.snapshot(folder)
@@ -1898,7 +1898,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
             summary = agent_coding.run(provider, folder, instruction, guide, extra,
                                        log=lambda m: _agent_progress(player, m)) or summary
         except RuntimeError as e:
-            from core.jarvis_agent import AgentCancelled
+            from core.aether_agent import AgentCancelled
             if round_no == 0 or isinstance(e, AgentCancelled):
                 after = agent_coding.snapshot(folder)
                 conflicts = agent_coding.restore_checked(folder, before, after)
@@ -1940,15 +1940,15 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         if not (changed or created or deleted):
             break
         _update("testing")
-        _log(player, "Ajanın çalışması MAYK testleriyle doğrulanıyor…")
+        _log(player, "Ajanın çalışması AETHER testleriyle doğrulanıyor…")
         problems = _agent_checks(folder, written, stack, texts, baseline, player)
         if not problems:
-            _log(player, "MAYK kontrollerinde yeni hata bulunmadı.")
+            _log(player, "AETHER kontrollerinde yeni hata bulunmadı.")
             break
         for rel, p in problems.items():
             _log(player, f"Problem — {rel}: {p[:220]}")
         if round_no + 1 < _AGENT_ROUNDS:
-            extra = ("MAYK checked your previous round and these still fail. Fix them, "
+            extra = ("AETHER checked your previous round and these still fail. Fix them, "
                      "then run the tests again:\n" + "\n".join(f"- {r}: {p[:1500]}" for r, p in problems.items()))
             _update("writing")
 
@@ -1997,9 +1997,9 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         msg += (" Şu kontroller hâlâ başarısız: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
     elif stack and stack.get("test_cmd"):
-        msg += " MAYK dosya ve proje testi kontrollerinde yeni hata bulmadı."
+        msg += " AETHER dosya ve proje testi kontrollerinde yeni hata bulmadı."
     else:
-        msg += (" MAYK dosya kontrollerinde yeni hata bulmadı; "
+        msg += (" AETHER dosya kontrollerinde yeni hata bulmadı; "
                 "projenin otomatik test komutu algılanmadı.")
     msg += " Değişiklikleri geri almak için 'geri al' komutunu kullanın."
     _log(player, msg)
@@ -2010,8 +2010,8 @@ def _build_with_agent(description: str, language: str, project_name: str, provid
                       player) -> str:
     """A new project, written, run and tested by the agent in its own folder."""
     from core import agent_coding
-    who = "MAYK kod ajanı"
-    base = project_name or re.sub(r"[^\w]+", "_", description.lower())[:40].strip("_") or "jarvis_project"
+    who = "AETHER kod ajanı"
+    base = project_name or re.sub(r"[^\w]+", "_", description.lower())[:40].strip("_") or "aether_project"
     name = re.sub(r"[^\w\-]", "_", base)
     project_dir = PROJECTS_DIR / name
     n = 2
@@ -2122,7 +2122,7 @@ def _run_job(job, name: str, who: str, speak=None, player=None, pid=None) -> str
                   or "still fail their test" in result):
                 status = "finished with problems"
         except Exception as e:
-            from core.jarvis_agent import AgentCancelled
+            from core.aether_agent import AgentCancelled
             if isinstance(e, AgentCancelled):
                 status = "cancelled"
                 result = f"'{name}' kodlama görevi kullanıcı isteğiyle iptal edildi."
@@ -2284,7 +2284,7 @@ def _build_staged(description: str, language: str, project_name: str, player, pi
         _update("planning")
         _log(player, "Proje aşamalar halinde planlanıyor…")
         plan = _plan_stages(description, language)
-        base = re.sub(r"[^\w\-]", "_", project_name or plan.get("project_name") or "jarvis_project")
+        base = re.sub(r"[^\w\-]", "_", project_name or plan.get("project_name") or "aether_project")
         folder = PROJECTS_DIR / base
         n = 2
         while folder.exists() and any(folder.iterdir()):

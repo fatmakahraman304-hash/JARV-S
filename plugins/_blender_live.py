@@ -1,4 +1,4 @@
-"""MAYK side of the live Blender link (see _blender_live_addon.py, which runs
+"""AETHER side of the live Blender link (see _blender_live_addon.py, which runs
 inside Blender): install the add-on, talk to the open Blender, and let the
 user direct the scene in their own window."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ADDON = Path(__file__).with_name("_blender_live_addon.py")
 TOKEN = ROOT / "memory" / "blender_live.token"
-LAST = ROOT / "memory" / "blender_live_last.json"       # what MAYK changed last: what "onu / it" means
+LAST = ROOT / "memory" / "blender_live_last.json"       # what AETHER changed last: what "onu / it" means
 PORT = 47863
 
 
@@ -32,10 +32,10 @@ def token() -> str:
 def startup_dir(binary: str) -> Path:
     """Blender's own user scripts/startup folder (asked from Blender, so every OS and version is right)."""
     r = subprocess.run([binary, "-b", "--factory-startup", "--python-expr",
-                        "import bpy;print('JARVIS_STARTUP=' + bpy.utils.user_resource('SCRIPTS', path='startup', create=True))"],
+                        "import bpy;print('AETHER_STARTUP=' + bpy.utils.user_resource('SCRIPTS', path='startup', create=True))"],
                        capture_output=True, encoding="utf8", errors="replace", timeout=180)
     for line in (r.stdout or "").splitlines():
-        if line.startswith("JARVIS_STARTUP="):
+        if line.startswith("AETHER_STARTUP="):
             return Path(line.split("=", 1)[1].strip())
     raise ValueError("Blender'ın eklenti klasörü bulunamadı: " + ((r.stderr or r.stdout or "").strip().splitlines() or [""])[-1][:200])
 
@@ -45,8 +45,8 @@ def install(binary: str) -> Path:
     token()
     folder = startup_dir(binary)
     folder.mkdir(parents=True, exist_ok=True)
-    target = folder / "jarvis_live.py"
-    code = ADDON.read_text(encoding="utf8").replace("__JARVIS_DIR__", str(ROOT).replace("\\", "\\\\"))
+    target = folder / "aether_live.py"
+    code = ADDON.read_text(encoding="utf8").replace("__AETHER_DIR__", str(ROOT).replace("\\", "\\\\"))
     if not target.is_file() or target.read_text(encoding="utf8") != code:
         target.write_text(code, encoding="utf8")
     return target
@@ -65,7 +65,7 @@ def call(op: str, timeout: float = 120.0, **fields) -> dict:
             data += chunk
     reply = json.loads(data.decode("utf8") or "{}")
     if reply.get("error") == "token":
-        raise ConnectionError("Açık Blender MAYK'ı tanımadı (eski bağlantı). Blender'ı kapatıp yeniden aç.")
+        raise ConnectionError("Açık Blender AETHER'ı tanımadı (eski bağlantı). Blender'ı kapatıp yeniden aç.")
     return reply
 
 
@@ -134,7 +134,7 @@ def edit(request: str, player=None) -> str:
     recent = (last.get("added") or []) + (last.get("changed") or [])
     told = (f"{request}\n\nThis runs LIVE in the user's open Blender window. Selected objects (what 'bu', 'şu', 'bunu', "
             f"'şunu', 'this' mean): {sel or 'none'}; active: {st.get('active')}.\n"
-            f"What MAYK changed last (for «{last.get('request', '')}») — what 'onu', 'o', 'it', 'biraz daha' refer to "
+            f"What AETHER changed last (for «{last.get('request', '')}») — what 'onu', 'o', 'it', 'biraz daha' refer to "
             f"when nothing is selected: {recent[:20] or 'nothing yet'}.\n"
             "Change ONLY what the user said; keep every other object exactly as it is. Never call clear() or studio() "
             "unless the user asks; do not save or render.")
@@ -172,7 +172,7 @@ def preview(player=None, title="Blender") -> tuple[bytes, list[str]]:
 
 
 def look_live(request: str, player=None):
-    """MAYK looks at what it just did in the open window; real defects (not taste) get one fix."""
+    """AETHER looks at what it just did in the open window; real defects (not taste) get one fix."""
     from plugins import _blender_brain as brain
     try:
         png, found = preview(player, f"Blender: {request[:40]}")
@@ -220,5 +220,5 @@ def render(player=None, width=1920, height=1080, samples=128) -> Path:
 
 
 def open_file(path: str) -> None:
-    """Show a .blend in the user's open window (after MAYK rebuilt it)."""
+    """Show a .blend in the user's open window (after AETHER rebuilt it)."""
     run(f"import bpy\nbpy.ops.wm.open_mainfile(filepath={path!r})\n", "aç")

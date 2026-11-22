@@ -1,8 +1,8 @@
-# MAYK yazılım geliştirme
+# AETHER yazılım geliştirme
 
 Mevcut `dev_agent` yeni proje oluşturur, yerel projeleri geliştirir ve hata
 kontrolleri yapar. `github_develop` Murat uyarlamasının GitHub deposunu ayrı
-`~/JarvisDevelopment/Murat` klasörüne alır.
+`~/AetherDevelopment/Murat` klasörüne alır.
 
 Komut akışı: geliştirme alanını hazırla → incele → istenen değişikliği geliştir
 → test et → seçilen kaynak dosyalarını yayınla → kontroller bittiyse main'e al.

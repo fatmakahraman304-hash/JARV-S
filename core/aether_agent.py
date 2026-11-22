@@ -1,4 +1,4 @@
-"""MAYK'ın kodlama ajanı: NVIDIA Build → Gemini.
+"""AETHER'ın kodlama ajanı: NVIDIA Build → Gemini.
 
 Dosyaları analiz eder, düzenler ve test eder. Kod değişiklikleri proje klasöründe
 kalır; API anahtarları günlük dosyalarına veya model istemine verilmez.
@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-PROVIDER_ID = "jarvis_agent"
+PROVIDER_ID = "aether_agent"
 MAX_STEPS = 90
 MAX_OUTPUT = 8000
 MAX_READ_LINES = 500
@@ -46,10 +46,10 @@ RUN_FORBIDDEN = re.compile(r"\b(rm|rmdir|del|erase|rd|format|shutdown|reboot|mkf
                            r"powershell|pwsh|reg|sudo|su)\b|git\s+(commit|push|reset|checkout|clean|rebase)|"
                            r">\s*/dev/|\bnpm\s+(publish|login)\b", re.I)
 _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "env", "__pycache__", "dist", "build", ".next",
-              ".idea", ".vscode", ".mypy_cache", ".pytest_cache", ".jarvis_backup"}
+              ".idea", ".vscode", ".mypy_cache", ".pytest_cache", ".aether_backup"}
 
 SYSTEM = (
-    "Sen MAYK'ın kodlama ajanısın. Yalnızca verilen proje klasöründe çalışırsın. "
+    "Sen AETHER'ın kodlama ajanısın. Yalnızca verilen proje klasöründe çalışırsın. "
     "Deneyimli bir yazılım mühendisi gibi eksiksiz ve doğrulanmış çözüm üret. "
     "Kullanıcı Türkçe konuşuyorsa yanıtların, günlük açıklamaların ve özetlerin Türkçe olsun.\n"
     "1. Önce incele: list_files, search ve read_file ile mevcut yapıyı anla; tekrar kullanılabilecek kodu bul.\n"
@@ -153,7 +153,7 @@ class Workspace:
             relative = resolved.relative_to(self.root).as_posix()
         except (OSError, ValueError):
             return "Proje klasörünün dışına çıkılamaz."
-        if any(part in (".git", ".jarvis_backup", ".hg", ".svn")
+        if any(part in (".git", ".aether_backup", ".hg", ".svn")
                for part in Path(relative).parts):
             return "Sürüm geçmişi ve yedekler korumalıdır."
         return self.protection.reason(relative)
@@ -189,7 +189,7 @@ class Workspace:
         try:
             with tempfile.NamedTemporaryFile(
                 "w", encoding="utf-8", newline="", dir=path.parent,
-                prefix=".mayk-write-", delete=False,
+                prefix=".aether-write-", delete=False,
             ) as stream:
                 tmp = Path(stream.name)
                 stream.write(content)
@@ -222,7 +222,7 @@ class Workspace:
             if len(rel.parts) >= depth:
                 dirs[:] = []
             dirs[:] = sorted(
-                d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".jarvis")
+                d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".aether")
                 and not self._protected(Path(root) / d))
             for d in dirs:
                 out.append(str((rel / d).as_posix()) + "/")
@@ -257,7 +257,7 @@ class Workspace:
         rx = re.compile(pattern, re.I)
         hits = []
         for root, dirs, files in os.walk(self.root):
-            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".jarvis")
+            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".aether")
                        and not self._protected(Path(root) / d)]
             for f in files:
                 if not fnmatch.fnmatch(f, glob or "*"):
@@ -418,7 +418,7 @@ class Workspace:
     def _resolve_python(self, executable: str) -> str:
         if executable not in {"python", "python.exe", "python3", "py", "py.exe"}:
             return executable
-        # An installed Windows MAYK.exe is not the Python interpreter.
+        # An installed Windows AETHER.exe is not the Python interpreter.
         for name in (".venv", "venv", "env"):
             for rel in ("Scripts/python.exe", "bin/python"):
                 exe = self.root / name / rel
@@ -445,7 +445,7 @@ class Workspace:
         outputs = []
         checked = False
         # Do not give model-authentication secrets to subprocesses; project
-        # tests should use fixture keys, not MAYK's live API credentials.
+        # tests should use fixture keys, not AETHER's live API credentials.
         private = re.compile(
             r"(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD|"
             r"CREDENTIALS|PRIVATE_KEY|ACCESS_KEY|AUTH|COOKIE)(?:_|$)|"
@@ -516,7 +516,7 @@ class Workspace:
                     raise ValueError("Yerel ağa veya HTTP adresine yönlendirme reddedildi.")
                 return super().redirect_request(req, fp, code, msg, headers, newurl)
 
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 MAYK"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 AETHER"})
         opener = urllib.request.build_opener(PublicRedirect())
         with opener.open(req, timeout=20) as r:
             raw = r.read(600_000).decode("utf-8", errors="replace")
@@ -832,10 +832,10 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("MAYK kod ajanı için NVIDIA veya Gemini API anahtarı gerekiyor.")
+        raise RuntimeError("AETHER kod ajanı için NVIDIA veya Gemini API anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
-    log(f"  MAYK ajanı: {brain.name}")
+    log(f"  AETHER ajanı: {brain.name}")
     idle = 0
     short_retries = 0
     last_error = ""

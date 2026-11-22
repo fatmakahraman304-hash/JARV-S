@@ -1,11 +1,11 @@
-"""Everything MAYK knows about Blender, kept on this PC:
+"""Everything AETHER knows about Blender, kept on this PC:
 
 * api   — read from the user's own Blender (every operator and its options, every
           data type, every node and its sockets): exact for that version.
 * manual — the official Blender manual, downloaded once, kept as searchable text.
 
 search() finds what a request needs; prompt() turns it into a block that goes
-into every Blender script / plan / answer, so MAYK writes correct names and
+into every Blender script / plan / answer, so AETHER writes correct names and
 knows how a feature is meant to be used.
 """
 from __future__ import annotations
@@ -267,7 +267,7 @@ def ensure(binary, invoke, version: str = "", log=print) -> None:
     except Exception as exc:
         log(f"[Blender] API dizini çıkarılamadı: {exc}")
     import os
-    if os.environ.get("JARVIS_BLENDER_NO_MANUAL"):
+    if os.environ.get("AETHER_BLENDER_NO_MANUAL"):
         return
     if not MANUAL.is_file() and (_manual_job is None or not _manual_job.is_alive()):
         _manual_job = threading.Thread(target=lambda: _safe(build_manual, version, log), daemon=True)

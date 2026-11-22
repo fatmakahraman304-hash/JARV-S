@@ -92,7 +92,7 @@ def run(parameters, player=None, session_memory=None):
     ):
         return "Taşınacak veya kapatılacak uygulamaların adlarını belirt."
     if player is None:
-        return "Pencere işlemleri için MAYK arayüzü gerekli."
+        return "Pencere işlemleri için AETHER arayüzü gerekli."
 
     def work():
         try:
@@ -101,5 +101,5 @@ def run(parameters, player=None, session_memory=None):
             result = f"Pencere işlemi tamamlanamadı: {exc}"
         player.write_log("ÇALIŞMA ALANI: " + result)
 
-    threading.Thread(target=work, daemon=True, name="jarvis-workspace").start()
+    threading.Thread(target=work, daemon=True, name="aether-workspace").start()
     return "Pencere işlemi başladı. Sonuç etkinlik günlüğünde görünecek."

@@ -1,4 +1,4 @@
-"""MAYK kodlama sırası: NVIDIA Build → Gemini.
+"""AETHER kodlama sırası: NVIDIA Build → Gemini.
 
 Eski Claude Code ve Codex CLI kodlama rotasında bulunmaz.
 Kota veya bağlantı hatasında sıradaki model devralır; dinlenme süreleri
@@ -12,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 
-from core import jarvis_agent
+from core import aether_agent
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 _COOL_FILE = BASE_DIR / "config" / "coding_cooldown.json"
@@ -20,8 +20,8 @@ LIMIT_REST = 60 * 60           # usage limit: try the best again after an hour
 DOWN_REST = 15 * 60            # signed out / not installed / would not start
 GEMINI = ""                    # the Gemini ladder (never rests)
 
-AGENTS = (jarvis_agent.PROVIDER_ID,)
-NAMES = {jarvis_agent.PROVIDER_ID: "MAYK kod ajanı (NVIDIA → Gemini)",
+AGENTS = (aether_agent.PROVIDER_ID,)
+NAMES = {aether_agent.PROVIDER_ID: "AETHER kod ajanı (NVIDIA → Gemini)",
          GEMINI: "Gemini"}
 
 _lock = threading.Lock()
@@ -94,7 +94,7 @@ def rest(provider: str, err) -> float:
 
 
 def ladder(chosen: str = "", installed=None) -> list[str]:
-    """NVIDIA destekli MAYK kod ajanı ilk sırada; eski CLI ajanları yok."""
+    """NVIDIA destekli AETHER kod ajanı ilk sırada; eski CLI ajanları yok."""
     if installed is None:
         from core import agent_coding
         installed = agent_coding.available

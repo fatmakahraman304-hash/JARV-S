@@ -75,8 +75,8 @@ class SetupOverlay(QWidget):
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        layout.addWidget(_lbl("M.A.Y.K  ·  İLK KURULUM", 13, True))
-        layout.addWidget(_lbl("MAYK’ı ilk açılıştan önce yapılandırın.", 9, color=C.PRI_DIM))
+        layout.addWidget(_lbl("AETHER  ·  İLK KURULUM", 13, True))
+        layout.addWidget(_lbl("AETHER’ı ilk açılıştan önce yapılandırın.", 9, color=C.PRI_DIM))
         layout.addSpacing(6)
 
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
@@ -288,7 +288,7 @@ class CustomizeOverlay(QWidget):
     saved = pyqtSignal(str, str, str, str)   # assistant_name, user_name, ui_color, voice
     _OW, _OH = 400, 588
 
-    def __init__(self, assistant_name="MAYK", user_name="",
+    def __init__(self, assistant_name="AETHER", user_name="",
                  ui_color=DEFAULT_UI_COLOR, voice="", parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -321,7 +321,8 @@ class CustomizeOverlay(QWidget):
 
         lay.addWidget(_lbl("ASİSTANIN ADI", 8, color=C.TEXT_DIM,
                             align=Qt.AlignmentFlag.AlignLeft))
-        self._name_input = QLineEdit(assistant_name)
+        self._name_input = QLineEdit("AETHER")
+        self._name_input.setReadOnly(True)
         self._name_input.setFont(hud_font(10))
         self._name_input.setFixedHeight(32)
         self._name_input.setStyleSheet(_fs)
@@ -494,7 +495,7 @@ class CustomizeOverlay(QWidget):
         self.hide()
 
     def _save(self):
-        name = self._name_input.text().strip() or "MAYK"
+        name = self._name_input.text().strip() or "AETHER"
         user = self._user_input.text().strip()
         self.saved.emit(name, user, self._sel_color or DEFAULT_UI_COLOR, self._sel_voice)
         self.hide()
@@ -759,11 +760,11 @@ class ConfirmBanner(_HudOverlay):
 
 
 class AudioDeviceOverlay(_HudOverlay):
-    """Choose which microphone MAYK listens to and which speakers it uses.
+    """Choose which microphone AETHER listens to and which speakers it uses.
 
     Both audio streams used to open with no `device=` at all, so they always
     took the OS default — which on Windows moves by itself the moment a headset
-    is plugged in. 'MAYK can't hear me' is usually 'MAYK is listening to the
+    is plugged in. 'AETHER can't hear me' is usually 'AETHER is listening to the
     webcam'."""
 
     picked = pyqtSignal()      # emitted after Apply, when something changed
@@ -863,7 +864,7 @@ class AudioDeviceOverlay(_HudOverlay):
             # speaking into it.
             #
             # So the button is here, beside the dropdown, in the panel somebody
-            # opens when MAYK cannot hear them. It replaces a loose
+            # opens when AETHER cannot hear them. It replaces a loose
             # `ses_testi.py` in the project root that nobody would ever find.
             btn_row = QHBoxLayout(); btn_row.setSpacing(6)
             btn_row.addWidget(box, 1)
@@ -909,10 +910,10 @@ class AudioDeviceOverlay(_HudOverlay):
         self._level_seen.connect(self._on_level)
         self._test_result.connect(self._on_result)
 
-        self._in_box  = _row("MİKROFON — MAYK’ın sizi dinlediği cihaz",
+        self._in_box  = _row("MİKROFON — AETHER’ın sizi dinlediği cihaz",
                              "input", get_input_device())
         lay.addSpacing(4)
-        self._out_box = _row("HOPARLÖR — MAYK’ın ses verdiği cihaz",
+        self._out_box = _row("HOPARLÖR — AETHER’ın ses verdiği cihaz",
                              "output", get_output_device())
 
         # ── Output volume, beside the output device ──────────────────────────
@@ -1119,7 +1120,7 @@ class AudioDeviceOverlay(_HudOverlay):
 
 
 class MemoryOverlay(_HudOverlay):
-    """Everything MAYK has stored about you, and when it learned it.
+    """Everything AETHER has stored about you, and when it learned it.
 
     Memory used to be a 2200-character store that deleted its oldest entries
     when full and mentioned it only on stdout. The cap is gone; this panel is
@@ -1213,7 +1214,7 @@ class MemoryOverlay(_HudOverlay):
 
         from memory.memory_manager import all_entries_for_ui
 
-        hdr = QLabel("🧠  MAYK NELERİ HATIRLIYOR?")
+        hdr = QLabel("🧠  AETHER NELERİ HATIRLIYOR?")
         hdr.setFont(hud_font(12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         self._lay.addWidget(hdr)
@@ -1344,7 +1345,7 @@ class _ScrollSafeCombo(QComboBox):
 
 
 class ClipboardPanel(QWidget):
-    """Floating panel shown when text is copied — offers quick MAYK actions."""
+    """Floating panel shown when text is copied — offers quick AETHER actions."""
 
     action_requested = pyqtSignal(str)
     _W, _H = 326, 112
@@ -1772,7 +1773,7 @@ class RemoteKeyOverlay(QWidget):
         if _blocked:
             warn = _lbl(
                 "⚠  Windows bu Python uygulamasına gelen bağlantıları engelliyor. "
-                "Bu nedenle telefonunuz bu sayfaya erişemiyor. MAYK’ı yeniden başlatıp "
+                "Bu nedenle telefonunuz bu sayfaya erişemiyor. AETHER’ı yeniden başlatıp "
                 "Windows izin penceresini onaylayın veya şu engelleme kurallarını kaldırın: "
                 + ", ".join(sorted({n for n, _ in _blocked}))
                 + " (Windows Defender Güvenlik Duvarı → Gelen Kuralları).",
@@ -1911,7 +1912,7 @@ class RemoteKeyOverlay(QWidget):
         self._qr_label.setStyleSheet(
             "color: #00ff88; background: #001a0d; border-radius: 10px;"
         )
-        self._timer_lbl.setText("Telefon bağlandı — MAYK hazır")
+        self._timer_lbl.setText("Telefon bağlandı — AETHER hazır")
         self._timer_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
 
     def _refresh_key(self):

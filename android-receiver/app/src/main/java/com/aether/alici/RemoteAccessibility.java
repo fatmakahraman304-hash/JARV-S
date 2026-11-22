@@ -1,4 +1,4 @@
-package com.jarvis.alici;
+package com.aether.alici;
 
 import android.accessibilityservice.AccessibilityService;
 import android.graphics.Bitmap;
@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
  * What only an accessibility service may do on Android: press the remote's
  * keys for the user, write into the box that has focus (Turkish letters too)
  * and take a picture of the screen. Turned on once by the user in Settings →
- * Accessibility → MAYK Alıcı.
+ * Accessibility → AETHER Alıcı.
  */
 public class RemoteAccessibility extends AccessibilityService {
     static volatile RemoteAccessibility instance;
-    private static final String TAG = "MAYK-Accessibility";
+    private static final String TAG = "AETHER-Accessibility";
     static final String STATE_KEY = "a11y_last_event";
     static final String TIME_KEY = "a11y_last_event_time";
 

@@ -1,4 +1,4 @@
-name: MAYK Türkçe komut testleri
+name: AETHER Türkçe komut testleri
 
 on:
   pull_request:
