@@ -11,7 +11,8 @@ from typing import Callable
 
 MODEL_NAME = "vosk-model-small-en-us-0.15"
 # Vosk may transcribe the AETHER (EY-TIR) wake word as "either".
-KEYPHRASE = "hey either"\nKEYPHRASES = ("hey either", "hey aether", "hey ether")
+KEYPHRASE = "hey either"
+KEYPHRASES = ("hey either", "hey aether", "hey ether")
 DEFAULT_THRESHOLD = 0.8
 SAMPLE_RATE = 16000
 
