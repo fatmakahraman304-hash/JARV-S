@@ -252,7 +252,9 @@ public class MainActivity extends Activity {
                 : a11yRunning ? "açık ✓" : "izin açık, servis henüz çalışmıyor";
         status.setText("Bağlantı: " + (linked ? "kurulu" : "kurulmadı — 2. adım") + "\n"
                 + "Erişilebilirlik: " + a11yStatus + "\n"
-                + "Dinleme: " + ReceiverService.status + "\n" + "Wi-Fi kumanda: " + ReceiverService.lanAddress + "\n\n"
+                + "Dinleme: " + ReceiverService.status + "\n"
+                + "MAYK HTTPS köprüsü: " + RelayRemote.status + "\n"
+                + "Wi-Fi kumanda: " + ReceiverService.lanAddress + "\n\n"
                 + "Hazır olunca telefondaki MAYK'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
         ui.postDelayed(this::refresh, 3000);
     }
