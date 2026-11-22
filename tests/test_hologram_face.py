@@ -83,6 +83,18 @@ class HologramFace(unittest.TestCase):
         self.assertGreater(len(projection.a), 600)
         self.assertTrue(np.isfinite(projection.w).all())
 
+    def test_sculpted_contour_lines_and_subtle_speaking_lips(self):
+        from gui.hologram_glsl import FRAG_HOLOGRAM
+        # Lines bend around sockets, nose and cheeks on the actual posed mesh.
+        self.assertIn("float contourY = p.y + face", FRAG_HOLOGRAM)
+        self.assertIn("float eyeSocket", FRAG_HOLOGRAM)
+        self.assertIn("float bridge", FRAG_HOLOGRAM)
+        self.assertIn("crown = np.clip", __import__("inspect").getsource(
+            __import__("core.hologram_mesh", fromlist=["with_shoulders"]).with_shoulders))
+        self.assertIn("float opening = 0.024 * talk", FRAG_HOLOGRAM)
+        self.assertIn("uniform vec2 u_eye_c", FRAG_HOLOGRAM)
+        self.assertNotIn("vec3 iris", FRAG_HOLOGRAM)
+
     def test_reference_halo_and_ears_draw_in_qpainter(self):
         from core.hologram_finish import bloom, details, _hull
         from core.avatar_mesh import get_head_mesh
