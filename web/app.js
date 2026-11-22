@@ -14,7 +14,8 @@
   const GH = 'https://api.github.com';
 
   // ── settings ─────────────────────────────────────────────────────────────
-  const S = (() => { try { const key = "aether_web"; const legacy = Object.keys(localStorage).find(k => k.endsWith("_web") && k !== key); return JSON.parse(localStorage.getItem(key) || (legacy && localStorage.getItem(legacy)) || "{}"); } catch { return {}; } })();\nS.name = "AETHER";
+  const S = (() => { try { const key = "aether_web"; const legacy = Object.keys(localStorage).find(k => k.endsWith("_web") && k !== key); return JSON.parse(localStorage.getItem(key) || (legacy && localStorage.getItem(legacy)) || "{}"); } catch { return {}; } })();
+S.name = "AETHER";
   const assistantName = value => "AETHER";
   S.name = assistantName(S.name);
   const save = () => localStorage.setItem('aether_web', JSON.stringify(S));
