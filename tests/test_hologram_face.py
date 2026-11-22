@@ -49,6 +49,18 @@ class HologramFace(unittest.TestCase):
             painter.end()
 
 
+    def test_high_quality_hologram_keeps_human_relief(self):
+        # Spectral mode must not strip the scalp volume or character details.
+        from gui.android_gl import FRAG_HUMAN, _human_relief
+        points = np.array([[0.0, 0.92, 0.58], [0.0, -0.15, 0.58]], np.float32)
+        full = _human_relief(points, with_hair=True)
+        bare = _human_relief(points, with_hair=False)
+        self.assertGreater(float(full[0] - bare[0]), 0.02)
+        self.assertAlmostEqual(float(full[1]), float(bare[1]), places=4)
+        self.assertIn("ice *= 1.0 - beard", FRAG_HUMAN)
+        self.assertIn("hairC * 0.96", FRAG_HUMAN)
+        self.assertIn("frost * pow", FRAG_HUMAN)
+
     def test_shoulder_extension_preserves_base_and_has_no_neck_gap(self):
         from core.avatar_mesh import get_head_mesh
         from core.hologram_mesh import with_shoulders
