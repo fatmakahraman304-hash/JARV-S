@@ -7,7 +7,7 @@ without adding a photographed human face or replacing the live 3D rig.
 from __future__ import annotations
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QBrush, QLinearGradient
 
 
 def _hull(points):
@@ -79,7 +79,7 @@ def bloom(painter: QPainter, image: QImage, x0: float, y0: float,
     try:
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        for div, margin, opacity in ((17, 20.0, .26), (6, 8.0, .12)):
+        for div, margin, opacity in ((19, 31.0, .40), (7, 12.0, .17)):
             low = image.scaled(max(2, image.width() // div),
                                max(2, image.height() // div),
                                Qt.AspectRatioMode.IgnoreAspectRatio,
@@ -104,7 +104,7 @@ def details(painter: QPainter, xs, ys, n_head: int, landmarks,
     if len(head) < 3:
         return
     outer = _smooth_hull(head)
-    _neon_path(painter, outer, .80 + .11 * energy)
+    _neon_path(painter, outer, .98 + .10 * energy)
 
     left = min(x for x, _ in head)
     right = max(x for x, _ in head)
@@ -114,26 +114,48 @@ def details(painter: QPainter, xs, ys, n_head: int, landmarks,
     height = max(1.0, bottom - top)
     center = 0.5 * (left + right)
 
-    # Explicit ears avoid the vertical square side protrusions of the old
-    # simple canonical head: narrow C-shaped helix, darker center, thin rim.
+    # Ear shells: compact, anatomically placed translucent forms with the
+    # same fine glowing horizontal contours as the face. Previous C loops
+    # floated outside the head like headphones.
     for idx in (234, 454):
         if idx >= len(xs):
             continue
         side = -1.0 if float(xs[idx]) < center else 1.0
         ex = float(xs[idx])
         ey = float(ys[idx])
-        ear = QPainterPath(QPointF(ex, ey - height * .10))
-        ear.cubicTo(ex + side * half * .27, ey - height * .14,
-                    ex + side * half * .29, ey + height * .10,
-                    ex + side * half * .07, ey + height * .16)
-        ear.cubicTo(ex - side * half * .015, ey + height * .14,
-                    ex + side * half * .035, ey - height * .01,
-                    ex, ey - height * .10)
-        _neon_path(painter, ear, .64)
+        ear = QPainterPath(QPointF(ex, ey - height * .064))
+        ear.cubicTo(ex + side * half * .22, ey - height * .12,
+                    ex + side * half * .26, ey + height * .065,
+                    ex + side * half * .08, ey + height * .110)
+        ear.cubicTo(ex + side * half * .025, ey + height * .106,
+                    ex - side * half * .010, ey - height * .003,
+                    ex, ey - height * .064)
+        painter.save()
+        # Light passes through the ear; no solid skin or dark plastic fill.
+        painter.setPen(Qt.PenStyle.NoPen)
+        tint = QLinearGradient(QPointF(ex, ey - height * .13),
+                               QPointF(ex + side * half * .25,
+                                       ey + height * .12))
+        tint.setColorAt(0.0, QColor(4, 112, 200, 48))
+        tint.setColorAt(0.65, QColor(2, 46, 105, 78))
+        tint.setColorAt(1.0, QColor(3, 153, 221, 30))
+        painter.setBrush(QBrush(tint))
+        painter.drawPath(ear)
+        painter.setClipPath(ear)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        step = max(2.0, height / 120.0)
+        row = ey - height * .12
+        while row < ey + height * .13:
+            painter.setPen(QPen(QColor(41, 188, 248, 73), .55))
+            painter.drawLine(QPointF(ex - half * .35, row),
+                             QPointF(ex + half * .35, row))
+            row += step
+        painter.restore()
+        _neon_path(painter, ear, .53)
 
-        inner = QPainterPath(QPointF(ex + side * half * .08,
-                                    ey - height * .07))
-        inner.cubicTo(ex + side * half * .16, ey - height * .02,
-                      ex + side * half * .16, ey + height * .05,
-                      ex + side * half * .07, ey + height * .09)
-        _neon_path(painter, inner, .33)
+        inner = QPainterPath(QPointF(ex + side * half * .055,
+                                    ey - height * .053))
+        inner.cubicTo(ex + side * half * .165, ey - height * .047,
+                      ex + side * half * .16, ey + height * .020,
+                      ex + side * half * .068, ey + height * .063)
+        _neon_path(painter, inner, .29)
