@@ -202,6 +202,37 @@ class AgentCancellationTest(unittest.TestCase):
                     ja.run(Path(d), "Kod yaz", brain_list=[a],
                            log=lambda _: None)
 
+class StaticCodeVerificationTest(unittest.TestCase):
+    def test_changed_python_and_json_are_validated(self):
+        with tempfile.TemporaryDirectory() as d:
+            ws = ja.Workspace(Path(d), log=lambda _: None)
+            ws.t_write_file("bad.py", "def broken(:\n")
+            ws.t_write_file("config.json", '{"missing":')
+            failures = ws.syntax_problems()
+            self.assertEqual(len(failures), 2)
+            self.assertIn("bad.py", failures[0])
+            self.assertIn("config.json", failures[1])
+            ws.t_write_file("bad.py", "def fixed():\n    return 1\n")
+            ws.t_write_file("config.json", '{"ok": true}')
+            self.assertEqual(ws.syntax_problems(), [])
+
+    def test_unrelated_smoke_test_cannot_hide_broken_python(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "good.py").write_text("print('ok')\n")
+            brain = ScriptedBrain([
+                ("", [call("write_file", path="bad.py",
+                            content="def broken(:\n")], None),
+                ("", [call("run", command="python good.py")], None),
+                ("", [call("finish", summary="success")], None),
+                ("", [call("finish", summary="success")], None),
+                ("", [call("finish", summary="success")], None),
+            ])
+            with self.assertRaisesRegex(RuntimeError, "statik kontrolleri"):
+                ja.run(root, "Python yaz", brain_list=[brain],
+                       log=lambda _: None)
+
+
 class AdvancedAgentReliabilityTest(unittest.TestCase):
     def test_hidden_credentials_cannot_be_read_searched_or_edited(self):
         with tempfile.TemporaryDirectory() as temp:
