@@ -275,7 +275,7 @@
           <button class="btn pri" id="rm-lan-save" type="button">💾 Bağlantıyı kaydet</button>
         </div>
       </details>
-      <small>Bağlantı zaten kayıtlıysa yeniden kaydetme. Tuşa bastığında MAYK açık kalır; sesli komutlarda iPhone kısa süreli sayfa geçişi yapabilir.</small>
+      <small>📽️ Ses, yön tuşları, YouTube ve sesli komutlar eski MAYK arayüzünde çalışır. Komutlar üçüncü taraf HTTPS köprüsünde uçtan uca şifrelenir; GitHub kotası kullanılmaz. İnternet kesilirse yedek yerel kumandayı aç.</small>
     </div>
     <div class="pad">
       <span></span><button class="btn" data-k="up" type="button">▲</button><span></span>
@@ -365,28 +365,10 @@
     <div class="row"><button class="btn pri" id="ask-yes" type="button">Tamam</button><button class="btn" data-close type="button">Vazgeç</button></div>
   </section>
 
-<style>
-    /* HTTPS-to-local-HTTP popup handoff fails inside iOS app browsers.
-       Hide misleading in-page keys and expose the proven native controller. */
-    #s-remote.lan-ios-native .pad,
-    #s-remote.lan-ios-native .pcgrid,
-    #s-remote.lan-ios-native #rm-pad,
-    #s-remote.lan-ios-native #rm-sleep,
-    #s-remote.lan-ios-native #rm-ask,
-    #s-remote.lan-ios-native #rm-type,
-    #s-remote.lan-ios-native #rm-look { display: none !important; }
-    #s-remote.lan-ios-native #rm-lan-open {
-      padding: 17px 20px;
-      font-weight: 700;
-      width: 100%;
-      background: linear-gradient(100deg,#d96c10,#ff9933);
-      color: #171009;
-      border-radius: 14px;
-    }
-  </style>
   <script src="reactor.js"></script>
   <script src="chess.js"></script>
   <script src="devkit.js"></script>
+  <script src="relay.js"></script>
   <script src="app.js"></script>
   <!-- one module per kind of device; each does nothing on the others -->
   <script src="dev-common.js"></script>
