@@ -1454,6 +1454,10 @@
     if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
     const reply = await window.MAYKRelay.send(link, kind, arg);
     if (result) { result.textContent = '📽️ ' + reply; result.hidden = false; }
+    const failed = /(?:yanıt vermedi|başarısız|kurulamadı|desteklenmiyor|geçersiz)/i.test(reply);
+    $('rm-lan-state').textContent = failed
+      ? '⚠️ HTTPS köprüsü cevap vermedi; yedek yerel kumanda kullanılabilir.'
+      : '🟢 HTTPS köprüsü çalışıyor · ' + new URL(link).hostname + ' · GitHub gerekmez';
     return reply;
   }
   async function sendToReceiver(d, cmd) {
@@ -1483,7 +1487,7 @@
     const link = parseLanUrl(S.lanRemote);
     $('rm-lan-url').value = link;
     $('rm-lan-state').textContent = link
-      ? '🟢 Bağlı: ' + new URL(link).hostname + ' · GitHub gerekmez'
+      ? '🔒 Eşleştirme kayıtlı: ' + new URL(link).hostname + ' · HTTPS köprüsü ilk komutta doğrulanacak.'
       : 'Bağlantı henüz kayıtlı değil. MAYK Alıcı adresini bir kez ekle.';
     $('rm-lan-config').open = !link;
     $('rm-lan-open').disabled = !link;
