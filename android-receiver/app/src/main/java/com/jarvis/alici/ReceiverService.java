@@ -291,6 +291,20 @@ public class ReceiverService extends Service {
 
     private String search(String q, String where) throws Exception {
         String enc = java.net.URLEncoder.encode(q, "UTF-8");
+        // Explicit Chrome target: unlike a generic VIEW intent this does not
+        // silently route a Chrome search to YouTube or another browser.
+        if ("chrome".equalsIgnoreCase(where)) {
+            Intent chromeSearch = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://www.google.com/search?q=" + enc));
+            chromeSearch.setPackage("com.android.chrome");
+            chromeSearch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                launcher().startActivity(chromeSearch);
+                return "Chrome'da '" + q + "' aranıyor.";
+            } catch (Exception e) {
+                return "Chrome'da arama açılamadı. Projeksiyonda Chrome yüklü ve etkin mi kontrol et.";
+            }
+        }
         if (where.contains("youtube")) {
             try {
                 Intent i = new Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube.tv")
