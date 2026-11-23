@@ -276,6 +276,40 @@ reach them.
 
 ---
 
+## 🔑 Aether API gateway (optional)
+
+AETHER the desktop assistant and **Aether API** the third-party model gateway
+are separate products. The gateway uses the documented OpenAI-compatible
+`https://api.aetherapi.dev/v1` endpoint.
+
+1. Open **⚙ → ENGINE & PROVIDERS**. To keep Gemini Live voice and use Aether
+   for documents/background requests, choose **ARKA PLAN İSTEKLERİ → Aether API**.
+   To use Aether for the main language model instead, choose
+   **KENDİ KURULUMUM → ② DÜŞÜNME → Aether API** and configure listening and
+   speaking separately. The coding provider selector can use it too.
+2. Paste your Aether API key **locally** into the masked **API anahtarı** field.
+   It is stored in `config/api_keys.json`, which is excluded from Git.
+   Never paste a secret into source files, screenshots or commits.
+3. Start with `gpt-oss-120b-free`, or press **↻ YENİLE** to load your account's
+   permitted chat models. Press **TEST ET**, then **KAYDET VE UYGULA**.
+4. By default, **Ücretli modellere izin ver = hayır**. The model picker filters
+   to chat IDs explicitly suffixed `-free` and API request code also rejects
+   all other model IDs, including manually entered IDs and coding/background
+   requests. Switch the option to **evet** only if you agree to credit charges;
+   refresh the list after changing the option.
+
+**Billing safety:** the `-free` suffix reflects Aether's published model
+labelling, **not a guarantee that prices can never change**. Check the live
+provider dashboard before use and set a strict per-key spending limit there.
+A saved key does not mean all models are free. Discovery and local tests do
+not need to generate model output; **TEST ET** sends a real request and may
+count against limits. Model availability and tool/vision support vary by ID.
+
+Official documentation: https://aetherapi.dev/docs/agents/models and
+https://aetherapi.dev/docs/agents/quickstart.
+
+---
+
 ## 📦 Local and hosted providers
 
 **Nothing new is installed by default.** Talking to a model — local or hosted — uses `httpx`, which already ships with `google-genai`. The system's own voices need no Python package at all. Local speech recognition (`faster-whisper`) and the neural voice (`piper-tts`) are one-click installs from inside the panel, and are deliberately absent from `requirements.txt`: a fresh clone that only ever uses Gemini should not download several hundred megabytes for a feature it will not open.
