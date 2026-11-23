@@ -26,6 +26,12 @@ def with_shoulders(mesh):
     original[:count_head, 0] *= (1.076 + .035 * forehead -
                                  .048 * crown - .180 * jaw +
                                  .022 * cheek)
+    # The former portrait put eyes too high in the head, leaving too little
+    # forehead and compressing the nose/eye spacing. Smoothly lower the face
+    # features without disturbing the dome, chin seam or measured vertex IDs.
+    # Applying this to the rest mesh also moves its real speaking/blink rig.
+    feature_band = np.exp(-((y + .20) / .72) ** 4)
+    original[:count_head, 1] -= .155 * feature_band
     segments = 14  # The existing neck ends with a 14-vertex elliptical ring.
     base = original[-segments:].copy()
     vertices = [original]
