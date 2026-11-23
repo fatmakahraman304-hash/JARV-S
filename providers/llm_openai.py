@@ -117,6 +117,34 @@ _LOCAL_BUDGET = {"max_tools": "14", "max_tool_chars": "12000"}
 _LOCAL = {"model": "", **_LOCAL_BUDGET}
 _CLOUD = {"model": "", "max_tools": "", "max_tool_chars": ""}
 
+# Aether API's advertised free chat model IDs, grouped by workload.
+# These are practical STARTING choices, not benchmark-proven rankings.
+# /v1/models still controls availability and per-key eligibility; no
+# automatic model change is allowed to bypass a price or access restriction.
+AETHER_FREE_ROLES: dict[str, str] = {
+    "conversation": "gpt-oss-120b-free",
+    "fast": "qwen3.8-35b-a3b-free",
+    "research": "qwen3.8-27b-free",
+    "coding": "minimax-m3-free",
+}
+
+
+def aether_role_model(cfg: dict, role: str = "conversation") -> str:
+    """Select a workload preset only when Aether's auto mode is enabled.
+
+    User-chosen non-Aether services and manually selected Aether IDs must be
+    respected.  Never switch to a paid model in this automatic mode.
+    """
+    model = str(cfg.get("model") or "").strip()
+    base = _normalise(str(cfg.get("base_url") or ""))
+    if base != PRESETS["Aether API"]:
+        return model
+    auto = str(cfg.get("aether_auto_models", "1")).strip().lower()
+    if auto not in ("1", "true", "yes", "on"):
+        return model
+    return AETHER_FREE_ROLES.get(role, AETHER_FREE_ROLES["conversation"])
+
+
 CATALOG = (
     {"id": "ollama",     "label": "Ollama",
      "note": "bu bilgisayarda · ücretsiz", "local": True,
@@ -148,10 +176,11 @@ CATALOG = (
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["OpenAI"], **_CLOUD}},
     {"id": "aether",     "label": "Aether API",
-     "note": "bulut · varsayılan olarak yalnızca ücretsiz modeller",
+     "note": "bulut · sohbet / hızlı / araştırma / kodlama için ücretsiz akıllı seçim",
      "local": False,
      "values": {"base_url": PRESETS["Aether API"], **_CLOUD,
-                "model": "gpt-oss-120b-free", "aether_allow_paid": ""}},
+                "model": "gpt-oss-120b-free",
+                "aether_auto_models": "1", "aether_allow_paid": ""}},
     {"id": "anthropic",  "label": "Claude (Anthropic)",
      "note": "bulut · Anthropic API anahtarı gerekir", "local": False,
      "values": {"base_url": "https://api.anthropic.com/v1", **_CLOUD}},
@@ -379,7 +408,7 @@ class OpenAICompatLLM:
 
         self._httpx = httpx
         self.base = _normalise(cfg.get("base_url") or "")
-        self.model = (cfg.get("model") or "").strip()
+        self.model = aether_role_model(cfg, str(cfg.get("aether_role") or "conversation"))
         self.key = (cfg.get("api_key") or "").strip()
         self._aether = self.base.rstrip("/") == PRESETS["Aether API"]
         # Defaults OFF even for existing configs: opting in is never implicit.
@@ -623,7 +652,15 @@ class OpenAICompatLLM:
             if not self._aether_allow_paid and not _aether_is_free_model(model_id):
                 continue
             ids.add(model_id)
-        return sorted(ids, key=lambda m: (not _aether_is_free_model(m), m.casefold()))
+        # Most useful default presets at the top; all other eligible IDs remain
+        # visible. Explicit user selections are not overwritten by discovery.
+        fav = tuple(dict.fromkeys(AETHER_FREE_ROLES.values()))
+        return sorted(ids, key=lambda m: (
+            0 if m in fav else 1,
+            fav.index(m) if m in fav else 999,
+            not _aether_is_free_model(m),
+            m.casefold(),
+        ))
 
     # A 1x1 transparent PNG — 68 bytes, the smallest thing that is a real image.
     _PIXEL = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
@@ -875,6 +912,10 @@ PROVIDER = {
               hint="Sunucudan otomatik alınır; boşsa YENİLE düğmesine basın"),
         Field("api_key", "API anahtarı", kind="secret", required=False,
               hint="Yerel sunucular genellikle API anahtarı istemez"),
+        Field("aether_auto_models", "En uygun ücretsiz modeli otomatik seç", kind="bool",
+              default="1", required=False,
+              hint="Açık: sohbet GPT OSS 120B, hızlı Qwen A3B, araştırma Qwen 27B, kodlama MiniMax M3. "
+                   "Manuel model seçmek için kapatın."),
         Field("aether_allow_paid", "Ücretli modellere izin ver", kind="bool",
               default="", required=False,
               hint="Varsayılan HAYIR: yalnızca -free modeller. EVET: kredi harcayabilir."),
