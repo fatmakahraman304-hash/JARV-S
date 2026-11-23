@@ -455,34 +455,44 @@ class PipelineEngine:
         pending = ""            # visible text not yet a whole sentence
         try:
             messages = self._messages()
-            # Free chat models sometimes answer from old training data even
-            # when web_search is available. Fixture timing must be looked up
-            # before the first generated word, not left to optional tool use.
+            # Public, time-sensitive questions must be checked *before* model
+            # generation. Tools are optional for some free endpoints and even a
+            # configured web_search can be skipped by the model.
+            # Only examine the latest USER turn: tool callbacks and synthetic
+            # status messages should not trigger recursive searches.
             if self._history and self._history[-1].get("role") == "user":
                 question = self._history[-1].get("content")
                 if isinstance(question, str):
                     from core.live_facts import (
-                        needs_fixture_lookup, lookup_fixture_evidence,
+                        needs_live_lookup, lookup_live_evidence,
                     )
-                    if needs_fixture_lookup(question):
-                        self._log("SYS: checking live fixture sources before answering")
+                    if needs_live_lookup(question):
+                        self._log("SYS: checking current web sources before answering")
                         try:
                             evidence = await asyncio.wait_for(
-                                asyncio.to_thread(lookup_fixture_evidence, question),
-                                timeout=8.0)
+                                asyncio.to_thread(lookup_live_evidence, question),
+                                timeout=9.0)
                         except Exception:
                             evidence = ""
                         if not evidence:
-                            line = ("Canlı maç takvimine şu anda erişemiyorum. "
-                                    "Doğrulayamadığım bir tarih söylemeyeceğim.")
+                            line = ("Güncel kaynaklara şu anda erişemiyorum. "
+                                    "Doğrulayamadığım bilgiyi tahmin etmeyeceğim.")
                             await self._emit(Msg.said(line))
                             await self._speak(line)
                             self._history.append({"role": "assistant", "content": line})
                             await self._emit(Msg.turn_end())
                             return
-                        messages.insert(1 if messages and messages[0]["role"] == "system"
-                                        else 0,
-                                        {"role": "system", "content": evidence})
+                        # Merge into system prompt rather than adding a second
+                        # system role (some OpenAI-compatible servers reject it).
+                        if messages and messages[0]["role"] == "system":
+                            messages[0] = dict(messages[0])
+                            messages[0]["content"] += (
+                                "\n\n[CURRENT WEB EVIDENCE]\n" + evidence)
+                        else:
+                            messages.insert(0, {
+                                "role": "system",
+                                "content": "[CURRENT WEB EVIDENCE]\n" + evidence,
+                            })
             async for ev in self._llm.chat(messages, self._tools):
                 if ev.get("text"):
                     visible = thinking.feed(ev["text"])
