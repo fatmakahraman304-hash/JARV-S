@@ -711,8 +711,8 @@ class ProvidersOverlay(_HudOverlay):
         for f in decl.get("needs", ()):
             if not isinstance(f, Field):
                 continue
-            # This billing choice belongs only to the Aether API gateway.
-            if f.key == "aether_allow_paid" and eid != "aether":
+            # The smart-model and billing controls belong to Aether API only.
+            if f.key in ("aether_auto_models", "aether_allow_paid") and eid != "aether":
                 continue
             # Do not show what the catalog entry already answered. The address
             # somebody did not have to type is one more thing to read and one
@@ -751,10 +751,11 @@ class ProvidersOverlay(_HudOverlay):
 
         if pid == "openai_compat@aether":
             lay.addWidget(self._label(
-                "Aether API: varsayılan olarak ücretli modeller engellenir. "
-                "Ücretsiz modelleri görmek için YENİLE'ye basın. "
-                "Ücretli model izni açılırsa hesabınızdan kredi düşebilir. "
-                "Gerçek fiyatı Aether panelinden kontrol edin.",
+                "Aether API akıllı ücretsiz model seçimi: Sohbet GPT OSS 120B, "
+                "hızlı istek Qwen 35B A3B, araştırma Qwen 27B, kodlama MiniMax M3. "
+                "Otomatik seçim açıkken MODEL kutusundaki manuel seçim yerine "
+                "göreve uygun model kullanılır. Manuel model için otomatiği kapatın. "
+                "Ücretli modellere izin kapalıdır; fiyatları Aether panelinden kontrol edin.",
                 7, C.TEXT_DIM))
 
         for _key, (w, f) in shown.items():
