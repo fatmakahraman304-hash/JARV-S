@@ -19,6 +19,8 @@ uniform float u_open;
 uniform float u_scale;
 uniform vec2 u_eye_x;
 uniform vec2 u_eye_c;
+uniform vec2 u_gaze;
+uniform vec3 u_brow;
 uniform vec4 u_eye_up;
 uniform vec4 u_eye_lo;
 uniform vec4 u_lip_uo;
@@ -67,7 +69,9 @@ void main() {
                              0.0025 * eyeSocket + 0.0018 * cheek);
 
     // Subpixel anti-aliased neon scan lines.
-    float frequency = clamp(u_scale * 0.19, 34.0, 88.0);
+    // Finer hologram sampling recreates the high-density reference scanlines
+    // without mapping a photograph to the surface.
+    float frequency = clamp(u_scale * 0.30, 48.0, 116.0);
     float phase = contourY * frequency;
     float d = abs(fract(phase) - 0.5);
     float halfwidth = clamp(0.11 + 0.22 * fwidth(phase), 0.11, 0.34);
@@ -77,22 +81,60 @@ void main() {
     // negative space between fine lines.
     float relief = 0.22 + 0.37 * key + 0.49 * rim;
     float lineLight = bands * relief;
+    // Iris and pupil are procedural shader geometry painted on the moving
+    // face mesh. They follow the real eye landmarks, head rotation, blinking,
+    // gaze and ambient lighting; no photo, sprite, UV atlas or texture.
     float eyes = 0.0;
+    float iris = 0.0;
+    float irisRing = 0.0;
+    float pupil = 0.0;
+    float irisThreads = 0.0;
+    float irisGlint = 0.0;
+    float eyeSclera = 0.0;
     if (front > 0.0 && ax > u_eye_x.x - 0.015 && ax < u_eye_x.y + 0.015) {
         float t = clamp((ax - u_eye_x.x) /
                         max(0.015, u_eye_x.y - u_eye_x.x), 0.0, 1.0);
-        float ends = smoothstep(0.0, 0.10, t) *
-                     (1.0 - smoothstep(0.88, 1.0, t));
-        // Almond lid arcs, not large pupil-less geometric ellipses.
+        float ends = smoothstep(0.0, 0.08, t) *
+                     (1.0 - smoothstep(0.92, 1.0, t));
         float arc = sin(3.14159265 * t);
         float upper = poly(u_eye_up, ax) + 0.005 * arc;
         float lower = poly(u_eye_lo, ax) - 0.0025 * arc;
         float lid = mix(lower, upper, clamp(u_open, 0.0, 1.0));
-        eyes = max(contour(p.y - lid, 0.0010),
-                   contour(p.y - lower, 0.0010)) * ends;
-        // Sculpted brow ridge, faintly above the lid; no pupil or iris.
-        eyes += 0.22 * contour(p.y - upper - 0.024 * arc,
-                               0.0016) * ends;
+        // Pale cyan eye chamber inside an anatomically measured almond lid.
+        float aa = max(fwidth(p.y) * 1.3, 0.002);
+        float aperture = front * ends *
+            smoothstep(lower - aa, lower + aa, p.y) *
+            (1.0 - smoothstep(lid - aa, lid + aa, p.y));
+        eyeSclera = aperture * 0.27;
+
+        vec2 centre = vec2(sign(p.x) * u_eye_c.x, u_eye_c.y) +
+                      vec2(u_gaze.x * 0.027, u_gaze.y * 0.016);
+        vec2 dEye = (p.xy - centre) / vec2(0.039, 0.042);
+        float rad = length(dEye);
+        float radAA = max(fwidth(rad), 0.012);
+        iris = aperture * (1.0 - smoothstep(0.86, 1.0 + radAA, rad));
+        irisRing = aperture * contour(rad - 0.89, 0.067);
+        pupil = aperture * (1.0 - smoothstep(0.35, 0.42 + radAA, rad));
+        float angle = atan(dEye.y, dEye.x);
+        irisThreads = iris * (0.5 + 0.5 * sin(angle * 38.0 + rad * 8.0)) *
+                      smoothstep(0.37, 0.55, rad) *
+                      (1.0 - smoothstep(0.83, 0.96, rad));
+        // Twin specular catchlights give the hologram readable, alert eyes.
+        irisGlint = aperture *
+                    (0.85 * exp(-dot((dEye - vec2(-0.29, 0.34)) * 9.0,
+                                      (dEye - vec2(-0.29, 0.34)) * 9.0)) +
+                     0.40 * exp(-dot((dEye - vec2(0.31, -0.27)) * 16.0,
+                                      (dEye - vec2(0.31, -0.27)) * 16.0)));
+
+        eyes = max(contour(p.y - lid, 0.0011),
+                   contour(p.y - lower, 0.0011)) * ends;
+        // Real mesh-fitted eyebrows: expressive without dark solid hair.
+        float browLine = u_brow.x + ax * (u_brow.y + ax * u_brow.z);
+        eyes += 0.60 * contour(p.y - browLine, 0.0024) * ends;
+        // Fine luminous eyelashes trace the upper lid, not large cartoon lashes.
+        float lashes = pow(max(0.0, sin(t * 68.0)), 18.0) *
+                       smoothstep(0.40, 0.85, t);
+        eyes += 0.28 * lashes * contour(p.y - lid - 0.008, 0.004) * ends;
     }
 
     // Only a luminous lip contour and an animated opening, not teeth or skin.
@@ -114,8 +156,14 @@ void main() {
         float opening = 0.024 * talk * taper;
         float topLine = mix(mid + smile, upper, talk * 0.52);
         float bottomLine = topLine - opening;
+        // Preserve the actual speaking viseme while adding dimensional,
+        // softly smiling upper/lower lips at rest, like the visual reference.
         lips = max(contour(p.y - topLine, 0.0012),
                    talk * contour(p.y - bottomLine, 0.0012)) * taper;
+        float upperBow = 0.0028 * exp(-pow((ax - 0.07) / 0.037, 2.0));
+        lips += 0.42 * contour(p.y - upper - upperBow, 0.0015) * taper;
+        lips += 0.55 * contour(p.y - lower, 0.0017) * taper;
+        lips += 0.15 * exp(-pow((p.y - lower) / 0.016, 2.0)) * taper;
         lips += talk * 0.12 * contour(p.y - innerUpper, 0.0013) * taper;
         mouthCavity = smoothstep(innerLower - opening - 0.003,
                                  innerLower + 0.003, p.y);
@@ -143,10 +191,19 @@ void main() {
     float bust = 1.0 - smoothstep(-1.67, -1.14, p.y);
     col += ice * rim * (2.48 + 0.45 * u_glow) * mix(1.0, 0.57, bust);
     col += ice * features * 1.15;
+    // Inner eye volume stays luminous yet translucent; the electric iris
+    // reads as a circular optical structure rather than a painted eyeball.
+    col += vec3(0.07, 0.24, 0.33) * eyeSclera;
+    col += neon * iris * 0.48 + ice * irisRing * 1.70;
+    col += ice * irisThreads * 0.62 + ice * irisGlint * 2.0;
+    col *= 1.0 - 0.86 * pupil;
+    col += ice * irisGlint * 1.15;
     col *= 1.0 - 0.75 * mouthCavity;
     col *= pulse * (1.0 - 0.44 * u_muted);
     float alpha = clamp(0.080 + 1.33 * lineLight + 1.40 * rim +
-                        0.93 * features, 0.0, 1.0) * fade;
+                        0.93 * features + 0.32 * eyeSclera +
+                        0.82 * iris + 0.76 * irisRing +
+                        1.5 * irisGlint, 0.0, 1.0) * fade;
     col = vec3(1.0) - exp(-max(col, vec3(0.0)) * 2.10);
     gl_FragColor = vec4(col * alpha, alpha);
 }
