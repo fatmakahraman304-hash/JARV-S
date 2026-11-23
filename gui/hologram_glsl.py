@@ -171,7 +171,9 @@ void main() {
                                        innerUpper + 0.003, p.y);
         mouthCavity *= taper * talk;
     }
-    float features = front * (0.90 * eyes + 0.75 * lips);
+    // The animated full-size eyes and lips are now drawn as vector contours
+    // over the posed 3D mesh; suppress the old tiny GLSL features underneath.
+    float features = front * (0.07 * eyes + 0.08 * lips);
     float pulse = 0.95 + 0.05 * sin(u_time * 1.4) + 0.13 * u_glow;
 
     // Dark translucent interior, bright electric cyan scan lines and edge.
@@ -194,16 +196,16 @@ void main() {
     // Inner eye volume stays luminous yet translucent; the electric iris
     // reads as a circular optical structure rather than a painted eyeball.
     col += vec3(0.07, 0.24, 0.33) * eyeSclera;
-    col += neon * iris * 0.48 + ice * irisRing * 1.70;
-    col += ice * irisThreads * 0.62 + ice * irisGlint * 2.0;
-    col *= 1.0 - 0.86 * pupil;
-    col += ice * irisGlint * 1.15;
+    col += neon * iris * 0.035 + ice * irisRing * 0.075;
+    col += ice * irisThreads * 0.035 + ice * irisGlint * 0.075;
+    col *= 1.0 - 0.04 * pupil;
+    col += ice * irisGlint * 0.065;
     col *= 1.0 - 0.75 * mouthCavity;
     col *= pulse * (1.0 - 0.44 * u_muted);
     float alpha = clamp(0.080 + 1.33 * lineLight + 1.40 * rim +
-                        0.93 * features + 0.32 * eyeSclera +
-                        0.82 * iris + 0.76 * irisRing +
-                        1.5 * irisGlint, 0.0, 1.0) * fade;
+                        0.15 * features + 0.01 * eyeSclera +
+                        0.025 * iris + 0.035 * irisRing +
+                        0.03 * irisGlint, 0.0, 1.0) * fade;
     col = vec3(1.0) - exp(-max(col, vec3(0.0)) * 2.10);
     gl_FragColor = vec4(col * alpha, alpha);
 }
