@@ -92,11 +92,13 @@ def bloom(painter: QPainter, image: QImage, x0: float, y0: float,
 
 
 def details(painter: QPainter, xs, ys, n_head: int, landmarks,
-            energy: float = 0.0) -> None:
+            energy: float = 0.0, *, eye_open: float = 1.0,
+            gaze=(0.0, 0.0), mouth: float = 0.0) -> None:
     """Smooth blue face rim and two actual ear-shaped loops in screen space.
 
-    They follow the 3D vertex projections at every frame rather than sitting
-    on a static face image. The scanline shader still owns lips and eyelids.
+    They follow the 3D vertex projections every frame rather than sitting
+    on a static face image. A high-detail vector overlay supplies the eyes,
+    lips and brows, using the existing audio- and gaze-driven animation.
     """
     if len(xs) < n_head or n_head < 3:
         return
@@ -176,3 +178,10 @@ def details(painter: QPainter, xs, ys, n_head: int, landmarks,
                       ex + side * half * .16, ey + height * .020,
                       ex + side * half * .068, ey + height * .063)
         _neon_path(painter, inner, .29)
+
+    # Visual source of truth: a feminine, expressive face with properly sized
+    # almond eyes and full lips. This is animated Qt vector drawing, not an
+    # imported/generated picture, and uses the same moving projected 3D head.
+    from core.gideon_portrait import paint_portrait
+    paint_portrait(painter, left, top, right - left, height,
+                   eye_open=eye_open, gaze=gaze, mouth=mouth, energy=energy)
