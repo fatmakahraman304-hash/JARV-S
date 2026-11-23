@@ -4042,6 +4042,14 @@ def main():
     except Exception as exc:
         print(f"[AETHER] Günlük dosyası açılamadı: {exc}")
     ui = AetherUI("face.png")
+    # Observe very short-lived Qt dialogs and native console windows. This
+    # never opens its own window, and makes otherwise invisible flickers
+    # identifiable in MAYK's activity log and the local window_flash.log.
+    try:
+        from core.window_flash import start as start_flash_diagnostics
+        start_flash_diagnostics(ui._app, ui._win, notify=ui.write_log)
+    except Exception as exc:
+        print(f"[window-flash] diagnostics unavailable: {type(exc).__name__}")
     from core.second_brain_service import Controller
     from memory.continuity import recover_jobs
     try:
