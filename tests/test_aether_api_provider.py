@@ -4,7 +4,7 @@ All calls are mocked: tests must never use a real API key or bill credits.
 """
 import asyncio
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from providers.llm_openai import (
     CATALOG, PRESETS, OpenAICompatLLM, _aether_is_free_model,
@@ -90,9 +90,8 @@ class AetherAPIProviderTests(unittest.TestCase):
         response = Mock()
         response.json.return_value = {"data": rows}
         response.raise_for_status.return_value = None
-        fake_client = Mock()
-        fake_client.__enter__ = Mock(return_value=fake_client)
-        fake_client.__exit__ = Mock(return_value=False)
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value = fake_client
         fake_client.get.return_value = response
         with patch("httpx.Client", return_value=fake_client):
             self.assertEqual(
