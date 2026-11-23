@@ -709,7 +709,8 @@ def _to_openai_messages(contents, config) -> tuple[list[dict], Optional[float]]:
     return messages, temperature
 
 
-def _provider_call(model: str, contents, config, timeout_ms: int):
+def _provider_call(model: str, contents, config, timeout_ms: int, *,
+                   tier: str = FAST, coding: bool = False):
     """One generation through a configured provider. Raises like every other
     rung, so the loop's error classification applies to it unchanged."""
     from memory.config_manager import get_provider_config
@@ -717,6 +718,12 @@ def _provider_call(model: str, contents, config, timeout_ms: int):
 
     pid = model[len(PROVIDER_PREFIX):]
     cfg = get_provider_config(pid)
+    if pid == "openai_compat@aether":
+        # The same locally stored API key is used for all workloads, without
+        # duplicating any secret or overriding the user's manual model choice.
+        # Each request gets its own config/instance: no shared .model mutation.
+        role = "coding" if coding else ("fast" if tier == FAST else "research")
+        cfg = dict(cfg, aether_role=role)
     missing = registry.missing_fields(pid, cfg)
     if missing:
         raise RuntimeError(f"404 not configured: {', '.join(missing)}")
@@ -808,7 +815,10 @@ def call(contents, tier: str = FAST, config=None,
                     return reply
                 raise RuntimeError("the Live turn came back empty")
             if model.startswith(PROVIDER_PREFIX):
-                return _provider_call(model, contents, config, timeout_ms)
+                return _provider_call(
+                    model, contents, config, timeout_ms, tier=tier,
+                    coding=bool(provider and provider_only and
+                                model == PROVIDER_PREFIX + provider))
             if cl is None:
                 cl = client(timeout_ms=timeout_ms, key=resolved_key)
             kwargs = {"model": model, "contents": contents}
