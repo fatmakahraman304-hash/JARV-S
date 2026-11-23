@@ -99,6 +99,11 @@ def ladder(chosen: str = "", installed=None) -> list[str]:
         from core import agent_coding
         installed = agent_coding.available
     order = [p for p in AGENTS if installed(p) and not resting(p)]
+    # When Aether API is deliberately chosen for coding, use the task-aware
+    # free coding model BEFORE NVIDIA. Keep NVIDIA and Gemini as existing
+    # fallbacks, and leave every other chosen provider's order unchanged.
+    if chosen == "openai_compat@aether" and not resting(chosen):
+        return [chosen] + order + [GEMINI]
     # Kullanıcı alternatif bir API modeli seçmişse yedek olarak kullanılabilir,
     # ancak kaldırılan eski abonelik/CLI kod ajanları geri yüklenmez.
     old_agents = {"claude_code", "codex_cli", "openai_compat@deepseek"}
