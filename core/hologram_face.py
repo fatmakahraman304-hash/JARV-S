@@ -227,9 +227,9 @@ class ProjectionFace:
             painter.setPen(QPen(QColor(60, 210, 255, 18 + bucket * 13), .70))
             painter.drawLines(segments)
 
-        # Eyes sit behind the animated eyelid outlines. No bitmaps or sprites.
-        self._paint_optical_eyes(painter, xs, ys, normals, eye_open, gaze)
-        for name in ("eye_l", "eye_r", "lips_in", "brow_l", "brow_r"):
+        # The new shared vector finish handles large eyes, brows and lips on
+        # BOTH OpenGL and software modes; avoid drawing the old tiny rings.
+        for name in ():
             ids = self.landmarks[name]
             if float(normals[ids, 2].mean()) < 0:
                 continue
