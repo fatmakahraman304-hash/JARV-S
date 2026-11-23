@@ -213,7 +213,10 @@ def _start_native(recorder: FlashRecorder, main_hwnd: int) -> None:
                     pid = int(pid_out.value)
                     if not pid or pid == current_pid:
                         return   # Qt widgets already handled on Qt thread.
-                    is_console = class_name == "ConsoleWindowClass"
+                    is_console = class_name in {
+                        "ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS",
+                        "VirtualConsoleClass",
+                    }
                     try:
                         process = psutil.Process(pid)
                         name = process.name()
