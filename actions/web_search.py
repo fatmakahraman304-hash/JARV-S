@@ -3,6 +3,7 @@ import json
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 # ── Gemini grounding quota circuit breaker ────────────────────────────────────
@@ -137,6 +138,7 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
                     "title":   r.get("title",  ""),
                     "snippet": r.get("body",   ""),
                     "url":     r.get("href",   ""),
+                    "date":    r.get("date",   ""),
                 })
     except Exception as e:
         print(f"[WebSearch] ⚠️ DDG text() failed: {e}")
@@ -155,6 +157,7 @@ def _ddg_news(query: str, max_results: int = 8) -> list[dict]:
                     "snippet": r.get("body",   ""),
                     "url":     r.get("url",    ""),
                     "source":  r.get("source", ""),
+                    "date":    r.get("date", ""),
                 })
     except Exception as e:
         print(f"[WebSearch] ⚠️ DDG news() failed ({e}) — falling back to text search")
@@ -169,10 +172,14 @@ def _format_ddg(query: str, results: list[dict]) -> str:
     if not results:
         return f"No results found for: {query}"
 
-    lines = [f"Search results for: {query}\n"]
+    checked = datetime.now().astimezone().isoformat(timespec="minutes")
+    lines = [f"Live web search performed at {checked}: {query}",
+             "Retrieved now does NOT mean published today. Check source dates.",
+             "Do not invent missing, outdated, or conflicting facts.", ""]
     for i, r in enumerate(results, 1):
         if r.get("title"):   lines.append(f"{i}. {r['title']}")
         if r.get("snippet"): lines.append(f"   {r['snippet']}")
+        if r.get("date"):    lines.append(f"   Published: {r['date']}")
         if r.get("url"):     lines.append(f"   Source: {r['url']}")
         lines.append("")
     return "\n".join(lines).strip()
@@ -182,7 +189,9 @@ def _format_news(query: str, results: list[dict]) -> str:
     if not results:
         return f"No news found for: {query}"
 
-    lines = [f"Latest news: {query}\n"]
+    checked = datetime.now().astimezone().isoformat(timespec="minutes")
+    lines = [f"Live news results retrieved at {checked}: {query}",
+             "Verify each item's publication date; search results can be old.", ""]
     for i, r in enumerate(results, 1):
         title = r.get("title", "")
         if not title:
@@ -191,6 +200,8 @@ def _format_news(query: str, results: list[dict]) -> str:
         lines.append(f"{i}. {title}{src}")
         if r.get("snippet"):
             lines.append(f"   {r['snippet'][:140]}")
+        if r.get("date"):
+            lines.append(f"   Published: {r['date']}")
         if r.get("url"):
             lines.append(f"   {r['url']}")
         lines.append("")
@@ -241,13 +252,23 @@ def _gemini_headlines(n: int = 5) -> tuple[list[str], str]:
 # ── Modes ──────────────────────────────────────────────────────────────────────
 
 def _search(query: str) -> str:
-    """Default search — Gemini grounded, DDG fallback."""
-    try:
-        return _gemini_search(query)
-    except Exception as e:
-        _log_gemini_failure("Gemini search", e)
-        results = _ddg_search(query)
+    """Prefer live source URLs over a model summary on every web search."""
+    results = _ddg_search(query, max_results=7)
+    if results:
         return _format_ddg(query, results)
+
+    # Google grounding is a real internet search, not the model's training data.
+    # Only the fallback path spends a Google grounding request.
+    try:
+        answer = _gemini_search(
+            f"Search the live web for: {query}. State the source links and "
+            "publication dates; if unavailable, say you cannot verify.")
+        if answer:
+            return ("Grounded live web lookup (direct source list unavailable):\n"
+                    + answer)
+    except Exception as e:
+        _log_gemini_failure("Gemini fallback search", e)
+    return f"No verified current search results available for: {query}"
 
 
 def _news(query: str) -> str:
@@ -285,58 +306,75 @@ def _news(query: str) -> str:
 
 
 def _research(query: str) -> str:
-    """
-    Deep dive — asks Gemini for a comprehensive answer with context.
-    Falls back to a wider DDG fetch.
-    """
-    research_query = (
-        f"Comprehensive, detailed explanation of: {query}. "
-        "Include background context, key facts, current state, and important nuances."
-    )
-    try:
-        return _gemini_search(research_query)
-    except Exception as e:
-        _log_gemini_failure("Gemini research", e)
-        results = _ddg_search(query, max_results=10)
+    """Research from live documents first, not old model knowledge."""
+    results = _ddg_search(query, max_results=10)
+    if results:
         return _format_ddg(query, results)
+    try:
+        answer = _gemini_search(
+            f"Research this via live web search: {query}. Supply current "
+            "source links, distinguish publication dates and avoid guesses.")
+        if answer:
+            return ("Grounded live web research (direct source list unavailable):\n"
+                    + answer)
+    except Exception as e:
+        _log_gemini_failure("Gemini fallback research", e)
+    return f"No verified current research sources available for: {query}"
 
 
 def _price(query: str) -> str:
-    """Product price lookup — searches for current market prices."""
-    price_query = f"current price of {query} — how much does it cost today"
-    try:
-        return _gemini_search(price_query)
-    except Exception as e:
-        _log_gemini_failure("Gemini price", e)
-        results = _ddg_search(f"{query} price buy", max_results=6)
+    """Check actual current price listings, not an LLM's remembered amount."""
+    this_year = datetime.now().year
+    results = _ddg_search(f"{query} price buy {this_year}", max_results=7)
+    if results:
         return _format_ddg(query, results)
+    try:
+        answer = _gemini_search(
+            f"Find currently advertised prices for {query} using live search. "
+            "Include the seller/source and date. Never estimate an amount.")
+        if answer:
+            return ("Grounded live price search (direct source list unavailable):\n"
+                    + answer)
+    except Exception as e:
+        _log_gemini_failure("Gemini fallback price", e)
+    return f"No verified current prices available for: {query}"
 
 
 def _compare(items: list[str], aspect: str) -> str:
-    query = (
-        f"Compare {', '.join(items)} in terms of {aspect}. "
-        "Give specific facts and data."
-    )
-    try:
-        return _gemini_search(query)
-    except Exception as e:
-        _log_gemini_failure("Gemini compare", e)
-
+    """Compare using freshly retrieved and attributed source snippets."""
     all_results: dict[str, list] = {}
-    for item in items:
-        try:
-            all_results[item] = _ddg_search(f"{item} {aspect}", max_results=3)
-        except Exception:
-            all_results[item] = []
+    for item in items[:8]:
+        all_results[item] = _ddg_search(f"{item} {aspect}", max_results=4)
 
-    lines = [f"Comparison — {aspect.upper()}", "─" * 40]
-    for item in items:
+    if not any(all_results.values()):
+        try:
+            answer = _gemini_search(
+                f"Compare {', '.join(items)} in terms of {aspect} using "
+                "current web sources, with links and publication dates.")
+            if answer:
+                return ("Grounded live comparison (direct source list unavailable):\n"
+                        + answer)
+        except Exception as e:
+            _log_gemini_failure("Gemini fallback compare", e)
+        return "No verified current sources available for this comparison."
+
+    checked = datetime.now().astimezone().isoformat(timespec="minutes")
+    lines = [f"Live comparison results retrieved at {checked} for {aspect}.",
+             "Retrieved now is not necessarily up to date; check the source dates."]
+    for item in items[:8]:
         lines.append(f"\n▸ {item}")
-        for r in all_results.get(item, [])[:2]:
+        found = all_results.get(item, [])
+        if not found:
+            lines.append("  No verified sources retrieved for this item.")
+        for r in found[:3]:
+            if r.get("title"):
+                lines.append(f"  {r['title']}")
             if r.get("snippet"):
                 lines.append(f"  • {r['snippet']}")
+            if r.get("date"):
+                lines.append(f"    Published: {r['date']}")
             if r.get("url"):
-                lines.append(f"    {r['url']}")
+                lines.append(f"    Source: {r['url']}")
     return "\n".join(lines)
 
 
@@ -383,6 +421,15 @@ def web_search(
     except Exception as e:
         print(f"[WebSearch] ❌ All backends failed: {e}")
         return outcome.failed("web_search", f"the search failed: {e}",
+                              query=query or ", ".join(items))
+
+    # Search failure is not evidence: do not let the assistant turn it into
+    # a fictional answer based on model memory.
+    if (not found or found.startswith("No verified current")
+            or found.startswith("No news found")
+            or found.startswith("No results found")):
+        return outcome.failed("web_search",
+                              "Güncel kaynak bulunamadı; tarih, fiyat veya sonucu tahmin etmeyin.",
                               query=query or ", ".join(items))
 
     # EVERYTHING BELOW THIS LINE WAS WRITTEN BY STRANGERS.
