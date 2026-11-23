@@ -11,14 +11,14 @@ import re
 from urllib.parse import urlsplit
 
 _FIXTURE = re.compile(
-    r"\\b(maç(?:ı|i|ın|in|lar|ları|ları)?|karşılaşma(?:sı)?|"
-    r"fixture|fixtures|match|matches|game|games|playing|play)\\b",
+    r"\b(maç(?:ı|i|ın|in|lar|ları|ları)?|karşılaşma(?:sı)?|"
+    r"fixture|fixtures|match|matches|game|games|playing|play)\b",
     re.IGNORECASE,
 )
 _TIME = re.compile(
-    r"ne\\s*zaman|saat\\s*kaçta|hangi\\s*gün|bu\\s*akşam|bu\\s*hafta|"
+    r"ne\s*zaman|saat\s*kaçta|hangi\s*gün|bu\s*akşam|bu\s*hafta|"
     r"bugün|yarın|sıradaki|sonraki|gelecek|yaklaşan|"
-    r"when|next|upcoming|today|tomorrow|tonight|this\\s*week",
+    r"when|next|upcoming|today|tomorrow|tonight|this\s*week",
     re.IGNORECASE,
 )
 
@@ -94,4 +94,4 @@ def lookup_fixture_evidence(question: str, *, search=None, now=None) -> str:
     ]
     for i, (_host, title, snippet, url) in enumerate(entries[:5], 1):
         lines.extend((f"[{i}] {title}", f"Details: {snippet}", f"Source: {url}"))
-    return "\\n".join(lines)
+    return "\n".join(lines)
