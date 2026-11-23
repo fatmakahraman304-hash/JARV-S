@@ -535,7 +535,9 @@ class HoloAvatar:
         if self.style == "holographic":
             if self._paint_android(p, xs, ys, verts, norms, primary, accent, amp):
                 from core.hologram_finish import details
-                details(p, xs, ys, self._n_head, self._lm, amp)
+                details(p, xs, ys, self._n_head, self._lm, amp,
+                        eye_open=(1.0 - self._blink) * self._lids,
+                        gaze=tuple(self._gaze), mouth=self._mouth)
                 return
         if self.style == "projection":
             if self._projection is None:
@@ -546,7 +548,9 @@ class HoloAvatar:
             # The software fallback gets the same animated feminine silhouette
             # and swept-back holographic contours as the GPU face.
             from core.hologram_finish import details
-            details(p, xs, ys, self._n_head, self._lm, amp)
+            details(p, xs, ys, self._n_head, self._lm, amp,
+                    eye_open=(1.0 - self._blink) * self._lids,
+                    gaze=tuple(self._gaze), mouth=self._mouth)
             return
         if self.style in ("human", "android") and self._paint_android(p, xs, ys, verts, norms,
                                                            primary, accent, amp):
