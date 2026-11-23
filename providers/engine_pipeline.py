@@ -454,7 +454,36 @@ class PipelineEngine:
         thinking = _ReasoningFilter()
         pending = ""            # visible text not yet a whole sentence
         try:
-            async for ev in self._llm.chat(self._messages(), self._tools):
+            messages = self._messages()
+            # Free chat models sometimes answer from old training data even
+            # when web_search is available. Fixture timing must be looked up
+            # before the first generated word, not left to optional tool use.
+            if self._history and self._history[-1].get("role") == "user":
+                question = self._history[-1].get("content")
+                if isinstance(question, str):
+                    from core.live_facts import (
+                        needs_fixture_lookup, lookup_fixture_evidence,
+                    )
+                    if needs_fixture_lookup(question):
+                        self._log("SYS: checking live fixture sources before answering")
+                        try:
+                            evidence = await asyncio.wait_for(
+                                asyncio.to_thread(lookup_fixture_evidence, question),
+                                timeout=8.0)
+                        except (asyncio.TimeoutError, Exception):
+                            evidence = ""
+                        if not evidence:
+                            line = ("Canlı maç takvimine şu anda erişemiyorum. "
+                                    "Doğrulayamadığım bir tarih söylemeyeceğim.")
+                            await self._emit(Msg.said(line))
+                            await self._speak(line)
+                            self._history.append({"role": "assistant", "content": line})
+                            await self._emit(Msg.turn_end())
+                            return
+                        messages.insert(1 if messages and messages[0]["role"] == "system"
+                                        else 0,
+                                        {"role": "system", "content": evidence})
+            async for ev in self._llm.chat(messages, self._tools):
                 if ev.get("text"):
                     visible = thinking.feed(ev["text"])
                     if visible and first_word is None:
