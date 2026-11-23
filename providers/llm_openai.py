@@ -139,8 +139,14 @@ def aether_role_model(cfg: dict, role: str = "conversation") -> str:
     base = _normalise(str(cfg.get("base_url") or ""))
     if base != PRESETS["Aether API"]:
         return model
-    auto = str(cfg.get("aether_auto_models", "1")).strip().lower()
-    if auto not in ("1", "true", "yes", "on"):
+    # Legacy installs may have intentionally selected another model. Do not
+    # replace their choice merely because the automatic option is newly added.
+    setting = cfg.get("aether_auto_models")
+    if setting is None:
+        enabled = model in ("", AETHER_FREE_ROLES["conversation"])
+    else:
+        enabled = str(setting).strip().lower() in ("1", "true", "yes", "on")
+    if not enabled:
         return model
     return AETHER_FREE_ROLES.get(role, AETHER_FREE_ROLES["conversation"])
 
