@@ -276,6 +276,45 @@ reach them.
 
 ---
 
+## 🧠 Aether API: recommended free models by job
+
+These are **practical starter presets, not a benchmark ranking**. The Aether API
+public catalogue currently lists all four at a free input/output price, but
+model access, limits and capabilities can change. A valid key is required.
+
+| Workload | Selected free chat model |
+|---|---|
+| Main chat / conversation | `gpt-oss-120b-free` |
+| Fast background tasks | `qwen3.8-35b-a3b-free` |
+| Deep research and long documents | `qwen3.8-27b-free` |
+| Coding assistance / code generation | `minimax-m3-free` |
+
+In **⚙ → ENGINE & PROVIDERS → Aether API**, keep **En uygun ücretsiz modeli
+otomatik seç** on to use these workload-specific choices. It is on for new
+Aether settings and for existing installations still using the old default
+`gpt-oss-120b-free`. If you have explicitly chosen a different model, your
+existing selection is preserved unless you enable automatic selection.
+Switch this setting off to force the exact manually selected **Model** ID.
+
+If Aether API is configured as the background provider with a local API key
+and no separate coding provider has been chosen, coding tasks automatically
+use its free coding preset first. NVIDIA and Gemini remain the fallbacks.
+When coding or background models are explicitly selected elsewhere, those
+choices remain in effect.
+
+The live model catalogue and **your own key's route-specific access/capabilities**
+remain authoritative. `-free` naming is a conservative local safety
+filter, not an immutable pricing guarantee; a `tool_calling: unknown`
+capability must not be treated as verified tool-call support. Do not assume
+a recommended model will operate every AETHER tool. Live testing may count
+against API quotas, and prices must be checked in the provider dashboard.
+Keys stay in the locally ignored `config/api_keys.json`.
+
+Model catalogue: https://aetherapi.dev/models
+Capability guide: https://aetherapi.dev/docs/agents/models
+
+---
+
 ## 🔑 Aether API gateway (optional)
 
 AETHER the desktop assistant and **Aether API** the third-party model gateway
