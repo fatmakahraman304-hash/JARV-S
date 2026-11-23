@@ -732,7 +732,10 @@ def get_coding_provider() -> str:
     chosen = str(get_providers().get("coding", "") or "").strip()
     if chosen:
         return chosen
-    if get_sidecar_provider() != "openai_compat@aether":
+    # AETHER may be using the gateway for background requests OR as the
+    # primary language model in the STT -> LLM -> TTS pipeline.
+    if (get_sidecar_provider() != "openai_compat@aether" and
+            get_pipeline().get("llm") != "openai_compat@aether"):
         return ""
     cfg = get_provider_config("openai_compat@aether")
     if not str(cfg.get("api_key") or "").strip():
