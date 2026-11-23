@@ -60,6 +60,7 @@ PRESETS: dict[str, str] = {
     "vLLM":                 "http://127.0.0.1:8000/v1",
     "Jan":                  "http://127.0.0.1:1337/v1",
     "OpenAI":               "https://api.openai.com/v1",
+    "Aether API":            "https://api.aetherapi.dev/v1",
     "Groq":                 "https://api.groq.com/openai/v1",
     "NVIDIA":               "https://integrate.api.nvidia.com/v1",
     "Mistral":              "https://api.mistral.ai/v1",
@@ -146,6 +147,11 @@ CATALOG = (
     {"id": "openai",     "label": "OpenAI",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["OpenAI"], **_CLOUD}},
+    {"id": "aether",     "label": "Aether API",
+     "note": "bulut · varsayılan olarak yalnızca ücretsiz modeller",
+     "local": False,
+     "values": {"base_url": PRESETS["Aether API"], **_CLOUD,
+                "model": "gpt-oss-120b-free", "aether_allow_paid": ""}},
     {"id": "anthropic",  "label": "Claude (Anthropic)",
      "note": "bulut · Anthropic API anahtarı gerekir", "local": False,
      "values": {"base_url": "https://api.anthropic.com/v1", **_CLOUD}},
@@ -355,6 +361,16 @@ class _ToolCallBuffer:
 # ─────────────────────────────────────────────────────────────────────────────
 #  The provider
 # ─────────────────────────────────────────────────────────────────────────────
+def _aether_is_free_model(model_id: str) -> bool:
+    """Conservative free-tier allowlist by the catalogue's -free ID suffix.
+
+    Aether's advertised no-charge chat models use IDs such as
+    gpt-oss-120b-free. No unknown or unlabelled model is assumed free.
+    Prices can change at the provider: the user's dashboard is authoritative.
+    """
+    return bool(model_id) and str(model_id).strip().casefold().endswith("-free")
+
+
 class OpenAICompatLLM:
     """Speaks to anything that serves /v1/chat/completions."""
 
@@ -365,6 +381,10 @@ class OpenAICompatLLM:
         self.base = _normalise(cfg.get("base_url") or "")
         self.model = (cfg.get("model") or "").strip()
         self.key = (cfg.get("api_key") or "").strip()
+        self._aether = self.base.rstrip("/") == PRESETS["Aether API"]
+        # Defaults OFF even for existing configs: opting in is never implicit.
+        self._aether_allow_paid = str(cfg.get("aether_allow_paid", "")).strip().lower() in (
+            "1", "true", "yes", "on")
         if not self.key and "generativelanguage.googleapis.com" in self.base:
             # The Gemini entry needs no second key: the one Gemini Live already
             # uses is the natural choice, and a different key pasted here is how
@@ -428,6 +448,14 @@ class OpenAICompatLLM:
 
     def _body(self, messages: list[dict], tools: list[dict] | None,
               stream: bool, temperature: float | None) -> dict:
+        # Enforced in the network request path, not just the model selector:
+        # typed model IDs, saved settings, background jobs and coding agents
+        # cannot silently spend credits when the paid opt-in is disabled.
+        if self._aether and not self._aether_allow_paid and not _aether_is_free_model(self.model):
+            raise ValueError(
+                "Aether API: ücretli veya fiyatı doğrulanmamış model engellendi. "
+                "Ücretsiz bir '-free' modeli seçin ya da "
+                "'Ücretli modellere izin ver' seçeneğini bilinçli olarak açın.")
         body: dict[str, Any] = {"model": self.model, "messages": messages,
                                 "stream": stream}
         if tools and self.caps["tools"]:
@@ -575,7 +603,27 @@ class OpenAICompatLLM:
             r.raise_for_status()
             data = r.json()
         rows = data.get("data") if isinstance(data, dict) else data
-        return sorted({str(m.get("id")) for m in (rows or []) if m.get("id")})
+        if not self._aether:
+            return sorted({str(m.get("id")) for m in (rows or []) if m.get("id")})
+
+        # Aether's /models contains chat and non-chat IDs together. Only offer
+        # supported chat routes available to this key; exact IDs are retained.
+        # Discovery is read-only and does not generate billable model output.
+        ids = set()
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            model_id = str(row.get("id") or "").strip()
+            if not model_id or "/v1/chat/completions" not in (row.get("supported_endpoints") or []):
+                continue
+            access = ((row.get("capabilities") or {})
+                      .get("/v1/chat/completions") or {}).get("access") or {}
+            if access.get("allowed") is False:
+                continue
+            if not self._aether_allow_paid and not _aether_is_free_model(model_id):
+                continue
+            ids.add(model_id)
+        return sorted(ids, key=lambda m: (not _aether_is_free_model(m), m.casefold()))
 
     # A 1x1 transparent PNG — 68 bytes, the smallest thing that is a real image.
     _PIXEL = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
@@ -827,6 +875,9 @@ PROVIDER = {
               hint="Sunucudan otomatik alınır; boşsa YENİLE düğmesine basın"),
         Field("api_key", "API anahtarı", kind="secret", required=False,
               hint="Yerel sunucular genellikle API anahtarı istemez"),
+        Field("aether_allow_paid", "Ücretli modellere izin ver", kind="bool",
+              default="", required=False,
+              hint="Varsayılan HAYIR: yalnızca -free modeller. EVET: kredi harcayabilir."),
         # Filled in by TEST, not asked. The user is the wrong person to ask
         # whether a model is multimodal — see OpenAICompatLLM.can_see. Kept as a
         # field so the answer is stored and so somebody who knows better can
