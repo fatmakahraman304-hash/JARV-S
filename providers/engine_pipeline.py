@@ -470,7 +470,7 @@ class PipelineEngine:
                             evidence = await asyncio.wait_for(
                                 asyncio.to_thread(lookup_fixture_evidence, question),
                                 timeout=8.0)
-                        except (asyncio.TimeoutError, Exception):
+                        except Exception:
                             evidence = ""
                         if not evidence:
                             line = ("Canlı maç takvimine şu anda erişemiyorum. "
