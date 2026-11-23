@@ -32,16 +32,16 @@ def face_layout(left: float, top: float, width: float, height: float) -> dict:
     cx = left + width * 0.5
     return {
         "cx": cx,
-        "eyes_y": top + height * 0.485,
-        "eyes_x": (cx - width * 0.247, cx + width * 0.247),
-        "eye_w": width * 0.276,
-        "eye_h": height * 0.105,
-        "brow_y": top + height * 0.389,
-        "nose_y": top + height * 0.667,
-        "mouth_y": top + height * 0.772,
+        "eyes_y": top + height * 0.525,
+        "eyes_x": (cx - width * 0.234, cx + width * 0.234),
+        "eye_w": width * 0.314,
+        "eye_h": height * 0.095,
+        "brow_y": top + height * 0.425,
+        "nose_y": top + height * 0.714,
+        "mouth_y": top + height * 0.816,
         "mouth_w": width * 0.314,
         "mouth_h": height * 0.055,
-        "cheek_y": top + height * 0.613,
+        "cheek_y": top + height * 0.655,
     }
 
 
@@ -106,7 +106,7 @@ def _eyes(p: QPainter, layout: dict, openness: float,
         p.setClipPath(opening)
         px = ex + float(gaze[0]) * ew * .115
         py = eye_y - float(gaze[1]) * eh * .14
-        radius = min(ew * .235, eh * .49)
+        radius = min(ew * .185, eh * .37)
         iris = QRadialGradient(QPointF(px, py), radius)
         iris.setColorAt(0, QColor(0, 17, 40, 255))
         iris.setColorAt(.32, QColor(5, 52, 125, 250))
