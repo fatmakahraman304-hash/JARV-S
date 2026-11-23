@@ -59,7 +59,9 @@ class HologramFace(unittest.TestCase):
         self.assertIn("vec3 neon", FRAG_HOLOGRAM)
         self.assertIn("u_mouth", FRAG_HOLOGRAM)
         self.assertIn("u_open", FRAG_HOLOGRAM)
-        self.assertNotIn("vec3 iris", FRAG_HOLOGRAM)
+        self.assertIn("float iris = 0.0", FRAG_HOLOGRAM)
+        self.assertIn("float irisGlint = 0.0", FRAG_HOLOGRAM)
+        self.assertIn("uniform vec2 u_gaze", FRAG_HOLOGRAM)
         self.assertNotIn("float hairC", FRAG_HOLOGRAM)
         base = get_head_mesh()
         mesh = with_shoulders(base)
@@ -93,7 +95,45 @@ class HologramFace(unittest.TestCase):
             __import__("core.hologram_mesh", fromlist=["with_shoulders"]).with_shoulders))
         self.assertIn("float opening = 0.024 * talk", FRAG_HOLOGRAM)
         self.assertIn("uniform vec2 u_eye_c", FRAG_HOLOGRAM)
-        self.assertNotIn("vec3 iris", FRAG_HOLOGRAM)
+        self.assertIn("float iris = 0.0", FRAG_HOLOGRAM)
+        self.assertIn("float irisGlint = 0.0", FRAG_HOLOGRAM)
+        self.assertIn("uniform vec2 u_gaze", FRAG_HOLOGRAM)
+
+    def test_iris_fallback_is_living_vector_geometry_not_a_picture(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        from core.hologram_face import ProjectionFace
+        from PyQt6.QtGui import QPainter, QImage
+
+        app = QApplication.instance() or QApplication([])
+        mesh = with_shoulders(get_head_mesh())
+        face = ProjectionFace(mesh)
+        vertices = mesh["verts"]
+        xs = 160 + vertices[:, 0] * 125
+        ys = 195 - vertices[:, 1] * 125
+        normals = mesh["normals"]
+
+        def frame(gaze, openness):
+            img = QImage(320, 350, QImage.Format.Format_ARGB32)
+            img.fill(QColor(2, 10, 21))
+            painter = QPainter(img)
+            face._paint_optical_eyes(painter, xs, ys, normals, openness, gaze)
+            painter.end()
+            bits = img.bits()
+            bits.setsize(img.sizeInBytes())
+            return np.frombuffer(bits, dtype=np.uint8).copy()
+
+        center = frame((0.0, 0.0), 1.0)
+        side = frame((0.8, -0.4), 1.0)
+        closed = frame((0.0, 0.0), 0.0)
+        self.assertFalse(np.array_equal(center, side))
+        self.assertFalse(np.array_equal(center, closed))
+        self.assertIn("QPainterPath", __import__("inspect").getsource(
+            ProjectionFace._paint_optical_eyes))
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        self.assertNotIn("QPixmap", (root / "core" / "hologram_face.py").read_text("utf8"))
+        self.assertNotIn("texture2D", (root / "gui" / "hologram_glsl.py").read_text("utf8"))
 
     def test_reference_halo_and_ears_draw_in_qpainter(self):
         from core.hologram_finish import bloom, details, _hull
