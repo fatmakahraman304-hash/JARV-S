@@ -227,28 +227,5 @@ class ProjectionFace:
             painter.setPen(QPen(QColor(60, 210, 255, 18 + bucket * 13), .70))
             painter.drawLines(segments)
 
-        # The new shared vector finish handles large eyes, brows and lips on
-        # BOTH OpenGL and software modes; avoid drawing the old tiny rings.
-        for name in ():
-            ids = self.landmarks[name]
-            if float(normals[ids, 2].mean()) < 0:
-                continue
-            x, y = xs[ids], ys[ids].copy()
-            if name.startswith("eye"):
-                y = y.mean() + (y - y.mean()) * max(0.02, eye_open)
-            # Keep the animated eyelid ring over the procedural iris.
-            points = [QPointF(float(xx), float(yy)) for xx, yy in zip(x, y)]
-            if name.startswith(("eye", "lips")):
-                points.append(points[0])
-            path = QPainterPath(points[0])
-            for point in points[1:]:
-                path.lineTo(point)
-            strength = .56 if name.startswith("eye") else .28 if name.startswith("brow") else .47
-            self._light_path(painter, path, strength, .75)
-        # Bridge, nostrils and nose wings remain tied to the real face mesh.
-        for ids in ((193, 122, 196, 3, 51, 45, 44), (417, 351, 419, 248, 281, 275, 274),
-                    (49, 48, 64, 98, 97, 2), (279, 278, 294, 327, 326, 2)):
-            path = QPainterPath(QPointF(float(xs[ids[0]]), float(ys[ids[0]])))
-            for i in ids[1:]:
-                path.lineTo(float(xs[i]), float(ys[i]))
-            self._light_path(painter, path, .50, .6)
+        # All face details are drawn by the shared animated vector finisher.
+        # Keep this renderer responsible only for the 3D projection scanlines.
