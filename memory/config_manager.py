@@ -740,9 +740,13 @@ def get_coding_provider() -> str:
     cfg = get_provider_config("openai_compat@aether")
     if not str(cfg.get("api_key") or "").strip():
         return ""
-    # The automatic model option must be enabled. A legacy default GPT OSS
-    # model is eligible; a different manually selected model is not.
+    # The automatic model option must be enabled. Legacy users on the
+    # shipped GPT OSS default are eligible; manual model choices are not.
     from providers.llm_openai import aether_role_model, AETHER_FREE_ROLES
+    enabled = cfg.get("aether_auto_models")
+    if enabled is not None and str(enabled).strip().lower() not in (
+            "1", "true", "yes", "on"):
+        return ""
     if (aether_role_model(cfg, "coding") ==
             AETHER_FREE_ROLES["coding"]):
         return "openai_compat@aether"
