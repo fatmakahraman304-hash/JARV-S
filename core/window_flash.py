@@ -179,6 +179,17 @@ def _start_native(recorder: FlashRecorder, main_hwnd: int) -> None:
         wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
     user32.GetClassNameW.argtypes = (
         wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
+    # ctypes defaults to 32-bit integers for untyped DLL calls; on 64-bit
+    # Windows that truncates a native HWND and silently misses the flash.
+    user32.IsWindowVisible.argtypes = (wintypes.HWND,)
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.IsIconic.argtypes = (wintypes.HWND,)
+    user32.IsIconic.restype = wintypes.BOOL
+    user32.GetMessageW.argtypes = (
+        ctypes.POINTER(wintypes.MSG), wintypes.HWND,
+        wintypes.UINT, wintypes.UINT,
+    )
+    user32.GetMessageW.restype = ctypes.c_int
 
     def work():
         current_pid = os.getpid()
