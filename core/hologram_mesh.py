@@ -18,8 +18,14 @@ def with_shoulders(mesh):
     # of the wide, nearly vertical capsule that appeared on the user's HUD.
     # Smoothly reduce width at the crown while keeping measured eyes/jaw and
     # the existing landmark-based lip/blink animation intact.
-    original[:count_head, 0] *= (1.022 + .040 * forehead -
-                                 .070 * crown - .100 * jaw)
+    # Keep a rounded forehead but avoid the old tubular egg-shaped face.
+    # Broaden the temples/upper cheeks, then taper naturally into a defined,
+    # narrower chin. The 468 measured landmark IDs and lip/eyelid rig remain
+    # exactly where the animation code expects them.
+    cheek = np.exp(-((y + .20) / .34) ** 2)
+    original[:count_head, 0] *= (1.076 + .035 * forehead -
+                                 .048 * crown - .180 * jaw +
+                                 .022 * cheek)
     segments = 14  # The existing neck ends with a 14-vertex elliptical ring.
     base = original[-segments:].copy()
     vertices = [original]
