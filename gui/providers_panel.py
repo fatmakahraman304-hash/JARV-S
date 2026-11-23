@@ -384,6 +384,10 @@ class ProvidersOverlay(_HudOverlay):
             j = box.findText(keep)
         if j >= 0:
             box.setCurrentIndex(j)
+        elif pid == "openai_compat@aether" and items:
+            # Returning to free-only must not retain a paid ID in an editable
+            # model box. Runtime request validation is the final safeguard.
+            box.setCurrentIndex(0)
         elif keep:
             box.setCurrentText(keep)
         self._say(pid, f"{len(items)} model bu sunucuda bulundu; yukarıdan seçin.", C.TEXT_DIM)
@@ -707,6 +711,9 @@ class ProvidersOverlay(_HudOverlay):
         for f in decl.get("needs", ()):
             if not isinstance(f, Field):
                 continue
+            # This billing choice belongs only to the Aether API gateway.
+            if f.key == "aether_allow_paid" and eid != "aether":
+                continue
             # Do not show what the catalog entry already answered. The address
             # somebody did not have to type is one more thing to read and one
             # more thing to break; a key a local server never asks for is a box
@@ -731,10 +738,24 @@ class ProvidersOverlay(_HudOverlay):
                         or stored.get(f.key, f.default) or "")), f)
                 continue
             w = self._make_widget(pid, f, stored.get(f.key, f.default))
+            if f.key == "aether_allow_paid":
+                # Refresh model choices when the user explicitly opts into or
+                # out of paid models. Do not do network I/O on the Qt thread.
+                w.currentIndexChanged.connect(
+                    lambda _i, p=pid: QTimer.singleShot(
+                        0, lambda: self._fetch_models(p)))
             if f.advanced:
                 advanced.append((f, w))
             else:
                 shown[f.key] = (w, f)
+
+        if pid == "openai_compat@aether":
+            lay.addWidget(self._label(
+                "Aether API: varsayılan olarak ücretli modeller engellenir. "
+                "Ücretsiz modelleri görmek için YENİLE'ye basın. "
+                "Ücretli model izni açılırsa hesabınızdan kredi düşebilir. "
+                "Gerçek fiyatı Aether panelinden kontrol edin.",
+                7, C.TEXT_DIM))
 
         for _key, (w, f) in shown.items():
             lay.addWidget(self._label(
