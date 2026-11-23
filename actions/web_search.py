@@ -129,9 +129,9 @@ def _get_ddgs():
 
 
 def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
-    DDGS = _get_ddgs()
     results = []
     try:
+        DDGS = _get_ddgs()
         with DDGS() as ddgs:
             for r in ddgs.text(query, max_results=max_results):
                 results.append({
@@ -147,9 +147,9 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
 
 def _ddg_news(query: str, max_results: int = 8) -> list[dict]:
     """DDG news search — returns actual articles, not website homepages."""
-    DDGS = _get_ddgs()
     results = []
     try:
+        DDGS = _get_ddgs()
         with DDGS() as ddgs:
             for r in ddgs.news(query, max_results=max_results):
                 results.append({
