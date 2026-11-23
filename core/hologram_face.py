@@ -1,6 +1,6 @@
 """Animated feminine face projection made from 3D scan contours, without a GPU."""
 import numpy as np
-from PyQt6.QtCore import QLineF, QPointF
+from PyQt6.QtCore import QLineF, QPointF, QRectF
 from PyQt6.QtGui import QColor, QPen, QPolygonF, QBrush, QPainterPath, QRadialGradient, QPainter
 from PyQt6.QtCore import Qt
 
@@ -116,6 +116,75 @@ class ProjectionFace:
                          ex + side * half * .04, ey + height * .07)
             self._light_path(painter, inner, .38, .45)
 
+
+    def _paint_optical_eyes(self, painter, xs, ys, normals, eye_open, gaze):
+        """Eyes with depth and tracked pupils, painted from live 3D landmarks.
+
+        Only vector geometry, gradients and QPainter primitives are used. Eye
+        outlines, blinking and gaze are all derived from the posed mesh.
+        This runs when an OpenGL context is unavailable, with no loaded images.
+        """
+        import math
+
+        openness = max(0.0, min(1.0, float(eye_open)))
+        if openness < 0.055:
+            return
+        for name in ("eye_l", "eye_r"):
+            ids = self.landmarks[name]
+            if float(normals[ids, 2].mean()) <= 0.02:
+                continue
+            eye_x, eye_y = xs[ids], ys[ids]
+            cx, cy = float(np.mean(eye_x)), float(np.mean(eye_y))
+            width = max(2.0, float(np.max(eye_x) - np.min(eye_x)))
+            height = max(2.0, float(np.max(eye_y) - np.min(eye_y)))
+            # Shape the visible aperture with the same blink expression that
+            # drives the 3D rig, and clip the iris behind the eyelids.
+            shape = QPainterPath(QPointF(float(eye_x[0]),
+                                        cy + (float(eye_y[0]) - cy) * openness))
+            for xx, yy in zip(eye_x[1:], eye_y[1:]):
+                shape.lineTo(float(xx), cy + (float(yy) - cy) * openness)
+            shape.closeSubpath()
+            if shape.isEmpty():
+                continue
+            radius = min(width * .165, height * .54 * openness)
+            if radius < 1.0:
+                continue
+            px = cx + float(gaze[0]) * width * .10
+            py = cy - float(gaze[1]) * height * .15
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setClipPath(shape)
+            # Inner eye chamber; dark navy rather than a human white eyeball.
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(12, 104, 164, 80)))
+            painter.drawPath(shape)
+            iris = QRadialGradient(QPointF(px, py), radius)
+            iris.setColorAt(0.0, QColor(2, 19, 47, 215))
+            iris.setColorAt(0.35, QColor(2, 51, 102, 225))
+            iris.setColorAt(0.69, QColor(14, 150, 219, 218))
+            iris.setColorAt(0.87, QColor(106, 240, 255, 240))
+            iris.setColorAt(1.0, QColor(18, 175, 245, 15))
+            painter.setBrush(QBrush(iris))
+            painter.drawEllipse(QPointF(px, py), radius, radius)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(105, 243, 255, 205), max(.65, radius * .12)))
+            painter.drawEllipse(QPointF(px, py), radius * .88, radius * .88)
+            # Small radial optical threads read as a computed iris on a
+            # scanning hologram, not a flat circle glued onto the face.
+            painter.setPen(QPen(QColor(123, 238, 255, 130), .48))
+            for k in range(18):
+                angle = (k / 18.0) * math.tau
+                ux, uy = math.cos(angle), math.sin(angle)
+                painter.drawLine(QPointF(px + ux * radius * .49, py + uy * radius * .49),
+                                 QPointF(px + ux * radius * .81, py + uy * radius * .81))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(1, 14, 39, 235)))
+            painter.drawEllipse(QPointF(px, py), radius * .38, radius * .38)
+            painter.setBrush(QBrush(QColor(195, 251, 255, 246)))
+            painter.drawEllipse(QPointF(px - radius * .28, py - radius * .33),
+                                max(.8, radius * .15), max(.8, radius * .15))
+            painter.restore()
+
     def paint(self, painter, xs, ys, normals, vertices, scan, amplitude, eye_open, gaze=(0.0, 0.0)):
         self._bust(painter, xs, ys, amplitude)
         # A transparent surface supplies depth beneath finer scan contours.
@@ -158,6 +227,8 @@ class ProjectionFace:
             painter.setPen(QPen(QColor(60, 210, 255, 18 + bucket * 13), .70))
             painter.drawLines(segments)
 
+        # Eyes sit behind the animated eyelid outlines. No bitmaps or sprites.
+        self._paint_optical_eyes(painter, xs, ys, normals, eye_open, gaze)
         for name in ("eye_l", "eye_r", "lips_in", "brow_l", "brow_r"):
             ids = self.landmarks[name]
             if float(normals[ids, 2].mean()) < 0:
@@ -165,7 +236,7 @@ class ProjectionFace:
             x, y = xs[ids], ys[ids].copy()
             if name.startswith("eye"):
                 y = y.mean() + (y - y.mean()) * max(0.02, eye_open)
-            # Eyes are hollow hologram outlines; never add human pupils.
+            # Keep the animated eyelid ring over the procedural iris.
             points = [QPointF(float(xx), float(yy)) for xx, yy in zip(x, y)]
             if name.startswith(("eye", "lips")):
                 points.append(points[0])
