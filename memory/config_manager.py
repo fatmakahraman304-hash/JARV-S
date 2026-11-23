@@ -723,13 +723,27 @@ def save_sidecar_provider(provider_id: str) -> None:
 
 
 def get_coding_provider() -> str:
-    """The service dev_agent writes code with, or '' to use whatever answers
-    background requests.
+    """Explicit coding choice; otherwise reuse an active Aether API sidecar.
 
-    Its own setting because coding is the one background job where the model
-    matters most and the request is longest — somebody may well want a strong
-    coding model there and something cheap and fast for reading the screen."""
-    return str(get_providers().get("coding", "") or "").strip()
+    Aether's role-aware free model selection lets coding use MiniMax M3 Free
+    without a second key. Never override an explicitly configured provider or
+    enable Aether when it is not actually selected and configured locally.
+    """
+    chosen = str(get_providers().get("coding", "") or "").strip()
+    if chosen:
+        return chosen
+    if get_sidecar_provider() != "openai_compat@aether":
+        return ""
+    cfg = get_provider_config("openai_compat@aether")
+    if not str(cfg.get("api_key") or "").strip():
+        return ""
+    # The automatic model option must be enabled. A legacy default GPT OSS
+    # model is eligible; a different manually selected model is not.
+    from providers.llm_openai import aether_role_model, AETHER_FREE_ROLES
+    if (aether_role_model(cfg, "coding") ==
+            AETHER_FREE_ROLES["coding"]):
+        return "openai_compat@aether"
+    return ""
 
 
 def save_coding_provider(provider_id: str) -> None:
