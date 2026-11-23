@@ -72,6 +72,20 @@ class LivePublicSearchTests(unittest.TestCase):
         self.assertNotIn("http://unsafe", answer)
         self.assertNotIn("duplicate", answer)
 
+    def test_explicit_historical_year_is_not_replaced(self):
+        queries = []
+
+        def search(query, max_results):
+            queries.append(query)
+            return [{"title": "Historic rate", "snippet": "Historical example",
+                     "url": "https://example.org/archive"}]
+
+        lookup_live_evidence(
+            "2020'de dolar kuru ne kadardı?", search=search,
+            now=datetime(2026, 11, 23, tzinfo=timezone.utc))
+        self.assertIn("2020", queries[0])
+        self.assertNotIn("2026 güncel", queries[0])
+
     def test_search_failure_must_not_generate_model_fact(self):
         self.assertEqual(lookup_live_evidence("Dolar kuru ne kadar?",
                          search=lambda q, max_results: []), "")
