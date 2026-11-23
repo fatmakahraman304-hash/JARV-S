@@ -194,7 +194,10 @@ def lookup_live_evidence(question: str, *, search=None, now=None) -> str:
         search = _ddg_search
     now = now or datetime.now().astimezone()
     q = question.strip()
-    if _LIVE_EXPLICIT.search(q) or _PUBLIC_DYNAMIC.search(q):
+    # Do not overwrite explicit historical years ("2020'de dolar kaçtı?")
+    # with today's year. A live lookup can still answer historical questions.
+    year_in_question = re.search(r"\b(?:19|20)\d{2}\b", q)
+    if not year_in_question and (_LIVE_EXPLICIT.search(q) or _PUBLIC_DYNAMIC.search(q)):
         q += f" {now.year} güncel"
     try:
         hits = search(q, max_results=7)
