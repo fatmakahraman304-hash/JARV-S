@@ -112,6 +112,11 @@ class AetherSmartModelTests(unittest.TestCase):
         with mock.patch.object(config_manager, "get_providers",
                                return_value=settings):
             self.assertEqual(config_manager.get_coding_provider(), "")
+        settings["creds"][provider]["aether_auto_models"] = "1"
+        settings["pipeline"] = {"llm": provider}
+        with mock.patch.object(config_manager, "get_providers",
+                               return_value=settings):
+            self.assertEqual(config_manager.get_coding_provider(), provider)
 
     def test_chosen_aether_coding_precedes_nvidia_with_gemini_fallback(self):
         with mock.patch.object(coding_router, "resting", return_value=0.0):
