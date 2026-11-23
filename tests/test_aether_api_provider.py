@@ -85,7 +85,7 @@ class AetherAPIProviderTests(unittest.TestCase):
             {"id": "denied-model-free",
              "supported_endpoints": ["/v1/chat/completions"],
              "capabilities": {"/v1/chat/completions": {
-                 "access": {"allowed": False, "reason": "model_not_allowed"}}},
+                 "access": {"allowed": False, "reason": "model_not_allowed"}}}},
         ]
         response = Mock()
         response.json.return_value = {"data": rows}
