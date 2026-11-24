@@ -47,10 +47,30 @@
     scene.screenSpaceCameraController.minimumZoomDistance=120;
     scene.screenSpaceCameraController.maximumZoomDistance=42000000;
     scene.globe.showGroundAtmosphere=true;
+    // Screen-space cyan contours preserve the real projected geography.
+    // This stage is disabled for natural imagery and street labels.
+    const hologram=scene.postProcessStages.add(new Cesium.PostProcessStage({
+      name:"friday-holographic-contours",
+      fragmentShader:`uniform sampler2D colorTexture;
+        in vec2 v_textureCoordinates;
+        float lightAt(vec2 uv){return dot(texture(colorTexture,uv).rgb,vec3(.2126,.7152,.0722));}
+        void main(){
+          vec2 uv=v_textureCoordinates, px=1.0/vec2(textureSize(colorTexture,0));
+          float light=lightAt(uv);
+          float dx=lightAt(uv+vec2(px.x,0.))-lightAt(uv-vec2(px.x,0.));
+          float dy=lightAt(uv+vec2(0.,px.y))-lightAt(uv-vec2(0.,px.y));
+          float edge=clamp(length(vec2(dx,dy))*3.6,0.,1.);
+          float body=smoothstep(.055,.60,light);
+          vec3 color=vec3(.008,.020,.043)+body*vec3(.006,.057,.13);
+          color+=edge*vec3(.025,.64,1.10);
+          out_FragColor=vec4(color,1.);
+        }`
+    }));
     let layer;
     function setMode(next) {
       if (!["holo","natural","street"].includes(next)) return;
       mode=state.mode=next;
+      hologram.enabled=next==="holo";
       state.images=0;
       if (layer) viewer.imageryLayers.remove(layer,true);
       const streets=next!=="natural";

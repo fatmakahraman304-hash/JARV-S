@@ -86,6 +86,9 @@ def main():
         panel.go_to(35.12, 33.94, 19)
         wait("fridayEarth.centre() && Math.abs(fridayEarth.centre().lat - 35.12)<.001 && Math.abs(fridayEarth.centre().lon - 33.94)<.001 && earthState.tiles===0 && earthState.height<150")
         capture("3-street-detail")
+        js("document.querySelector('[data-mode=natural]').click()")
+        wait("earthState.mode==='natural' && earthState.images>0 && earthState.tiles===0 && earthState.height<150")
+        capture("4-satellite-detail")
         js("document.getElementById('dimension').click()")
         # Wait for morph to finish before testing the same native page again.
         wait("earthState.sceneMode === 2")
