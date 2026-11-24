@@ -32,33 +32,36 @@ routines use only what the app already had.
 
 ---
 
-## FRIDAY Düşünce Stüdyosu (140 özellik)
+## FRIDAY Düşünce Stüdyosu (1–500 ve normal mod 0)
 
-Kullanıcının 1–140 maddelik özellik tanımı, 18 sürekli davranış ilkesi ve
-122 seçilebilir dil-modeli çalışma modu olarak `core/thinking_studio.py`
-içinde numaralı bir kataloğa dönüştürülmüştür. Ek olarak dört üslup modu vardır.
-Mod seçimi işlem içi bellekte saklanır ve yeniden başlatınca normal moda döner.
+500 numaralı özellik: 422 seçilebilir dil-modeli çalışma modu, 49 sürekli
+davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Mod 0 normal moda döner;
+ayrıca dört üslup modu vardır. İlk 140 maddenin ayrıntılı özgün yönergeleri
+ve 141–500 maddelerinin metni ayrı kaynak modüllerinde korunur.
 
-- `FRIDAY, modları göster` — numaralı listeyi açar.
-- `FRIDAY, karşı ben` veya `FRIDAY, mod 13` — yapıcı eleştiri modu.
-- `FRIDAY, mod 11 ve 16` — hayat provası ile olasılık haritasını birleştirir.
-- `FRIDAY, sessiz eşlik` — gereksiz proaktif bildirimleri bastırır; hatırlatıcılar korunur.
-- `FRIDAY, normal moda dön` — çalışma modlarını sıfırlar.
-- `FRIDAY, hangi mod açık` — etkin modları gösterir.
+- Ayarlar → DÜŞÜNCE STÜDYOSU veya `Ctrl+Shift+M`: aranabilir özellik seçici.
+- `FRIDAY, modları göster`, `mod 145`, `karşı ben`, `mod 11 ve 16`,
+  `sessiz eşlik`, `normal moda dön` veya `mod 0`.
+- Projeler ve arşiv: yerel SQLite kayıtları; fikir, proje, kaynak, karar,
+  şablon, not, geri bildirim; etiket, aşama, proje filtresi, sürüm geçmişi,
+  karar tablosu, zaman çizelgesi, fikir grafiği.
+- Kayıt silme iki onay ister. JSON yedeği mevcut kayıtların üzerine yazmadan
+  içe aktarılır; seçili kayıt metin dosyasına aktarılabilir. Yedek yalnız
+  güncel stüdyo kayıtlarını içerir, tüm uygulamayı veya eski sürümleri değil.
+- Seçili yerel kayıt yalnız kullanıcının ayrıca onayladığı durumda etkin
+  modele gönderilir. Yerel arşiv otomatik olarak buluta gönderilmez.
+- Mod sayacı oturum içidir. Açık/koyu tema yalnız stüdyo paneline uygulanır.
+  Son 100 konuşma kaydı dışa aktarılabilir ve bugünkü kayıtlar görülebilir.
+- Harici Composio çalıştırmaları gerçek ekran onayı gerektirir; sonuç
+  uygulama panelinde gösterilir. Hafıza aracından kayıt silme de onay ister.
+  Bu değişiklik evrensel bir güvenlik geçidi değildir.
 
-Yazılı tam komutlar yerel olarak çözülür; sesli komutlarda aracın istediği mod,
-gerçek kullanıcı dökümü ile eşleşmelidir. Bir modun kılavuzu seçildiğinde
-model mevcut sohbeti ve erişilebilen hafızayı kullanır. Abacus/Gemini ve mevcut
-yedek sağlayıcılar korunur. Modlar ayrı yapay zekâ modelleri, gerçek duygu
-algısı, gerçek gelecek tahmini, otomatik cihaz yetkisi veya yeni 3D uygulama
-değildir. Kamera, akıllı ev, dosya, takvim ve benzeri gerçek işlemler mevcut
-araçlar, kullanıcı izni ve bağlı donanım gerektirir.
-
-Mevcut hafıza günlükleri ve proje kayıtları yeniden kullanılmaktadır; yeni
-kişisel veri deposu eklenmemiştir. Eski günlükleri silmek, yeni modların
-kapsamına girmez. Kaydetme/silme ve dış işlemlerin güvenliği mevcut araçların
-onay mekanizmalarına bağlıdır; bu özellik tüm araçlara yeni bir merkezi
-izin sistemi uygulamaz.
+Modlar farklı AI modelleri veya bağımsız cihaz yetenekleri değildir. Mevcut
+Abacus/Gemini ve yedek sağlayıcılar korunur. Kamera, akıllı ev ve çevrim içi
+araçlar bağlı cihaz ve hesap gerektirir. Her model çıktısının doğruluğu garanti
+edilemez. Kaynaklar elle kaydedilir; güven etiketi kullanıcı seçimine dayanır.
+Gerçek uygulama kapsamı ve eksikler 471–499 maddelerinin durum alanlarında
+görülebilir. Ayrı kişiselleştirme sayfası geri getirilmemiştir.
 
 ## 📦 Configurable engines
 
