@@ -32,16 +32,25 @@ routines use only what the app already had.
 
 ---
 
-## FRIDAY Düşünce Stüdyosu (1–500 ve normal mod 0)
+## FRIDAY Düşünce Stüdyosu (1–1000 ve normal mod 0)
 
-500 numaralı özellik: 422 seçilebilir dil-modeli çalışma modu, 49 sürekli
+1000 numaralı özellik: 895 seçilebilir dil-modeli çalışma modu, 76 sürekli
 davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Mod 0 normal moda döner;
 ayrıca dört üslup modu vardır. İlk 140 maddenin ayrıntılı özgün yönergeleri
-ve 141–500 maddelerinin metni ayrı kaynak modüllerinde korunur.
+ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
 
 - Ayarlar → DÜŞÜNCE STÜDYOSU veya `Ctrl+Shift+M`: aranabilir özellik seçici.
 - `FRIDAY, modları göster`, `mod 145`, `karşı ben`, `mod 11 ve 16`,
   `sessiz eşlik`, `normal moda dön` veya `mod 0`.
+- Yeni 20 kategori: sağlıklı yaşam, ev, seyahat, yemek, finans farkındalığı, kariyer,
+  topluluk, bilim, tarih, felsefe, oyun, müzik, veri, otomasyon, eğitim,
+  yaratıcılık, hafıza, belge/görsel, kriz ve meta ilkeler.
+- `studio_utilities`: yerel birim, porsiyon, masraf bölüşümü, istatistik,
+  aykırı değer, toplam, yüzdelik fark, takvim çakışması, metin farkı, zar ve
+  sınırlı Excel formül üretimi. Takvim ve belgeler kendiliğinden okunmaz.
+- Kayıt şablonu: seçili 16 günlük/tarif/fatura/not türünde düzenlenebilir yerel
+  taslak. Kaydetmeden hiçbir kayıt yazılmaz. Hatırlatma isteyen kullanıcı için
+  mevcut reminder aracı tarih/saat ile kullanılır; mod seçmek bildirim kurmaz.
 - Projeler ve arşiv: yerel SQLite kayıtları; fikir, proje, kaynak, karar,
   şablon, not, geri bildirim; etiket, aşama, proje filtresi, sürüm geçmişi,
   karar tablosu, zaman çizelgesi, fikir grafiği.
