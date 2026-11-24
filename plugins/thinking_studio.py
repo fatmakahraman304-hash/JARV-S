@@ -33,7 +33,8 @@ def run(parameters, player=None, session_memory=None):
     if action == "guide":
         try:
             n = int(parameters.get("number"))
-            title, guidance = studio.FEATURES[n]
+            title, _ = studio.FEATURES[n]
+            guidance = studio.guidance_for(n)
             return f"{n}. {title}: {guidance}\nDurum: {studio.feature_status(n)}"
         except (TypeError, ValueError, KeyError):
             return "Geçersiz özellik numarası."
