@@ -117,6 +117,8 @@ def is_read_only(name: str, args: dict | None = None) -> bool:
     things, blender_studio action=status only looks); without one, the tool's name does."""
     if name in ("studio_utilities", "core_modes"):
         return True
+    if name == "thinking_studio" and (args or {}).get("action") == "resolve":
+        return True
     args = args or {}
     for key in ("action", "mode", "op", "command"):
         v = str(args.get(key) or "").lower().strip()
