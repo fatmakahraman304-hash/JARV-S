@@ -5,9 +5,9 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
     QFileDialog, QMessageBox, QFormLayout, QTableWidget, QTableWidgetItem,
     QGraphicsScene, QGraphicsView)
 from PyQt6.QtCore import Qt
-from core.studio_workspace import Workspace, KINDS, STAGES, CONFIDENCE, MAX_BACKUP
+from core.studio_workspace import Workspace, KINDS, STAGES, CONFIDENCE, MAX_BACKUP, PRIORITIES
 
-LABELS = dict(zip(KINDS, ("Proje", "Fikir", "Karar", "Kaynak", "Geri bildirim", "Şablon", "Not")))
+LABELS = dict(zip(KINDS, ("Proje", "Fikir", "Karar", "Kaynak", "Geri bildirim", "Şablon", "Not", "Görev")))
 
 
 class WorkspaceDialog(QDialog):
@@ -46,12 +46,16 @@ class WorkspaceDialog(QDialog):
         self.stage.addItems(STAGES)
         self.confidence = QComboBox()
         self.confidence.addItems(CONFIDENCE)
+        self.due = QLineEdit()
+        self.due.setPlaceholderText("YYYY-AA-GG (isteğe bağlı)")
+        self.priority = QComboBox()
+        self.priority.addItems(PRIORITIES)
         self.body = QPlainTextEdit()
         form = QFormLayout()
         for label, field in (("Tür", self.kind), ("Başlık", self.title),
                              ("Proje bağlamı", self.project), ("Etiketler (virgül)", self.tags),
                              ("Aşama", self.stage), ("Güven etiketi (kullanıcı seçimi)", self.confidence),
-                             ("İçerik", self.body)):
+                             ("Son tarih", self.due), ("Öncelik", self.priority), ("İçerik", self.body)):
             form.addRow(label, field)
             field.setAccessibleName(label)
         root.addLayout(form, 3)
@@ -60,7 +64,7 @@ class WorkspaceDialog(QDialog):
         root.addWidget(self.status)
         for controls in (
             (("Yeni", self.clear), ("Kaydet", self.save), ("Sil", self.delete),
-             ("Sürüm geçmişi", self.show_versions), ("Bağlantılar", self.show_links)),
+             ("Sürüm geçmişi", self.show_versions), ("Bağlantılar", self.show_links), ("Görev panosu", self.show_tasks)),
             (("Zaman çizelgesi", self.show_timeline), ("Karar tablosu", self.show_decisions),
              ("Fikir haritası", self.show_graph), ("Kaynaklar", lambda: self.filter.setCurrentIndex(self.filter.findData("source")))),
             (("Yedekle", self.backup), ("Yedekten ekle", self.restore),
@@ -103,10 +107,11 @@ class WorkspaceDialog(QDialog):
     def clear(self):
         self.record_id = None
         self.rows.clearSelection()
-        for field in (self.title, self.project, self.tags, self.body):
+        for field in (self.title, self.project, self.tags, self.body, self.due):
             field.clear()
         self.stage.setCurrentIndex(0)
         self.confidence.setCurrentIndex(0)
+        self.priority.setCurrentIndex(0)
 
     def load(self, item):
         r = item.data(Qt.ItemDataRole.UserRole)
@@ -117,13 +122,15 @@ class WorkspaceDialog(QDialog):
         self.stage.setCurrentText(r["stage"])
         self.confidence.setCurrentText(r["confidence"])
         self.body.setPlainText(r["body"])
+        self.due.setText(r.get("due", ""))
+        self.priority.setCurrentText(r.get("priority", "Normal"))
 
     def save(self):
         try:
             self.record_id = self.store.save(kind=self.kind.currentData(), title=self.title.text(),
                 body=self.body.toPlainText(), tags=self.tags.text(), project=self.project.text(),
                 stage=self.stage.currentText(), confidence=self.confidence.currentText(),
-                record_id=self.record_id)
+                record_id=self.record_id, due=self.due.text().strip(), priority=self.priority.currentText())
             self.refresh()
             self.status.setText("Yerel kayıt kaydedildi.")
         except Exception as exc:
@@ -203,6 +210,18 @@ class WorkspaceDialog(QDialog):
                     events.append((r["updated"], r["title"], r["stage"], "Son güncelleme"))
             self.show_table("Proje zaman çizelgesi", ["Zaman (UTC)", "Kayıt", "Aşama", "Olay"],
                             sorted(events))
+        except Exception as exc:
+            self.error(exc)
+
+    def show_tasks(self):
+        try:
+            counts, rows = self.store.task_overview(project=self.project_filter.text())
+            names = {"overdue":"Gecikmiş","today":"Bugün","open":"Açık","completed":"Tamamlandı","archived":"Arşiv"}
+            title = (f"Görevler · {counts['open']} açık · {counts['overdue']} gecikmiş · "
+                     f"{counts['today']} bugün · {counts['completed']} tamamlandı")
+            self.show_table(title, ["Görev","Proje","Son tarih","Öncelik","Durum","Aşama"],
+                            [(r["title"],r["project"],r["due"] or "—",r["priority"],
+                              names[r["task_state"]],r["stage"]) for r in rows])
         except Exception as exc:
             self.error(exc)
 
