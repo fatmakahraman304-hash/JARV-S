@@ -1,4 +1,4 @@
-"""Reference-style cyan hologram shader; no photoreal skin, hair or human eyeballs.
+"""Volume-lit female hologram with restrained surface sampling.
 
 Uses the same posed 3D head/shoulder mesh as the old renderer, so head rotation,
 speech-driven jaw and eyelid animations remain live. The visible form is made
@@ -76,7 +76,7 @@ void main() {
     float frequency = clamp(u_scale * 0.30, 48.0, 116.0);
     float phase = contourY * frequency;
     float d = abs(fract(phase) - 0.5);
-    float halfwidth = clamp(0.11 + 0.22 * fwidth(phase), 0.11, 0.34);
+    float halfwidth = clamp(0.08 + 0.16 * fwidth(phase), 0.08, 0.25);
     float bands = 1.0 - smoothstep(halfwidth * 0.50, halfwidth, d);
 
     // Concentrate bright light at the contour while leaving deep blue
@@ -100,6 +100,7 @@ void main() {
     float irisThreads = 0.0;
     float irisGlint = 0.0;
     float eyeSclera = 0.0;
+    float browShade = 0.0;
     if (front > 0.0 && ax > u_eye_x.x - 0.015 && ax < u_eye_x.y + 0.015) {
         float t = clamp((ax - u_eye_x.x) /
                         max(0.015, u_eye_x.y - u_eye_x.x), 0.0, 1.0);
@@ -114,7 +115,7 @@ void main() {
         float aperture = front * ends *
             smoothstep(lower - aa, lower + aa, p.y) *
             (1.0 - smoothstep(lid - aa, lid + aa, p.y));
-        eyeSclera = aperture * 0.27;
+        eyeSclera = aperture * 0.62;
 
         vec2 centre = vec2(sign(p.x) * u_eye_c.x, u_eye_c.y) +
                       vec2(u_gaze.x * 0.027, u_gaze.y * 0.016);
@@ -139,7 +140,8 @@ void main() {
                    contour(p.y - lower, 0.0011)) * ends;
         // Real mesh-fitted eyebrows: expressive without dark solid hair.
         float browLine = u_brow.x + ax * (u_brow.y + ax * u_brow.z);
-        eyes += 0.60 * contour(p.y - browLine, 0.0024) * ends;
+        browShade = exp(-pow((p.y - browLine) / 0.011, 2.0)) * ends;
+        eyes += 0.16 * contour(p.y - browLine + 0.006, 0.0018) * ends;
         // Fine luminous eyelashes trace the upper lid, not large cartoon lashes.
         float lashes = pow(max(0.0, sin(t * 68.0)), 18.0) *
                        smoothstep(0.40, 0.85, t);
@@ -149,6 +151,8 @@ void main() {
     // Only a luminous lip contour and an animated opening, not teeth or skin.
     float lips = 0.0;
     float mouthCavity = 0.0;
+    float lipBody = 0.0;
+    float lipSeam = 0.0;
     if (front > 0.0 && ax < u_lip_w.x + 0.008) {
         float taper = 1.0 - smoothstep(u_lip_w.x * 0.80, u_lip_w.x, ax);
         float upper = poly(u_lip_uo, ax);
@@ -159,6 +163,10 @@ void main() {
         // image. Split into independently moving lips only while talking.
         float talk = smoothstep(0.10, 0.48, clamp(u_mouth, 0.0, 1.0));
         float mid = 0.5 * (upper + lower);
+        float lipAA = max(fwidth(p.y), 0.0015);
+        lipBody = smoothstep(lower - lipAA, lower + lipAA, p.y) *
+                  (1.0 - smoothstep(upper - lipAA, upper + lipAA, p.y)) * taper;
+        lipSeam = exp(-pow((p.y - 0.5 * (innerUpper + innerLower)) / 0.0035, 2.0)) * taper;
         // The reference keeps a relaxed, gently curved mouth even when the
         // assistant speaks; avoid a large horizontal oval or bright teeth.
         float smile = 0.005 * pow(ax / max(u_lip_w.x, 0.01), 2.0);
@@ -191,32 +199,41 @@ void main() {
     vec3 ice = vec3(0.23, 0.96, 1.39);
     float cavity = clamp(v_misc.x, 0.35, 1.0);
     float fill = max(0.0, dot(n, normalize(vec3(0.70, -0.10, 0.70))));
-    float volume = (0.20 + 0.70 * key + 0.15 * fill) * cavity * cavity;
+    // Continuous directional light carries the anatomy between scan samples.
+    // Keep shadows in sockets and under the nose instead of flooding them
+    // with uniform neon. The narrow sheen follows the actual surface normals.
+    float volume = (0.08 + 0.86 * pow(key, 1.45) + 0.12 * fill) * cavity * cavity;
+    vec3 halfLight = normalize(normalize(vec3(-0.45, 0.5, 0.77)) + vec3(0.0, 0.0, 1.0));
+    float sheen = pow(max(0.0, dot(n, halfLight)), 34.0) * face * cavity;
     vec3 col = night * (0.18 + 0.12 * key);
-    col += mix(neon, ice, 0.40) * volume * 0.30;
+    col += mix(neon, ice, 0.40) * volume * 0.88;
+    col += ice * sheen * 0.16;
     // Intentionally emissive: the reference is a lit projection, not an
     // opaque blue mannequin. The edge is several times brighter than
     // the inter-line interior, with dynamic voice-synchronised highlights.
-    col += neon * lineLight * (1.02 + 0.20 * u_glow);
-    col += ice * network * 0.12;
+    col += neon * lineLight * (0.10 + 0.035 * u_glow);
+    col += ice * network * 0.018;
     // Add a subtle translucent anatomical bloom at the nose and cheekbones
     // so the scanline portrait has depth instead of looking like a striped egg.
     float ridge = face * (0.35 * bridge + 0.28 * tip +
                           0.17 * cheek) * max(key, 0.22);
-    col += neon * ridge * 0.27;
+    col += neon * ridge * 0.10;
     float bust = 1.0 - smoothstep(-1.67, -1.14, p.y);
-    col += ice * rim * (2.48 + 0.45 * u_glow) * mix(1.0, 0.57, bust);
-    col += ice * features * 1.15;
+    col += ice * rim * (0.46 + 0.12 * u_glow) * mix(1.0, 0.57, bust);
+    col *= 1.0 - 0.42 * front * browShade;
+    col = mix(col, col * vec3(0.78, 0.84, 1.05) + ice * 0.032, lipBody * front);
+    col *= 1.0 - 0.42 * lipSeam * front;
+    col += ice * features * 0.28;
     // Inner eye volume stays luminous yet translucent; the electric iris
     // reads as a circular optical structure rather than a painted eyeball.
     col += vec3(0.18, 0.52, 0.68) * eyeSclera;
-    col += neon * iris * 0.16 + ice * irisRing * 0.30;
-    col += ice * irisThreads * 0.10 + ice * irisGlint * 0.25;
+    col += neon * iris * 0.28 + ice * irisRing * 0.18;
+    col += ice * irisThreads * 0.10 + ice * irisGlint * 0.70;
     col *= 1.0 - 0.72 * pupil;
     col += ice * irisGlint * 0.065;
     col *= 1.0 - 0.75 * mouthCavity;
     col *= pulse * (1.0 - 0.44 * u_muted);
-    float alpha = clamp(0.080 + 0.28 * volume + 0.06 * network + 0.95 * lineLight + 1.40 * rim +
+    float alpha = clamp(0.32 + 0.42 * volume + 0.008 * network + 0.045 * lineLight + 0.32 * rim +
                         0.15 * features + 0.01 * eyeSclera +
                         0.025 * iris + 0.035 * irisRing +
                         0.03 * irisGlint, 0.0, 1.0) * fade;
