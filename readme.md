@@ -68,6 +68,16 @@ bütünlüğünü kapsar; canlı model yanıtlarının tamamını doğrulamaz.
 
 ## FRIDAY yerel görev panosu ve planlama
 
+Arşiv güvenliği: düzenleme sırasında başka bir pencere kaydı değiştirirse
+eski sürüm üzerine yazılmaz veya silinmez. Kaydedilmemiş düzenlemeler için
+pencere kapatırken, yeni kayıt açarken ve kayıt değiştirirken uyarı verilir.
+Sürüm geçmişinden seçili eski kayıt geri yüklenebilir; mevcut kayıt da
+geçmişe eklenir. Yedek önce geçici dosyaya yazılıp sonra atomik değiştirilir;
+8 MB / 10.000 kayıt sınırı aşıldığında mevcut yedek korunur. Fikir haritası
+son 60, bağlantı listesi son 200 kaydı kapsar. Bu sınırlar büyük arşivlerde
+karesel ilişki hesabını kısıtlar.
+
+
 Düşünce Stüdyosu → Görevler: kullanıcı tarafından kaydedilen görevler,
 proje, aşama, son tarih ve öncelik; Görev panosu açık, bugün, gecikmiş,
 tamamlanmış ve arşivlenmiş durumları gösterir. Görevler ayrı SQLite
