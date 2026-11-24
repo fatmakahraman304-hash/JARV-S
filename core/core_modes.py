@@ -226,7 +226,8 @@ def turn_hint(ids):
 # Hints are restricted to the tools actually declared to the current model.
 # They are not calls, authorization, or claims about live connectivity.
 TOOL_HINTS = {
-    2: ("reminder", "routines"), 9: ("background_tasks", "thinking_studio"),
+    2: ("studio_utilities", "reminder", "routines"), 6: ("studio_utilities",),
+    9: ("studio_utilities", "background_tasks", "thinking_studio"),
     10: ("web_search",), 11: ("studio_utilities", "file_processor"),
     12: ("code_helper", "github_develop"), 13: ("routines", "background_tasks"),
     15: ("file_processor",), 16: ("studio_utilities",),
