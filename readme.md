@@ -32,6 +32,34 @@ routines use only what the app already had.
 
 ---
 
+## FRIDAY Düşünce Stüdyosu (140 özellik)
+
+Kullanıcının 1–140 maddelik özellik tanımı, 18 sürekli davranış ilkesi ve
+122 seçilebilir dil-modeli çalışma modu olarak `core/thinking_studio.py`
+içinde numaralı bir kataloğa dönüştürülmüştür. Ek olarak dört üslup modu vardır.
+Mod seçimi işlem içi bellekte saklanır ve yeniden başlatınca normal moda döner.
+
+- `FRIDAY, modları göster` — numaralı listeyi açar.
+- `FRIDAY, karşı ben` veya `FRIDAY, mod 13` — yapıcı eleştiri modu.
+- `FRIDAY, mod 11 ve 16` — hayat provası ile olasılık haritasını birleştirir.
+- `FRIDAY, sessiz eşlik` — gereksiz proaktif bildirimleri bastırır; hatırlatıcılar korunur.
+- `FRIDAY, normal moda dön` — çalışma modlarını sıfırlar.
+- `FRIDAY, hangi mod açık` — etkin modları gösterir.
+
+Yazılı tam komutlar yerel olarak çözülür; sesli komutlarda aracın istediği mod,
+gerçek kullanıcı dökümü ile eşleşmelidir. Bir modun kılavuzu seçildiğinde
+model mevcut sohbeti ve erişilebilen hafızayı kullanır. Abacus/Gemini ve mevcut
+yedek sağlayıcılar korunur. Modlar ayrı yapay zekâ modelleri, gerçek duygu
+algısı, gerçek gelecek tahmini, otomatik cihaz yetkisi veya yeni 3D uygulama
+değildir. Kamera, akıllı ev, dosya, takvim ve benzeri gerçek işlemler mevcut
+araçlar, kullanıcı izni ve bağlı donanım gerektirir.
+
+Mevcut hafıza günlükleri ve proje kayıtları yeniden kullanılmaktadır; yeni
+kişisel veri deposu eklenmemiştir. Eski günlükleri silmek, yeni modların
+kapsamına girmez. Kaydetme/silme ve dış işlemlerin güvenliği mevcut araçların
+onay mekanizmalarına bağlıdır; bu özellik tüm araçlara yeni bir merkezi
+izin sistemi uygulamaz.
+
 ## 📦 Configurable engines
 
 ### Abacus AI / RouteLLM (FRIDAY)
