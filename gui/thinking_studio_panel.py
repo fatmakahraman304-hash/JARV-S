@@ -174,31 +174,29 @@ class ThinkingStudioDialog(QDialog):
 
     def show_today(self):
         from datetime import datetime
-        from memory.continuity import recent
+        from memory.continuity import day_history
         try:
-            rows = []
-            for stamp, role, text in recent(100):
-                date = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone().date()
-                if date == datetime.now().date():
-                    rows.append(f"{stamp[:16]} · {role}: {text}")
-            self.detail.setPlainText("Bugünkü son 100 kayıt içindeki konuşmalar:\n\n" +
-                                     ("\n".join(rows) or "Kayıt yok."))
+            snapshot=day_history()
+            rows=[]
+            for stamp,role,body in snapshot["rows"]:
+                local=datetime.fromisoformat(stamp).astimezone().strftime("%H:%M")
+                rows.append(f"{local} · {role}: {body}")
+            notice=f"{snapshot['day']} · {len(rows)} / {snapshot['total']} kayıt"
+            if snapshot["omitted"]:
+                notice+=f" · Görüntü sınırı nedeniyle {snapshot['omitted']} eski kayıt gösterilmiyor."
+            self.detail.setPlainText(notice+"\n\n"+("\n".join(rows) or "Gösterilecek kayıt yok."))
+            self.status.setText("Yerel konuşma kayıtları; otomatik yapay zekâ özeti değildir.")
         except Exception as exc:
             self.status.setText(f"Kayıtlar okunamadı: {type(exc).__name__}")
 
     def export_history(self):
-        from pathlib import Path
-        from memory.continuity import recent
+        from memory.continuity import export_recent_text
         path, _ = QFileDialog.getSaveFileName(self, "Konuşma kayıtlarını dışa aktar",
                                              "friday-konusmalar.txt", "Metin (*.txt)")
         if not path:
             return
         try:
-            # Explicit destination from the OS dialog; no automatic uploads.
-            # The save dialog handles overwrite confirmation.
-            rows = recent(100)
-            Path(path).write_text("\n".join(f"{stamp} | {role}: {text}" for stamp, role, text in rows),
-                                  encoding="utf-8")
-            self.status.setText(f"{len(rows)} kayıt seçilen dosyaya yazıldı.")
+            count=export_recent_text(path)
+            self.status.setText(f"{count} kayıt seçilen dosyaya yazıldı.")
         except Exception as exc:
-            self.status.setText(f"Dışa aktarılamadı: {type(exc).__name__}")
+            self.status.setText(f"Dışa aktarılamadı: {type(exc).__name__} · {str(exc)[:150]}")
