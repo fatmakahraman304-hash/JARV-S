@@ -224,6 +224,7 @@ class PipelineEngine:
         # Native Live receives the common mode directory; the modular pipeline
         # additionally gets a per-turn, deterministic advisory route.
         from core.core_modes import MARKER, route_history, turn_hint, available_hints
+        names = None
         if MARKER in system:
             # Recompute only when the user-turn revision changes. Tool callbacks
             # and repeated generation rounds reuse the route; no extra API call.
@@ -237,8 +238,8 @@ class PipelineEngine:
                 self._studio_route_cache = (last_user, selected)
             if selected.ids:
                 system += "\n\n" + turn_hint(selected.ids)
-                names = self.tool_names() if hasattr(self, "tool_names") else ()
-                hints = available_hints(selected.ids, names)
+                names = self.tool_names() if hasattr(self, "tool_names") else None
+                hints = available_hints(selected.ids, names or ())
                 if hints:
                     system += "\nMevcut araç adayları: " + ", ".join(hints) + ". Yalnız istek gerektiriyorsa, izin ve gerçek sonuç koşullarıyla kullan."
         from core import integrated_capabilities as integrated
@@ -252,7 +253,9 @@ class PipelineEngine:
                 core_ids = selected.ids if MARKER in system else ()
                 ids = integrated.history_features(self._history, core_ids)
                 self._capability_cache = (last_user, ids)
-            detail = integrated.guidance(ids)
+            if names is None and hasattr(self, "tool_names"):
+                names = self.tool_names()
+            detail = integrated.guidance(ids, available_tools=names)
             if detail:
                 system += "\n\n" + detail
         msgs = [{"role": "system", "content": system}] if system else []
