@@ -8,7 +8,8 @@ import unicodedata
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
+import tempfile
 
 
 def data_dir():
@@ -80,6 +81,70 @@ def recent(limit=16):
                           (max(1, min(int(limit), 100)),)).fetchall()
     return list(reversed(rows))
 
+
+def day_history(day=None, tz=None, limit=500, max_chars=120000):
+    """Local-day snapshot, independent of the last-100-event history window."""
+    if type(limit) is not int or not 1 <= limit <= 500:
+        raise ValueError("Kayıt sınırı 1–500 olmalı.")
+    if type(max_chars) is not int or not 100 <= max_chars <= 120000:
+        raise ValueError("Metin sınırı 100–120000 olmalı.")
+    if day is None:
+        day = datetime.now(tz).date()
+    elif type(day) is str:
+        day = date.fromisoformat(day)
+    if type(day) is not date:
+        raise ValueError("Geçerli tarih gerekli.")
+    # Convert each midnight independently to handle DST on the local system.
+    def midnight(d):
+        local = datetime.combine(d,time.min,tzinfo=tz)
+        return local.astimezone(timezone.utc).isoformat()
+    bounds = (midnight(day),midnight(day+timedelta(days=1)))
+    with connect() as db:
+        db.execute("BEGIN")
+        total = db.execute("SELECT count(*) FROM events WHERE time>=? AND time<?",bounds).fetchone()[0]
+        rows = db.execute("SELECT time,role,text FROM events WHERE time>=? AND time<? ORDER BY id DESC LIMIT ?",
+                          (*bounds,limit)).fetchall()
+    selected=[]
+    size=0
+    for stamp,role,body in rows:
+        # Leave complete entries intact; do not silently cut a record.
+        weight=len(stamp)+len(role)+len(body)+8
+        if size+weight>max_chars:
+            break
+        selected.append((stamp,role,body))
+        size+=weight
+    return {"day":day.isoformat(),"total":total,"rows":list(reversed(selected)),
+            "omitted":total-len(selected)}
+
+
+def export_recent_text(destination, limit=100):
+    """Explicit local text export, never overwrite assistant data files."""
+    target=Path(destination)
+    def check():
+        resolved=target.resolve()
+        root=data_dir().resolve()
+        if resolved==root or root in resolved.parents:
+            raise ValueError("FRIDAY veri klasörüne konuşma dışa aktarılamaz.")
+        if target.suffix.lower()!=".txt":
+            raise ValueError("Konuşma dosyası TXT uzantılı olmalı.")
+        if target.exists() and not target.is_file():
+            raise ValueError("Hedef normal bir dosya olmalı.")
+    check()
+    rows=recent(limit)
+    temp=None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w",encoding="utf-8",newline="\n",
+                dir=target.parent,prefix=".friday-history-",suffix=".tmp",delete=False) as handle:
+            temp=Path(handle.name)
+            handle.write("\n".join(f"{stamp} | {role}: {body}" for stamp,role,body in rows))
+            handle.flush()
+            os.fsync(handle.fileno())
+        check()
+        os.replace(temp,target)
+    finally:
+        if temp is not None:
+            temp.unlink(missing_ok=True)
+    return len(rows)
 
 def resume_text():
     rows = recent()
