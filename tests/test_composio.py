@@ -144,8 +144,9 @@ class ComposioTests(_Setup, unittest.TestCase):
         self.httpx.routes[("POST", "/trs_1/execute")] = _Resp(200, {
             "result_type": "completed", "data": {"id": "evt_1"}, "error": None})
         # First prove that a headless model cannot approve the external action.
-        blocked = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
-                            "arguments": '{"summary": "Toplantı"}'})
+        with patch("core.confirm._show_cb", None):
+            blocked = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
+                                "arguments": '{"summary": "Toplantı"}'})
         self.assertIn("not done", blocked)
         # Simulate the approved callback, not a model-supplied approval token.
         with patch("core.confirm.request", side_effect=lambda key, title, detail, run: run()):
