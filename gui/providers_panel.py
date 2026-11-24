@@ -731,6 +731,8 @@ class ProvidersOverlay(_HudOverlay):
             # none — and that one declaration was printing "(optional)" and
             # "Local servers usually need none" under MiniMax and OpenAI, which
             # refuse every request without one.
+            if f.key == "base_url" and eid == "cloudflare":
+                f = replace(f, hint="Cloudflare 32 karakterli hesap kimliği veya resmi API adresi")
             if f.key == "api_key" and entry.get("local") is False:
                 f = replace(f, required=True,
                             hint=f"{entry['label']} API anahtarınızı buraya yapıştırın")
@@ -751,6 +753,11 @@ class ProvidersOverlay(_HudOverlay):
             else:
                 shown[f.key] = (w, f)
 
+        if eid == "cloudflare":
+            lay.addWidget(self._label(
+                "API adresi alanına Cloudflare hesap kimliğinizi (Account ID) girin. "
+                "Workers Free planında kalın; ücretli planı etkinleştirmeyin.",
+                7, C.TEXT_DIM))
         if pid == "openai_compat@aether":
             lay.addWidget(self._label(
                 "Aether API akıllı ücretsiz model seçimi: Sohbet GPT OSS 120B, "
@@ -883,7 +890,7 @@ class ProvidersOverlay(_HudOverlay):
         self._first_combo.addItem("Önce Gemini — seçilen model yedek", "after")
         self._first_combo.addItem(
             "Önce seçilen model — Gemini yedek", "before")
-        self._first_combo.addItem("Ücretsiz çoklu beyin (Groq / Cerebras / OpenRouter)", "free")
+        self._first_combo.addItem("Ücretsiz çoklu beyin (Groq / Cloudflare / OpenRouter)", "free")
         self._first_combo.setCurrentIndex(2 if self._free_multi else (1 if self._sidecar_first else 0))
         self._first_combo.currentIndexChanged.connect(self._free_mode_changed)
         lay.addWidget(self._first_combo)
@@ -905,7 +912,7 @@ class ProvidersOverlay(_HudOverlay):
         else:
             lay.addWidget(self._label(
                 "Böyle bırakılırsa istekler Gemini’yi kullanmaya devam eder ve "
-                "metin kotası bitince durur.", 7, C.TEXT_DIM))
+                "metin kotası bitince durur (çoklu beyin modu açık değilse).", 7, C.TEXT_DIM))
         return w
 
     def _coding_box_widget(self) -> QWidget:

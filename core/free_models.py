@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import threading
+import re
 
 PREFIX = "prov:free:"
 BASES = {
@@ -19,27 +20,24 @@ BASES = {
 }
 FAST = (
     ("groq", "openai/gpt-oss-20b"),
-    ("cerebras", "qwen-3.8-27b"),
+    ("cloudflare", "@cf/openai/gpt-oss-20b"),
     ("groq", "qwen/qwen3.8-27b"),
     ("groq", "openai/gpt-oss-120b"),
-    ("cerebras", "gpt-oss-120b"),
     ("aether", "qwen3.8-35b-a3b-free"),
     ("openrouter", "openrouter/free"),
 )
 SMART = (
     ("groq", "openai/gpt-oss-120b"),
-    ("cerebras", "gpt-oss-120b"),
+    ("cloudflare", "@cf/openai/gpt-oss-120b"),
     ("groq", "qwen/qwen3.8-27b"),
-    ("cerebras", "qwen-3.8-27b"),
     ("aether", "qwen3.8-27b-free"),
     ("groq", "openai/gpt-oss-20b"),
     ("openrouter", "openrouter/free"),
 )
 CODING = (
     ("groq", "openai/gpt-oss-120b"),
-    ("cerebras", "gpt-oss-120b"),
+    ("cloudflare", "@cf/openai/gpt-oss-120b"),
     ("groq", "qwen/qwen3.8-27b"),
-    ("cerebras", "qwen-3.8-27b"),
     ("aether", "minimax-m3-free"),
     ("openrouter", "openrouter/free"),
 )
@@ -47,6 +45,16 @@ GEMINI_TEXT = ("gemini-4-hydrogen", "gemini-3.8-flash",
                "gemini-3.5-flash-lite", "gemini-3.5-flash",
                "gemini-3.1-flash-lite", "gemini-2.5-flash",
                "gemini-2.5-flash-lite")
+
+
+def cloudflare_base(value):
+    """Accept only the official account-specific API base (or account ID)."""
+    value = str(value or "").strip().rstrip("/")
+    if re.fullmatch(r"[0-9a-fA-F]{32}", value):
+        value = "https://api.cloudflare.com/client/v4/accounts/" + value + "/ai/v1"
+    if re.fullmatch(r"https://api\.cloudflare\.com/client/v4/accounts/[0-9a-fA-F]{32}/ai/v1", value):
+        return value
+    return ""
 
 
 def settings():
@@ -71,8 +79,13 @@ def specs(role="smart", block=None):
     for provider, model in {"fast": FAST, "coding": CODING}.get(role, SMART):
         cfg = creds.get("openai_compat@" + provider) or {}
         key = str(cfg.get("api_key") or "").strip()
-        base = str(cfg.get("base_url") or BASES[provider]).rstrip("/")
-        if key and base == BASES[provider]:
+        if provider == "cloudflare":
+            base = cloudflare_base(cfg.get("base_url"))
+        else:
+            base = str(cfg.get("base_url") or BASES[provider]).rstrip("/")
+            if base != BASES[provider]:
+                base = ""
+        if key and base:
             out.append((provider, model, base, key))
     cfg = creds.get("openai_compat@ollama") or {}
     base = str(cfg.get("base_url") or BASES["ollama"]).rstrip("/")
@@ -102,7 +115,8 @@ _usage = {}
 def record_usage(base, model, usage):
     if not isinstance(usage, dict):
         return
-    provider = next((p for p, url in BASES.items() if url == base), None)
+    provider = ("cloudflare" if cloudflare_base(base) else
+                next((p for p, url in BASES.items() if url == base), None))
     if provider is None:
         return
     def count(key):

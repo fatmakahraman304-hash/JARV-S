@@ -4,18 +4,21 @@
 
 1. Google AI Studio: https://aistudio.google.com/apikey
 2. Groq: https://console.groq.com/keys
-3. Cerebras: https://cloud.cerebras.ai/
+3. Cloudflare Workers AI: https://dash.cloudflare.com/ (Workers Free planı)
 4. OpenRouter: https://openrouter.ai/keys
 5. İsteğe bağlı: Ollama https://ollama.com/ — kurulu yerel model seçin.
 
-Motor ve Sağlayıcılar → Arka Plan İstekleri bölümünde Groq, Cerebras ve
+Motor ve Sağlayıcılar → Arka Plan İstekleri bölümünde Groq, Cloudflare ve
 OpenRouter'ı tek tek seçerek API anahtarlarını girin. Her seçim değişiminde
 ayarlar yerelde saklanır. Sonra öncelik menüsünde **Ücretsiz çoklu beyin**
 seçip Uygula deyin. Kodlama ajanı için yerleşik AETHER ajanını seçin.
-Sesli konuşma mevcut Gemini Live veya seçilmiş pipeline üzerinden devam eder.
+Cloudflare için API adresi alanına 32 karakterli Account ID girin; API anahtarı
+alanına sadece Workers AI izinli token girin. Cerebras ödeme yöntemi istediği
+için otomatik havuza dahil değildir. Sesli konuşma mevcut Gemini Live veya
+seçilmiş pipeline üzerinden devam eder.
 
 Hızlı metin: GPT-OSS 20B; zor metin/kod: GPT-OSS 120B, Qwen 3.8;
-Cerebras ve OpenRouter ücretsiz yönlendirici yedek; yapılandırılmış yerel
+Cloudflare ve OpenRouter ücretsiz yönlendirici yedek; yapılandırılmış yerel
 Ollama son harici yedek. Aether API'nin ücretsiz rolleri de yapılandırılmışsa
 kullanılır. Gemini mevcut yedek merdivenini korur; Hydrogen SMART'a eklenmiştir.
 Görseller ve kayıtlar mevcut Gemini yolunu, kaynaklı arama REST yolunu korur.
@@ -36,7 +39,8 @@ Yeni bağımlılık gerekmez.
 
 Resmi model/kota belgeleri:
 - https://console.groq.com/docs/rate-limits
-- https://inference-docs.cerebras.ai/support/deprecation
+- https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/
+- https://developers.cloudflare.com/workers-ai/platform/pricing/
 - https://openrouter.ai/openrouter/free
 - https://ai.google.dev/gemini-api/docs/pricing
 

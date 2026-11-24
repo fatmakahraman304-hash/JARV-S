@@ -206,6 +206,9 @@ CATALOG = (
     {"id": "together",   "label": "Together",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Together"], **_CLOUD}},
+    {"id": "cloudflare", "label": "Cloudflare Workers AI",
+     "note": "bulut · Workers Free planı ve hesap kimliği gerekir", "local": False,
+     "values": {**_CLOUD, "model": "@cf/openai/gpt-oss-20b"}},
     {"id": "cerebras",   "label": "Cerebras",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Cerebras"], **_CLOUD, "model": "gpt-oss-120b"}},
@@ -413,7 +416,13 @@ class OpenAICompatLLM:
         import httpx  # inside the factory path — never at module scope
 
         self._httpx = httpx
-        self.base = _normalise(cfg.get("base_url") or "")
+        if cfg.get("catalog") == "cloudflare":
+            from core.free_models import cloudflare_base
+            self.base = cloudflare_base(cfg.get("base_url"))
+            if not self.base:
+                raise ValueError("Cloudflare: geçerli hesap kimliği veya resmi API adresi gerekli.")
+        else:
+            self.base = _normalise(cfg.get("base_url") or "")
         self.model = aether_role_model(cfg, str(cfg.get("aether_role") or "conversation"))
         self.key = (cfg.get("api_key") or "").strip()
         self._aether = self.base.rstrip("/") == PRESETS["Aether API"]

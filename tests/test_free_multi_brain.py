@@ -29,6 +29,17 @@ class FreePoolTests(unittest.TestCase):
         self.assertEqual([s[0] for s in free_models.specs("coding", self.block)],
                          ["openrouter", "ollama"])
 
+    def test_cloudflare_account_endpoint_and_no_cerebras(self):
+        cf = {"api_key": "fake-cf", "base_url": "a" * 32}
+        self.block["creds"]["openai_compat@cloudflare"] = cf
+        smart = free_models.specs("smart", self.block)
+        self.assertNotIn("cerebras", [s[0] for s in smart])
+        spec = next(s for s in smart if s[0] == "cloudflare")
+        self.assertEqual(spec[1], "@cf/openai/gpt-oss-120b")
+        self.assertEqual(spec[2], "https://api.cloudflare.com/client/v4/accounts/" + "a" * 32 + "/ai/v1")
+        cf["base_url"] = "https://example.org/" + "a" * 32
+        self.assertNotIn("cloudflare", [s[0] for s in free_models.specs("smart", self.block)])
+
     def test_media_not_routed(self):
         self.assertTrue(free_models.text_only("hello"))
         self.assertTrue(free_models.text_only(["a", "b"]))

@@ -679,10 +679,10 @@ class OpenAIBrain:
         record_usage(self.base, self.model, js.get("usage"))
         choices = js.get("choices") or []
         if not choices or not isinstance(choices[0], dict):
-            raise BrainError("NVIDIA modelinden geçerli yanıt alınamadı.")
+            raise BrainError(f"{self.name}: modelden geçerli yanıt alınamadı.")
         choice = choices[0]
         if choice.get("finish_reason") == "length":
-            raise BrainError("NVIDIA yanıtı token sınırında kesildi.")
+            raise BrainError(f"{self.name}: yanıt token sınırında kesildi.")
         msg = choice.get("message") or {}
         if not isinstance(msg, dict):
             raise BrainError("NVIDIA modelinin yanıt biçimi geçersiz.")
