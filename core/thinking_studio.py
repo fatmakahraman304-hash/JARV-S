@@ -290,7 +290,7 @@ def parse(text: str):
             value = value[len(prefix):]
             break
     # Numeric mode selection and explicit combination syntax.
-    match = re.fullmatch(r"mod(?:lar)? (\d+(?: (?:ve )?\d+)*)", value)
+    match = re.fullmatch(r"mod(?:lar)? ([0-9]{1,4}(?: (?:ve )?[0-9]{1,4})*)", value)
     if match:
         ids = tuple(dict.fromkeys(int(x) for x in re.findall(r"\d+", match[1])))
         return ids if ids == (0,) or (1 <= len(ids) <= 4 and all(n in MODES for n in ids)) else None
@@ -302,6 +302,8 @@ def parse(text: str):
 def search_features(query="", first=1, last=MAX_FEATURE):
     q = normalize_command(query)
     if q.isdecimal():
+        if len(q) > 4:
+            return []
         return [(n, title, guidance, feature_status(n)) for n,(title,guidance) in FEATURES.items()
                 if first <= n <= last and n == int(q)]
     return [(n, title, guidance, feature_status(n))
@@ -383,17 +385,13 @@ def system_block() -> str:
     # Compact policy + directory; retrieve only selected full workflow details.
     policies = "\n".join(f"{n}. {FEATURES[n][1]}" for n in sorted(POLICY))
     from core.core_modes import system_block as core_block
-    return (core_block() + "\n\n[FRIDAY DÜŞÜNCE STÜDYOSU]\n" + policies +
-            "\nModlar doğal Türkçe komutla veya 'mod 11 ve 16' şeklinde seçilir. "
-            "Her mod dil modeliyle çalışan bir düşünme yaklaşımıdır; araç, sensör, "
-            "kalıcı kayıt veya gerçek gelecek bilgisi yaratmaz. "
-            "Kullanıcı mod komutunu açıkça verdiğinde thinking_studio aracıyla "
-            "etkinleştir; sıradan isteklerde uygun yaklaşımı kullan. "
-            "Mod listesi için thinking_studio(list); mod durumunu status ile oku. "
-            "Kurguyu, varsayımı, doğrulanmış bilgiyi ayır. "
-            "Her mod mevcut güvenlik, onay ve araç sınırlarına tabidir.\n"
-            "Mod grupları: " + "; ".join(f"{a}–{b} {g}" for a,b,g in GROUPS) +
-            "\nMod adını ve numarasını bulmak için thinking_studio(search, query=…) kullan. "
+    from core.integrated_capabilities import system_block as integrated_block
+    return (core_block() + "\n\n" + integrated_block() + "\n\n[FRIDAY DÜŞÜNCE STÜDYOSU]\n" + policies +
+            "\nTüm iş akışları FRIDAY'in normal sohbetinde doğrudan uygulanır. "
+            "Bir özellik için kullanıcıdan mod açmasını isteme. "
+            "Kurguyu, varsayımı, doğrulanmış bilgiyi ayır; izinleri koru. "
+            "Katalog grupları: " + "; ".join(f"{a}–{b} {g}" for a,b,g in GROUPS) +
+            "\nGerekirse thinking_studio(resolve, query=…) ile ilgili tam yönergeleri getir. "
             "471–499 uygulama maddelerini gerçek durumlarını guide ile kontrol etmeden yapılmış sayma. "
-            "501–1000 için seçili modun workflow yönergesini uygula; hesap, belge, hatırlatma ve kayıt işlerini gerçek araçlarla doğrula. " +
-            "\nAktif mod: " + (mode_prompt() or "normal") + "\n")
+            "Hesap, belge, hatırlatma ve kayıt işlerini gerçek araçlarla doğrula. " +
+            "\nİsteğe bağlı açık üslup/uyumluluk ayarı: " + (mode_prompt() or "normal") + "\n")
