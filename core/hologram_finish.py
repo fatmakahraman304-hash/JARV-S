@@ -106,7 +106,7 @@ def details(painter: QPainter, xs, ys, n_head: int, landmarks,
     if len(head) < 3:
         return
     outer = _smooth_hull(head)
-    _neon_path(painter, outer, .72 + .10 * energy)
+    _neon_path(painter, outer, (.72 if face_features else .16) + .04 * energy)
     if not face_features:
         return
 
