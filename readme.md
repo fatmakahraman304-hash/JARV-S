@@ -95,6 +95,14 @@ gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
 
 ## FRIDAY 1.000 yerleşik yetenek — normal sohbet
 
+Planlama araçları: `task_schedule` bağımlılıkların en erken bitiş süresini,
+kritik görevleri, örnek bir kritik yolu ve her görevin gecikme payını hesaplar.
+Bağımsız işlerin paralel yürütülebileceği varsayılır; gerçek takvime veya
+kaynak kapasitesine rezervasyon yapmaz. `priority_matrix` kullanıcının verdiği
+önem ve aciliyet değerlerinden dört görev grubu üretir. Bu öneriler görevleri
+kendiliğinden yürütmez, devretmez veya silmez. Normal sohbetten çağrılır.
+
+
 Yetenek yönlendirmesi, tüm katalogda yerel ters indeksle aday bulur; birden
 fazla bağımsız istek aynı mesajda varsa her birine öncelikli aday ayrılır
 (en fazla altı parça ve sınırlı yönerge bütçesi). Kod inceleme, bütçe, görev
