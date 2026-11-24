@@ -105,3 +105,20 @@ class WorkspaceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.store.export()
         self.assertEqual(len(self.store.list()),4)
+
+    def test_atomic_backup_and_stale_delete(self):
+        from unittest.mock import patch
+        rid = self.store.save(kind="note",title="İlk")
+        old = self.store.get(rid)
+        self.store.save(kind="note",title="İkinci",record_id=rid)
+        with self.assertRaises(ValueError):
+            self.store.delete(rid,expected_updated=old["updated"])
+        target = Path(self.tmp.name)/"backup.json"
+        self.store.write_backup(target)
+        before = target.read_text(encoding="utf-8")
+        self.assertEqual(json.loads(before)["records"][0]["title"],"İkinci")
+        with patch("core.studio_workspace.os.replace",side_effect=OSError("write failed")):
+            with self.assertRaises(OSError):
+                self.store.write_backup(target)
+        self.assertEqual(target.read_text(encoding="utf-8"),before)
+        self.assertEqual(list(target.parent.glob(".friday-*.tmp")),[])
