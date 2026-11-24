@@ -28,8 +28,7 @@ jobs:
       - name: Real Earth (Linux)
         if: runner.os == 'Linux'
         env:
-          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu --enable-unsafe-swiftshader
-          QT_QUICK_BACKEND: software
+          QTWEBENGINE_CHROMIUM_FLAGS: --enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader
         run: xvfb-run -s "-screen 0 1280x900x24" python tools/verify_earth.py earth-preview
       - name: Real Earth (Windows)
         if: runner.os == 'Windows'
