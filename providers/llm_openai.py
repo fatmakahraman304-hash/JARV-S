@@ -931,7 +931,7 @@ class AbacusPriorityLLM(OpenAICompatLLM):
 
     def _fallbacks(self):
         from core import free_models
-        from memory.config_manager import get_provider_config, get_sidecar_provider, get_gemini_key
+        from memory.config_manager import get_provider_config, get_sidecar_provider, get_gemini_key, load_api_keys
         seen = {(self.base, self.model)}
         sidecar = get_sidecar_provider()
         configs = []
@@ -940,7 +940,7 @@ class AbacusPriorityLLM(OpenAICompatLLM):
         for vendor, model, base, key in free_models.specs("smart"):
             configs.append(dict(base_url=base, model=model, api_key=key,
                                 aether_auto_models="0", aether_allow_paid="0"))
-        key = get_gemini_key()
+        key = get_gemini_key() if not load_api_keys().get("local_only") else ""
         if key:
             configs.append(dict(base_url=PRESETS["Google Gemini"],
                                 model="gemini-3.5-flash", api_key=key))
