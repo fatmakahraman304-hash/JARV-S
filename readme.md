@@ -34,6 +34,15 @@ routines use only what the app already had.
 
 ## FRIDAY 30 çekirdek mod — otomatik yönlendirme
 
+**V2:** Türkçe çekimli sözcük ve görev ipuçları genişletildi; kısa devam
+istekleri en fazla son 12 kullanıcı iletisi bağlamından yönlendirilir.
+Pipeline aynı kullanıcı turunun araç çağrılarında mod kararını önbellekten
+kullanır. Yönlendirme önizlemesi seçimin nedenini ve ipucu desteğini gösterir;
+bu bir doğruluk olasılığı değildir. Araç adayları yalnız mevcut sağlayıcının
+bildirdiği araçlardan seçilir; bu öneri izin, bağlantı veya işlem garantisi
+vermez. Native Live ortak talimatları kullanmaya devam eder.
+
+
 Mevcut 1.000 özel özellik korunur. Çekirdek mod numarası özel özellik
 numarasıyla aynı şey değildir: `mod 0` özel modları kapatır, otomatik
 çekirdek yönlendirme çalışmaya devam eder. Yeni mod kataloğu
