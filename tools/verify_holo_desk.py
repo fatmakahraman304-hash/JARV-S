@@ -68,9 +68,12 @@ def main():
                 assert len(result)==2 and all(len(h["points"])==21 for h in result),"Real inference failed to find 2 hands"
                 # Do not put the fixture's photograph in the public artifact.
                 desk.canvas.frame=QImage()
+                desk._last_packet=time.monotonic()
                 desk.canvas.consume_hands(Hands().update(result,aspect=rgb.shape[1]/rgb.shape[0]))
                 desk.status.setText("TEST: Google örnek görselinden gerçek el çıkarımı · Canlı kamera kapalı")
-                app.processEvents();desk.grab().save(str(args.out/"2-hand-inference.png"))
+                app.processEvents()
+                assert len(desk.canvas.hands)==2,"Fresh inferred hands disappeared before rendering"
+                desk.grab().save(str(args.out/"2-hand-inference.png"))
                 print("PASS: real MediaPipe inference, 2 hands, 21 landmarks each; no webcam access")
             finally:tracker.close()
         desk.close();app.processEvents()

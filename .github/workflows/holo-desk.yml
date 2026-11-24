@@ -27,9 +27,13 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest -v tests.test_holo_desk
-      - name: Native render and real hand inference
+      - name: Native render and real hand inference (Linux)
+        if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
+        run: python tools/verify_holo_desk.py holo-preview --tracking
+      - name: Native render and real hand inference (Windows desktop)
+        if: runner.os == 'Windows'
         run: python tools/verify_holo_desk.py holo-preview --tracking
       - uses: actions/upload-artifact@v4
         if: always()

@@ -110,16 +110,24 @@ class SpatialCanvas(QWidget):
             if not hand["down"]:
                 continue
             pointer=self.screen(hand["pointer"])
+            # Native widgets take priority over rings painted behind them.
+            # A pinch inside a note/file panel must not rotate the model or
+            # select an invisible control underneath that panel.
+            target=self.childAt(pointer.toPoint())
+            while target is not None and target is not self and not isinstance(target,FloatingPanel):
+                target=target.parentWidget()
+            if isinstance(target,FloatingPanel):
+                if pointer.y()<target.y()+37:
+                    self._panel_grip=(hand["id"],target,pointer-QPointF(target.pos()))
+                    target.raise_()
+                else:self._grip=("menu",hand["id"])
+                return
             for anchor in hands:
                 for key,point in self.ring_items(anchor):
                     if (point-pointer).manhattanLength()<24:
                         self.action.emit(key)
                         self._grip=("menu",hand["id"])
                         return
-            for panel in reversed(self.panels):
-                if panel.isVisible() and QRectF(panel.x(),panel.y(),panel.width(),37).contains(pointer):
-                    self._panel_grip=(hand["id"],panel,pointer-QPointF(panel.pos()))
-                    panel.raise_();return
         if self._panel_grip:
             ident,panel,offset=self._panel_grip
             for hand in held:

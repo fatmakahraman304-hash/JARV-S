@@ -77,12 +77,12 @@ uygulamayla aynı kameranın eşzamanlı paylaşılabileceği varsayılmaz.
 ## Doğrulama ve sınırlar
 
 Kaynak kayıtların bütün karelerindeki gerçek MediaPipe çıkarımı (yerel
-Python 3.13.5, MediaPipe 0.10.35, CPU):
+Python 3.13.5, MediaPipe 0.10.35, OpenCV 4.14.0, CPU):
 
 | Kayıt | Kare | Tek el bulunan | İki el bulunan | Çimdik durumu | Çıkarım medyan / p95 |
 |---|---:|---:|---:|---:|---:|
-| A | 517 | 380 | 16 | 59 | 15,92 / 22,11 ms |
-| B | 296 | 90 | 19 | 23 | 18,17 / 26,79 ms |
+| A | 517 | 380 | 16 | 59 | 15,49 / 22,33 ms |
+| B | 296 | 90 | 19 | 23 | 16,34 / 23,26 ms |
 
 Bunlar etiketlenmiş doğruluk oranı değildir: her karede el görünmüyor ve
 kayıtlar dışarıdan bir monitörü çekiyor. Gerçek webcam gecikmesi, karanlıkta

@@ -104,6 +104,19 @@ class SpatialUI(unittest.TestCase):
         canvas.consume_hands(state.update([hand(x=.1),hand("Right",x=.8)]))
         self.assertEqual(canvas.scale,scale)
 
+    def test_hand_drags_visible_panel_instead_of_model_under_it(self):
+        self.desk.action("Nesneler");self.app.processEvents()
+        canvas=self.desk.canvas;panel=self.desk._panels["Nesneler"]
+        before=panel.pos();yaw=canvas.yaw
+        pointer=np.array([(panel.x()+70)/canvas.width(),(panel.y()+18)/canvas.height()])
+        h={"id":"Left","pinch":True,"down":True,"pointer":pointer,"palm":pointer,"width":.1,"points":np.zeros((21,3))}
+        canvas.consume_hands([h])
+        h=dict(h,down=False,pointer=pointer+np.array([.1,.1]))
+        canvas.consume_hands([h])
+        self.assertNotEqual(panel.pos(),before)
+        self.assertEqual(canvas.yaw,yaw)
+        canvas.consume_hands([])
+
     def test_notes_survive_close_and_invalid_obj_keeps_working_scene(self):
         self.desk.notes.setPlainText("Murat — proje notu")
         self.desk.hide();self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["notes"],"Murat — proje notu")
