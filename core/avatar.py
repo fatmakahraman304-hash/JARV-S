@@ -537,7 +537,7 @@ class HoloAvatar:
                 from core.hologram_finish import details
                 details(p, xs, ys, self._n_head, self._lm, amp,
                         eye_open=(1.0 - self._blink) * self._lids,
-                        gaze=tuple(self._gaze), mouth=self._mouth)
+                        gaze=tuple(self._gaze), mouth=self._mouth, face_features=False)
                 return
         if self.style == "projection":
             if self._projection is None:

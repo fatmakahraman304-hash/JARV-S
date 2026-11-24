@@ -180,3 +180,41 @@ class HologramFace(unittest.TestCase):
         np.testing.assert_allclose(mesh["jaw"][len(base["verts"]):], 0)
         self.assertTrue(np.isfinite(mesh["normals"]).all())
         self.assertEqual(len(mesh["faces"]), len(mesh["face_group"]))
+
+    def test_feminine_mesh_updates_lip_rig_origin_and_neck_is_monotonic(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        base = get_head_mesh()
+        mesh = with_shoulders(base)
+        np.testing.assert_allclose(
+            mesh["lip_centre"], mesh["verts"][mesh["landmarks"]["lips_out"]].mean(0), atol=1e-6)
+        rings = mesh["verts"][len(base["verts"]) - 14:, 1].reshape(-1, 14)
+        self.assertTrue(np.all(np.diff(rings.mean(1)) < 0))
+
+    def test_3d_face_finish_keeps_features_on_the_gpu_surface(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        from core.hologram_finish import details
+        mesh = with_shoulders(get_head_mesh())
+        app = QApplication.instance() or QApplication([])
+        image = QImage(400, 400, QImage.Format.Format_ARGB32)
+        image.fill(QColor("#020a15"))
+        p = QPainter(image)
+        try:
+            with patch("core.gideon_portrait.paint_portrait") as portrait:
+                details(p, 200 + mesh["verts"][:, 0] * 100,
+                        150 - mesh["verts"][:, 1] * 100,
+                        mesh["n_head"], mesh["landmarks"], face_features=False)
+                portrait.assert_not_called()
+        finally:
+            p.end()
+
+
+    def test_nose_light_tracks_the_sculpted_face_landmarks(self):
+        from core.avatar_mesh import get_head_mesh
+        from core.hologram_mesh import with_shoulders
+        from gui.android_gl import _human_params
+        mesh = with_shoulders(get_head_mesh())
+        params = _human_params(mesh["verts"], mesh["landmarks"])
+        np.testing.assert_allclose(params["u_nose_tip"], mesh["verts"][1, :2])
+        np.testing.assert_allclose(params["u_nose_bridge"], mesh["verts"][6, :2])

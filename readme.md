@@ -17,7 +17,7 @@ switched off costs one step of that work, never the whole of it.
 Everything the assistant used to do unprompted — the opening briefing, the
 check-in after a quiet spell, the news watch, reminders — was four separate
 hand-written schedules. They are now one **routine engine**, and they are yours to
-change by voice: *"move the briefing to 08:30"*, *"every Aether at 17:00 remind me
+change by voice: *"move the briefing to 08:30"*, *"every Friday at 17:00 remind me
 to send the report"*, *"don't talk to me unprompted between 23:00 and 07:00"*.
 
 And the HUD became a command center: glass panels, live gauges, a transcript-style

@@ -30,8 +30,13 @@ def with_shoulders(mesh):
     # forehead and compressing the nose/eye spacing. Smoothly lower the face
     # features without disturbing the dome, chin seam or measured vertex IDs.
     # Applying this to the rest mesh also moves its real speaking/blink rig.
-    feature_band = np.exp(-((y + .20) / .72) ** 4)
-    original[:count_head, 1] -= .155 * feature_band
+    feature_band = np.exp(-((y + .05) / .44) ** 4)
+    original[:count_head, 1] -= .055 * feature_band
+    face = original[:count_head]
+    nose = (np.exp(-(face[:, 0] / .21) ** 4 - ((y + .20) / .31) ** 4) *
+            np.clip((face[:, 2] - .32) / .27, 0, 1))
+    face[:, 0] *= 1.0 - .085 * nose
+    face[:, 2] -= .022 * nose
     segments = 14  # The existing neck ends with a 14-vertex elliptical ring.
     base = original[-segments:].copy()
     vertices = [original]
@@ -39,9 +44,9 @@ def with_shoulders(mesh):
     last = np.arange(len(original) - segments, len(original))
     count = len(original)
     # Extra rings smooth the transition from the neck into broad shoulders.
-    ring_specs = ((1.08, 1.03, -1.28), (1.24, 1.08, -1.35),
-                  (1.54, 1.12, -1.43), (2.00, 1.16, -1.51),
-                  (2.47, 1.20, -1.59), (2.84, 1.23, -1.68))
+    ring_specs = ((1.08, 1.03, -1.37), (1.24, 1.08, -1.42),
+                  (1.54, 1.12, -1.48), (2.00, 1.16, -1.54),
+                  (2.20, 1.20, -1.61), (2.45, 1.23, -1.68))
     for width, depth, y in ring_specs:
         ring = base.copy()
         ring[:, 0] *= width
@@ -70,5 +75,7 @@ def with_shoulders(mesh):
     outward = np.concatenate((mesh["normals"], result["verts"][len(original):] - [0, -1.40, -.25]))
     result["normals"] = np.ascontiguousarray(_vertex_normals(result["verts"], result["faces"], outward), dtype=np.float32)
     result["edges"] = _unique_edges(result["faces"])[::3]
+    result["lip_centre"] = np.ascontiguousarray(
+        original[mesh["landmarks"]["lips_out"]].mean(axis=0), dtype=np.float32)
     result["span"] = (1.0, -1.68)
     return result

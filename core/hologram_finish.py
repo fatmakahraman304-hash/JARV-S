@@ -93,7 +93,7 @@ def bloom(painter: QPainter, image: QImage, x0: float, y0: float,
 
 def details(painter: QPainter, xs, ys, n_head: int, landmarks,
             energy: float = 0.0, *, eye_open: float = 1.0,
-            gaze=(0.0, 0.0), mouth: float = 0.0) -> None:
+            gaze=(0.0, 0.0), mouth: float = 0.0, face_features: bool = True) -> None:
     """Smooth blue face rim and two actual ear-shaped loops in screen space.
 
     They follow the 3D vertex projections every frame rather than sitting
@@ -106,7 +106,9 @@ def details(painter: QPainter, xs, ys, n_head: int, landmarks,
     if len(head) < 3:
         return
     outer = _smooth_hull(head)
-    _neon_path(painter, outer, .98 + .10 * energy)
+    _neon_path(painter, outer, .72 + .10 * energy)
+    if not face_features:
+        return
 
     left = min(x for x, _ in head)
     right = max(x for x, _ in head)

@@ -752,6 +752,8 @@ def _human_params(rest: np.ndarray, lm) -> dict:
         "u_eye_x": (float(ex.min()), float(ex.max())),
         "u_eye_lo": fit(eye[:9]),
         "u_eye_up": fit([eye[0]] + eye[8:]),
+        "u_nose_tip": (float(rest[1, 0]), float(rest[1, 1])),
+        "u_nose_bridge": (float(rest[6, 0]), float(rest[6, 1])),
         "u_eye_c": (float(np.abs(pe[:, 0]).mean()), float(pe[:, 1].mean())),
         "u_brow": fit(list(lm["brow_r"]), 3)[:3],
         "u_brow_x": (float(brow.min()) - 0.01, float(brow.max()) + 0.02),
