@@ -169,16 +169,18 @@ def formula(kind, column, first, last):
     return f"={kind}({col}{first}:{col}{last})"
 
 
-def task_schedule(tasks):
+def task_schedule(tasks, workers=None):
     """Earliest-start schedule, critical path and slack from supplied durations."""
     # Inputs are bounded to 100 characters and 200 tasks. Use a local context
     # large enough for exact forward and backward sums, without global changes.
     with localcontext() as ctx:
         ctx.prec = 128
-        return _task_schedule(tasks)
+        if workers is not None and (type(workers) is not int or not 1 <= workers <= 20):
+            raise ValueError("Paralel çalışan sayısı 1–20 arasında tam sayı olmalı.")
+        return _task_schedule(tasks, workers)
 
 
-def _task_schedule(tasks):
+def _task_schedule(tasks, workers=None):
     """No calendar or actual execution."""
     rows = sequence(tasks, 200)
     data = {}
@@ -227,7 +229,7 @@ def _task_schedule(tasks):
         dep = next(d for d in data[key][1] if times[d][1] == times[key][0])
         path.append(dep)
     path.reverse()
-    return {"tasks":[{"id":key, "start_minutes":clean(start), "end_minutes":clean(end),
+    result = {"tasks":[{"id":key, "start_minutes":clean(start), "end_minutes":clean(end),
                       "latest_start_minutes":clean(late[key][0]),
                       "slack_minutes":clean(slack[key]), "critical":slack[key]==0}
                      for key,(start,end) in times.items()],
@@ -236,6 +238,45 @@ def _task_schedule(tasks):
             "critical_path":path,
             "critical_tasks":[key for key in times if slack[key]==0],
             "assumption":"Bağımsız görevler paralel yapılabilir; süreler verilen tahminlerdir, tarih veya kaynak ataması yok."}
+    if workers is not None:
+        result["capacity_plan"] = _capacity_plan(data, successors, times, workers, finish)
+    return result
+
+
+def _capacity_plan(data, successors, times, workers, unlimited_finish):
+    """Deterministic non-preemptive list schedule; not an optimality claim."""
+    rank = {}
+    order = {key: i for i,key in enumerate(data)}
+    for key in reversed(times):
+        rank[key] = data[key][0] + max((rank[k] for k in successors[key]), default=Decimal(0))
+    pending = set(data)
+    completed = set()
+    running = {}
+    assignments = []
+    current = Decimal(0)
+    while pending or running:
+        # Finish all tasks at this event before launching newly ready tasks.
+        for key in list(running):
+            if running[key][1] <= current:
+                completed.add(key)
+                del running[key]
+        busy = {slot for slot,_ in running.values()}
+        free = [slot for slot in range(1,workers+1) if slot not in busy]
+        ready = sorted((k for k in pending if all(dep in completed for dep in data[k][1])),
+                       key=lambda k: (-rank[k],order[k]))
+        for slot,key in zip(free,ready):
+            end = current + data[key][0]
+            pending.remove(key)
+            running[key] = (slot,end)
+            assignments.append({"id":key,"worker":slot,"start_minutes":clean(current),
+                                "end_minutes":clean(end)})
+        if running:
+            current = min(end for _,end in running.values())
+        elif pending:
+            raise ValueError("Kapasite planı kurulamadı.")
+    return {"workers":workers,"assignments":assignments,"elapsed_minutes":clean(current),
+            "delay_vs_unlimited_minutes":clean(current-unlimited_finish),
+            "assumption":"Eşdeğer çalışanlar; görev bölünmez, bağımlılıklar korunur. Örnek uygulanabilir çizelge, en iyi çözüm garantisi değil; gerçek kişi veya takvim ataması yapılmaz."}
 
 
 def priority_matrix(tasks):

@@ -97,8 +97,10 @@ gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
 
 Planlama araçları: `task_schedule` bağımlılıkların en erken bitiş süresini,
 kritik görevleri, örnek bir kritik yolu ve her görevin gecikme payını hesaplar.
-Bağımsız işlerin paralel yürütülebileceği varsayılır; gerçek takvime veya
-kaynak kapasitesine rezervasyon yapmaz. `priority_matrix` kullanıcının verdiği
+Varsayılan plan sınırsız paralel iş varsayar. İsteğe bağlı `workers` (1–20)
+verildiğinde bağımlılıkları ve çalışan kapasitesini koruyan örnek çizelge ve
+sınırsız plana göre ek süre hesaplanır. Çalışanlar eşdeğer kabul edilir;
+çizelge en iyi çözümü garanti etmez, gerçek kişi/takvim ataması yapmaz. `priority_matrix` kullanıcının verdiği
 önem ve aciliyet değerlerinden dört görev grubu üretir. Bu öneriler görevleri
 kendiliğinden yürütmez, devretmez veya silmez. Normal sohbetten çağrılır.
 
