@@ -26,10 +26,10 @@ class FridayEarth(unittest.TestCase):
                 self.assertEqual(cfg.get_user_name(), "Murat")
                 self.assertEqual(cfg.get_gemini_key(), "local-test")
                 self.assertEqual(cfg.get_provider_mode(), "pipeline")
-            self.assertEqual(json.loads(file.read_text()), data)
+            self.assertEqual(json.loads(file.read_text(encoding="utf-8")), data)
 
     def test_earth_resource_boundary(self):
-        for url in ("https://cesium.com/a.js", "https://tile.openstreetmap.org/1/0/0.png",
+        for url in ("https://cesium.com/a.js", "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/1/0/0",
                     QUrl.fromLocalFile(str(EARTH_ROOT / "earth.js")).toString()):
             self.assertTrue(allowed_resource(QUrl(url)), url)
         for url in ("https://cesium.com.evil.test/a", "http://cesium.com/a", "https://cesium.com:8443/a",
@@ -46,8 +46,8 @@ class FridayEarth(unittest.TestCase):
 
     def test_removed_business_server_cannot_start_on_boot(self):
         self.assertFalse((ROOT / "core/whatsapp_assistant.py").exists())
-        self.assertNotIn("whatsapp_assistant", (ROOT / "ui.py").read_text())
-        settings = (ROOT / "gui/settings_page.py").read_text()
+        self.assertNotIn("whatsapp_assistant", (ROOT / "ui.py").read_text(encoding="utf-8"))
+        settings = (ROOT / "gui/settings_page.py").read_text(encoding="utf-8")
         self.assertNotIn("WhatsApp Business", settings)
         self.assertNotIn("Kişiselleştirme", settings)
 

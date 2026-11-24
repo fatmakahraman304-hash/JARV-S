@@ -17,6 +17,8 @@
       state.active=desiredActive;
       if (viewer) { viewer.useDefaultRenderLoop = desiredActive; if (desiredActive) { viewer.resize(); viewer.scene.requestRender(); } }
     },
+    capture() { if(viewer){viewer.scene.requestRender();viewer.scene.render();return viewer.canvas.toDataURL("image/png");}return null; },
+    refresh() { if(viewer)viewer.scene.requestRender(); },
     centre() {
       if (!viewer) return null;
       const scene=viewer.scene, pixel=new Cesium.Cartesian2(scene.canvas.clientWidth/2,scene.canvas.clientHeight/2);
@@ -53,16 +55,16 @@
       if (layer) viewer.imageryLayers.remove(layer,true);
       const streets=next!=="natural";
       const provider=new Cesium.UrlTemplateImageryProvider({
-        url:streets?"https://tile.openstreetmap.org/{z}/{x}/{y}.png":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        url:streets?"https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         maximumLevel:19,tilingScheme:new Cesium.WebMercatorTilingScheme(),
-        credit:new Cesium.Credit(streets?'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>':'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',true)
+        credit:new Cesium.Credit(streets?'Tiles © Esri, HERE, Garmin, Intermap, increment P, GEBCO, USGS, FAO, NPS, NRCAN, and the GIS User Community':'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',true)
       });
       const requestImage=provider.requestImage.bind(provider);
       provider.requestImage=(...args)=>{
         const request=requestImage(...args);
-        return request && request.then(image=>{state.images++;return image;});
+        return request && request.then(image=>{if(mode===next)state.images++;return image;});
       };
-      provider.errorEvent.addEventListener(()=>fail("Harita görüntüleri alınamadı. Bağlantıyı veya başka bir görünümü deneyin."));
+      provider.errorEvent.addEventListener(()=>mode===next&&fail("Harita görüntüleri alınamadı. Bağlantıyı veya başka bir görünümü deneyin."));
       layer=viewer.imageryLayers.addImageryProvider(provider);
       if(next==="holo") {layer.brightness=.78;layer.contrast=1.65;layer.saturation=0;layer.colorToAlpha=Cesium.Color.WHITE;layer.colorToAlphaThreshold=.16;}
       document.querySelectorAll("[data-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.mode===next)));
@@ -75,7 +77,8 @@
     document.getElementById("out").onclick=()=>{viewer.camera.zoomOut(viewer.camera.positionCartographic.height*.70);scene.requestRender();};
     document.getElementById("dimension").onclick=()=>{if(scene.mode===Cesium.SceneMode.SCENE3D) scene.morphTo2D(1);else scene.morphTo3D(1);};
     scene.globe.tileLoadProgressEvent.addEventListener(count=>{state.tiles=count;if(!count)scene.requestRender();});
-    scene.postRender.addEventListener(()=>{state.rendered=true;state.sceneMode=scene.mode;state.height=viewer.camera.positionCartographic.height;});
+    scene.postRender.addEventListener(()=>{state.rendered=true;state.frame=(state.frame||0)+1;state.sceneMode=scene.mode;state.height=viewer.camera.positionCartographic.height;
+      if(!state.error)readout.textContent=(mode==="natural"?"DOĞAL / UYDU":mode==="street"?"SOKAK HARİTASI":"HOLOGRAFİK DÜNYA")+" · "+(state.height/1000).toFixed(2)+" km";});
     scene.renderError.addEventListener(()=>fail("3D çizim durdu. Ekran kartı veya WebGL desteğini kontrol edin."));
     viewer.camera.changed.addEventListener(()=>{
       const c=viewer.camera.positionCartographic;

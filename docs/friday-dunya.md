@@ -22,7 +22,7 @@ Alt çubuktaki küre simgesine basın veya Ctrl+Shift+O kullanın.
 - Holografik: mavi atmosferli 3D küre ve harita çizgileri.
 - Doğal / Uydu: Esri World Imagery görüntüleri; görüntü tarihi ve çözünürlüğü
   bölgeye bağlıdır. Canlı dünya görüntüsü veya fotoğraflanmış 3D bina modeli değildir.
-- Sokak haritası: OpenStreetMap yol/bina adları, yakın görünüm ve adres arama.
+- Sokak haritası: Esri World Street Map yol/bina adları, yakın görünüm ve adres arama.
 - 2D / 3D: düz harita ile küre arasında geçiş. Tekerlek ve +/− yakınlaştırır;
   sürükleme gezinir. Yakın kamera mesafesi 120 metredir; daha fazla büyütme
   kaynak görüntünün gerçek ayrıntısını artırmaz.

@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit
 
 EARTH_ROOT = Path(__file__).resolve().parent.parent / "web" / "earth"
-REMOTE_HOSTS = frozenset({"cesium.com", "services.arcgisonline.com", "tile.openstreetmap.org"})
+REMOTE_HOSTS = frozenset({"cesium.com", "services.arcgisonline.com"})
 
 
 def allowed_resource(url: QUrl) -> bool:
@@ -107,6 +107,12 @@ class EarthPanel(QWidget):
             self.view.loadFinished.connect(self._ready)
             layout.addWidget(self.view, 1)
             self.view.load(QUrl.fromLocalFile(str(EARTH_ROOT / "index.html")))
+            # QObject children are destroyed in creation order. The profile
+            # must outlive the page; detach it and explicitly schedule page
+            # deletion first when the panel is destroyed.
+            self.profile.setParent(None)
+            self.destroyed.connect(page.deleteLater)
+            self.destroyed.connect(self.profile.deleteLater)
         except ImportError:
             self.status.setText("3D dünya için PyQt6-WebEngine gerekiyor. Normal harita çalışmaya devam eder.")
 
