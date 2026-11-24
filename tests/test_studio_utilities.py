@@ -103,3 +103,63 @@ class UtilityTests(unittest.TestCase):
             u.formula("SUM","XFE",1,2)
         with self.assertRaises(ValueError):
             u.number("0"*101)
+
+    def test_critical_path_and_slack(self):
+        result=u.task_schedule([{"id":"A","minutes":4},{"id":"B","minutes":2},
+             {"id":"C","minutes":3,"depends":["A","B"]},{"id":"D","minutes":1}])
+        self.assertEqual(result["critical_path"],["A","C"])
+        self.assertEqual(result["critical_tasks"],["A","C"])
+        self.assertEqual(result["minimum_elapsed_minutes"],"7")
+        self.assertEqual({t["id"]:t["slack_minutes"] for t in result["tasks"]},
+                         {"A":"0","B":"2","C":"0","D":"6"})
+        tied=u.task_schedule([{"id":"A","minutes":2},{"id":"B","minutes":2},
+                              {"id":"C","minutes":1,"depends":["A","B"]}])
+        self.assertEqual(set(tied["critical_tasks"]),{"A","B","C"})
+        self.assertEqual(tied["critical_path"],["A","C"])
+
+    def test_priority_matrix(self):
+        result=u.priority_matrix([{"name":"A","important":True,"urgent":True},
+            {"name":"B","important":True,"urgent":False},
+            {"name":"C","important":False,"urgent":True},
+            {"name":"D","important":False,"urgent":False}])
+        self.assertEqual(result["groups"],{"do_first":["A"],"schedule":["B"],
+            "delegate_or_review":["C"],"defer_or_review":["D"]})
+        with self.assertRaises(ValueError):
+            u.priority_matrix([{"name":"A","important":"true","urgent":True}])
+        with self.assertRaises(ValueError):
+            u.priority_matrix([{"name":"A","important":True,"urgent":False}]*2)
+
+    def test_limited_worker_schedule(self):
+        tasks=[{"id":"A","minutes":4},{"id":"B","minutes":2},
+               {"id":"C","minutes":3,"depends":["A","B"]},{"id":"D","minutes":1}]
+        one=u.task_schedule(tasks,workers=1)["capacity_plan"]
+        self.assertEqual(one["elapsed_minutes"],"10")
+        self.assertEqual(one["delay_vs_unlimited_minutes"],"3")
+        two=u.task_schedule(tasks,workers=2)["capacity_plan"]
+        self.assertEqual(two["elapsed_minutes"],"7")
+        self.assertEqual(two["delay_vs_unlimited_minutes"],"0")
+        for workers in (1,2,3,20):
+            plan=u.task_schedule(tasks,workers=workers)["capacity_plan"]
+            rows={r["id"]:r for r in plan["assignments"]}
+            self.assertEqual(set(rows),{"A","B","C","D"})
+            for row in tasks:
+                r=rows[row["id"]]
+                self.assertEqual(Decimal(r["end_minutes"])-Decimal(r["start_minutes"]),Decimal(row["minutes"]))
+                for dep in row.get("depends",[]):
+                    self.assertLessEqual(Decimal(rows[dep]["end_minutes"]),Decimal(r["start_minutes"]))
+            for slot in range(1,workers+1):
+                assigned=sorted((r for r in rows.values() if r["worker"]==slot),
+                                key=lambda r:Decimal(r["start_minutes"]))
+                for a,b in zip(assigned,assigned[1:]):
+                    self.assertLessEqual(Decimal(a["end_minutes"]),Decimal(b["start_minutes"]))
+        for bad in (0,21,True,1.5,"2"):
+            with self.assertRaises(ValueError):
+                u.task_schedule(tasks,workers=bad)
+        self.assertNotIn("capacity_plan",u.task_schedule(tasks))
+
+    def test_capacity_schedule_fractional_and_simultaneous_finishes(self):
+        tasks=[{"id":"A","minutes":"0.1"},{"id":"B","minutes":"0.1"},
+               {"id":"C","minutes":"0.2","depends":["A","B"]}]
+        plan=u.task_schedule(tasks,workers=2)["capacity_plan"]
+        self.assertEqual(plan["elapsed_minutes"],"0.3")
+        self.assertEqual(plan["assignments"][-1]["start_minutes"],"0.1")

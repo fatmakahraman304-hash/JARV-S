@@ -376,7 +376,7 @@ def apply_command(text: str):
 
 # Explicit operation bindings for existing deterministic tools.
 UTILITY_BINDINGS = {
-    242:"task_schedule", 578:"portions", 601:"budget_summary", 612:"budget_summary",
+    233:"priority_matrix", 242:"task_schedule", 578:"portions", 601:"budget_summary", 612:"budget_summary",
     619:"split_cost", 685:"convert", 757:"dice", 801:"data_quality",
     804:"stats", 805:"stats", 807:"formula", 809:"data_quality", 813:"trend",
     821:"check_total", 824:"compare", 907:"conflicts", 932:"text_diff",
