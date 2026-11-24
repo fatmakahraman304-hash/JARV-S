@@ -72,6 +72,47 @@ class ContinuityTests(unittest.TestCase):
             m.save_session_summary('pythonw ile çalışıyor')
             self.assertEqual(m.pop_last_session()['summary'], 'pythonw ile çalışıyor')
 
+    def test_day_history_uses_local_midnight_not_last_100(self):
+        from datetime import datetime, timezone, timedelta
+        tz=timezone(timedelta(hours=3))
+        with c.connect() as db:
+            rows=[("2026-11-23T20:59:59+00:00","Kullanıcı","previous")]
+            rows += [("2026-11-23T21:00:00+00:00","Kullanıcı",f"event {i}") for i in range(120)]
+            rows += [("2026-11-24T20:59:59+00:00","FRIDAY","last"),
+                     ("2026-11-24T21:00:00+00:00","Kullanıcı","next")]
+            db.executemany("INSERT INTO events(time,role,text) VALUES(?,?,?)",rows)
+        result=c.day_history("2026-11-24",tz)
+        self.assertEqual(result["total"],121)
+        self.assertEqual(result["omitted"],0)
+        self.assertEqual(result["rows"][0][2],"event 0")
+        self.assertEqual(result["rows"][-1][2],"last")
+        limited=c.day_history("2026-11-24",tz,limit=10)
+        self.assertEqual(limited["omitted"],111)
+        self.assertEqual(len(limited["rows"]),10)
+        text_limited=c.day_history("2026-11-24",tz,max_chars=100)
+        self.assertGreater(text_limited["omitted"],0)
+        self.assertEqual(text_limited["rows"][-1][2],"last")
+        with self.assertRaises(ValueError):
+            c.day_history("2026-11-24",tz,limit=True)
+
+    def test_history_export_protects_data_and_existing_text(self):
+        c.record("Kullanıcı","Türkçe içerik")
+        for target in (self.root/"continuity.sqlite3",self.root/"export.txt"):
+            with self.assertRaises(ValueError):
+                c.export_recent_text(target)
+        with tempfile.TemporaryDirectory() as outside:
+            target=Path(outside)/"history.txt"
+            self.assertEqual(c.export_recent_text(target),1)
+            old=target.read_text(encoding="utf-8")
+            self.assertIn("Türkçe içerik",old)
+            c.record("FRIDAY","yeni")
+            with patch.object(c.os,"replace",side_effect=OSError("disk error")):
+                with self.assertRaises(OSError):
+                    c.export_recent_text(target)
+            self.assertEqual(target.read_text(encoding="utf-8"),old)
+            self.assertEqual(list(target.parent.glob(".friday-history-*.tmp")),[])
+        self.assertEqual(len(c.recent()),2)
+
 
 class ApplicationTests(unittest.TestCase):
     def test_plugin_validates_without_starting(self):

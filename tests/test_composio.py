@@ -143,15 +143,23 @@ class ComposioTests(_Setup, unittest.TestCase):
         self.c.save_api_key("k")
         self.httpx.routes[("POST", "/trs_1/execute")] = _Resp(200, {
             "result_type": "completed", "data": {"id": "evt_1"}, "error": None})
-        out = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
-                        "arguments": '{"summary": "Toplantı"}'})
+        # First prove that a headless model cannot approve the external action.
+        with patch("core.confirm._show_cb", None):
+            blocked = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
+                                "arguments": '{"summary": "Toplantı"}'})
+        self.assertIn("not done", blocked)
+        # Simulate the approved callback, not a model-supplied approval token.
+        with patch("core.confirm.request", side_effect=lambda key, title, detail, run: run()):
+            out = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
+                            "arguments": '{"summary": "Toplantı"}'})
         self.assertTrue(out.startswith("status=done"))
         self.assertIn("evt_1", out)
         self.assertIn("UNTRUSTED", out)
         self.assertIn("status=failed", apps.run({"action": "run", "tool_slug": "X", "arguments": "[1]"}))
         self.httpx.routes[("POST", "/trs_1/execute")] = _Resp(200, {
             "result_type": "completed", "data": None, "error": "No connected account"})
-        self.assertIn("status=failed", apps.run({"action": "run", "tool_slug": "GMAIL_X", "arguments": "{}"}))
+        with patch("core.confirm.request", side_effect=lambda key, title, detail, run: run()):
+            self.assertIn("status=failed", apps.run({"action": "run", "tool_slug": "GMAIL_X", "arguments": "{}"}))
         self.httpx.routes[("POST", "/trs_1/link")] = _Resp(201, {"redirect_url": "https://login"})
         with patch("webbrowser.open", return_value=True) as wb:
             out = apps.run({"action": "connect", "toolkit": "Gmail"})
@@ -381,6 +389,7 @@ class ConnectTests(_Setup, unittest.TestCase):
         from plugins import apps
         out = apps.run({"action": "connect", "toolkit": "gmail"})
         self.assertIn("already_connected=true", out.lower())
-        out = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
-                        "arguments": '{"summary": "x"}'})
+        with patch("core.confirm.request", side_effect=lambda key, title, detail, run: run()):
+            out = apps.run({"action": "run", "tool_slug": "GOOGLECALENDAR_CREATE_EVENT",
+                            "arguments": '{"summary": "x"}'})
         self.assertIn("evt_42", out)

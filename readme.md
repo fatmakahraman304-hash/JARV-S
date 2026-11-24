@@ -35,6 +35,132 @@ routines use only what the app already had.
 
 ---
 
+## FRIDAY 30 çekirdek mod — otomatik yönlendirme
+
+**V2:** Türkçe çekimli sözcük ve görev ipuçları genişletildi; kısa devam
+istekleri en fazla son 12 kullanıcı iletisi bağlamından yönlendirilir.
+Pipeline aynı kullanıcı turunun araç çağrılarında mod kararını önbellekten
+kullanır. Yönlendirme önizlemesi seçimin nedenini ve ipucu desteğini gösterir;
+bu bir doğruluk olasılığı değildir. Araç adayları yalnız mevcut sağlayıcının
+bildirdiği araçlardan seçilir; bu öneri izin, bağlantı veya işlem garantisi
+vermez. Native Live ortak talimatları kullanmaya devam eder.
+
+
+Mevcut 1.000 özellik normal FRIDAY sohbetine entegredir. Ayrı çalışma modu
+etkinleştirilmez; 30 çalışma alanı arka planda yönlendirir. `mod 0` yalnız
+isteğe bağlı etkileşim/üslup ayarını sıfırlar. Yeni mod kataloğu
+`core/core_modes.py` dosyasındadır; her modun amaç, girdi, çıktı,
+sınır, Türkçe/İngilizce ipucu ve örneği vardır.
+
+Pipeline (Abacus dahil) son isteğe bir ana ve en fazla iki yardımcı mod
+önerir. Kısa devam komutları önceki rotayı kullanabilir. Bu yerel anahtar
+kelime tabanlı öneri ek bir API isteği yapmaz, yanlış sınıflandırma mümkün;
+model gerçek bağlama göre düzeltebilir. Native Gemini Live, ortak 30 mod
+talimatından kendi seçimini yapar. Her iki yolda da mod seçimi araç yetkisi,
+yeni donanım, otomatik kayıt veya gerçekleştirilmiş işlem anlamına gelmez.
+
+Yetenekler ve Arşiv paneli bilgi amaçlıdır; 30 çalışma alanı ve 1.000
+özelliğe ulaşılır. Yönlendirme önizle, örnek istek üzerinde ana/yardımcı
+modları gösterir; isteği yürütmez. `core_modes` eklentisi mod rehberi ve
+ad, amaç, girdi, kısıt, çıktı, kabul ölçütü içeren yeniden kullanılabilir
+alt görev taslağı üretir. Taslak açıkça kaydedilmedikçe kalıcı değildir.
+
+Regresyon testleri 30 modun olumlu örneğini, sınır yönergesini, boş ve
+sistem iletilerini, devam komutunu, güvenli taslağı ve pipeline mesaj
+bütünlüğünü kapsar; canlı model yanıtlarının tamamını doğrulamaz.
+
+## FRIDAY yerel görev panosu ve planlama
+
+Arşiv güvenliği: düzenleme sırasında başka bir pencere kaydı değiştirirse
+eski sürüm üzerine yazılmaz veya silinmez. Kaydedilmemiş düzenlemeler için
+pencere kapatırken, yeni kayıt açarken ve kayıt değiştirirken uyarı verilir.
+Sürüm geçmişinden seçili eski kayıt geri yüklenebilir; mevcut kayıt da
+geçmişe eklenir. Yedek önce geçici dosyaya yazılıp sonra atomik değiştirilir;
+8 MB / 10.000 kayıt sınırı aşıldığında mevcut yedek korunur. Fikir haritası
+son 60, bağlantı listesi son 200 kaydı kapsar. Bu sınırlar büyük arşivlerde
+karesel ilişki hesabını kısıtlar.
+
+
+Yetenekler ve Arşiv → Görevler: kullanıcı tarafından kaydedilen görevler,
+proje, aşama, son tarih ve öncelik; Görev panosu açık, bugün, gecikmiş,
+tamamlanmış ve arşivlenmiş durumları gösterir. Görevler ayrı SQLite
+tablosundadır; eski kayıt şeması değişmez. Eski uygulama sürümü görevleri
+göstermez, fakat kendi kayıtlarıyla çalışabilir. Yeni yedekler görevleri
+içerir; eski uygulama yeni görev kayıtlarını içeren yedeği okuyamaz.
+Bu pano otomatik bildirim veya arka plan takibi değildir.
+
+`studio_utilities` ayrıca `task_schedule` (bağımlılık sırası, en erken
+başlama ve bitiş, döngü tespiti), `budget_summary` (aynı para birimi,
+kategori toplamı ve kalan tutar) ve `weighted_options` (kullanıcı
+puanları ile ağırlıklı karar karşılaştırması) sağlar. Plan bağımsız
+görevlerin paralel çalışabileceğini varsayar; takvim rezervasyonu veya
+gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
+
+## FRIDAY 1.000 yerleşik yetenek — normal sohbet
+
+Planlama araçları: `task_schedule` bağımlılıkların en erken bitiş süresini,
+kritik görevleri, örnek bir kritik yolu ve her görevin gecikme payını hesaplar.
+Varsayılan plan sınırsız paralel iş varsayar. İsteğe bağlı `workers` (1–20)
+verildiğinde bağımlılıkları ve çalışan kapasitesini koruyan örnek çizelge ve
+sınırsız plana göre ek süre hesaplanır. Çalışanlar eşdeğer kabul edilir;
+çizelge en iyi çözümü garanti etmez, gerçek kişi/takvim ataması yapmaz. `priority_matrix` kullanıcının verdiği
+önem ve aciliyet değerlerinden dört görev grubu üretir. Bu öneriler görevleri
+kendiliğinden yürütmez, devretmez veya silmez. Normal sohbetten çağrılır.
+
+
+Yetenek yönlendirmesi, tüm katalogda yerel ters indeksle aday bulur; birden
+fazla bağımsız istek aynı mesajda varsa her birine öncelikli aday ayrılır
+(en fazla altı parça ve sınırlı yönerge bütçesi). Kod inceleme, bütçe, görev
+bağımlılıkları ve veri analizi için doğal komutlar genişletilmiştir. Uygun
+hesaplama iş akışlarına gerçek `studio_utilities` işlemleri bağlanır.
+`data_quality` verilen tablo satırlarında eksik ve karışık türde değerleri
+raporlar; `trend` eşit aralıklı gözlemlerin doğrusal eğimini hesaplar, geleceği
+tahmin etmez. Gider bölüşümü tam kesirlerle hesaplanır; Excel sütun sınırı
+XFD olarak doğrulanır. Bu değişiklikler yeni model veya harici erişim gerektirmez.
+
+
+1000 numaralı özellik: 895 otomatik erişilebilir dil-modeli yöntemi, 76 sürekli
+davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Pipeline her kullanıcı turunda
+`core/integrated_capabilities.py` ile ilgili tam yönergeleri getirir; bunlar
+sadece o tur için geçerlidir. Native Gemini Live aynı repertuarı salt okunur
+`thinking_studio(resolve)` aracıyla çağırabilir. Anahtar kelime eşleşmesi
+kusursuz değildir; model bağlama göre düzeltir. Açık üslup/sessiz eşlik kontrolleri
+korunmuştur. İlk 140 maddenin ayrıntılı özgün yönergeleri
+ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
+
+- YETENEKLER VE ARŞİV veya `Ctrl+Shift+M`: bilgi, yerel kayıt ve arşiv paneli.
+- Normal konuş: `Bana beş soru sor`, `Tarifi iki katına çıkar`, `Zar at`.
+  Eski `mod 145` biçimi tek istek için yöntemi belirtir, kalıcı mod açmaz.
+- Yeni 20 kategori: sağlıklı yaşam, ev, seyahat, yemek, finans farkındalığı, kariyer,
+  topluluk, bilim, tarih, felsefe, oyun, müzik, veri, otomasyon, eğitim,
+  yaratıcılık, hafıza, belge/görsel, kriz ve meta ilkeler.
+- `studio_utilities`: yerel birim, porsiyon, masraf bölüşümü, istatistik,
+  aykırı değer, toplam, yüzdelik fark, takvim çakışması, metin farkı, zar ve
+  sınırlı Excel formül üretimi. Takvim ve belgeler kendiliğinden okunmaz.
+- Kayıt şablonu: seçili 16 günlük/tarif/fatura/not türünde düzenlenebilir yerel
+  taslak. Kaydetmeden hiçbir kayıt yazılmaz. Hatırlatma isteyen kullanıcı için
+  mevcut reminder aracı tarih/saat ile kullanılır; yöntem eşleşmesi bildirim kurmaz.
+- Projeler ve arşiv: yerel SQLite kayıtları; fikir, proje, kaynak, karar,
+  şablon, not, geri bildirim; etiket, aşama, proje filtresi, sürüm geçmişi,
+  karar tablosu, zaman çizelgesi, fikir grafiği.
+- Kayıt silme iki onay ister. JSON yedeği mevcut kayıtların üzerine yazmadan
+  içe aktarılır; seçili kayıt metin dosyasına aktarılabilir. Yedek yalnız
+  güncel stüdyo kayıtlarını içerir, tüm uygulamayı veya eski sürümleri değil.
+- Seçili yerel kayıt yalnız kullanıcının ayrıca onayladığı durumda etkin
+  modele gönderilir. Yerel arşiv otomatik olarak buluta gönderilmez.
+- Açık üslup/etkileşim kontrol sayacı oturum içidir. Açık/koyu tema yalnız stüdyo paneline uygulanır.
+  Son 100 konuşma kaydı dışa aktarılabilir ve bugünkü kayıtlar görülebilir.
+- Harici Composio çalıştırmaları gerçek ekran onayı gerektirir; sonuç
+  uygulama panelinde gösterilir. Hafıza aracından kayıt silme de onay ister.
+  Bu değişiklik evrensel bir güvenlik geçidi değildir.
+
+Modlar farklı AI modelleri veya bağımsız cihaz yetenekleri değildir. Mevcut
+Abacus/Gemini ve yedek sağlayıcılar korunur. Kamera, akıllı ev ve çevrim içi
+araçlar bağlı cihaz ve hesap gerektirir. Her model çıktısının doğruluğu garanti
+edilemez. Kaynaklar elle kaydedilir; güven etiketi kullanıcı seçimine dayanır.
+Gerçek uygulama kapsamı ve eksikler 471–499 maddelerinin durum alanlarında
+görülebilir. Ayrı kişiselleştirme sayfası geri getirilmemiştir.
+
 ## 📦 Configurable engines
 
 ### Abacus AI / RouteLLM (FRIDAY)

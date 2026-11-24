@@ -220,7 +220,45 @@ class PipelineEngine:
 
     # ── history ──────────────────────────────────────────────────────────────
     def _messages(self) -> list[dict]:
-        msgs = [{"role": "system", "content": self._system}] if self._system else []
+        system = self._system
+        # Native Live receives the common mode directory; the modular pipeline
+        # additionally gets a per-turn, deterministic advisory route.
+        from core.core_modes import MARKER, route_history, turn_hint, available_hints
+        names = None
+        if MARKER in system:
+            # Recompute only when the user-turn revision changes. Tool callbacks
+            # and repeated generation rounds reuse the route; no extra API call.
+            last_user = next((item for item in reversed(self._history)
+                              if item.get("role") == "user"), None)
+            cached = getattr(self, "_studio_route_cache", None)
+            if cached is not None and cached[0] is last_user:
+                selected = cached[1]
+            else:
+                selected = route_history(self._history)
+                self._studio_route_cache = (last_user, selected)
+            if selected.ids:
+                system += "\n\n" + turn_hint(selected.ids)
+                names = self.tool_names() if hasattr(self, "tool_names") else None
+                hints = available_hints(selected.ids, names or ())
+                if hints:
+                    system += "\nMevcut araç adayları: " + ", ".join(hints) + ". Yalnız istek gerektiriyorsa, izin ve gerçek sonuç koşullarıyla kullan."
+        from core import integrated_capabilities as integrated
+        if integrated.MARKER in system:
+            last_user = next((item for item in reversed(self._history)
+                              if item.get("role") == "user"), None)
+            cached = getattr(self, "_capability_cache", None)
+            if cached is not None and cached[0] is last_user:
+                ids = cached[1]
+            else:
+                core_ids = selected.ids if MARKER in system else ()
+                ids = integrated.history_features(self._history, core_ids)
+                self._capability_cache = (last_user, ids)
+            if names is None and hasattr(self, "tool_names"):
+                names = self.tool_names()
+            detail = integrated.guidance(ids, available_tools=names)
+            if detail:
+                system += "\n\n" + detail
+        msgs = [{"role": "system", "content": system}] if system else []
         return msgs + self._trimmed()
 
     def _trimmed(self) -> list[dict]:

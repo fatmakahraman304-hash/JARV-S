@@ -473,6 +473,18 @@ class MainWindow(QMainWindow):
         sc_holo = QShortcut(QKeySequence("Ctrl+Shift+H"), self)
         sc_holo.activated.connect(lambda: self._holo_desk_command({"params":{"mode":"open"}}))
 
+        self._studio_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
+        self._studio_shortcut.activated.connect(self._open_thinking_studio)
+
+    def _open_thinking_studio(self):
+        from gui.thinking_studio_panel import ThinkingStudioDialog
+        def send(command):
+            if self.on_text_command:
+                threading.Thread(target=self.on_text_command, args=(command,), daemon=True).start()
+        dialog = ThinkingStudioDialog(self, send)
+        dialog.exec()
+
+
     def _open_prototype(self, text: str) -> None:
         from gui.prototype_panel import PrototypePanel
 
@@ -2101,6 +2113,7 @@ class MainWindow(QMainWindow):
         self._autostart_btn = _btn("◉  OTOMATİK BAŞLAT: KAPALI", self._toggle_autostart)
         _btn("🎧  SES CİHAZLARI", self._open_audio_devices)
         _btn("🧠  HAFIZA", self._open_memory_panel)
+        _btn("YETENEKLER VE ARŞİV", self._open_thinking_studio)
         _btn("🧩  EKLENTİLER", self._open_plugin_manager)
         _btn("⚙  EKLENTİ AYARLARI", self._open_plugin_settings)
         # The button is built here with the rest of the drawer; the panel behind
@@ -2553,6 +2566,9 @@ class MainWindow(QMainWindow):
     def _show_content(self, title: str, text: str):
         """Slot — runs on Qt main thread. Updates and shows the content panel."""
         import time as _time
+        if title == "FRIDAY Düşünce Stüdyosu — Mod Seçici":
+            self._open_thinking_studio()
+            return
         self._code_cancel_btn.hide()
         # The panel opens below the head, so the head looks down at it. It is a
         # tiny thing that answers "did that land?" before you read a word.
