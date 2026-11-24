@@ -118,43 +118,80 @@ def _hash(data):
 
 
 def _protected(name):
+    name = name.casefold()
     if name == '.gitignore':
         return False
     p = PurePosixPath(name)
     return (any(part.startswith('.') for part in p.parts)
             or p.parts[0] in {'venv', 'env', 'ENV', 'logs', 'downloads', 'screenshots', '__pycache__', 'uploads', 'reports'}
             or (p.parts[0] == 'config' and name not in {'config/__init__.py', 'config/aether.ico'})
-            or p.suffix.lower() in {'.db', '.log', '.pyc'}
+            or p.suffix.lower() in {'.db', '.log', '.pyc', '.sqlite', '.sqlite3', '.sqlite3-wal', '.sqlite3-shm', '.sqlite3-journal'}
             or (p.parts[0] == 'memory' and (p.suffix != '.py' or p.parts[1:2] == ('tasks',)))
             or any(x in p.name.lower() for x in ('token', 'credential', 'client_secret')))
+
+
+def _validate_relative(name):
+    """Reject ambiguous paths on both POSIX and Windows before any write."""
+    if not isinstance(name, str) or not name:
+        raise RuntimeError("Geçersiz güncelleme yolu.")
+    parts = name.split("/")
+    for part in parts:
+        if (not part or part in (".", "..") or part.endswith((" ", "."))
+                or any(c in '<>:"\\|?*' or ord(c) < 32 for c in part)
+                or re.fullmatch(r"(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])",
+                                part.split(".")[0].casefold())):
+            raise RuntimeError("Güvensiz güncelleme yolu: " + name)
+    return name
+
+
+def _validate_names(names):
+    seen = set()
+    for name in names:
+        key = _validate_relative(name).casefold()
+        if key in seen:
+            raise RuntimeError("Çakışan güncelleme yolları.")
+        seen.add(key)
+    for key in seen:
+        parts = key.split("/")
+        if any("/".join(parts[:i]) in seen for i in range(1, len(parts))):
+            raise RuntimeError("Dosya ve klasör yolu çakışıyor.")
 
 
 def _archive(data):
     files = {}
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         total = 0
+        names = []
+        roots = set()
         for info in archive.infolist():
             raw = info.filename
             path = PurePosixPath(raw)
             if '\\' in raw or path.is_absolute() or '..' in path.parts or ':' in raw:
                 raise RuntimeError('Güvensiz arşiv yolu.')
+            _validate_relative(raw.rstrip('/') if info.is_dir() else raw)
+            roots.add(path.parts[0])
+            if len(roots) != 1:
+                raise RuntimeError('Arşivde birden fazla kök klasör var.')
             if info.is_dir() or len(path.parts) < 2:
                 continue
             if (info.external_attr >> 16) & 0o170000 == 0o120000:
                 raise RuntimeError('Arşivde sembolik bağlantı var.')
             name = str(PurePosixPath(*path.parts[1:]))
+            names.append(name)
             if _protected(name):
                 continue
             total += info.file_size
             if total > LIMIT or name in files:
                 raise RuntimeError('Geçersiz veya çok büyük güncelleme arşivi.')
             files[name] = archive.read(info)
+    _validate_names(names)
     if not {'main.py', 'requirements.txt', 'gui/window.py'} <= files.keys():
         raise RuntimeError('Eksik AETHER arşivi.')
     return files
 
 
 def _target(root, name):
+    _validate_relative(name)
     path = root / name
     if not path.resolve().is_relative_to(root.resolve()) or path.is_symlink():
         raise RuntimeError('Güncelleme yolu uygulama dışına çıkıyor.')
@@ -294,6 +331,11 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marke
     state_path = root / '.aether-update.json'
     old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
     previous = old.get('files', {})
+    _validate_names(previous)
+    _validate_names(files)
+    if any(_protected(name) for name in files):
+        raise RuntimeError('Korunan dosya güncellenemez.')
+    _validate_names(set(files) | set(previous))
     for name, digest in previous.items():
         if _protected(name):
             continue
