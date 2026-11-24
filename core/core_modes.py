@@ -45,6 +45,38 @@ MODES = {
     29: CoreMode(29, "Hafıza ve Notlar", "Verilen notları düzenle, özetle ve isteğe bağlı kayıt yolunu göster.", "Notlar veya erişilebilen kayıtlar", "Özet, arşiv taslağı veya not düzeni", "İzinsiz kalıcı hafıza ve erişim iddiası yok; gerçek silme onay ister.", ("hafiza", "notlar", "not duzenle", "hatirla", "arsiv", "konusma ozeti", "gunluk tut",), "Notlarımı düzenle"),
     30: CoreMode(30, "Meta-Mod", "İsteği ve çıktı biçimini netleştir; doğruluğu ve kapsamı kontrol et.", "İstek, bağlam, kısıt", "Doğrudan yanıt veya gerekli tek soru", "Bir işlem yapıldığını kanıtsız iddia etme; düşük güvende bunu belirt.", ("meta mod", "cevap kalitesi", "yanit kontrol", "istegi anla", "ne demek istedim",), "Cevap kalitesini kontrol et"),
 }
+EXTRA_KEYWORDS = {
+    1: ("daily routine", "daily life", "habit", "morning routine",),
+    2: ("planning", "calendar", "priorities", "schedule", "weekly plan",),
+    3: ("learn", "learning", "study", "explain topic",),
+    4: ("write email", "writing", "story", "draft report",),
+    5: ("brainstorm", "creativity", "prototype", "new ideas",),
+    6: ("decision", "tradeoff", "compare options", "risk assessment",),
+    7: ("communication", "message", "conversation practice",),
+    8: ("career", "resume", "interview", "job application",),
+    9: ("project scope", "project", "task allocation", "workflow report",),
+    10: ("research", "find sources", "verify", "current information",),
+    11: ("data analysis", "statistics", "spreadsheet", "calculate", "chart",),
+    12: ("code", "coding", "debug", "software", "system architecture",),
+    13: ("automation", "automate", "workflow", "trigger",),
+    14: ("design", "user flow", "visual brief", "interface",),
+    15: ("presentation", "slides", "speaker notes",),
+    16: ("budget", "finance", "debt", "investment",),
+    17: ("health", "sleep", "exercise", "doctor", "symptoms",),
+    18: ("home organization", "cleaning", "shopping list", "housework",),
+    19: ("recipe", "meal", "cooking", "ingredients", "servings",),
+    20: ("travel", "trip", "flight", "hotel", "itinerary",),
+    21: ("community", "volunteer", "group event",),
+    22: ("science", "physics", "chemistry", "hypothesis", "isik hizini",),
+    23: ("history", "culture", "historical", "mythology",),
+    24: ("philosophy", "argument", "ethical dilemma",),
+    25: ("game", "puzzle", "riddle", "text adventure",),
+    26: ("music", "song", "podcast", "chords",),
+    27: ("teaching", "lesson plan", "rubric", "education",),
+    28: ("crisis", "emergency", "backup plan", "kriz iletisim", "cannot breathe", "self harm",),
+    29: ("notes", "memory", "archive", "notlarimi", "notlarimi duzenle",),
+    30: ("meta mode", "answer quality", "check response",),
+}
 MARKER = "[FRIDAY CORE MODES]"
 COMMON = (
     "Son kullanıcı mesajının dilinde ve istediği biçimde cevap ver. Sonuç önce; gereksiz tekrar yok. "
@@ -71,14 +103,16 @@ def route(text, previous=None):
         return ()
     if value in ("devam et", "devam", "onu degistir", "bunu duzelt", "continue", "keep going"):
         if previous:
-            return tuple(dict.fromkeys(n for n in previous if n in MODES))[:3]
+            valid = tuple(dict.fromkeys(n for n in previous if n in MODES))[:3]
+            if valid:
+                return valid
     scores = {}
     for n, mode in MODES.items():
-        score = sum(3 if " " in k else 1 for k in mode.keywords if _has(value,k))
+        score = sum(3 if " " in k else 1 for k in set(mode.keywords + EXTRA_KEYWORDS[n]) if _has(value,k))
         if score:
             scores[n] = score
     # Emergency cues take precedence, never a diagnosis or execution grant.
-    if any(_has(value,k) for k in ("nefes alamiyorum","kendime zarar","acil yardim","yangin")):
+    if any(_has(value,k) for k in ("nefes alamiyorum","kendime zarar","acil yardim","yangin","cannot breathe","self harm")):
         scores[28] = max(scores.values(), default=0) + 10
     if not scores:
         return (30,)
