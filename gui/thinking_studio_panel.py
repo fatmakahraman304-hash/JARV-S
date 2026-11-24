@@ -3,9 +3,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QFileDialog,
-    QMessageBox, QAbstractItemView,
+    QMessageBox, QAbstractItemView, QInputDialog,
 )
 from core import thinking_studio as studio
+from core import core_modes as core
+from core.voice_commands import normalize_command
 
 
 class ThinkingStudioDialog(QDialog):
@@ -25,7 +27,8 @@ class ThinkingStudioDialog(QDialog):
         root.addWidget(self.query)
         self.group = QComboBox()
         self.group.setAccessibleName("Özellik kategorisi")
-        self.group.addItem("Tümü", (1, studio.MAX_FEATURE))
+        self.group.addItem("30 çekirdek mod (otomatik)", (0, 0))
+        self.group.addItem("Tüm özel özellikler", (1, studio.MAX_FEATURE))
         for a, b, label in studio.GROUPS:
             self.group.addItem(f"{a}–{b} · {label}", (a, b))
         root.addWidget(self.group)
@@ -45,6 +48,7 @@ class ThinkingStudioDialog(QDialog):
             ("Uygula", self.apply_selected), ("Normal mod", lambda: self._send("normal moda dön")),
             ("Sessiz eşlik", lambda: self._send("sessiz eşlik")), ("Kullanım", self.show_usage),
             ("Açık/koyu tema", self.toggle_theme),
+            ("Yönlendirme önizle", self.preview_route),
         ):
             button = QPushButton(label)
             button.clicked.connect(callback)
@@ -71,6 +75,17 @@ class ThinkingStudioDialog(QDialog):
     def refresh(self, *_):
         a, b = self.group.currentData()
         self.rows.clear()
+        if a == 0:
+            q = normalize_command(self.query.text())
+            for n, mode in core.MODES.items():
+                searchable = normalize_command(f"{n} {mode.name} {mode.purpose}")
+                if q and q not in searchable:
+                    continue
+                item = QListWidgetItem(f"{n:02d} · {mode.name} — otomatik")
+                item.setData(Qt.ItemDataRole.UserRole, -n)
+                self.rows.addItem(item)
+            self.status.setText(f"{self.rows.count()} çekirdek mod · istek başına otomatik seçim")
+            return
         for n, title, guide, status in studio.search_features(self.query.text(), a, b):
             item = QListWidgetItem(f"{n:03d} · {title} — {status}")
             item.setData(Qt.ItemDataRole.UserRole, n)
@@ -79,6 +94,9 @@ class ThinkingStudioDialog(QDialog):
 
     def show_detail(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
+        if ids and all(n < 0 for n in ids):
+            self.detail.setPlainText(core.turn_hint(tuple(-n for n in ids[:3])))
+            return
         self.detail.setPlainText("\n\n".join(
             f"{n}. {studio.FEATURES[n][0]}\n{studio.workflow_for(n)}\nDurum: {studio.feature_status(n)}"
             for n in ids[:4]))
@@ -89,6 +107,9 @@ class ThinkingStudioDialog(QDialog):
 
     def apply_selected(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
+        if ids and all(n < 0 for n in ids):
+            self.status.setText("Çekirdek modlar otomatik seçilir. Özel mod kullanmak için kategoriyi değiştirin.")
+            return
         if len(ids) == 1 and ids[0] in (472, 473, 480, 481, 482, 483, 484, 489, 491, 492, 493, 496, 498):
             self.open_workspace({472:"project",473:"idea",481:"source",483:"decision",489:"template",493:"feedback"}.get(ids[0], ""))
             return
@@ -111,6 +132,11 @@ class ThinkingStudioDialog(QDialog):
             self.status.setText("Uygulamak için 1–4 çalışma modu seçin. İlkeler ve uygulama maddeleri bilgi amaçlıdır.")
             return
         self._send("mod " + " ve ".join(map(str, ids)))
+
+    def preview_route(self):
+        request, accepted = QInputDialog.getText(self, "Otomatik yönlendirme", "Örnek isteği yazın (çalıştırılmaz):")
+        if accepted:
+            self.detail.setPlainText(core.turn_hint(core.route(request)) or "İstek gerekli.")
 
     def toggle_theme(self):
         self._light = not self._light
