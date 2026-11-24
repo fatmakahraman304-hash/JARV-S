@@ -1,4 +1,4 @@
-"""FRIDAY: 140-feature thinking studio, derived from the user specification.
+"""FRIDAY: 500-feature thinking studio, derived from the user specification.
 
 Policy entries are always-on guidance; numbered modes are language-model
 workflows, not claims of new sensors or independent agents. Session state is
@@ -150,8 +150,39 @@ _SOURCE = """1|Temel kimlik|Güvenilir ekip arkadaşı; araştır, üret, gerekt
 140|Sonraki keşif sorusu|Gerçekten yararlıysa cevabın sonunda tek özgün soru."""
 FEATURES = {int(n): (title, guidance) for n, title, guidance in
             (line.split("|", 2) for line in _SOURCE.splitlines())}
-POLICY = frozenset(range(1, 11)) | {42, 44, 45, 46, 47, 48, 49, 90}
-MODES = {n: value for n, value in FEATURES.items() if n not in POLICY}
+from core.thinking_studio_extended import FEATURES as EXTENDED
+FEATURES.update(EXTENDED)
+POLICY = (frozenset(range(1, 11)) | {42, 44, 45, 46, 47, 48, 49, 90, 500}
+          | frozenset(range(441, 471)))
+# These entries describe application functionality, not conversation modes.
+APP_FEATURES = {n: FEATURES[n] for n in range(471, 500)}
+MODES = {n: value for n, value in FEATURES.items()
+         if n not in POLICY and n not in APP_FEATURES}
+GROUPS = (
+    (1, 140, "Düşünce ve yaratıcılık"),
+    (141, 170, "Öğrenme"), (171, 200, "Yazı ve hikâye"),
+    (201, 230, "Ürün ve girişim"), (231, 260, "Karar ve planlama"),
+    (261, 290, "Kod ve teknik"), (291, 320, "Tasarım, sanat, oyun"),
+    (321, 350, "Dünya kurma"), (351, 380, "İletişim ve ilişkiler"),
+    (381, 410, "Araştırma ve doğrulama"), (411, 440, "Kişisel gelişim"),
+    (441, 470, "Güvenlik, etik, gizlilik"), (471, 500, "Uygulama ve meta"),
+)
+APP_STATUS = {
+    471: "Yeni: aranabilir mod seçici", 472: "Mevcut proje kayıtları",
+    474: "Mevcut hafıza ekranı", 475: "Yeni: son 100 konuşma kaydını dışa aktar",
+    476: "Yeni: bugünkü mevcut konuşma kayıtlarını göster",
+    478: "Mevcut sesli giriş", 479: "Yeni: tek tık sessiz eşlik",
+    485: "Yeni: Ctrl+Shift+M", 486: "Mevcut işlem onayı (kapsamı sınırlı)",
+    488: "Yeni: panel kullanım notu", 489: "Yeni: numaralı iş akışı kütüphanesi",
+    490: "Mevcut dört üslup modu; ayrı kişiselleştirme sayfası yok",
+    495: "Yeni: oturum içi mod sayacı", 497: "Mevcut eklenti altyapısı",
+    499: "Yeni: katalog, komut ve mod seçimi regresyon testleri",
+}
+def feature_status(n):
+    if n in APP_FEATURES:
+        return APP_STATUS.get(n, "Bağımsız uygulama özelliği henüz yapılmadı")
+    return "Davranış ilkesi" if n in POLICY else "Dil modeli çalışma modu"
+
 EXTRA = {
     "kısa mod": -1, "detaylı mod": -2, "yaratıcı mod": -3,
     "bilim kurgu modu": -4, "normal moda dön": 0,
@@ -176,10 +207,13 @@ ALIASES = {
     "proje hafızası": 87, "günlük özet": 86, "konuş": 0,
     "bana gerçekten farklı bir şey göster": 84,
 }
-_INDEX = {normalize_command(title): n for n, (title, _) in MODES.items()}
+_INDEX = {}
+for n, (title, _) in MODES.items():
+    _INDEX.setdefault(normalize_command(title), n)
 _INDEX.update({normalize_command(k): v for k, v in {**EXTRA, **ALIASES}.items()})
 _lock = threading.RLock()
 _active: tuple[int, ...] = ()
+_usage: dict[int, int] = {}
 
 
 def parse(text: str):
@@ -202,8 +236,23 @@ def parse(text: str):
     return None
 
 
-def describe_modes() -> str:
-    return "\n".join(f"{n}. {title}" for n, (title, _) in MODES.items())
+def search_features(query="", first=1, last=500):
+    q = normalize_command(query)
+    return [(n, title, guidance, feature_status(n))
+            for n, (title, guidance) in FEATURES.items()
+            if first <= n <= last and (not q or q == str(n) or
+                q in normalize_command(title + " " + guidance))]
+
+
+def describe_modes(first=1, last=500) -> str:
+    return "\n".join(f"{n}. {title}" for n, (title, _) in MODES.items()
+                     if first <= n <= last)
+
+
+def usage():
+    with _lock:
+        return dict(_usage)
+
 
 
 def active() -> tuple[int, ...]:
@@ -232,6 +281,8 @@ def activate(ids: tuple[int, ...]) -> str:
         return "Geçersiz mod."
     with _lock:
         _active = tuple(dict.fromkeys(ids))
+        for n in _active:
+            _usage[n] = _usage.get(n, 0) + 1
     return "Etkin mod: " + mode_prompt()
 
 
@@ -252,5 +303,7 @@ def system_block() -> str:
             "Mod listesi için thinking_studio(list); mod durumunu status ile oku. "
             "Kurguyu, varsayımı, doğrulanmış bilgiyi ayır. "
             "Her mod mevcut güvenlik, onay ve araç sınırlarına tabidir.\n"
-            "Mod dizini: " + "; ".join(f"{n} {title}" for n,(title,_) in MODES.items()) +
+            "Mod grupları: " + "; ".join(f"{a}–{b} {g}" for a,b,g in GROUPS) +
+            "\nMod adını ve numarasını bulmak için thinking_studio(search, query=…) kullan. "
+            "471–499 uygulama maddelerini gerçek durumlarını guide ile kontrol etmeden yapılmış sayma. " +
             "\nAktif mod: " + (mode_prompt() or "normal") + "\n")
