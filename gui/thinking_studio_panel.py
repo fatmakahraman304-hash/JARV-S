@@ -50,6 +50,7 @@ class ThinkingStudioDialog(QDialog):
         root.addLayout(controls)
         history = QHBoxLayout()
         for label, callback in (
+            ("Projeler ve arşiv", self.open_workspace),
             ("Bugünkü kayıtlar", self.show_today),
             ("Son 100 kaydı dışa aktar", self.export_history),
             ("Kapat", self.close),
@@ -76,12 +77,12 @@ class ThinkingStudioDialog(QDialog):
     def show_detail(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
         self.detail.setPlainText("\n\n".join(
-            f"{n}. {studio.FEATURES[n][0]}\n{studio.FEATURES[n][1]}\nDurum: {studio.feature_status(n)}"
+            f"{n}. {studio.FEATURES[n][0]}\n{studio.guidance_for(n)}\nDurum: {studio.feature_status(n)}"
             for n in ids[:4]))
 
     def _send(self, command):
-        self.send_command(command)
         self.close()
+        self.send_command(command)
 
     def apply_selected(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
@@ -89,6 +90,10 @@ class ThinkingStudioDialog(QDialog):
             self.status.setText("Uygulamak için 1–4 çalışma modu seçin. İlkeler ve uygulama maddeleri bilgi amaçlıdır.")
             return
         self._send("mod " + " ve ".join(map(str, ids)))
+
+    def open_workspace(self):
+        from gui.studio_workspace import WorkspaceDialog
+        WorkspaceDialog(self).exec()
 
     def show_usage(self):
         counts = studio.usage()
