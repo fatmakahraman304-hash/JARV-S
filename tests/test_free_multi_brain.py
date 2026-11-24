@@ -40,6 +40,13 @@ class FreePoolTests(unittest.TestCase):
         cf["base_url"] = "https://example.org/" + "a" * 32
         self.assertNotIn("cloudflare", [s[0] for s in free_models.specs("smart", self.block)])
 
+    def test_cloudflare_registry_rejects_foreign_url(self):
+        from providers import registry
+        with self.assertRaisesRegex(ValueError, "Cloudflare"):
+            registry.build("openai_compat@cloudflare", {
+                "base_url": "https://example.org/v1", "api_key": "fake",
+                "model": "@cf/openai/gpt-oss-20b"})
+
     def test_media_not_routed(self):
         self.assertTrue(free_models.text_only("hello"))
         self.assertTrue(free_models.text_only(["a", "b"]))

@@ -139,6 +139,8 @@ def build(provider_id: str, cfg: dict):
     configuration itself, so changing the model in the panel produces a new
     instance rather than silently reusing the old one.
     """
+    if provider_id == "openai_compat@cloudflare":
+        cfg = dict(cfg, catalog="cloudflare")
     key = _fingerprint(provider_id, cfg)
     if key in _instances:
         return _instances[key]

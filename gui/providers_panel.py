@@ -741,7 +741,8 @@ class ProvidersOverlay(_HudOverlay):
                     str(entry.get("values", {}).get("backend")
                         or stored.get(f.key, f.default) or "")), f)
                 continue
-            w = self._make_widget(pid, f, stored.get(f.key, f.default))
+            initial = stored.get(f.key, "" if eid == "cloudflare" and f.key == "base_url" else f.default)
+            w = self._make_widget(pid, f, initial)
             if f.key == "aether_allow_paid":
                 # Refresh model choices when the user explicitly opts into or
                 # out of paid models. Do not do network I/O on the Qt thread.

@@ -792,7 +792,7 @@ def call(contents, tier: str = FAST, config=None,
     # in front of everything, because somebody picked it on purpose. The rest
     # of the ladder stays behind it, so a service that is down still ends in an
     # answer rather than in nothing.
-    if provider:
+    if provider and not automatic:
         chosen = PROVIDER_PREFIX + provider
         rungs = (chosen,) + tuple(r for r in rungs if r != chosen)
         ladder = (chosen,) if provider_only else (chosen,) + tuple(m for m in ladder if m != chosen)
