@@ -57,6 +57,7 @@ class ThinkingStudioDialog(QDialog):
         history = QHBoxLayout()
         for label, callback in (
             ("Projeler ve arşiv", self.open_workspace),
+            ("Görevler", lambda: self.open_workspace("task")),
             ("Kayıt şablonu", self.open_template),
             ("Bugünkü kayıtlar", self.show_today),
             ("Son 100 kaydı dışa aktar", self.export_history),
@@ -136,7 +137,7 @@ class ThinkingStudioDialog(QDialog):
     def preview_route(self):
         request, accepted = QInputDialog.getText(self, "Otomatik yönlendirme", "Örnek isteği yazın (çalıştırılmaz):")
         if accepted:
-            self.detail.setPlainText(core.turn_hint(core.route(request)) or "İstek gerekli.")
+            self.detail.setPlainText(core.explain(core.decide(request)))
 
     def toggle_theme(self):
         self._light = not self._light

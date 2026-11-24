@@ -34,6 +34,15 @@ routines use only what the app already had.
 
 ## FRIDAY 30 çekirdek mod — otomatik yönlendirme
 
+**V2:** Türkçe çekimli sözcük ve görev ipuçları genişletildi; kısa devam
+istekleri en fazla son 12 kullanıcı iletisi bağlamından yönlendirilir.
+Pipeline aynı kullanıcı turunun araç çağrılarında mod kararını önbellekten
+kullanır. Yönlendirme önizlemesi seçimin nedenini ve ipucu desteğini gösterir;
+bu bir doğruluk olasılığı değildir. Araç adayları yalnız mevcut sağlayıcının
+bildirdiği araçlardan seçilir; bu öneri izin, bağlantı veya işlem garantisi
+vermez. Native Live ortak talimatları kullanmaya devam eder.
+
+
 Mevcut 1.000 özel özellik korunur. Çekirdek mod numarası özel özellik
 numarasıyla aynı şey değildir: `mod 0` özel modları kapatır, otomatik
 çekirdek yönlendirme çalışmaya devam eder. Yeni mod kataloğu
@@ -56,6 +65,33 @@ alt görev taslağı üretir. Taslak açıkça kaydedilmedikçe kalıcı değild
 Regresyon testleri 30 modun olumlu örneğini, sınır yönergesini, boş ve
 sistem iletilerini, devam komutunu, güvenli taslağı ve pipeline mesaj
 bütünlüğünü kapsar; canlı model yanıtlarının tamamını doğrulamaz.
+
+## FRIDAY yerel görev panosu ve planlama
+
+Arşiv güvenliği: düzenleme sırasında başka bir pencere kaydı değiştirirse
+eski sürüm üzerine yazılmaz veya silinmez. Kaydedilmemiş düzenlemeler için
+pencere kapatırken, yeni kayıt açarken ve kayıt değiştirirken uyarı verilir.
+Sürüm geçmişinden seçili eski kayıt geri yüklenebilir; mevcut kayıt da
+geçmişe eklenir. Yedek önce geçici dosyaya yazılıp sonra atomik değiştirilir;
+8 MB / 10.000 kayıt sınırı aşıldığında mevcut yedek korunur. Fikir haritası
+son 60, bağlantı listesi son 200 kaydı kapsar. Bu sınırlar büyük arşivlerde
+karesel ilişki hesabını kısıtlar.
+
+
+Düşünce Stüdyosu → Görevler: kullanıcı tarafından kaydedilen görevler,
+proje, aşama, son tarih ve öncelik; Görev panosu açık, bugün, gecikmiş,
+tamamlanmış ve arşivlenmiş durumları gösterir. Görevler ayrı SQLite
+tablosundadır; eski kayıt şeması değişmez. Eski uygulama sürümü görevleri
+göstermez, fakat kendi kayıtlarıyla çalışabilir. Yeni yedekler görevleri
+içerir; eski uygulama yeni görev kayıtlarını içeren yedeği okuyamaz.
+Bu pano otomatik bildirim veya arka plan takibi değildir.
+
+`studio_utilities` ayrıca `task_schedule` (bağımlılık sırası, en erken
+başlama ve bitiş, döngü tespiti), `budget_summary` (aynı para birimi,
+kategori toplamı ve kalan tutar) ve `weighted_options` (kullanıcı
+puanları ile ağırlıklı karar karşılaştırması) sağlar. Plan bağımsız
+görevlerin paralel çalışabileceğini varsayar; takvim rezervasyonu veya
+gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
 
 ## FRIDAY Düşünce Stüdyosu (1–1000 ve normal mod 0)
 

@@ -11,6 +11,9 @@ PLUGIN = {
         "conflicts {events:[{start,end}]} (saat dilimli ISO tarihleri); "
         "text_diff {before,after}; dice {count,sides}; check_total {values,expected}; "
         "formula {kind,column,first,last} (SUM,AVERAGE,MIN,MAX,COUNT). "
+        "task_schedule {tasks:[{id,minutes,depends:[id]}]}: paralel en erken plan; "
+        "budget_summary {income,expenses:[{category,amount}]} aynı para birimi; "
+        "weighted_options {weights:{criterion:weight},options:[{name,ratings:{criterion:0-10}}]}. "
         "Bilinmeyen veri uydurma, dosya veya takvime eriştiğini iddia etme."
     ),
     "parameters": {"type": "OBJECT", "properties": {

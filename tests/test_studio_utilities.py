@@ -52,3 +52,25 @@ class UtilityTests(unittest.TestCase):
             self.assertEqual(item["tags"], f"mod-{n}")
             self.assertTrue(item["body"])
         self.assertIn("Malzemeler",draft(590)["body"])
+
+    def test_project_schedule_budget_and_weighted_options(self):
+        from core import studio_utilities as u
+        result = u.task_schedule([{"id":"C","minutes":10,"depends":["A","B"]},
+                                  {"id":"A","minutes":20},{"id":"B","minutes":15}])
+        self.assertEqual(result["minimum_elapsed_minutes"],"30")
+        self.assertEqual(result["total_work_minutes"],"45")
+        with self.assertRaises(ValueError):
+            u.task_schedule([{"id":"A","minutes":1,"depends":["B"]},
+                             {"id":"B","minutes":1,"depends":["A"]}])
+        with self.assertRaises(ValueError):
+            u.task_schedule([{"id":"A","minutes":1,"depends":["missing"]}])
+        budget = u.budget_summary("100.00",[{"category":"Ev","amount":"20.10"},
+                                          {"category":"Ev","amount":"0.20"}])
+        self.assertEqual(budget["remaining"],"79.7")
+        self.assertEqual(budget["by_category"],{"Ev":"20.3"})
+        ranked = u.weighted_options({"Fiyat":2,"Kalite":1},
+            [{"name":"A","ratings":{"Fiyat":9,"Kalite":3}},
+             {"name":"B","ratings":{"Fiyat":6,"Kalite":6}}])
+        self.assertEqual(ranked["ranking"],[{"name":"A","score":"7"},{"name":"B","score":"6"}])
+        with self.assertRaises(ValueError):
+            u.weighted_options({"Fiyat":1},[{"name":"A","ratings":{"Fiyat":11}}])

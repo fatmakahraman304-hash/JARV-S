@@ -158,9 +158,99 @@ def formula(kind, column, first, last):
     return f"={kind}({col}{first}:{col}{last})"
 
 
+def task_schedule(tasks):
+    """Earliest-start schedule with dependencies and parallel capacity.
+    Durations are supplied by the user; no calendar or actual execution.
+    """
+    rows = sequence(tasks, 200)
+    data = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Görev nesnesi gerekli.")
+        key = row.get("id")
+        if not isinstance(key, str) or not key.strip() or len(key) > 80 or key in data:
+            raise ValueError("Görev kimliği geçersiz veya tekrarlı.")
+        duration = positive(row.get("minutes"))
+        if duration > 1000000:
+            raise ValueError("Süre sınırı aşıldı.")
+        deps = row.get("depends", [])
+        if not isinstance(deps, list) or len(deps) > 200 or any(not isinstance(d,str) for d in deps):
+            raise ValueError("Bağımlılık listesi geçersiz.")
+        data[key] = (duration, tuple(dict.fromkeys(deps)))
+    if any(dep not in data for _, deps in data.values() for dep in deps):
+        raise ValueError("Bilinmeyen görev bağımlılığı.")
+    remaining = dict(data)
+    times = {}
+    while remaining:
+        ready = [key for key, (_, deps) in remaining.items() if all(d in times for d in deps)]
+        if not ready:
+            raise ValueError("Döngüsel görev bağımlılığı; plan kurulamadı.")
+        for key in ready:
+            duration, deps = remaining.pop(key)
+            start = max((times[d][1] for d in deps), default=Decimal(0))
+            times[key] = (start, start + duration)
+    return {"tasks":[{"id":key, "start_minutes":clean(start), "end_minutes":clean(end)}
+                     for key,(start,end) in times.items()],
+            "minimum_elapsed_minutes":clean(max(end for _,end in times.values())),
+            "total_work_minutes":clean(sum(duration for duration,_ in data.values())),
+            "assumption":"Bağımsız görevler paralel yapılabilir; tarih veya kaynak ataması yok."}
+
+
+def budget_summary(income, expenses):
+    """Same currency amounts only, no exchange rate or financial advice."""
+    total = number(income)
+    if total < 0:
+        raise ValueError("Gelir negatif olamaz.")
+    if not isinstance(expenses, list) or len(expenses) > 500:
+        raise ValueError("En fazla 500 gider gerekli.")
+    categories = {}
+    for row in expenses:
+        if not isinstance(row,dict) or not isinstance(row.get("category"),str):
+            raise ValueError("Gider kategorisi gerekli.")
+        category = row["category"].strip()
+        amount = number(row.get("amount"))
+        if not category or len(category) > 100 or amount < 0:
+            raise ValueError("Geçersiz gider.")
+        categories[category] = categories.get(category,Decimal(0)) + amount
+    spent = sum(categories.values(),Decimal(0))
+    return {"income":clean(total), "expenses":clean(spent), "remaining":clean(total-spent),
+            "by_category":{key:clean(value) for key,value in categories.items()},
+            "assumption":"Tüm tutarlar aynı para biriminde olmalıdır."}
+
+
+def weighted_options(weights, options):
+    """Weighted 0–10 ratings supplied by user, not model-selected preferences."""
+    if not isinstance(weights,dict) or not 1 <= len(weights) <= 30:
+        raise ValueError("1–30 ölçüt gerekli.")
+    if any(not isinstance(k,str) or not k.strip() or len(k)>100 for k in weights):
+        raise ValueError("Geçersiz ölçüt.")
+    parsed = {k:positive(v) for k,v in weights.items()}
+    denominator = sum(parsed.values())
+    result = []
+    names = set()
+    for row in sequence(options,100):
+        if not isinstance(row,dict) or not isinstance(row.get("name"),str):
+            raise ValueError("Seçenek adı gerekli.")
+        name = row["name"].strip()
+        values = row.get("ratings")
+        if not name or len(name)>120 or name in names or not isinstance(values,dict) or set(values)!=set(parsed):
+            raise ValueError("Tekil seçenek ve tüm ölçütlerin puanı gerekli.")
+        names.add(name)
+        ratings = {k:number(v) for k,v in values.items()}
+        if any(not 0 <= v <= 10 for v in ratings.values()):
+            raise ValueError("Puan 0–10 arasında olmalı.")
+        score = sum(parsed[k]*ratings[k] for k in parsed)/denominator
+        result.append((name,score))
+    result.sort(key=lambda r:-r[1])
+    return {"ranking":[{"name":name,"score":clean(score)} for name,score in result],
+            "assumption":"Kullanıcının ölçüt ve puanları; nihai karar kullanıcıya ait."}
+
+
 OPERATIONS = {"convert": convert, "portions": portions, "split_cost": split_cost,
               "stats": stats, "compare": compare, "conflicts": conflicts,
-              "text_diff": text_diff, "dice": dice, "check_total": check_total, "formula": formula}
+              "text_diff": text_diff, "dice": dice, "check_total": check_total, "formula": formula,
+              "task_schedule": task_schedule, "budget_summary": budget_summary,
+              "weighted_options": weighted_options}
 
 
 def run(operation, args):

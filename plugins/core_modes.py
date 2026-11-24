@@ -23,7 +23,7 @@ def run(parameters, player=None, session_memory=None):
         if action == "guide":
             return core.turn_hint((int(p.get("number")),)) or "Geçersiz çekirdek mod."
         if action == "route":
-            return core.turn_hint(core.route(p.get("query", ""))) or "İstek gerekli."
+            return core.explain(core.decide(p.get("query", "")))
         if action == "draft":
             task = core.subtask(**{k:p.get(k,"") for k in ("name","goal","inputs","constraints","output","acceptance")})
             return json.dumps(task, ensure_ascii=False)

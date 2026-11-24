@@ -91,33 +91,124 @@ COMMON = (
     "Alt görev gerekirse ad, amaç, girdi, kısıt, çıktı ve doğrulama ölçütü belirle; şablon taslağı oluştur, otomatik kalıcı kayıt yapma."
 )
 
+# Common Turkish inflections/phrases and specific task cues. Exact token
+# boundaries avoid routing "ev" inside "devam" or "kod" inside a different word.
+TASK_CUES = {
+    1: ("rutinimi", "aliskanliklarimi", "gunluk isler", "daily habits"),
+    2: ("planimi", "planimizi", "planini", "takvimimi", "haftayi planla", "oncelikleri"),
+    3: ("ogrenmek", "ogreniyorum", "konuyu anlat", "bana ogret", "calismam gerekiyor"),
+    4: ("mail yaz", "metnimi duzelt", "metni kisalt", "raporu yaz", "oykuyu yaz", "rewrite"),
+    5: ("fikirler", "fikirleri", "fikirlerimi", "baska fikir", "prototipi", "brainstorming"),
+    6: ("hangisini seceyim", "kararimi", "secenekleri", "karsilastir", "tradeoffs"),
+    7: ("mesaji", "mesajimi", "konusmam", "ne yazayim", "cevap yaz"),
+    8: ("cvmi", "mulakata", "mulakati", "is gorusmesi", "kariyerimi", "resume review"),
+    9: ("projeyi", "projemi", "projem", "gorevleri", "isleri dagit", "project status"),
+    10: ("arastirir misin", "arastirmayi", "kaynaklari", "internet aramasi", "web search", "look up"),
+    11: ("verileri", "verilerimi", "tabloyu", "hesaplama", "ortalamasi", "grafikleri", "analyze data"),
+    12: ("kodu", "kodunu", "kodlari", "kodlarini", "kodlama", "kodlamaya", "gelistir", "gelistirmeye", "hatalari duzelt", "repo", "debugging"),
+    13: ("otomasyonu", "otomatiklestir", "otomatiklestirme", "is akisini", "tekrarlayan gorev"),
+    14: ("tasarla", "tasarimi", "arayuzu", "arayuzunu", "kullanici deneyimi"),
+    15: ("sunumu", "slaytlari", "sunumumu", "slaytlar", "slide deck"),
+    16: ("butcemi", "butceyi", "giderleri", "gelirimi", "borclarimi", "harcamalar"),
+    17: ("uykumu", "uykuyu", "sagligim", "egzersizi", "belirtiler", "doktoruma"),
+    18: ("evimi", "evdeki", "temizligi", "alisveris listesi", "esyalarimi"),
+    19: ("tarifi", "tarifini", "porsiyonu", "malzemeleri", "yemegimi", "menumu"),
+    20: ("gezimi", "seyahatimi", "ucusumu", "tatilimi", "gezilecek yerler", "gezi plani"),
+    21: ("etkinligi", "toplulugu", "gonulluluk", "grubumuz", "community event"),
+    22: ("bilimsel", "deneyi", "hipotezi", "fizigi", "biyolojiyi", "scientific method"),
+    23: ("tarihini", "tarihte", "kulturunu", "tarihsel baglam", "historical context"),
+    24: ("felsefeyi", "argumani", "varsayimlari", "etik sorunu", "logical fallacy"),
+    25: ("oyunu", "oynayalim", "bulmacayi", "bilmeceyi", "play a game"),
+    26: ("muzigi", "sarkiyi", "besteyi", "akorlar", "podcasti"),
+    27: ("dersimi", "dersi planla", "ogrenciler", "rubrigi", "ders etkinligi"),
+    28: ("krizi", "guvenli ilk adim", "acil yardim", "emergency plan"),
+    29: ("notumu", "notlarimi", "notlari", "hatirladiklarini", "arsivimi"),
+    30: ("yanitimi kontrol et", "cevabi kontrol et", "ne istedigimi", "check your answer"),
+}
+FOLLOWUPS = frozenset((
+    "devam et", "devam", "kaldigin yerden devam et", "onu degistir", "bunu degistir",
+    "bunu duzelt", "onu duzelt", "daha kisa", "daha kisa yap", "daha detayli",
+    "daha detayli yap", "bir daha dene", "tekrar dene", "bunlari da ekle",
+    "bunlari da kodla", "bunu da yap", "bunu da ekle", "boyle boyle gelistir",
+    "continue", "keep going", "make it shorter", "make it longer", "try again",
+    "revise it", "do that too",
+))
+URGENT = ("nefes alamiyorum", "kendime zarar", "acil yardim", "yangin",
+          "cannot breathe", "self harm")
+KEYWORDS = {n: frozenset(mode.keywords + EXTRA_KEYWORDS[n] + TASK_CUES[n])
+            for n, mode in MODES.items()}
+
 def _has(text, phrase):
     return (" " + phrase + " ") in (" " + text + " ")
 
-def route(text, previous=None):
-    """Return one primary + <=2 helpers. A hint, not authorization."""
+def _valid_previous(previous):
+    return tuple(dict.fromkeys(n for n in (previous or ()) if type(n) is int and n in MODES))[:3]
+
+@dataclass(frozen=True)
+class RouteDecision:
+    ids: tuple[int, ...]
+    reason: str
+    strength: str
+
+def decide(text, previous=None):
+    """Only a local routing suggestion; strength describes cue support, not probability."""
     if not isinstance(text, str) or not text.strip() or text.lstrip().startswith("["):
-        return ()
+        return RouteDecision((), "system_or_empty", "none")
     value = normalize_command(text[:16000])
     if not value:
-        return ()
-    if value in ("devam et", "devam", "onu degistir", "bunu duzelt", "continue", "keep going"):
-        if previous:
-            valid = tuple(dict.fromkeys(n for n in previous if n in MODES))[:3]
-            if valid:
-                return valid
+        return RouteDecision((), "system_or_empty", "none")
+    prior = _valid_previous(previous)
+    if value in FOLLOWUPS and prior and prior != (30,):
+        return RouteDecision(prior, "followup", "context")
+    # Deduplicate overlapping phrases per mode: a longer phrase already
+    # includes its individual tokens. Keep independent cues additive.
     scores = {}
-    for n, mode in MODES.items():
-        score = sum(3 if " " in k else 1 for k in set(mode.keywords + EXTRA_KEYWORDS[n]) if _has(value,k))
+    for n, phrases in KEYWORDS.items():
+        matched = {k for k in phrases if _has(value,k)}
+        independent = [k for k in matched if not any(k != other and _has(other,k) for other in matched)]
+        score = sum(3 if " " in k else 1 for k in independent)
         if score:
             scores[n] = score
-    # Emergency cues take precedence, never a diagnosis or execution grant.
-    if any(_has(value,k) for k in ("nefes alamiyorum","kendime zarar","acil yardim","yangin","cannot breathe","self harm")):
+    urgent = any(_has(value,k) for k in URGENT)
+    if urgent:
         scores[28] = max(scores.values(), default=0) + 10
     if not scores:
-        return (30,)
+        return RouteDecision((30,), "fallback", "weak")
     ordered = sorted(scores, key=lambda n: (-scores[n], n))
-    return tuple(ordered[:3])
+    # Avoid unrelated low-support helpers after a strongly supported primary.
+    primary = ordered[0]
+    threshold = max(1, (scores[primary]+2)//3)
+    if urgent:
+        threshold = 1
+    ids = (primary,) + tuple(n for n in ordered[1:] if scores[n] >= threshold)[:2]
+    strength = "strong" if scores[primary] >= 3 else "weak"
+    return RouteDecision(ids, "urgent_cue" if urgent else "keywords", strength)
+
+def route(text, previous=None):
+    return decide(text, previous).ids
+
+def route_content(content, previous=None):
+    """Images and tool results are not instructions for the local classifier."""
+    if isinstance(content, list):
+        content = " ".join(p["text"] for p in content if isinstance(p, dict)
+                           and p.get("type") == "text" and isinstance(p.get("text"), str))
+    return decide(content, previous)
+
+def route_history(history, limit=12):
+    """Bounded scan; no storage, no raw user text in the result."""
+    turns = []
+    for item in reversed(history):
+        if isinstance(item, dict) and item.get("role") == "user":
+            turns.append(item.get("content"))
+            if len(turns) >= limit:
+                break
+    prior = ()
+    selected = RouteDecision((), "system_or_empty", "none")
+    for content in reversed(turns):
+        selected = route_content(content, prior)
+        if selected.ids:
+            prior = selected.ids
+    return selected
 
 def system_block():
     return MARKER + "\n" + COMMON + "\n" + "\n".join(
@@ -131,6 +222,33 @@ def turn_hint(ids):
         f"{'Ana' if i == 0 else 'Yardımcı'}: {MODES[n].name}. {MODES[n].purpose} "
         f"Girdi: {MODES[n].inputs}. Çıktı: {MODES[n].output}. Sınır: {MODES[n].boundary}"
         for i,n in enumerate(valid)) + "\nBu yalnızca yerel öneridir; gerçek isteğe göre düzelt. İzin vermez."
+
+# Hints are restricted to the tools actually declared to the current model.
+# They are not calls, authorization, or claims about live connectivity.
+TOOL_HINTS = {
+    2: ("studio_utilities", "reminder", "routines"), 6: ("studio_utilities",),
+    9: ("studio_utilities", "background_tasks", "thinking_studio"),
+    10: ("web_search",), 11: ("studio_utilities", "file_processor"),
+    12: ("code_helper", "github_develop"), 13: ("routines", "background_tasks"),
+    15: ("file_processor",), 16: ("studio_utilities",),
+    19: ("studio_utilities",), 20: ("web_search", "map_route"),
+    22: ("studio_utilities", "web_search"), 25: ("studio_utilities",),
+    29: ("recall_memory", "thinking_studio"),
+}
+
+def available_hints(ids, names):
+    allowed = set(names)
+    return tuple(dict.fromkeys(tool for n in ids for tool in TOOL_HINTS.get(n, ())
+                               if tool in allowed))[:6]
+
+def explain(decision):
+    reasons = {"system_or_empty": "Boş veya sistem iletisi",
+               "followup": "Önceki isteğin devamı", "keywords": "İstek ipuçları",
+               "urgent_cue": "Acil güvenlik ifadesi", "fallback": "Belirgin alan yok"}
+    support = {"strong": "Belirgin", "weak": "Sınırlı", "context": "Bağlamdan", "none": "Yok"}
+    return (f"Seçim nedeni: {reasons[decision.reason]}\n"
+            f"İpucu desteği: {support[decision.strength]} (doğruluk yüzdesi değildir)\n\n"
+            + (turn_hint(decision.ids) or "İstek gerekli."))
 
 def subtask(name, goal, inputs, constraints, output, acceptance):
     fields = dict(name=name, goal=goal, inputs=inputs, constraints=constraints,

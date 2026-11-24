@@ -223,22 +223,24 @@ class PipelineEngine:
         system = self._system
         # Native Live receives the common mode directory; the modular pipeline
         # additionally gets a per-turn, deterministic advisory route.
-        from core.core_modes import MARKER, route, turn_hint
+        from core.core_modes import MARKER, route_history, turn_hint, available_hints
         if MARKER in system:
-            previous = ()
-            selected = ()
-            for item in self._history:
-                if item.get("role") != "user":
-                    continue
-                content = item.get("content")
-                if isinstance(content, list):
-                    content = " ".join(p.get("text", "") for p in content
-                                       if isinstance(p, dict) and p.get("type") == "text")
-                selected = route(content, previous)
-                if selected:
-                    previous = selected
-            if selected:
-                system += "\n\n" + turn_hint(selected)
+            # Recompute only when the user-turn revision changes. Tool callbacks
+            # and repeated generation rounds reuse the route; no extra API call.
+            last_user = next((item for item in reversed(self._history)
+                              if item.get("role") == "user"), None)
+            cached = getattr(self, "_studio_route_cache", None)
+            if cached is not None and cached[0] is last_user:
+                selected = cached[1]
+            else:
+                selected = route_history(self._history)
+                self._studio_route_cache = (last_user, selected)
+            if selected.ids:
+                system += "\n\n" + turn_hint(selected.ids)
+                names = self.tool_names() if hasattr(self, "tool_names") else ()
+                hints = available_hints(selected.ids, names)
+                if hints:
+                    system += "\nMevcut araç adayları: " + ", ".join(hints) + ". Yalnız istek gerektiriyorsa, izin ve gerçek sonuç koşullarıyla kullan."
         msgs = [{"role": "system", "content": system}] if system else []
         return msgs + self._trimmed()
 
