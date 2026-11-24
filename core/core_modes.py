@@ -66,7 +66,7 @@ EXTRA_KEYWORDS = {
     18: ("home organization", "cleaning", "shopping list", "housework",),
     19: ("recipe", "meal", "cooking", "ingredients", "servings",),
     20: ("travel", "trip", "flight", "hotel", "itinerary",),
-    21: ("community", "volunteer", "group event",),
+    21: ("community", "volunteer", "group event", "gonulluluk etkinligi",),
     22: ("science", "physics", "chemistry", "hypothesis", "isik hizini",),
     23: ("history", "culture", "historical", "mythology",),
     24: ("philosophy", "argument", "ethical dilemma",),
@@ -75,7 +75,7 @@ EXTRA_KEYWORDS = {
     27: ("teaching", "lesson plan", "rubric", "education",),
     28: ("crisis", "emergency", "backup plan", "kriz iletisim", "cannot breathe", "self harm",),
     29: ("notes", "memory", "archive", "notlarimi", "notlarimi duzenle",),
-    30: ("meta mode", "answer quality", "check response",),
+    30: ("meta mode", "answer quality", "check response", "cevap kalitesini",),
 }
 MARKER = "[FRIDAY CORE MODES]"
 COMMON = (
