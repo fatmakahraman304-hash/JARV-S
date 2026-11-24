@@ -48,7 +48,7 @@ except Exception:      # pragma: no cover — the classic core still draws
 
 
 class HudCanvas(QWidget):
-    def __init__(self, face_path: str, assistant_name: str = "AETHER", parent=None):
+    def __init__(self, face_path: str, assistant_name: str = "FRIDAY", parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setMinimumSize(300, 300)
@@ -311,7 +311,7 @@ class HudCanvas(QWidget):
         dt = now - self._step_t
         self._step_t = now
         # Integrated, not derived from absolute time: multiplying wall-clock by
-        # a rate that changes with state jumps the rings the instant AETHER
+        # a rate that changes with state jumps the rings the instant FRIDAY
         # starts talking. Same lesson the head's sway taught.
         self._core_phase += min(0.10, max(0.0, dt))
 
@@ -551,7 +551,7 @@ class HudCanvas(QWidget):
         p.drawEllipse(QRectF(cx - inner, cy - inner, inner * 2, inner * 2))
 
         # 9. The name, sized from the string rather than from the radius alone:
-        #    "AETHER" and a name someone renamed to "MAX" are very
+        #    "FRIDAY" and a name someone renamed to "MAX" are very
         #    different widths, and a fixed fraction of r spills one of them past
         #    the ring it is supposed to sit inside.
         name = self._assistant_name or ""

@@ -26,7 +26,7 @@ class ScanBusy(RuntimeError):
 def is_scan_command(text: str) -> bool:
     text = unicodedata.normalize("NFKC", text).replace("İ", "i").casefold()
     text = " ".join(text.strip().rstrip(".!?").split())
-    for name in ("aether", "aether"):
+    for name in ("friday", "aether"):
         if text.startswith((name + " ", name + ",")):
             text = text[len(name):].lstrip(", ")
             break

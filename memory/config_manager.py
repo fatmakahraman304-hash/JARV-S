@@ -122,8 +122,8 @@ def save_api_keys(gemini_api_key: str) -> None:
     _write_config(data)
 
 def normalized_assistant_name(value):
-    """AETHER is the single assistant identity, including upgraded settings."""
-    return "AETHER"
+    """FRIDAY is the single assistant identity, including upgraded settings."""
+    return "FRIDAY"
 
 def _normalize_identity(data):
     if isinstance(data, dict) and "assistant_name" in data:
@@ -160,8 +160,8 @@ def is_configured() -> bool:
 
 
 def get_assistant_name() -> str:
-    """Return the configured assistant name, or 'AETHER' if not set."""
-    return load_api_keys().get("assistant_name", "AETHER") or "AETHER"
+    """Return the configured assistant name, or 'FRIDAY' if not set."""
+    return load_api_keys().get("assistant_name", "FRIDAY") or "FRIDAY"
 
 
 def get_user_name() -> str:
@@ -183,14 +183,14 @@ def save_assistant_config(assistant_name: str, user_name: str) -> None:
 # Gemini Live prebuilt voices. Names are proper nouns — identical in every
 # language, so this list is safe to show verbatim in any locale.
 AVAILABLE_VOICES = ["Charon", "Puck", "Kore", "Fenrir", "Aoede"]
-DEFAULT_VOICE    = "Charon"
+DEFAULT_VOICE    = "Aoede"
 
 
 def get_voice() -> str:
     """Return the configured Live voice, falling back to the default if unset
     or if the stored value is not a voice we recognise."""
     v = load_api_keys().get("voice_name", DEFAULT_VOICE) or DEFAULT_VOICE
-    return v if v in AVAILABLE_VOICES else DEFAULT_VOICE
+    return v if v in ("Aoede", "Kore") else DEFAULT_VOICE
 
 
 @_locked

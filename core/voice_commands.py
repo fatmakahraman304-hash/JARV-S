@@ -50,4 +50,8 @@ _CLOSE_COMMANDS = {
 
 def is_close_command(text: str) -> bool:
     """Yalnızca AETHER'ı kapatma niyeti açık olan tam komutları kabul et."""
-    return normalize_command(text) in _CLOSE_COMMANDS
+    command = normalize_command(text)
+    # Legacy name remains a valid explicit command during the FRIDAY upgrade.
+    return command in _CLOSE_COMMANDS or command in {
+        c.replace("aether", "friday") for c in _CLOSE_COMMANDS
+    }

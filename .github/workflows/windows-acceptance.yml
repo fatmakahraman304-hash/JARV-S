@@ -53,7 +53,7 @@ jobs:
               # A Windows venv launcher can host the interpreter in a child.
               $processIds = @($process.Id) + @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | Select-Object -ExpandProperty ProcessId)
               $windowOwner = Get-Process -Id $processIds -ErrorAction SilentlyContinue |
-                Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle -like 'AETHER*' } |
+                Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle -like 'FRIDAY*' } |
                 Select-Object -First 1
             } until ($windowOwner -or [DateTime]::UtcNow -gt $deadline)
             if (-not $windowOwner) { throw "No native desktop window" }

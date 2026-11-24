@@ -1,6 +1,9 @@
-# Murat — AETHER.
+# Murat — FRIDAY.
 
 A real-time voice AI that can hear, see, speak, and control your computer — on any OS. Supports Windows, macOS, and Linux. Built on the Gemini Live API for native audio streaming, delivering zero subscriptions and total digital autonomy.
+
+FRIDAY adı, kadın ses profili, 3D dünya ve uydu/sokak görünümü için
+[kullanım ve doğrulama notları](docs/friday-dunya.md).
 
 ---
 
