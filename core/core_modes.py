@@ -223,6 +223,32 @@ def turn_hint(ids):
         f"Girdi: {MODES[n].inputs}. Çıktı: {MODES[n].output}. Sınır: {MODES[n].boundary}"
         for i,n in enumerate(valid)) + "\nBu yalnızca yerel öneridir; gerçek isteğe göre düzelt. İzin vermez."
 
+# Hints are restricted to the tools actually declared to the current model.
+# They are not calls, authorization, or claims about live connectivity.
+TOOL_HINTS = {
+    2: ("reminder", "routines"), 9: ("background_tasks", "thinking_studio"),
+    10: ("web_search",), 11: ("studio_utilities", "file_processor"),
+    12: ("code_helper", "github_develop"), 13: ("routines", "background_tasks"),
+    15: ("file_processor",), 16: ("studio_utilities",),
+    19: ("studio_utilities",), 20: ("web_search", "map_route"),
+    22: ("studio_utilities", "web_search"), 25: ("studio_utilities",),
+    29: ("recall_memory", "thinking_studio"),
+}
+
+def available_hints(ids, names):
+    allowed = set(names)
+    return tuple(dict.fromkeys(tool for n in ids for tool in TOOL_HINTS.get(n, ())
+                               if tool in allowed))[:6]
+
+def explain(decision):
+    reasons = {"system_or_empty": "Boş veya sistem iletisi",
+               "followup": "Önceki isteğin devamı", "keywords": "İstek ipuçları",
+               "urgent_cue": "Acil güvenlik ifadesi", "fallback": "Belirgin alan yok"}
+    support = {"strong": "Belirgin", "weak": "Sınırlı", "context": "Bağlamdan", "none": "Yok"}
+    return (f"Seçim nedeni: {reasons[decision.reason]}\n"
+            f"İpucu desteği: {support[decision.strength]} (doğruluk yüzdesi değildir)\n\n"
+            + (turn_hint(decision.ids) or "İstek gerekli."))
+
 def subtask(name, goal, inputs, constraints, output, acceptance):
     fields = dict(name=name, goal=goal, inputs=inputs, constraints=constraints,
                   output=output, acceptance=acceptance)
