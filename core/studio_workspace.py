@@ -6,13 +6,14 @@ the entire document before writing and merges without replacing existing rows.
 from __future__ import annotations
 
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 import json
 import sqlite3
 import uuid
 
-KINDS = ("project", "idea", "decision", "source", "feedback", "template", "note")
+KINDS = ("project", "idea", "decision", "source", "feedback", "template", "note", "task")
+PRIORITIES = ("Normal", "Yüksek", "Acil", "Düşük")
 STAGES = ("Taslak", "Planlandı", "Devam ediyor", "Test", "Tamamlandı", "Arşiv")
 CONFIDENCE = ("Belirtilmedi", "Doğrulanmış", "Çıkarım", "Tahmin", "Kurgu")
 MAX_BACKUP = 8 * 1024 * 1024
@@ -39,7 +40,16 @@ class Workspace:
                     id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
                     body TEXT NOT NULL, tags TEXT NOT NULL, project TEXT NOT NULL,
                     stage TEXT NOT NULL, confidence TEXT NOT NULL, created TEXT NOT NULL,
-                    updated TEXT NOT NULL)""")
+                    updated TEXT NOT NULL, due TEXT NOT NULL DEFAULT '',
+                    priority TEXT NOT NULL DEFAULT 'Normal')""")
+                columns = {r["name"] for r in db.execute("PRAGMA table_info(records)")}
+                if not {"due", "priority"} <= columns:
+                    db.execute("BEGIN IMMEDIATE")
+                    columns = {r["name"] for r in db.execute("PRAGMA table_info(records)")}
+                    if "due" not in columns:
+                        db.execute("ALTER TABLE records ADD COLUMN due TEXT NOT NULL DEFAULT ''")
+                    if "priority" not in columns:
+                        db.execute("ALTER TABLE records ADD COLUMN priority TEXT NOT NULL DEFAULT 'Normal'")
                 db.execute("""CREATE TABLE IF NOT EXISTS versions (
                     seq INTEGER PRIMARY KEY, record_id TEXT NOT NULL, time TEXT NOT NULL,
                     data TEXT NOT NULL)""")
@@ -64,10 +74,17 @@ class Workspace:
         for key in ("created", "updated"):
             if datetime.fromisoformat(out[key]).tzinfo is None:
                 raise ValueError("Zaman dilimi gerekli.")
+        due, priority = row.get("due", ""), row.get("priority", "Normal")
+        if not isinstance(due, str) or len(due) > 10 or priority not in PRIORITIES:
+            raise ValueError("Geçersiz tarih veya öncelik.")
+        if due and date.fromisoformat(due).isoformat() != due:
+            raise ValueError("Tarih YYYY-AA-GG biçiminde olmalı.")
+        out["due"] = due
+        out["priority"] = priority
         return out
 
     def save(self, *, kind, title, body="", tags="", project="", stage="Taslak",
-             confidence="Belirtilmedi", record_id=None):
+             confidence="Belirtilmedi", record_id=None, due=None, priority=None):
         with self.db() as db:
             old = db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone() if record_id else None
             if record_id and old is None:
@@ -76,12 +93,14 @@ class Workspace:
             row = self.validate(dict(id=record_id or uuid.uuid4().hex, kind=kind, title=title.strip(),
                                      body=body, tags=tags, project=project, stage=stage,
                                      confidence=confidence, created=old["created"] if old else stamp,
-                                     updated=stamp))
+                                     updated=stamp,
+                                     due=due if due is not None else (old["due"] if old else ""),
+                                     priority=priority if priority is not None else (old["priority"] if old else "Normal")))
             if old:
                 db.execute("INSERT INTO versions(record_id,time,data) VALUES(?,?,?)",
                            (record_id, stamp, json.dumps(dict(old), ensure_ascii=False)))
-            db.execute("""INSERT OR REPLACE INTO records VALUES(
-                :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated)""", row)
+            db.execute("""INSERT OR REPLACE INTO records(id,kind,title,body,tags,project,stage,confidence,created,updated,due,priority) VALUES(
+                :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated,:due,:priority)""", row)
             return row["id"]
 
     def list(self, query="", kind="", project=""):
@@ -120,9 +139,34 @@ class Workspace:
         count = 0
         with self.db() as db:
             for row in clean:
-                count += db.execute("""INSERT OR IGNORE INTO records VALUES(
-                    :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated)""", row).rowcount
+                count += db.execute("""INSERT OR IGNORE INTO records(id,kind,title,body,tags,project,stage,confidence,created,updated,due,priority) VALUES(
+                    :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated,:due,:priority)""", row).rowcount
         return count
+
+    def task_overview(self, project="", today=None):
+        """A local snapshot only; no reminders, uploads or actions."""
+        today = date.today() if today is None else date.fromisoformat(today)
+        rows = self.list(kind="task", project=project)
+        counts = {"open": 0, "overdue": 0, "today": 0, "completed": 0, "archived": 0}
+        priority_order = {"Acil": 0, "Yüksek": 1, "Normal": 2, "Düşük": 3}
+        for r in rows:
+            if r["stage"] == "Tamamlandı":
+                state = "completed"
+            elif r["stage"] == "Arşiv":
+                state = "archived"
+            else:
+                counts["open"] += 1
+                due = date.fromisoformat(r["due"]) if r["due"] else None
+                state = "overdue" if due and due < today else "today" if due == today else "open"
+                if state != "open":
+                    counts[state] += 1
+            if state in ("completed", "archived"):
+                counts[state] += 1
+            r["task_state"] = state
+        state_order = {"overdue": 0, "today": 1, "open": 2, "completed": 3, "archived": 4}
+        rows.sort(key=lambda r: (state_order[r["task_state"]], priority_order[r["priority"]],
+                                r["due"] or "9999-12-31", r["title"].casefold()))
+        return counts, rows
 
     def relationships(self, project=""):
         """Edges reflect explicitly entered project names and shared tags."""
