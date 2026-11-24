@@ -66,3 +66,39 @@ class SecondBrainTests(unittest.TestCase):
         result = brain._get(item["id"])
         self.assertEqual(result["state"], "unverified")
         self.assertIn("Git bağlantısı", result["result"])
+
+    def test_completion_is_found_beyond_recent_project_history(self):
+        brain.add("Eski geliştirme")
+        item = brain.items()[0]
+        brain.update(item["id"], state="running")
+        pid = continuity.project_start("improve", "AETHER", "/code", f"[SECOND_BRAIN:{item['id']}]")
+        continuity.project_update(pid, status="bitti", note="Proje testleri geçti.")
+        with continuity.connect() as db:
+            db.executemany("INSERT INTO projects(title,status,instruction) VALUES(?,?,?)",
+                           [("Yeni iş", "bitti", "başka istek")] * 205)
+        brain.scan()
+        saved = brain._get(item["id"])
+        self.assertEqual(saved["state"], "verified")
+        self.assertIn("testleri geçti", saved["result"])
+
+    def test_pending_work_is_checked_even_when_the_display_is_full(self):
+        brain.add("Hazırlanan geliştirme")
+        item = brain.items()[0]
+        brain.update(item["id"], state="requested")
+        for i in range(105):
+            brain.add(f"Yeni fikir {i}")
+        with continuity.connect() as db:
+            db.execute("UPDATE improvements SET updated=? WHERE id=?", ("2020-01-01T00:00:00+00:00", item["id"]))
+        self.assertNotIn(item["id"], [row["id"] for row in brain.items()])
+        brain.scan()
+        self.assertEqual(brain._get(item["id"])["state"], "unverified")
+
+    def test_lost_job_record_cannot_stay_running_forever(self):
+        brain.add("Kaydı kaybolmuş geliştirme")
+        item = brain.items()[0]
+        brain.update(item["id"], state="running")
+        with continuity.connect() as db:
+            db.execute("UPDATE improvements SET updated=? WHERE id=?", ("2020-01-01T00:00:00+00:00", item["id"]))
+        brain.scan()
+        self.assertEqual(brain._get(item["id"])["state"], "unverified")
+        self.assertIn("kaydı bulunamadı", brain._get(item["id"])["result"])

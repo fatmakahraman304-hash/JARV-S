@@ -112,3 +112,14 @@ class AutonomousBrain(unittest.TestCase):
              patch("core.gemini.as_json", side_effect=unavailable):
             with self.assertRaisesRegex(ValueError, "modeli yanıt vermedi"):
                 service.discover(0)
+
+    def test_planning_error_remains_on_the_improvement_record(self):
+        found = {"title": "Hafıza hatası", "detail": "Kaynak bulgusu", "source": "audit:memory:error"}
+        with patch.object(service, "discover", return_value=found), \
+             patch.object(brain, "analyze", side_effect=ValueError("Model kotası doldu.")):
+            self.controller.cycle(now=100)
+        self.controller.reconcile()
+        saved = brain.items()[0]
+        self.assertEqual(saved["state"], "unverified")
+        self.assertIn("Model kotası doldu", saved["result"])
+        self.assertIsNone(self.controller.item_id)

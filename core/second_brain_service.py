@@ -175,7 +175,7 @@ class Controller:
                 self.phase = "Etkin kod işi bekleniyor"
                 return
             brain.scan()
-            if any(item["state"] in ("requested", "running") for item in brain.items()):
+            if brain.items(active_only=True):
                 self.phase = "Etkin geliştirme sonucu bekleniyor"
                 return
             index = _claim(time.time() if now is None else now)
@@ -203,6 +203,10 @@ class Controller:
             result = brain.develop(self.item_id, self.player)
             self._event(area, "Kod ajanına aktarıldı", result)
         except Exception as exc:
+            if self.item_id is not None:
+                item = brain._get(self.item_id)
+                if item["state"] == "idea":
+                    brain.update(self.item_id, state="unverified", result=str(exc))
             self._event(self.area or "coding", "Doğrulanamadı", str(exc))
         finally:
             self._cycle_lock.release()

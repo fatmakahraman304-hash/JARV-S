@@ -27,12 +27,14 @@ def add(title, detail="", source=None):
                    (title, detail, source, datetime.now(timezone.utc).isoformat()))
 
 
-def items():
+def items(*, active_only=False):
     with connect() as db:
         _table(db)
-        rows = db.execute("SELECT id,title,detail,state,analysis,result FROM improvements "
-                          "ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'failed' THEN 1 "
-                          "WHEN 'idea' THEN 2 ELSE 3 END,id DESC LIMIT 100").fetchall()
+        where = " WHERE state IN ('requested','running')" if active_only else ""
+        limit = "" if active_only else " LIMIT 100"
+        rows = db.execute("SELECT id,title,detail,state,analysis,result FROM improvements" + where +
+                          " ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'failed' THEN 1 "
+                          "WHEN 'idea' THEN 2 ELSE 3 END,id DESC" + limit).fetchall()
     return [dict(zip(("id", "title", "detail", "state", "analysis", "result"), row)) for row in rows]
 
 
@@ -59,29 +61,29 @@ def scan():
     if not _scan_lock.acquire(False):
         return
     try:
-        from memory.continuity import projects
+        from memory.continuity import projects, project_with_marker
         jobs = projects(limit=200)
         for job in jobs:
             if (job["status"] in ("başarısız", "sorunlu bitti", "aşama bekliyor")
                     and "[SECOND_BRAIN:" not in job["instruction"]):
                 add("Kod işini incele · " + job["title"], job["note"], "project:" + str(job["id"]))
-        for item in items():
-            if item["state"] not in ("requested", "running"):
-                continue
+        for item in items(active_only=True):
             marker = f"[SECOND_BRAIN:{item['id']}]"
             with connect() as db:
                 baseline = db.execute("SELECT baseline FROM improvements WHERE id=?", (item["id"],)).fetchone()[0]
-            job = next((p for p in jobs if p["id"] > baseline and marker in p["instruction"]), None)
+            job = project_with_marker(marker, after_id=baseline)
             if job:
                 state = {"çalışıyor": "running", "bitti": "verified",
                          "başarısız": "failed", "sorunlu bitti": "failed"}.get(job["status"], "unverified")
                 update(item["id"], state=state, result=job["note"])
-            elif item["state"] == "requested":
+            else:
                 with connect() as db:
                     updated = db.execute("SELECT updated FROM improvements WHERE id=?", (item["id"],)).fetchone()[0]
                 if (datetime.now(timezone.utc) - datetime.fromisoformat(updated)).total_seconds() > 300:
-                    update(item["id"], state="unverified",
-                           result="Beş dakika içinde kod ajanının başladığı doğrulanamadı. Günlüğü inceleyin.")
+                    reason = ("Beş dakika içinde kod ajanının başladığı doğrulanamadı."
+                              if item["state"] == "requested" else
+                              "İzlenen geliştirmeyle eşleşen kod işi kaydı bulunamadı.")
+                    update(item["id"], state="unverified", result=reason + " Günlüğü inceleyin.")
     finally:
         _scan_lock.release()
 
