@@ -152,6 +152,11 @@ FEATURES = {int(n): (title, guidance) for n, title, guidance in
             (line.split("|", 2) for line in _SOURCE.splitlines())}
 from core.thinking_studio_extended import FEATURES as EXTENDED
 FEATURES.update(EXTENDED)
+from core.thinking_studio_original import DETAILS
+
+def guidance_for(n):
+    return DETAILS[n][1] if n in DETAILS else FEATURES[n][1]
+
 POLICY = (frozenset(range(1, 11)) | {42, 44, 45, 46, 47, 48, 49, 90, 500}
           | frozenset(range(441, 471)))
 # These entries describe application functionality, not conversation modes.
@@ -187,7 +192,7 @@ EXTRA = {
     "kısa mod": -1, "detaylı mod": -2, "yaratıcı mod": -3,
     "bilim kurgu modu": -4, "normal moda dön": 0,
     "normal mod": 0, "modları göster": -5, "modlar": -5,
-    "hangi mod açık": -6,
+    "hangi mod açık": -6, "düşünce stüdyosu": -5, "stüdyoyu aç": -5,
 }
 STYLE = {
     -1: ("Kısa mod", "Kısa ve doğrudan cevap ver."),
@@ -205,7 +210,8 @@ ALIASES = {
     "kararların ön otopsisi": 60, "özgünlük araştırması modu": 73,
     "fikir dna sı": 54, "fikrin dna sını çıkar": 54,
     "proje hafızası": 87, "günlük özet": 86, "konuş": 0,
-    "bana gerçekten farklı bir şey göster": 84,
+    "bana gerçekten farklı bir şey göster": 84, "fikrimi geliştir": 53,
+    "mini sınav": 145, "hızlı prototip": 78,
 }
 _INDEX = {}
 for n, (title, _) in MODES.items():
@@ -230,7 +236,7 @@ def parse(text: str):
     match = re.fullmatch(r"mod(?:lar)? (\d+(?: (?:ve )?\d+)*)", value)
     if match:
         ids = tuple(dict.fromkeys(int(x) for x in re.findall(r"\d+", match[1])))
-        return ids if 1 <= len(ids) <= 4 and all(n in MODES for n in ids) else None
+        return ids if ids == (0,) or (1 <= len(ids) <= 4 and all(n in MODES for n in ids)) else None
     if value in _INDEX:
         return (_INDEX[value],)
     return None
@@ -238,6 +244,9 @@ def parse(text: str):
 
 def search_features(query="", first=1, last=500):
     q = normalize_command(query)
+    if q.isdecimal():
+        return [(n, title, guidance, feature_status(n)) for n,(title,guidance) in FEATURES.items()
+                if first <= n <= last and n == int(q)]
     return [(n, title, guidance, feature_status(n))
             for n, (title, guidance) in FEATURES.items()
             if first <= n <= last and (not q or q == str(n) or
@@ -264,7 +273,8 @@ def mode_prompt() -> str:
     with _lock:
         ids = _active
     rows = [((MODES if n > 0 else STYLE)[n]) for n in ids]
-    return "\n".join(f"{title}: {guidance}" for title, guidance in rows)
+    return "\n".join(f"{title}: {guidance_for(n) if n > 0 else guidance}"
+                     for n, (title, guidance) in zip(ids, rows))
 
 
 def activate(ids: tuple[int, ...]) -> str:
