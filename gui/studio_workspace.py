@@ -3,7 +3,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton,
     QFileDialog, QMessageBox, QFormLayout, QTableWidget, QTableWidgetItem,
-    QGraphicsScene, QGraphicsView)
+    QGraphicsScene, QGraphicsView, QInputDialog)
 from PyQt6.QtCore import Qt
 from core.studio_workspace import Workspace, KINDS, STAGES, CONFIDENCE, MAX_BACKUP, PRIORITIES
 
@@ -18,6 +18,8 @@ class WorkspaceDialog(QDialog):
         self.store = Workspace()
         self.send_command = send_command
         self.record_id = None
+        self.expected_updated = None
+        self._baseline = None
         root = QVBoxLayout(self)
         filters = QHBoxLayout()
         self.search = QLineEdit()
@@ -86,6 +88,7 @@ class WorkspaceDialog(QDialog):
         self.kind.currentIndexChanged.connect(self.update_task_fields)
         self.update_task_fields()
         self.refresh()
+        self._baseline = self.form_state()
         if template is not None:
             self.kind.setCurrentIndex(self.kind.findData(template["kind"]))
             self.title.setText(template["title"])
@@ -111,18 +114,57 @@ class WorkspaceDialog(QDialog):
         except Exception as exc:
             self.error(exc)
 
-    def clear(self):
+    def form_state(self):
+        return (self.kind.currentData(), self.title.text(), self.project.text(),
+                self.tags.text(), self.stage.currentText(), self.confidence.currentText(),
+                self.due.text(), self.priority.currentText(), self.body.toPlainText())
+
+    def discard_ok(self):
+        if self._baseline is None or self.form_state() == self._baseline:
+            return True
+        return QMessageBox.question(self, "Kaydedilmemiş değişiklikler",
+            "Kaydedilmemiş değişiklikler var. Kaydetmeden devam etmek istiyor musunuz?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+
+    def reject(self):
+        if self.discard_ok():
+            super().reject()
+
+    def closeEvent(self, event):
+        if self.discard_ok():
+            self._baseline = self.form_state()
+            super().closeEvent(event)
+        else:
+            event.ignore()
+
+    def clear(self, *_args, force=False):
+        if not force and not self.discard_ok():
+            return
         self.record_id = None
+        self.expected_updated = None
         self.rows.clearSelection()
         for field in (self.title, self.project, self.tags, self.body, self.due):
             field.clear()
         self.stage.setCurrentIndex(0)
         self.confidence.setCurrentIndex(0)
         self.priority.setCurrentIndex(0)
+        self._baseline = self.form_state()
 
     def load(self, item):
-        r = item.data(Qt.ItemDataRole.UserRole)
+        if not self.discard_ok():
+            self.rows.clearSelection()
+            return
+        r = self.store.get(item.data(Qt.ItemDataRole.UserRole)["id"])
+        if r is None:
+            self.status.setText("Kayıt bulunamadı.")
+            self.refresh()
+            return
+        self.load_record(r)
+
+    def load_record(self, r):
         self.record_id = r["id"]
+        self.expected_updated = r["updated"]
         self.kind.setCurrentIndex(self.kind.findData(r["kind"]))
         for field, key in ((self.title,"title"), (self.project,"project"), (self.tags,"tags")):
             field.setText(r[key])
@@ -131,13 +173,17 @@ class WorkspaceDialog(QDialog):
         self.body.setPlainText(r["body"])
         self.due.setText(r.get("due", ""))
         self.priority.setCurrentText(r.get("priority", "Normal"))
+        self._baseline = self.form_state()
 
     def save(self):
         try:
             self.record_id = self.store.save(kind=self.kind.currentData(), title=self.title.text(),
                 body=self.body.toPlainText(), tags=self.tags.text(), project=self.project.text(),
                 stage=self.stage.currentText(), confidence=self.confidence.currentText(),
-                record_id=self.record_id, due=self.due.text().strip(), priority=self.priority.currentText())
+                record_id=self.record_id, due=self.due.text().strip(), priority=self.priority.currentText(),
+                expected_updated=self.expected_updated)
+            saved = self.store.get(self.record_id)
+            self.load_record(saved)
             self.refresh()
             self.status.setText("Yerel kayıt kaydedildi.")
         except Exception as exc:
@@ -154,7 +200,7 @@ class WorkspaceDialog(QDialog):
             return
         try:
             if self.store.delete(self.record_id):
-                self.clear()
+                self.clear(force=True)
                 self.refresh()
                 self.status.setText("Seçili yerel kayıt silindi.")
         except Exception as exc:
@@ -176,8 +222,26 @@ class WorkspaceDialog(QDialog):
             return
         try:
             rows = self.store.versions(self.record_id)
-            self.show_text("Önceki sürümler", "\n\n".join(
-                f"{r['saved_at']} · {r['title']} · {r['stage']}\n{r['body']}" for r in rows) or "Önceki sürüm yok.")
+            if not rows:
+                self.show_text("Önceki sürümler", "Önceki sürüm yok.")
+                return
+            labels = [f"{r['version_seq']} · {r['saved_at']} · {r['title']}" for r in rows]
+            choice, ok = QInputDialog.getItem(self, "Önceki sürümler", "İncelenecek sürüm:", labels, 0, False)
+            if not ok:
+                return
+            row = rows[labels.index(choice)]
+            self.show_text("Sürüm içeriği", f"{row['title']} · {row['stage']}\n{row['body']}")
+            if not self.discard_ok():
+                return
+            if QMessageBox.question(self, "Sürümü geri yükle",
+                "Bu sürümü geri yükle? Mevcut kaydedilmiş hâl de geçmişte saklanır.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+            restored = self.store.restore_version(self.record_id, row["version_seq"], self.expected_updated)
+            self.load_record(restored)
+            self.refresh()
+            self.status.setText("Sürüm geri yüklendi; önceki hâl geçmişte saklandı.")
         except Exception as exc:
             self.error(exc)
 
@@ -185,7 +249,7 @@ class WorkspaceDialog(QDialog):
         try:
             nodes, edges = self.store.relationships(self.project_filter.text())
             names = {n["id"]: n["title"] for n in nodes}
-            self.show_text("Etiket ve proje bağlantıları", "\n".join(
+            self.show_text("Etiket ve proje bağlantıları · en yeni 200 kayıt", "\n".join(
                 f"{names[e['from']]} ↔ {names[e['to']]} ({e['reason']})" for e in edges) or "Bağlantı yok.")
         except Exception as exc:
             self.error(exc)
@@ -244,13 +308,13 @@ class WorkspaceDialog(QDialog):
         import math
         from PyQt6.QtGui import QColor, QPen, QBrush
         try:
-            nodes, edges = self.store.relationships(self.project_filter.text())
-            shown = nodes[:60]
+            nodes, edges = self.store.relationships(self.project_filter.text(), limit=60)
+            shown = nodes
             dialog = QDialog(self)
             dialog.setWindowTitle("Fikir haritası · açık etiket/proje ilişkileri")
             dialog.resize(860, 660)
             layout = QVBoxLayout(dialog)
-            layout.addWidget(QLabel(f"{len(shown)}/{len(nodes)} düğüm. Çizgiler ortak etiket veya projeyi gösterir."))
+            layout.addWidget(QLabel(f"{len(shown)} düğüm (en yeni 60 kayıt). Çizgiler ortak etiket veya projeyi gösterir."))
             scene = QGraphicsScene(dialog)
             positions = {}
             for i, n in enumerate(shown):
@@ -306,7 +370,7 @@ class WorkspaceDialog(QDialog):
             self.status.setText("Önce kayıt seçin; FRIDAY bağlantısı hazır olmalı.")
             return
         try:
-            row = next((r for r in self.store.list() if r["id"] == self.record_id), None)
+            row = self.store.get(self.record_id)
             if not row:
                 return
             if QMessageBox.question(self, "Seçili proje bağlamını kullan",
@@ -329,7 +393,7 @@ class WorkspaceDialog(QDialog):
         if not self.record_id:
             return
         try:
-            row = next((r for r in self.store.list() if r["id"] == self.record_id), None)
+            row = self.store.get(self.record_id)
             if not row:
                 return
             path, _ = QFileDialog.getSaveFileName(self, "Seçili kaydı yerel dosyaya aktar",
