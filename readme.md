@@ -43,9 +43,9 @@ bildirdiği araçlardan seçilir; bu öneri izin, bağlantı veya işlem garanti
 vermez. Native Live ortak talimatları kullanmaya devam eder.
 
 
-Mevcut 1.000 özel özellik korunur. Çekirdek mod numarası özel özellik
-numarasıyla aynı şey değildir: `mod 0` özel modları kapatır, otomatik
-çekirdek yönlendirme çalışmaya devam eder. Yeni mod kataloğu
+Mevcut 1.000 özellik normal FRIDAY sohbetine entegredir. Ayrı çalışma modu
+etkinleştirilmez; 30 çalışma alanı arka planda yönlendirir. `mod 0` yalnız
+isteğe bağlı etkileşim/üslup ayarını sıfırlar. Yeni mod kataloğu
 `core/core_modes.py` dosyasındadır; her modun amaç, girdi, çıktı,
 sınır, Türkçe/İngilizce ipucu ve örneği vardır.
 
@@ -56,8 +56,8 @@ model gerçek bağlama göre düzeltebilir. Native Gemini Live, ortak 30 mod
 talimatından kendi seçimini yapar. Her iki yolda da mod seçimi araç yetkisi,
 yeni donanım, otomatik kayıt veya gerçekleştirilmiş işlem anlamına gelmez.
 
-Düşünce Stüdyosu önce 30 çekirdek modu gösterir. Açılır kategoriden 1.000
-özel özelliğe ulaşılır. Yönlendirme önizle, örnek istek üzerinde ana/yardımcı
+Yetenekler ve Arşiv paneli bilgi amaçlıdır; 30 çalışma alanı ve 1.000
+özelliğe ulaşılır. Yönlendirme önizle, örnek istek üzerinde ana/yardımcı
 modları gösterir; isteği yürütmez. `core_modes` eklentisi mod rehberi ve
 ad, amaç, girdi, kısıt, çıktı, kabul ölçütü içeren yeniden kullanılabilir
 alt görev taslağı üretir. Taslak açıkça kaydedilmedikçe kalıcı değildir.
@@ -78,7 +78,7 @@ son 60, bağlantı listesi son 200 kaydı kapsar. Bu sınırlar büyük arşivle
 karesel ilişki hesabını kısıtlar.
 
 
-Düşünce Stüdyosu → Görevler: kullanıcı tarafından kaydedilen görevler,
+Yetenekler ve Arşiv → Görevler: kullanıcı tarafından kaydedilen görevler,
 proje, aşama, son tarih ve öncelik; Görev panosu açık, bugün, gecikmiş,
 tamamlanmış ve arşivlenmiş durumları gösterir. Görevler ayrı SQLite
 tablosundadır; eski kayıt şeması değişmez. Eski uygulama sürümü görevleri
@@ -93,16 +93,20 @@ puanları ile ağırlıklı karar karşılaştırması) sağlar. Plan bağımsı
 görevlerin paralel çalışabileceğini varsayar; takvim rezervasyonu veya
 gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
 
-## FRIDAY Düşünce Stüdyosu (1–1000 ve normal mod 0)
+## FRIDAY 1.000 yerleşik yetenek — normal sohbet
 
-1000 numaralı özellik: 895 seçilebilir dil-modeli çalışma modu, 76 sürekli
-davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Mod 0 normal moda döner;
-ayrıca dört üslup modu vardır. İlk 140 maddenin ayrıntılı özgün yönergeleri
+1000 numaralı özellik: 895 otomatik erişilebilir dil-modeli yöntemi, 76 sürekli
+davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Pipeline her kullanıcı turunda
+`core/integrated_capabilities.py` ile ilgili tam yönergeleri getirir; bunlar
+sadece o tur için geçerlidir. Native Gemini Live aynı repertuarı salt okunur
+`thinking_studio(resolve)` aracıyla çağırabilir. Anahtar kelime eşleşmesi
+kusursuz değildir; model bağlama göre düzeltir. Açık üslup/sessiz eşlik kontrolleri
+korunmuştur. İlk 140 maddenin ayrıntılı özgün yönergeleri
 ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
 
-- Ayarlar → DÜŞÜNCE STÜDYOSU veya `Ctrl+Shift+M`: aranabilir özellik seçici.
-- `FRIDAY, modları göster`, `mod 145`, `karşı ben`, `mod 11 ve 16`,
-  `sessiz eşlik`, `normal moda dön` veya `mod 0`.
+- YETENEKLER VE ARŞİV veya `Ctrl+Shift+M`: bilgi, yerel kayıt ve arşiv paneli.
+- Normal konuş: `Bana beş soru sor`, `Tarifi iki katına çıkar`, `Zar at`.
+  Eski `mod 145` biçimi tek istek için yöntemi belirtir, kalıcı mod açmaz.
 - Yeni 20 kategori: sağlıklı yaşam, ev, seyahat, yemek, finans farkındalığı, kariyer,
   topluluk, bilim, tarih, felsefe, oyun, müzik, veri, otomasyon, eğitim,
   yaratıcılık, hafıza, belge/görsel, kriz ve meta ilkeler.
@@ -111,7 +115,7 @@ ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
   sınırlı Excel formül üretimi. Takvim ve belgeler kendiliğinden okunmaz.
 - Kayıt şablonu: seçili 16 günlük/tarif/fatura/not türünde düzenlenebilir yerel
   taslak. Kaydetmeden hiçbir kayıt yazılmaz. Hatırlatma isteyen kullanıcı için
-  mevcut reminder aracı tarih/saat ile kullanılır; mod seçmek bildirim kurmaz.
+  mevcut reminder aracı tarih/saat ile kullanılır; yöntem eşleşmesi bildirim kurmaz.
 - Projeler ve arşiv: yerel SQLite kayıtları; fikir, proje, kaynak, karar,
   şablon, not, geri bildirim; etiket, aşama, proje filtresi, sürüm geçmişi,
   karar tablosu, zaman çizelgesi, fikir grafiği.
@@ -120,7 +124,7 @@ ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
   güncel stüdyo kayıtlarını içerir, tüm uygulamayı veya eski sürümleri değil.
 - Seçili yerel kayıt yalnız kullanıcının ayrıca onayladığı durumda etkin
   modele gönderilir. Yerel arşiv otomatik olarak buluta gönderilmez.
-- Mod sayacı oturum içidir. Açık/koyu tema yalnız stüdyo paneline uygulanır.
+- Açık üslup/etkileşim kontrol sayacı oturum içidir. Açık/koyu tema yalnız stüdyo paneline uygulanır.
   Son 100 konuşma kaydı dışa aktarılabilir ve bugünkü kayıtlar görülebilir.
 - Harici Composio çalıştırmaları gerçek ekran onayı gerektirir; sonuç
   uygulama panelinde gösterilir. Hafıza aracından kayıt silme de onay ister.
