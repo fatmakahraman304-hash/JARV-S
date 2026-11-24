@@ -197,7 +197,7 @@ GROUPS = (
     (976, 1000, "Meta ve son ilkeler"),
 )
 APP_STATUS = {
-    471: "Aranabilir yerel mod seçici",
+    471: "Aranabilir yerel yetenek rehberi",
     472: "Yerel proje arşivi; aşama alanları ve filtre",
     473: "Yerel aranabilir, etiketli fikir arşivi",
     474: "Mevcut hafıza ekranı; model silme isteklerinde onay",
@@ -211,17 +211,17 @@ APP_STATUS = {
     482: "Yerel kayıt ve düzenleme zaman çizelgesi",
     483: "Yerel karar tablosu",
     484: "Yerel etiket/proje ilişkilerinden görsel düğüm haritası",
-    485: "Ctrl+Shift+M ile mod seçici",
+    485: "Ctrl+Shift+M ile yetenek rehberi",
     486: "Mevcut işlem onayı ve arşiv silme/harici uygulama onayı; kapsamı sınırlı",
     487: "Yerel işlem hatası ve elle yeniden deneme; genel hata ekranı değil",
     488: "Panel kullanım açıklaması; ilk açılış turu yok",
-    489: "Numaralı iş akışları ve kaydedilebilir şablon arşivi",
+    489: "Otomatik iş akışları ve kaydedilebilir şablon arşivi",
     490: "Üslup modları; ayrı kişiselleştirme sayfası yok",
     491: "Yerel proje bazlı kayıt filtreleri; otomatik sohbet izolasyonu yok",
     492: "Seçili kaydı yerel dosyaya aktar; ağ paylaşımı yok",
     493: "Kullanıcının kaydettiği geri bildirim kayıtları; yanıta bağlı düğme yok",
     494: "Klavye erişimi ve alan etiketleri; ekran okuyucu uçtan uca doğrulanmadı",
-    495: "Oturum içi mod sayacı",
+    495: "Oturum içi açık etkileşim kontrolü sayacı",
     496: "Yerel arşiv yedeği ve çakışmasız içe aktarma; tam sistem yedeği değil",
     497: "Mevcut eklenti altyapısı; otomatik mod eklentisi yükleme yok",
     498: "Yerel kayıt değişikliklerinin geçmişi; genel ayar geçmişi değil",
@@ -234,14 +234,14 @@ def feature_status(n):
     if n in POLICY:
         return "Davranış ilkesi"
     if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
-        return "Dil modeli modu + yerel hesaplama/karşılaştırma aracı"
+        return "Yerleşik konuşma yöntemi + yerel hesaplama/karşılaştırma aracı"
     if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
-        return "Dil modeli modu + yerel düzenlenebilir kayıt şablonu"
+        return "Yerleşik konuşma yöntemi + yerel düzenlenebilir kayıt şablonu"
     if n in (501, 505, 510, 515, 833, 840, 909, 910):
-        return "Dil modeli modu; gerçek hatırlatma mevcut reminder aracıyla, açık istekle"
+        return "Yerleşik konuşma yöntemi; gerçek hatırlatma mevcut reminder aracıyla, açık istekle"
     if 926 <= n <= 950:
-        return "Dil modeli modu; verilen belge/görsel ve mevcut işleme aracı gerekir"
-    return "Dil modeli çalışma modu"
+        return "Yerleşik konuşma yöntemi; verilen belge/görsel ve mevcut işleme aracı gerekir"
+    return "Yerleşik konuşma yöntemi"
 
 EXTRA = {
     "kısa mod": -1, "detaylı mod": -2, "yaratıcı mod": -3,
@@ -290,7 +290,7 @@ def parse(text: str):
             value = value[len(prefix):]
             break
     # Numeric mode selection and explicit combination syntax.
-    match = re.fullmatch(r"mod(?:lar)? (\d+(?: (?:ve )?\d+)*)", value)
+    match = re.fullmatch(r"mod(?:lar)? ([0-9]{1,4}(?: (?:ve )?[0-9]{1,4})*)", value)
     if match:
         ids = tuple(dict.fromkeys(int(x) for x in re.findall(r"\d+", match[1])))
         return ids if ids == (0,) or (1 <= len(ids) <= 4 and all(n in MODES for n in ids)) else None
@@ -299,9 +299,25 @@ def parse(text: str):
     return None
 
 
+def control_command(text):
+    """Only actual UI/interaction controls may intercept a user turn.
+    Positive feature IDs are now ordinary one-turn capabilities.
+    Quiet companionship is an explicit user control, not an automatic workflow.
+    """
+    ids = parse(text)
+    if ids and all(n <= 0 for n in ids):
+        return ids
+    if ids == (27,) and normalize_command(text) in (
+            "sessiz eslik", "friday sessiz eslik", "jarvis sessiz eslik", "aether sessiz eslik"):
+        return ids
+    return None
+
+
 def search_features(query="", first=1, last=MAX_FEATURE):
     q = normalize_command(query)
     if q.isdecimal():
+        if len(q) > 4:
+            return []
         return [(n, title, guidance, feature_status(n)) for n,(title,guidance) in FEATURES.items()
                 if first <= n <= last and n == int(q)]
     return [(n, title, guidance, feature_status(n))
@@ -373,7 +389,7 @@ def workflow_for(n):
     if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
         guidance += " Hesap/karşılaştırma gerekiyorsa studio_utilities aracını kullan; veri eksikse uydurma."
     if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
-        guidance += " Kayıt için kullanıcının açık tercihiyle Düşünce Stüdyosu panelindeki Kayıt şablonu düğmesini ve yerel arşivi öner; model kendi kendine kayıt yapmaz."
+        guidance += " Kayıt için kullanıcının açık tercihiyle Yetenekler ve Arşiv panelindeki Kayıt şablonu düğmesini ve yerel arşivi öner; model kendi kendine kayıt yapmaz."
     if n in (501, 505, 510, 515, 833, 840, 909, 910):
         guidance += " Kullanıcı gerçek bildirim isterse mevcut reminder/routines aracını uygun tarih ve saatle kullan; yalnız öneri verdiysen zamanlandı deme."
     return guidance
@@ -383,17 +399,13 @@ def system_block() -> str:
     # Compact policy + directory; retrieve only selected full workflow details.
     policies = "\n".join(f"{n}. {FEATURES[n][1]}" for n in sorted(POLICY))
     from core.core_modes import system_block as core_block
-    return (core_block() + "\n\n[FRIDAY DÜŞÜNCE STÜDYOSU]\n" + policies +
-            "\nModlar doğal Türkçe komutla veya 'mod 11 ve 16' şeklinde seçilir. "
-            "Her mod dil modeliyle çalışan bir düşünme yaklaşımıdır; araç, sensör, "
-            "kalıcı kayıt veya gerçek gelecek bilgisi yaratmaz. "
-            "Kullanıcı mod komutunu açıkça verdiğinde thinking_studio aracıyla "
-            "etkinleştir; sıradan isteklerde uygun yaklaşımı kullan. "
-            "Mod listesi için thinking_studio(list); mod durumunu status ile oku. "
-            "Kurguyu, varsayımı, doğrulanmış bilgiyi ayır. "
-            "Her mod mevcut güvenlik, onay ve araç sınırlarına tabidir.\n"
-            "Mod grupları: " + "; ".join(f"{a}–{b} {g}" for a,b,g in GROUPS) +
-            "\nMod adını ve numarasını bulmak için thinking_studio(search, query=…) kullan. "
+    from core.integrated_capabilities import system_block as integrated_block
+    return (core_block() + "\n\n" + integrated_block() + "\n\n[FRIDAY DÜŞÜNCE STÜDYOSU]\n" + policies +
+            "\nTüm iş akışları FRIDAY'in normal sohbetinde doğrudan uygulanır. "
+            "Bir özellik için kullanıcıdan mod açmasını isteme. "
+            "Kurguyu, varsayımı, doğrulanmış bilgiyi ayır; izinleri koru. "
+            "Katalog grupları: " + "; ".join(f"{a}–{b} {g}" for a,b,g in GROUPS) +
+            "\nGerekirse thinking_studio(resolve, query=…) ile ilgili tam yönergeleri getir. "
             "471–499 uygulama maddelerini gerçek durumlarını guide ile kontrol etmeden yapılmış sayma. "
-            "501–1000 için seçili modun workflow yönergesini uygula; hesap, belge, hatırlatma ve kayıt işlerini gerçek araçlarla doğrula. " +
-            "\nAktif mod: " + (mode_prompt() or "normal") + "\n")
+            "Hesap, belge, hatırlatma ve kayıt işlerini gerçek araçlarla doğrula. " +
+            "\nİsteğe bağlı açık üslup/uyumluluk ayarı: " + (mode_prompt() or "normal") + "\n")

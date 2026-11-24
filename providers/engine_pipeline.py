@@ -241,6 +241,20 @@ class PipelineEngine:
                 hints = available_hints(selected.ids, names)
                 if hints:
                     system += "\nMevcut araç adayları: " + ", ".join(hints) + ". Yalnız istek gerektiriyorsa, izin ve gerçek sonuç koşullarıyla kullan."
+        from core import integrated_capabilities as integrated
+        if integrated.MARKER in system:
+            last_user = next((item for item in reversed(self._history)
+                              if item.get("role") == "user"), None)
+            cached = getattr(self, "_capability_cache", None)
+            if cached is not None and cached[0] is last_user:
+                ids = cached[1]
+            else:
+                core_ids = selected.ids if MARKER in system else ()
+                ids = integrated.history_features(self._history, core_ids)
+                self._capability_cache = (last_user, ids)
+            detail = integrated.guidance(ids)
+            if detail:
+                system += "\n\n" + detail
         msgs = [{"role": "system", "content": system}] if system else []
         return msgs + self._trimmed()
 

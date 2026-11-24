@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from core import thinking_studio as studio
 from core import core_modes as core
+from core import integrated_capabilities as integrated
 from core.voice_commands import normalize_command
 
 
@@ -15,20 +16,20 @@ class ThinkingStudioDialog(QDialog):
         super().__init__(parent)
         self.send_command = send_command
         self._light = False
-        self.setWindowTitle("FRIDAY · Düşünce Stüdyosu")
+        self.setWindowTitle("FRIDAY · Yerleşik Yetenekler ve Arşiv")
         self.resize(850, 660)
         root = QVBoxLayout(self)
-        title = QLabel(f"{len(studio.FEATURES)} özellik · {len(studio.MODES)} çalışma modu")
+        title = QLabel(f"{len(studio.FEATURES)} yerleşik özellik · Otomatik sohbet")
         root.addWidget(title)
-        root.addWidget(QLabel("Ara, kategori seç, bir veya en fazla dört mod seç ve uygula."))
+        root.addWidget(QLabel("Tüm özellikler normal konuşmada otomatik kullanılır. Bu panel bilgi ve arşiv içindir."))
         self.query = QLineEdit()
         self.query.setPlaceholderText("Özellik adı, numarası veya anahtar kelime")
         self.query.setAccessibleName("Özellik ara")
         root.addWidget(self.query)
         self.group = QComboBox()
         self.group.setAccessibleName("Özellik kategorisi")
-        self.group.addItem("30 çekirdek mod (otomatik)", (0, 0))
-        self.group.addItem("Tüm özel özellikler", (1, studio.MAX_FEATURE))
+        self.group.addItem("30 çalışma alanı (otomatik)", (0, 0))
+        self.group.addItem("Tüm yerleşik özellikler", (1, studio.MAX_FEATURE))
         for a, b, label in studio.GROUPS:
             self.group.addItem(f"{a}–{b} · {label}", (a, b))
         root.addWidget(self.group)
@@ -45,7 +46,7 @@ class ThinkingStudioDialog(QDialog):
         root.addWidget(self.status)
         controls = QHBoxLayout()
         for label, callback in (
-            ("Uygula", self.apply_selected), ("Normal mod", lambda: self._send("normal moda dön")),
+            ("İncele / arşivi aç", self.apply_selected),
             ("Sessiz eşlik", lambda: self._send("sessiz eşlik")), ("Kullanım", self.show_usage),
             ("Açık/koyu tema", self.toggle_theme),
             ("Yönlendirme önizle", self.preview_route),
@@ -85,13 +86,13 @@ class ThinkingStudioDialog(QDialog):
                 item = QListWidgetItem(f"{n:02d} · {mode.name} — otomatik")
                 item.setData(Qt.ItemDataRole.UserRole, -n)
                 self.rows.addItem(item)
-            self.status.setText(f"{self.rows.count()} çekirdek mod · istek başına otomatik seçim")
+            self.status.setText(f"{self.rows.count()} çalışma alanı · normal sohbet içinde otomatik")
             return
         for n, title, guide, status in studio.search_features(self.query.text(), a, b):
             item = QListWidgetItem(f"{n:03d} · {title} — {status}")
             item.setData(Qt.ItemDataRole.UserRole, n)
             self.rows.addItem(item)
-        self.status.setText(f"{self.rows.count()} sonuç · Etkin: {studio.mode_prompt() or 'Normal'}")
+        self.status.setText(f"{self.rows.count()} sonuç · Normal sohbet içinde kullanılabilir")
 
     def show_detail(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
@@ -109,7 +110,7 @@ class ThinkingStudioDialog(QDialog):
     def apply_selected(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
         if ids and all(n < 0 for n in ids):
-            self.status.setText("Çekirdek modlar otomatik seçilir. Özel mod kullanmak için kategoriyi değiştirin.")
+            self.status.setText("Çalışma alanları normal sohbet içinde otomatik kullanılır.")
             return
         if len(ids) == 1 and ids[0] in (472, 473, 480, 481, 482, 483, 484, 489, 491, 492, 493, 496, 498):
             self.open_workspace({472:"project",473:"idea",481:"source",483:"decision",489:"template",493:"feedback"}.get(ids[0], ""))
@@ -130,14 +131,16 @@ class ThinkingStudioDialog(QDialog):
             self.show_usage()
             return
         if not ids or len(ids) > 4 or any(n not in studio.MODES for n in ids):
-            self.status.setText("Uygulamak için 1–4 çalışma modu seçin. İlkeler ve uygulama maddeleri bilgi amaçlıdır.")
+            self.status.setText("Özellik açıklaması için kayıt seçin.")
             return
-        self._send("mod " + " ve ".join(map(str, ids)))
+        self.show_detail()
+        self.status.setText("Bu yöntemler FRIDAY sohbetinde otomatik kullanılır; etkinleştirme gerekmez.")
 
     def preview_route(self):
         request, accepted = QInputDialog.getText(self, "Otomatik yönlendirme", "Örnek isteği yazın (çalıştırılmaz):")
         if accepted:
-            self.detail.setPlainText(core.explain(core.decide(request)))
+            decision = core.decide(request)
+            self.detail.setPlainText(core.explain(decision) + "\n\n" + (integrated.guidance(integrated.resolve(request, decision.ids)) or "Ek katalog yöntemi eşleşmedi."))
 
     def toggle_theme(self):
         self._light = not self._light
@@ -167,7 +170,7 @@ class ThinkingStudioDialog(QDialog):
         self.detail.setPlainText("\n".join(
             f"{(studio.MODES if n > 0 else studio.STYLE)[n][0]}: {count}"
             for n, count in sorted(counts.items(), key=lambda kv: -kv[1]))
-            or "Bu oturumda henüz mod seçilmedi.")
+            or "Bu oturumda henüz açık üslup/etkileşim ayarı kullanılmadı.")
 
     def show_today(self):
         from datetime import datetime
