@@ -200,11 +200,57 @@ def task_schedule(tasks):
             duration, deps = remaining.pop(key)
             start = max((times[d][1] for d in deps), default=Decimal(0))
             times[key] = (start, start + duration)
-    return {"tasks":[{"id":key, "start_minutes":clean(start), "end_minutes":clean(end)}
+    # Backward pass: identify tasks that can delay the entire plan.
+    finish = max(end for _,end in times.values())
+    successors = {key: [] for key in data}
+    for key,(_,deps) in data.items():
+        for dep in deps:
+            successors[dep].append(key)
+    late = {}
+    for key in reversed(times):
+        duration,_ = data[key]
+        end = min((late[child][0] for child in successors[key]), default=finish)
+        late[key] = (end-duration,end)
+    slack = {key:late[key][0]-times[key][0] for key in times}
+    # One deterministic critical path, with all zero-slack tasks separately.
+    end_key = next(key for key,(_,end) in times.items() if end == finish)
+    path = [end_key]
+    while data[path[-1]][1]:
+        key = path[-1]
+        dep = next(d for d in data[key][1] if times[d][1] == times[key][0])
+        path.append(dep)
+    path.reverse()
+    return {"tasks":[{"id":key, "start_minutes":clean(start), "end_minutes":clean(end),
+                      "latest_start_minutes":clean(late[key][0]),
+                      "slack_minutes":clean(slack[key]), "critical":slack[key]==0}
                      for key,(start,end) in times.items()],
-            "minimum_elapsed_minutes":clean(max(end for _,end in times.values())),
+            "minimum_elapsed_minutes":clean(finish),
             "total_work_minutes":clean(sum(duration for duration,_ in data.values())),
-            "assumption":"Bağımsız görevler paralel yapılabilir; tarih veya kaynak ataması yok."}
+            "critical_path":path,
+            "critical_tasks":[key for key in times if slack[key]==0],
+            "assumption":"Bağımsız görevler paralel yapılabilir; süreler verilen tahminlerdir, tarih veya kaynak ataması yok."}
+
+
+def priority_matrix(tasks):
+    """Classify only explicitly supplied importance and urgency flags."""
+    groups = {"do_first": [], "schedule": [], "delegate_or_review": [], "defer_or_review": []}
+    seen = set()
+    for row in sequence(tasks,200):
+        if not isinstance(row,dict):
+            raise ValueError("Görev nesnesi gerekli.")
+        name = row.get("name")
+        important, urgent = row.get("important"),row.get("urgent")
+        if not isinstance(name,str) or not name.strip() or len(name)>200 or name.strip() in seen:
+            raise ValueError("Benzersiz görev adı gerekli.")
+        if type(important) is not bool or type(urgent) is not bool:
+            raise ValueError("Önem ve aciliyet için açık boolean değerleri gerekli.")
+        name = name.strip()
+        seen.add(name)
+        key = ("do_first" if urgent else "schedule") if important else (
+               "delegate_or_review" if urgent else "defer_or_review")
+        groups[key].append(name)
+    return {"groups":groups,"count":len(seen),
+            "assumption":"Önem ve aciliyet verilen değerlendirmelerdir; hiçbir görev yürütülmez veya silinmez."}
 
 
 def budget_summary(income, expenses):
@@ -315,7 +361,8 @@ OPERATIONS = {"convert": convert, "portions": portions, "split_cost": split_cost
               "stats": stats, "compare": compare, "conflicts": conflicts,
               "text_diff": text_diff, "dice": dice, "check_total": check_total, "formula": formula,
               "task_schedule": task_schedule, "budget_summary": budget_summary,
-              "weighted_options": weighted_options, "trend": trend, "data_quality": data_quality}
+              "weighted_options": weighted_options, "trend": trend, "data_quality": data_quality,
+              "priority_matrix": priority_matrix}
 
 
 def run(operation, args):
