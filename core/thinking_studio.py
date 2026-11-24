@@ -1,4 +1,4 @@
-"""FRIDAY: 500-feature thinking studio, derived from the user specification.
+"""FRIDAY: 1000-feature thinking studio, derived from the user specification.
 
 Policy entries are always-on guidance; numbered modes are language-model
 workflows, not claims of new sensors or independent agents. Session state is
@@ -152,13 +152,17 @@ FEATURES = {int(n): (title, guidance) for n, title, guidance in
             (line.split("|", 2) for line in _SOURCE.splitlines())}
 from core.thinking_studio_extended import FEATURES as EXTENDED
 FEATURES.update(EXTENDED)
+from core.thinking_studio_life import FEATURES as LIFE
+FEATURES.update(LIFE)
+MAX_FEATURE = 1000
 from core.thinking_studio_original import DETAILS
 
 def guidance_for(n):
     return DETAILS[n][1] if n in DETAILS else FEATURES[n][1]
 
 POLICY = (frozenset(range(1, 11)) | {42, 44, 45, 46, 47, 48, 49, 90, 500}
-          | frozenset(range(441, 471)))
+          | frozenset(range(441, 471)) | frozenset(range(978, 990))
+          | {795, 798, 917, 925, 959, 975, 991, 992, 993, 994, 995, 997, 998, 999, 1000})
 # These entries describe application functionality, not conversation modes.
 APP_FEATURES = {n: FEATURES[n] for n in range(471, 500)}
 MODES = {n: value for n, value in FEATURES.items()
@@ -171,6 +175,26 @@ GROUPS = (
     (321, 350, "Dünya kurma"), (351, 380, "İletişim ve ilişkiler"),
     (381, 410, "Araştırma ve doğrulama"), (411, 440, "Kişisel gelişim"),
     (441, 470, "Güvenlik, etik, gizlilik"), (471, 500, "Uygulama ve meta"),
+    (501, 525, "Sağlıklı yaşam"),
+    (526, 550, "Ev ve günlük yaşam"),
+    (551, 575, "Seyahat ve keşif"),
+    (576, 600, "Yemek"),
+    (601, 625, "Finans farkındalığı"),
+    (626, 650, "Kariyer ve iş"),
+    (651, 675, "Sosyal ve topluluk"),
+    (676, 700, "Bilim ve merak"),
+    (701, 725, "Tarih ve kültür"),
+    (726, 750, "Felsefe ve düşünme"),
+    (751, 775, "Oyun ve eğlence"),
+    (776, 800, "Müzik ve ses"),
+    (801, 825, "Veri ve analiz"),
+    (826, 850, "Otomasyon ve iş akışı"),
+    (851, 875, "Eğitmen araçları"),
+    (876, 900, "Yaratıcı deneyler"),
+    (901, 925, "Zaman ve hafıza"),
+    (926, 950, "Görsel ve belge işleme"),
+    (951, 975, "Kriz ve belirsizlik"),
+    (976, 1000, "Meta ve son ilkeler"),
 )
 APP_STATUS = {
     471: "Aranabilir yerel mod seçici",
@@ -207,7 +231,17 @@ APP_STATUS = {
 def feature_status(n):
     if n in APP_FEATURES:
         return APP_STATUS.get(n, "Bağımsız uygulama özelliği henüz yapılmadı")
-    return "Davranış ilkesi" if n in POLICY else "Dil modeli çalışma modu"
+    if n in POLICY:
+        return "Davranış ilkesi"
+    if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
+        return "Dil modeli modu + yerel hesaplama/karşılaştırma aracı"
+    if n in (508, 523, 564, 590, 598, 684, 797, 903, 912, 918, 920):
+        return "Dil modeli modu + isteğe bağlı yerel stüdyo kaydı"
+    if n in (501, 505, 510, 515, 833, 840, 909, 910):
+        return "Dil modeli modu; gerçek hatırlatma mevcut reminder aracıyla, açık istekle"
+    if 926 <= n <= 950:
+        return "Dil modeli modu; verilen belge/görsel ve mevcut işleme aracı gerekir"
+    return "Dil modeli çalışma modu"
 
 EXTRA = {
     "kısa mod": -1, "detaylı mod": -2, "yaratıcı mod": -3,
@@ -233,6 +267,8 @@ ALIASES = {
     "proje hafızası": 87, "günlük özet": 86, "konuş": 0,
     "bana gerçekten farklı bir şey göster": 84, "fikrimi geliştir": 53,
     "mini sınav": 145, "hızlı prototip": 78,
+    "neden ışık hızı": 676, "porsiyon hesapla": 578, "istatistik hesapla": 804,
+    "zar at": 757, "tarif defteri": 590, "belge karşılaştır": 932,
 }
 _INDEX = {}
 for n, (title, _) in MODES.items():
@@ -263,7 +299,7 @@ def parse(text: str):
     return None
 
 
-def search_features(query="", first=1, last=500):
+def search_features(query="", first=1, last=MAX_FEATURE):
     q = normalize_command(query)
     if q.isdecimal():
         return [(n, title, guidance, feature_status(n)) for n,(title,guidance) in FEATURES.items()
@@ -274,7 +310,7 @@ def search_features(query="", first=1, last=500):
                 q in normalize_command(title + " " + guidance))]
 
 
-def describe_modes(first=1, last=500) -> str:
+def describe_modes(first=1, last=MAX_FEATURE) -> str:
     return "\n".join(f"{n}. {title}" for n, (title, _) in MODES.items()
                      if first <= n <= last)
 
@@ -294,7 +330,7 @@ def mode_prompt() -> str:
     with _lock:
         ids = _active
     rows = [((MODES if n > 0 else STYLE)[n]) for n in ids]
-    return "\n".join(f"{title}: {guidance_for(n) if n > 0 else guidance}"
+    return "\n".join(f"{title}: {workflow_for(n) if n > 0 else guidance}"
                      for n, (title, guidance) in zip(ids, rows))
 
 
@@ -322,6 +358,27 @@ def apply_command(text: str):
     return activate(ids) if ids is not None else None
 
 
+def workflow_for(n):
+    guidance = guidance_for(n)
+    if n <= 500:
+        return guidance
+    if 501 <= n <= 525:
+        guidance += " Genel sağlık bilgisi; teşhis, kişiye özel tedavi ve ilaç değişikliği yok. Acil tehlikede yerel acil hizmetlere yönlendir."
+    if 601 <= n <= 625:
+        guidance += " Finansal eğitim; kişiye özel yatırım talimatı veya garantili kazanç yok."
+    if 926 <= n <= 950:
+        guidance += " Yalnız gerçekten sağlanan dosyayı/görseli incele; mevcut file_processor aracını gerektiğinde kullan; dosya yoksa bunu söyle."
+    if 951 <= n <= 975:
+        guidance += " Acil tehlikede önce gerçek insan/acil hizmet desteği; olası riski küçümseme."
+    if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
+        guidance += " Hesap/karşılaştırma gerekiyorsa studio_utilities aracını kullan; veri eksikse uydurma."
+    if n in (508, 523, 564, 590, 598, 684, 797, 903, 912, 918, 920):
+        guidance += " Kayıt için kullanıcının açık tercihiyle yerel stüdyo arşivini kullan; model kendi kendine kayıt yapmaz."
+    if n in (501, 505, 510, 515, 833, 840, 909, 910):
+        guidance += " Kullanıcı gerçek bildirim isterse mevcut reminder/routines aracını uygun tarih ve saatle kullan; yalnız öneri verdiysen zamanlandı deme."
+    return guidance
+
+
 def system_block() -> str:
     # Compact policy + directory; retrieve only selected full workflow details.
     policies = "\n".join(f"{n}. {FEATURES[n][1]}" for n in sorted(POLICY))
@@ -336,5 +393,6 @@ def system_block() -> str:
             "Her mod mevcut güvenlik, onay ve araç sınırlarına tabidir.\n"
             "Mod grupları: " + "; ".join(f"{a}–{b} {g}" for a,b,g in GROUPS) +
             "\nMod adını ve numarasını bulmak için thinking_studio(search, query=…) kullan. "
-            "471–499 uygulama maddelerini gerçek durumlarını guide ile kontrol etmeden yapılmış sayma. " +
+            "471–499 uygulama maddelerini gerçek durumlarını guide ile kontrol etmeden yapılmış sayma. "
+            "501–1000 için seçili modun workflow yönergesini uygula; hesap, belge, hatırlatma ve kayıt işlerini gerçek araçlarla doğrula. " +
             "\nAktif mod: " + (mode_prompt() or "normal") + "\n")
