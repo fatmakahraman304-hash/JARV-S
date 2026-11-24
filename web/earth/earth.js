@@ -74,10 +74,19 @@
       state.images=0;
       if (layer) viewer.imageryLayers.remove(layer,true);
       const streets=next!=="natural";
+      const service="https://services.arcgisonline.com/ArcGIS/rest/services/"+(streets?"World_Street_Map":"World_Imagery")+"/MapServer";
+      // Some servers return HTTP 200 with a "Map data not yet available"
+      // picture for levels without coverage. Discard it so Cesium keeps the
+      // nearest valid ancestor image, rather than covering Earth in grey.
+      const missing=new Cesium.DiscardMissingTileImagePolicy({
+        missingImageUrl:service+"/tile/19/0/0",
+        pixelsToCheck:[new Cesium.Cartesian2(0,0),new Cesium.Cartesian2(200,20),
+          new Cesium.Cartesian2(20,200),new Cesium.Cartesian2(80,110),new Cesium.Cartesian2(160,130)]
+      });
       const provider=new Cesium.UrlTemplateImageryProvider({
         url:streets?"https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        maximumLevel:19,tilingScheme:new Cesium.WebMercatorTilingScheme(),
-        credit:new Cesium.Credit(streets?'Tiles © Esri, HERE, Garmin, Intermap, increment P, GEBCO, USGS, FAO, NPS, NRCAN, and the GIS User Community':'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',true)
+        maximumLevel:19,tileDiscardPolicy:missing,tilingScheme:new Cesium.WebMercatorTilingScheme(),
+        credit:new Cesium.Credit(streets?'Tiles © Esri, HERE, Garmin, Intermap, increment P, GEBCO, USGS, FAO, NPS, NRCAN, and the GIS User Community':'Tiles © Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',true)
       });
       const requestImage=provider.requestImage.bind(provider);
       provider.requestImage=(...args)=>{

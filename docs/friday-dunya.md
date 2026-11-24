@@ -25,7 +25,9 @@ Alt çubuktaki küre simgesine basın veya Ctrl+Shift+O kullanın.
 - Sokak haritası: Esri World Street Map yol/bina adları, yakın görünüm ve adres arama.
 - 2D / 3D: düz harita ile küre arasında geçiş. Tekerlek ve +/− yakınlaştırır;
   sürükleme gezinir. Yakın kamera mesafesi 120 metredir; daha fazla büyütme
-  kaynak görüntünün gerçek ayrıntısını artırmaz.
+  kaynak görüntünün gerçek ayrıntısını artırmaz. Servis ayrıntısız seviyede
+  “Map data not yet available” resmi döndürürse bu resim atılır; son geçerli
+  üst seviye uydu görüntüsü korunur.
 - Sokak panoraması: ekran merkezini Google Maps'in ayrı tarayıcı sayfasında
   açar. Sokak fotoğrafının bulunması bölgenin kapsamasına bağlıdır.
 - Normal harita: WebGL, indirme veya GPU sorunu varsa mevcut Qt haritasına geçer.
