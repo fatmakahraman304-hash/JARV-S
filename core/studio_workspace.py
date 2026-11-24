@@ -11,6 +11,8 @@ from pathlib import Path
 import json
 import sqlite3
 import uuid
+import os
+import tempfile
 
 KINDS = ("project", "idea", "decision", "source", "feedback", "template", "note", "task")
 PRIORITIES = ("Normal", "Yüksek", "Acil", "Düşük")
@@ -165,8 +167,14 @@ class Workspace:
                 and (not project or r["project"] == project)
                 and (not q or q in normalize_command(" ".join(r[k] for k in ("title","body","tags","project"))))]
 
-    def delete(self, record_id):
+    def delete(self, record_id, expected_updated=None):
         with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = self._get(db, record_id)
+            if row is None:
+                return False
+            if expected_updated is not None and row["updated"] != expected_updated:
+                raise ValueError("Kayıt değişti; silmeden önce yeniden açın.")
             db.execute("DELETE FROM versions WHERE record_id=?", (record_id,))
             removed = db.execute("DELETE FROM records WHERE id=?", (record_id,)).rowcount
             removed += db.execute("DELETE FROM tasks WHERE id=?", (record_id,)).rowcount
@@ -183,6 +191,23 @@ class Workspace:
         if len(rows) > 10000 or len(result.encode("utf-8")) > MAX_BACKUP:
             raise ValueError("Arşiv tek yedek sınırını aşıyor; mevcut dosya değiştirilmedi.")
         return result
+
+    def write_backup(self, path):
+        """Replace the chosen backup atomically, only after validation and write."""
+        data = self.export()
+        target = Path(path)
+        temp = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                    dir=target.parent, prefix=".friday-", suffix=".tmp", delete=False) as handle:
+                temp = Path(handle.name)
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp, target)
+        finally:
+            if temp is not None:
+                temp.unlink(missing_ok=True)
 
     def import_backup(self, text):
         if len(text.encode("utf-8")) > MAX_BACKUP:
