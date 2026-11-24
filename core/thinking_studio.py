@@ -233,7 +233,7 @@ def feature_status(n):
         return APP_STATUS.get(n, "Bağımsız uygulama özelliği henüz yapılmadı")
     if n in POLICY:
         return "Davranış ilkesi"
-    if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
+    if n in UTILITY_BINDINGS:
         return "Yerleşik konuşma yöntemi + yerel hesaplama/karşılaştırma aracı"
     if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
         return "Yerleşik konuşma yöntemi + yerel düzenlenebilir kayıt şablonu"
@@ -374,8 +374,19 @@ def apply_command(text: str):
     return activate(ids) if ids is not None else None
 
 
+# Explicit operation bindings for existing deterministic tools.
+UTILITY_BINDINGS = {
+    242:"task_schedule", 578:"portions", 601:"budget_summary", 612:"budget_summary",
+    619:"split_cost", 685:"convert", 757:"dice", 801:"data_quality",
+    804:"stats", 805:"stats", 807:"formula", 809:"data_quality", 813:"trend",
+    821:"check_total", 824:"compare", 907:"conflicts", 932:"text_diff",
+}
+
 def workflow_for(n):
     guidance = guidance_for(n)
+    if n in UTILITY_BINDINGS:
+        guidance += (" Gerekli gerçek girdiler mevcutsa ve hesaplama gerekiyorsa studio_utilities/"
+                     + UTILITY_BINDINGS[n] + " aracını kullan; eksik veri uydurma.")
     if n <= 500:
         return guidance
     if 501 <= n <= 525:
