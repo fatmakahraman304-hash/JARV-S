@@ -75,3 +75,33 @@ class ThinkingStudioTests(unittest.TestCase):
         self.assertIn("file_processor", studio.workflow_for(926))
         self.assertIn("reminder", studio.workflow_for(515))
         self.assertIn("Nihai ilke", plugin.run({"action": "guide", "number": 1000}))
+
+    def test_catalog_pagination_covers_policies_app_and_workflows(self):
+        import re
+        seen=[]
+        for first in range(1,1001,100):
+            result=plugin.run({"action":"list","first":first,"last":1000})
+            seen.extend(int(n) for n in re.findall(r"(?m)^(\d+)\. ",result))
+            if first<901:
+                self.assertIn(f"first={first+100}",result)
+        self.assertEqual(seen,list(range(1,1001)))
+        self.assertIn("Sürekli ilke",plugin.run({"action":"list","first":1,"last":1}))
+        self.assertIn("Uygulama",plugin.run({"action":"list","first":471,"last":471}))
+        self.assertIn("Sohbet yeteneği",plugin.run({"action":"list","first":145,"last":145}))
+
+    def test_catalog_validates_all_inputs(self):
+        for invalid in (True,0,1001,145.5,"9"*5000,[],{}):
+            self.assertIn("Geçersiz",plugin.run({"action":"guide","number":invalid}))
+            self.assertIn("Geçersiz",plugin.run({"action":"list","first":invalid}))
+        self.assertIn("Geçersiz",plugin.run({"action":"list","first":20,"last":10}))
+        self.assertIn("Geçersiz",plugin.run({"action":"search","query":"x"*301}))
+        self.assertIn("Geçersiz",plugin.run({"action":"resolve","query":[]}))
+        self.assertIn("Mini sınav",plugin.run({"action":"guide","number":"145"}))
+
+    def test_search_pagination_and_real_app_status(self):
+        result=plugin.run({"action":"search","query":"","first":470,"last":500})
+        self.assertIn("31 eşleşme, 20 gösteriliyor",result)
+        self.assertIn("first=490, last=500",result)
+        self.assertIn("otomatik kaynak yakalama yok",plugin.run({"action":"guide","number":481}))
+        self.assertIn("Uygulanmış olmayan işlemi yapılmış sayma",plugin.run({"action":"guide","number":481}))
+        self.assertEqual(studio.active(),())
