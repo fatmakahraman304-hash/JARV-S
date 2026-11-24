@@ -136,7 +136,7 @@ class ThinkingStudioDialog(QDialog):
     def preview_route(self):
         request, accepted = QInputDialog.getText(self, "Otomatik yönlendirme", "Örnek isteği yazın (çalıştırılmaz):")
         if accepted:
-            self.detail.setPlainText(core.turn_hint(core.route(request)) or "İstek gerekli.")
+            self.detail.setPlainText(core.explain(core.decide(request)))
 
     def toggle_theme(self):
         self._light = not self._light
