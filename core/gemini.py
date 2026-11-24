@@ -173,7 +173,7 @@ _LADDERS = {
            "gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-latest",
            "gemini-3-flash-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash"),
     SMART: (LIVE,
-            "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.6-flash",
+            "gemini-4-hydrogen", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.6-flash",
             "gemini-flash-latest", "gemini-3.7-flash",
             "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite",
             "gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
@@ -717,8 +717,19 @@ def _provider_call(model: str, contents, config, timeout_ms: int, *,
     from providers import registry
 
     pid = model[len(PROVIDER_PREFIX):]
-    cfg = get_provider_config(pid)
-    if pid == "openai_compat@aether":
+    if model.startswith("prov:free:"):
+        from core import free_models
+        role = "coding" if coding else ("fast" if tier == FAST else "smart")
+        spec = next((s for s in free_models.specs(role) if free_models.rung(s) == model), None)
+        if spec is None:
+            raise RuntimeError("404 free model not configured")
+        vendor, model_id, base, secret = spec
+        pid = "openai_compat@" + vendor
+        cfg = {"base_url": base, "api_key": secret, "model": model_id,
+               "aether_auto_models": "0", "aether_allow_paid": "0"}
+    else:
+        cfg = get_provider_config(pid)
+    if pid == "openai_compat@aether" and not model.startswith("prov:free:"):
         # The same locally stored API key is used for all workloads, without
         # duplicating any secret or overriding the user's manual model choice.
         # Each request gets its own config/instance: no shared .model mutation.
@@ -763,7 +774,17 @@ def call(contents, tier: str = FAST, config=None,
     # front of it when the user has asked for that. One config read; on an
     # install with no provider this is an empty tuple and nothing changes.
     rungs = _provider_rungs(tier)
-    if rungs:
+    # The user explicitly opts in to sharing text requests with the configured
+    # free-account providers. Grounded search and media retain their old path.
+    from core import free_models
+    automatic = not provider_only and tier in (FAST, SMART) and free_models.enabled()
+    if automatic:
+        role = "fast" if tier == FAST else "smart"
+        rungs = tuple(free_models.rung(s) for s in free_models.specs(role)
+                      if free_models.text_only(contents))
+        # Do not silently call a manually selected, possibly paid sidecar.
+        ladder = rungs + tuple(ladder)
+    elif rungs:
         ladder = (rungs + tuple(ladder)) if _provider_first() \
             else (tuple(ladder) + rungs)
 
@@ -771,7 +792,7 @@ def call(contents, tier: str = FAST, config=None,
     # in front of everything, because somebody picked it on purpose. The rest
     # of the ladder stays behind it, so a service that is down still ends in an
     # answer rather than in nothing.
-    if provider:
+    if provider and not automatic:
         chosen = PROVIDER_PREFIX + provider
         rungs = (chosen,) + tuple(r for r in rungs if r != chosen)
         ladder = (chosen,) if provider_only else (chosen,) + tuple(m for m in ladder if m != chosen)
@@ -802,6 +823,8 @@ def call(contents, tier: str = FAST, config=None,
 
     cl = None
     tried = usable_rungs(ladder)
+    # Unlike the legacy last-resort ladder, never hammer a resting pool model.
+    tried = [m for m in tried if not m.startswith("prov:free:") or not _cooling(m)]
     key_refused = False
     for model in tried:
         if key_refused and not model.startswith(PROVIDER_PREFIX):
@@ -829,7 +852,9 @@ def call(contents, tier: str = FAST, config=None,
             msg = str(e)
             if is_key_error(msg):
                 reason = "auth"
-                if not model.startswith(PROVIDER_PREFIX):
+                if model.startswith("prov:free:"):
+                    _cool(model, _UNAVAILABLE_SECONDS)
+                elif not model.startswith(PROVIDER_PREFIX):
                     key_refused = True
                 print(f"[Gemini] {model}: authentication failed")
             elif is_quota_error(msg):

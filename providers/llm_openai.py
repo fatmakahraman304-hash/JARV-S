@@ -177,7 +177,7 @@ CATALOG = (
                 "model": "MiniMax-M3.1-Flash"}},
     {"id": "groq",       "label": "Groq",
      "note": "bulut · çok hızlı · ücretsiz kullanım hakkı", "local": False,
-     "values": {"base_url": PRESETS["Groq"], **_CLOUD}},
+     "values": {"base_url": PRESETS["Groq"], **_CLOUD, "model": "openai/gpt-oss-120b"}},
     {"id": "openai",     "label": "OpenAI",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["OpenAI"], **_CLOUD}},
@@ -202,13 +202,16 @@ CATALOG = (
      "values": {"base_url": PRESETS["xAI"], **_CLOUD}},
     {"id": "openrouter", "label": "OpenRouter",
      "note": "bulut · tek anahtarla birçok model", "local": False,
-     "values": {"base_url": PRESETS["OpenRouter"], **_CLOUD}},
+     "values": {"base_url": PRESETS["OpenRouter"], **_CLOUD, "model": "openrouter/free"}},
     {"id": "together",   "label": "Together",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Together"], **_CLOUD}},
+    {"id": "cloudflare", "label": "Cloudflare Workers AI",
+     "note": "bulut · Workers Free planı ve hesap kimliği gerekir", "local": False,
+     "values": {**_CLOUD, "model": "@cf/openai/gpt-oss-20b"}},
     {"id": "cerebras",   "label": "Cerebras",
      "note": "bulut · API anahtarı gerekir", "local": False,
-     "values": {"base_url": PRESETS["Cerebras"], **_CLOUD}},
+     "values": {"base_url": PRESETS["Cerebras"], **_CLOUD, "model": "gpt-oss-120b"}},
     {"id": "custom",     "label": "Diğer sağlayıcı",
      "note": "API adresini kendiniz girin", "local": None,
      "values": {}},
@@ -413,7 +416,13 @@ class OpenAICompatLLM:
         import httpx  # inside the factory path — never at module scope
 
         self._httpx = httpx
-        self.base = _normalise(cfg.get("base_url") or "")
+        if cfg.get("catalog") == "cloudflare":
+            from core.free_models import cloudflare_base
+            self.base = cloudflare_base(cfg.get("base_url"))
+            if not self.base:
+                raise ValueError("Cloudflare: geçerli hesap kimliği veya resmi API adresi gerekli.")
+        else:
+            self.base = _normalise(cfg.get("base_url") or "")
         self.model = aether_role_model(cfg, str(cfg.get("aether_role") or "conversation"))
         self.key = (cfg.get("api_key") or "").strip()
         self._aether = self.base.rstrip("/") == PRESETS["Aether API"]
@@ -530,6 +539,8 @@ class OpenAICompatLLM:
         except Exception as e:
             raise _with_address(e, self.base) from None
 
+        from core.free_models import record_usage
+        record_usage(self.base, self.model, data.get("usage"))
         choice = (data.get("choices") or [{}])[0]
         msg = choice.get("message") or {}
         text = msg.get("content") or ""

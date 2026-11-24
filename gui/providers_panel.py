@@ -231,6 +231,8 @@ class ProvidersOverlay(_HudOverlay):
         coding = get_coding_provider()
         self._coding = "" if coding in {"claude_code", "codex_cli", "openai_compat@deepseek"} else self._normalise(coding, "llm")
         self._sidecar_first = get_sidecar_first()
+        from core.free_models import enabled
+        self._free_multi = enabled()
         self._rebuild_body()
 
         outer.addWidget(self._footer)
@@ -729,6 +731,8 @@ class ProvidersOverlay(_HudOverlay):
             # none — and that one declaration was printing "(optional)" and
             # "Local servers usually need none" under MiniMax and OpenAI, which
             # refuse every request without one.
+            if f.key == "base_url" and eid == "cloudflare":
+                f = replace(f, hint="Cloudflare 32 karakterli hesap kimliği veya resmi API adresi")
             if f.key == "api_key" and entry.get("local") is False:
                 f = replace(f, required=True,
                             hint=f"{entry['label']} API anahtarınızı buraya yapıştırın")
@@ -737,7 +741,8 @@ class ProvidersOverlay(_HudOverlay):
                     str(entry.get("values", {}).get("backend")
                         or stored.get(f.key, f.default) or "")), f)
                 continue
-            w = self._make_widget(pid, f, stored.get(f.key, f.default))
+            initial = stored.get(f.key, "" if eid == "cloudflare" and f.key == "base_url" else f.default)
+            w = self._make_widget(pid, f, initial)
             if f.key == "aether_allow_paid":
                 # Refresh model choices when the user explicitly opts into or
                 # out of paid models. Do not do network I/O on the Qt thread.
@@ -749,6 +754,11 @@ class ProvidersOverlay(_HudOverlay):
             else:
                 shown[f.key] = (w, f)
 
+        if eid == "cloudflare":
+            lay.addWidget(self._label(
+                "API adresi alanına Cloudflare hesap kimliğinizi (Account ID) girin. "
+                "Workers Free planında kalın; ücretli planı etkinleştirmeyin.",
+                7, C.TEXT_DIM))
         if pid == "openai_compat@aether":
             lay.addWidget(self._label(
                 "Aether API akıllı ücretsiz model seçimi: Sohbet GPT OSS 120B, "
@@ -881,8 +891,15 @@ class ProvidersOverlay(_HudOverlay):
         self._first_combo.addItem("Önce Gemini — seçilen model yedek", "after")
         self._first_combo.addItem(
             "Önce seçilen model — Gemini yedek", "before")
-        self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
+        self._first_combo.addItem("Ücretsiz çoklu beyin (Groq / Cloudflare / OpenRouter)", "free")
+        self._first_combo.setCurrentIndex(2 if self._free_multi else (1 if self._sidecar_first else 0))
+        self._first_combo.currentIndexChanged.connect(self._free_mode_changed)
         lay.addWidget(self._first_combo)
+        lay.addWidget(self._label(
+            "Çoklu beyin: sağlayıcıları sırayla seçip anahtarlarını girin, ardından "
+            "bu modu seçip uygulayın. Ücretsiz hesap kullanın; ücretli planlar "
+            "sağlayıcı tarafından faturalandırılabilir. Ses motoru değişmez.",
+            7, C.TEXT_DIM))
 
         # In pipeline mode the model chosen for ② THINKING may answer these too,
         # and then there is nothing more to fill in. In Gemini mode there IS no
@@ -896,7 +913,7 @@ class ProvidersOverlay(_HudOverlay):
         else:
             lay.addWidget(self._label(
                 "Böyle bırakılırsa istekler Gemini’yi kullanmaya devam eder ve "
-                "metin kotası bitince durur.", 7, C.TEXT_DIM))
+                "metin kotası bitince durur (çoklu beyin modu açık değilse).", 7, C.TEXT_DIM))
         return w
 
     def _coding_box_widget(self) -> QWidget:
@@ -952,6 +969,10 @@ class ProvidersOverlay(_HudOverlay):
         else:
             self._fields_into(lay, "llm", sid)
         return w
+
+    def _free_mode_changed(self, _ix) -> None:
+        self._free_multi = self._first_combo.currentData() == "free"
+        self._sidecar_first = self._first_combo.currentData() == "before"
 
     def _sidecar_changed(self, _ix) -> None:
         sid = self._sidecar_combo.currentData() or ""
@@ -1213,6 +1234,7 @@ class ProvidersOverlay(_HudOverlay):
             sidecar=self._sidecar,
             sidecar_first=self._first_combo.currentData() == "before",
             coding=self._coding,
+            free_multi=self._free_multi,
         )
 
         # Providers are cached by configuration; a changed setting must not go
