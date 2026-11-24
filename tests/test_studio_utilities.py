@@ -43,3 +43,12 @@ class UtilityTests(unittest.TestCase):
         self.assertEqual(u.formula("SUM","a",1,10),"=SUM(A1:A10)")
         self.assertIn("status=failed",plugin.run({"operation":"unknown","arguments":"{}"}))
         self.assertIn("status=done",plugin.run({"operation":"convert","arguments":'{"value":2,"source":"m","target":"cm"}'}))
+
+    def test_templates_are_explicit_drafts(self):
+        from core.studio_templates import FIELDS, draft
+        self.assertEqual(len(FIELDS),16)
+        for n in FIELDS:
+            item = draft(n)
+            self.assertEqual(item["tags"], f"mod-{n}")
+            self.assertTrue(item["body"])
+        self.assertIn("Malzemeler",draft(590)["body"])
