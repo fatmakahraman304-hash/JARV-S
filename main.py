@@ -1392,6 +1392,14 @@ class AetherLive:
         if is_close_command(text):
             self.ui.close_assistant()
             return
+        from core import thinking_studio
+        mode_result = thinking_studio.apply_command(text)
+        if mode_result is not None:
+            self.ui.show_content("FRIDAY Düşünce Stüdyosu", mode_result)
+            self.ui.write_log("SYS: " + mode_result.split("\n")[0][:180])
+            if thinking_studio.parse(text) not in ((-5,), (-6,)):
+                self.request_reconnect(keep_context=True, reason="thinking studio mode")
+            return
         from plugins.github_develop import local_command_mode
 
         if is_sleep_command(text):
@@ -1704,6 +1712,8 @@ class AetherLive:
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
+        from core.thinking_studio import system_block
+        parts.append(system_block())
         # Live ses modeli konuşmayı da yorumluyor; yalnızca STT motorunu
         # ayarlamak Gemini Live oturumunu etkilemez. Bu talimat, Türkçeye
         # öncelik verirken kullanıcı açıkça dil değiştirirse onu da korur.
@@ -1928,7 +1938,8 @@ class AetherLive:
         """Quiet mode (core/quiet.py): the user asked FRIDAY to volunteer nothing for now."""
         try:
             from core import quiet
-            return quiet.is_on()
+            from core.thinking_studio import active
+            return quiet.is_on() or 27 in active()
         except Exception:
             return False
 
@@ -1942,7 +1953,8 @@ class AetherLive:
                 break
         try:
             from core import quiet
-            hushed = quiet.holds(kind)
+            from core.thinking_studio import active
+            hushed = quiet.holds(kind) or (27 in active() and kind not in ("reminder", "heads_up"))
         except Exception:
             hushed = False
         if not hushed and not self._user_away():
@@ -2381,6 +2393,15 @@ class AetherLive:
                 self.ui.set_state("LISTENING")
             return types.FunctionResponse(id=fc.id, name=name, response={"result": blocked})
 
+
+        if name == "thinking_studio" and args.get("action") == "select":
+            from core import thinking_studio as studio
+            actual = studio.parse(self._last_user_text) if time.monotonic() - self._last_user_at <= 90 else None
+            requested = studio.parse(str(args.get("command") or ""))
+            result = (studio.activate(actual) if actual is not None and actual == requested
+                      else "Mod değiştirilmedi: açık kullanıcı komutu doğrulanamadı.")
+            self.ui.show_content("FRIDAY Düşünce Stüdyosu", result)
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         if name == "save_memory":
             category = args.get("category", "notes")
