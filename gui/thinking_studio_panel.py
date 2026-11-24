@@ -12,6 +12,7 @@ class ThinkingStudioDialog(QDialog):
     def __init__(self, parent, send_command):
         super().__init__(parent)
         self.send_command = send_command
+        self._light = False
         self.setWindowTitle("FRIDAY · Düşünce Stüdyosu")
         self.resize(850, 660)
         root = QVBoxLayout(self)
@@ -43,6 +44,7 @@ class ThinkingStudioDialog(QDialog):
         for label, callback in (
             ("Uygula", self.apply_selected), ("Normal mod", lambda: self._send("normal moda dön")),
             ("Sessiz eşlik", lambda: self._send("sessiz eşlik")), ("Kullanım", self.show_usage),
+            ("Açık/koyu tema", self.toggle_theme),
         ):
             button = QPushButton(label)
             button.clicked.connect(callback)
@@ -86,14 +88,42 @@ class ThinkingStudioDialog(QDialog):
 
     def apply_selected(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
+        if len(ids) == 1 and ids[0] in (472, 473, 480, 481, 482, 483, 484, 489, 491, 492, 493, 496, 498):
+            self.open_workspace({472:"project",473:"idea",481:"source",483:"decision",489:"template",493:"feedback"}.get(ids[0], ""))
+            return
+        if ids == [475]:
+            self.export_history()
+            return
+        if ids == [476]:
+            self.show_today()
+            return
+        if ids == [477]:
+            self.toggle_theme()
+            return
+        if ids == [479]:
+            self._send("sessiz eşlik")
+            return
+        if ids == [495]:
+            self.show_usage()
+            return
         if not ids or len(ids) > 4 or any(n not in studio.MODES for n in ids):
             self.status.setText("Uygulamak için 1–4 çalışma modu seçin. İlkeler ve uygulama maddeleri bilgi amaçlıdır.")
             return
         self._send("mod " + " ve ".join(map(str, ids)))
 
-    def open_workspace(self):
+    def toggle_theme(self):
+        self._light = not self._light
+        bg, fg, field, border = ("#f2f5f8", "#182533", "#ffffff", "#8b9bab") if self._light else (
+            "#17212b", "#edf5fa", "#202e3a", "#58758a")
+        self.setStyleSheet(f"QDialog {{background:{bg};color:{fg};}} QLabel {{color:{fg};}} "
+                           f"QLineEdit,QPlainTextEdit,QListWidget,QComboBox,QPushButton "
+                           f"{{background:{field};color:{fg};border:1px solid {border};padding:5px;}} "
+                           "QListWidget::item:selected {background:#14789b;color:white;}")
+
+    def open_workspace(self, kind=""):
         from gui.studio_workspace import WorkspaceDialog
-        WorkspaceDialog(self).exec()
+        WorkspaceDialog(self, kind if isinstance(kind, str) else "", self.send_command).exec()
+
 
     def show_usage(self):
         counts = studio.usage()
