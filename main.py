@@ -1393,7 +1393,7 @@ class AetherLive:
             self.ui.close_assistant()
             return
         from core import thinking_studio
-        selected = thinking_studio.parse(text)
+        selected = thinking_studio.control_command(text)
         if selected is not None:
             before = thinking_studio.active()
             mode_result = thinking_studio.activate(selected)
@@ -2400,8 +2400,8 @@ class AetherLive:
 
         if name == "thinking_studio" and args.get("action") == "select":
             from core import thinking_studio as studio
-            actual = studio.parse(self._last_user_text) if time.monotonic() - self._last_user_at <= 90 else None
-            requested = studio.parse(str(args.get("command") or ""))
+            actual = studio.control_command(self._last_user_text) if time.monotonic() - self._last_user_at <= 90 else None
+            requested = studio.control_command(str(args.get("command") or ""))
             result = (studio.activate(actual) if actual is not None and actual == requested
                       else "Mod değiştirilmedi: açık kullanıcı komutu doğrulanamadı.")
             if actual is not None and actual == requested:
@@ -2930,7 +2930,7 @@ class AetherLive:
                             full_in = " ".join(in_buf).strip()
                             if full_in:
                                 from core import thinking_studio as studio
-                                explicit_mode = studio.parse(full_in)
+                                explicit_mode = studio.control_command(full_in)
                                 if explicit_mode is not None and self._awake:
                                     wanted = () if explicit_mode == (0,) else explicit_mode
                                     if explicit_mode not in ((-5,), (-6,)) and wanted != studio.active():
