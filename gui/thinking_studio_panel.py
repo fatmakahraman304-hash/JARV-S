@@ -25,7 +25,7 @@ class ThinkingStudioDialog(QDialog):
         root.addWidget(self.query)
         self.group = QComboBox()
         self.group.setAccessibleName("Özellik kategorisi")
-        self.group.addItem("Tümü", (1, 500))
+        self.group.addItem("Tümü", (1, studio.MAX_FEATURE))
         for a, b, label in studio.GROUPS:
             self.group.addItem(f"{a}–{b} · {label}", (a, b))
         root.addWidget(self.group)
@@ -79,7 +79,7 @@ class ThinkingStudioDialog(QDialog):
     def show_detail(self):
         ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
         self.detail.setPlainText("\n\n".join(
-            f"{n}. {studio.FEATURES[n][0]}\n{studio.guidance_for(n)}\nDurum: {studio.feature_status(n)}"
+            f"{n}. {studio.FEATURES[n][0]}\n{studio.workflow_for(n)}\nDurum: {studio.feature_status(n)}"
             for n in ids[:4]))
 
     def _send(self, command):
