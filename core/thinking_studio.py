@@ -299,6 +299,20 @@ def parse(text: str):
     return None
 
 
+def control_command(text):
+    """Only actual UI/interaction controls may intercept a user turn.
+    Positive feature IDs are now ordinary one-turn capabilities.
+    Quiet companionship is an explicit user control, not an automatic workflow.
+    """
+    ids = parse(text)
+    if ids and all(n <= 0 for n in ids):
+        return ids
+    if ids == (27,) and normalize_command(text) in (
+            "sessiz eslik", "friday sessiz eslik", "jarvis sessiz eslik", "aether sessiz eslik"):
+        return ids
+    return None
+
+
 def search_features(query="", first=1, last=MAX_FEATURE):
     q = normalize_command(query)
     if q.isdecimal():
