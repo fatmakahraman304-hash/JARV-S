@@ -57,6 +57,7 @@ class ThinkingStudioDialog(QDialog):
         history = QHBoxLayout()
         for label, callback in (
             ("Projeler ve arşiv", self.open_workspace),
+            ("Görevler", lambda: self.open_workspace("task")),
             ("Kayıt şablonu", self.open_template),
             ("Bugünkü kayıtlar", self.show_today),
             ("Son 100 kaydı dışa aktar", self.export_history),
