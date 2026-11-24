@@ -1,21 +1,20 @@
 """Language-model workflows; no external actions or new hardware capabilities."""
 from core import thinking_studio as studio
+from core import integrated_capabilities as integrated
+from core.core_modes import route
 
 PLUGIN = {
     "name": "thinking_studio",
     "description": (
-        "FRIDAY düşünce stüdyosu. list: numaralı modları aralıkla göster; search: ad veya numaradan özellik bul; status: aktif modu oku; "
-        "select: kullanıcının TAM mod komutunu command alanına yaz. "
-        "Örnek: 'FRIDAY karşı ben', 'mod 11 ve 16', 'normal moda dön'. "
-        "guide: belirli bir modun talimatlarını numarasıyla oku. "
-        "Modlar düşünme yaklaşımıdır, gerçek cihaz veya kalıcı kayıt oluşturmaz."
+        "FRIDAY'in yerleşik 1000 yeteneği. resolve: kullanıcının doğal isteğinden ilgili tam iş akışlarını getir; "
+        "mod seçilmesi gerekmez. guide: numarayla ayrıntılı yöntem ve gerçek durum. "
+        "search/list/status: salt okunur katalog. İzin, yeni donanım veya işlem garantisi vermez."
     ),
     "tier": "core",
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "list | search | status | select | guide"},
-        "command": {"type": "STRING", "description": "select: kullanıcının tam komutu"},
+        "action": {"type": "STRING", "description": "resolve | list | search | status | guide"},
         "number": {"type": "INTEGER", "description": "guide: 1–1000"},
-        "query": {"type": "STRING", "description": "search: Turkish feature name or number"},
+        "query": {"type": "STRING", "description": "resolve: natural user request; search: feature name or number"},
         "first": {"type": "INTEGER", "description": "list: first feature number"},
         "last": {"type": "INTEGER", "description": "list: last feature number"},
     }, "required": ["action"]},
@@ -23,6 +22,9 @@ PLUGIN = {
 
 def run(parameters, player=None, session_memory=None):
     action = parameters.get("action")
+    if action == "resolve":
+        query = parameters.get("query", "")
+        return integrated.guidance(integrated.resolve(query, route(query))) or "Belirgin ek yöntem bulunamadı; normal sohbeti sürdür."
     if action == "list":
         return studio.describe_modes(parameters.get("first") or 1, parameters.get("last") or min((parameters.get("first") or 1) + 139, studio.MAX_FEATURE))
     if action == "search":
