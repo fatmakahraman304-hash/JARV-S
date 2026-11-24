@@ -104,12 +104,14 @@ class Workspace:
                 :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated)""", row)
 
     def save(self, *, kind, title, body="", tags="", project="", stage="Taslak",
-             confidence="Belirtilmedi", record_id=None, due=None, priority=None):
+             confidence="Belirtilmedi", record_id=None, due=None, priority=None, expected_updated=None):
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             old = self._get(db, record_id)
             if record_id and old is None:
                 raise ValueError("Düzenlenecek kayıt bulunamadı.")
+            if old and expected_updated is not None and old["updated"] != expected_updated:
+                raise ValueError("Kayıt başka bir pencerede değişti; yeniden açın.")
             if old and (old["kind"] == "task") != (kind == "task"):
                 raise ValueError("Görev türü diğer kayıt türlerine dönüştürülemez; yeni kayıt oluşturun.")
             if kind != "task" and (due or priority not in (None, "Normal")):
@@ -126,6 +128,31 @@ class Workspace:
                            (record_id, stamp, json.dumps(dict(old), ensure_ascii=False)))
             self._write(db, row)
             return row["id"]
+
+    def get(self, record_id):
+        with self.db() as db:
+            return self._get(db, record_id)
+
+    def restore_version(self, record_id, seq, expected_updated):
+        """Restore a single historical snapshot, retaining the current revision."""
+        with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = self._get(db, record_id)
+            if current is None or current["updated"] != expected_updated:
+                raise ValueError("Kayıt değişti veya silindi; yeniden açın.")
+            version = db.execute("SELECT data FROM versions WHERE seq=? AND record_id=?",
+                                 (seq, record_id)).fetchone()
+            if version is None:
+                raise ValueError("Sürüm bulunamadı.")
+            old = self.validate(json.loads(version["data"]))
+            if old["id"] != record_id or (old["kind"] == "task") != (current["kind"] == "task"):
+                raise ValueError("Sürüm bu kayda ait değil.")
+            stamp = now()
+            old["created"], old["updated"] = current["created"], stamp
+            db.execute("INSERT INTO versions(record_id,time,data) VALUES(?,?,?)",
+                       (record_id, stamp, json.dumps(current, ensure_ascii=False)))
+            self._write(db, old)
+            return old
 
     def list(self, query="", kind="", project=""):
         with self.db() as db:
@@ -147,12 +174,15 @@ class Workspace:
 
     def versions(self, record_id):
         with self.db() as db:
-            return [dict(json.loads(r["data"]), saved_at=r["time"]) for r in db.execute(
-                "SELECT time,data FROM versions WHERE record_id=? ORDER BY seq DESC", (record_id,))]
+            return [dict(json.loads(r["data"]), saved_at=r["time"], version_seq=r["seq"]) for r in db.execute(
+                "SELECT seq,time,data FROM versions WHERE record_id=? ORDER BY seq DESC", (record_id,))]
 
     def export(self):
-        return json.dumps({"format": "friday-studio-1", "records": self.list()},
-                          ensure_ascii=False, indent=2)
+        rows = self.list()
+        result = json.dumps({"format": "friday-studio-1", "records": rows}, ensure_ascii=False, indent=2)
+        if len(rows) > 10000 or len(result.encode("utf-8")) > MAX_BACKUP:
+            raise ValueError("Arşiv tek yedek sınırını aşıyor; mevcut dosya değiştirilmedi.")
+        return result
 
     def import_backup(self, text):
         if len(text.encode("utf-8")) > MAX_BACKUP:
@@ -198,15 +228,18 @@ class Workspace:
                                 r["due"] or "9999-12-31", r["title"].casefold()))
         return counts, rows
 
-    def relationships(self, project=""):
+    def relationships(self, project="", limit=200):
         """Edges reflect explicitly entered project names and shared tags."""
-        rows = self.list(project=project)
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("Bağlantı görünümü 1–200 kayıtla sınırlıdır.")
+        rows = self.list(project=project)[:limit]
         nodes = [{"id": r["id"], "title": r["title"], "kind": r["kind"]} for r in rows]
         edges = []
+        tag_sets = {r["id"]: {x.strip().casefold() for x in r["tags"].split(",") if x.strip()} for r in rows}
         for i, a in enumerate(rows):
-            tags = {x.strip().casefold() for x in a["tags"].split(",") if x.strip()}
+            tags = tag_sets[a["id"]]
             for b in rows[i+1:]:
-                shared = tags & {x.strip().casefold() for x in b["tags"].split(",") if x.strip()}
+                shared = tags & tag_sets[b["id"]]
                 if a["project"] and a["project"] == b["project"]:
                     shared.add("ortak proje")
                 if shared:
