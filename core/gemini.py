@@ -678,6 +678,25 @@ def _provider_first() -> bool:
     return _provider_settings()[1]
 
 
+def _abacus_rung(tier: str, contents) -> tuple[str, ...]:
+    """A configured Abacus conversation/sidecar has text priority."""
+    if tier not in (FAST, SMART):
+        return ()
+    from core import free_models
+    if not free_models.text_only(contents):
+        return ()
+    from memory.config_manager import (
+        get_pipeline, get_provider_mode, get_provider_config, get_sidecar_provider,
+    )
+    pid = "openai_compat@abacus"
+    selected = ((get_provider_mode() == "pipeline" and
+                 get_pipeline().get("llm") == pid) or
+                get_sidecar_provider() == pid)
+    if selected and str(get_provider_config(pid).get("api_key") or "").strip():
+        return (PROVIDER_PREFIX + pid,)
+    return ()
+
+
 def _to_openai_messages(contents, config) -> tuple[list[dict], Optional[float]]:
     """REST `contents` -> OpenAI `messages`, with the system instruction split
     out of the config where one was given.
@@ -788,6 +807,14 @@ def call(contents, tier: str = FAST, config=None,
         ladder = (rungs + tuple(ladder)) if _provider_first() \
             else (tuple(ladder) + rungs)
 
+    # Abacus is the primary general-purpose text model when selected.
+    # Keep explicit job-specific and provider-only overrides intact.
+    if not provider_only:
+        primary = _abacus_rung(tier, contents)
+        if primary:
+            ladder = primary + tuple(m for m in ladder if m not in primary)
+            rungs = primary + tuple(m for m in rungs if m not in primary)
+
     # A service the caller chose for THIS job — dev_agent's coding model — goes
     # in front of everything, because somebody picked it on purpose. The rest
     # of the ladder stays behind it, so a service that is down still ends in an
@@ -824,7 +851,8 @@ def call(contents, tier: str = FAST, config=None,
     cl = None
     tried = usable_rungs(ladder)
     # Unlike the legacy last-resort ladder, never hammer a resting pool model.
-    tried = [m for m in tried if not m.startswith("prov:free:") or not _cooling(m)]
+    tried = [m for m in tried if not (m.startswith("prov:free:") or
+             m == PROVIDER_PREFIX + "openai_compat@abacus") or not _cooling(m)]
     key_refused = False
     for model in tried:
         if key_refused and not model.startswith(PROVIDER_PREFIX):
@@ -850,7 +878,12 @@ def call(contents, tier: str = FAST, config=None,
             return cl.models.generate_content(**kwargs)
         except Exception as e:
             msg = str(e)
-            if is_key_error(msg):
+            if model == PROVIDER_PREFIX + "openai_compat@abacus":
+                from providers.llm_openai import _abacus_rest_seconds
+                _cool(model, _abacus_rest_seconds(e))
+                reason = "abacus_fallback"
+                print("[FRIDAY] Abacus AI unavailable; trying next model")
+            elif is_key_error(msg):
                 reason = "auth"
                 if model.startswith("prov:free:"):
                     _cool(model, _UNAVAILABLE_SECONDS)

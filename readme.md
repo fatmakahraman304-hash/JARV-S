@@ -34,6 +34,27 @@ routines use only what the app already had.
 
 ## 📦 Configurable engines
 
+### Abacus AI / RouteLLM (FRIDAY)
+
+1. Abacus AI RouteLLM hesabınızdan API anahtarı alın:
+   https://abacus.ai/help/developer-platform/route-llm
+2. Ayarlar → ENGINE & PROVIDERS → kendi kurulumunuz (pipeline) → DÜŞÜNME:
+   **Abacus AI (RouteLLM)** seçin. Varsayılan API adresi
+   `https://routellm.abacus.ai/v1`, model `route-llm`.
+3. API anahtarını yalnızca yerel ayara girin. Sesli kullanım için mevcut
+   dinleme ve konuşma sağlayıcılarınızı seçin. Kaydet ve uygula.
+4. Yedek olarak arka plan sağlayıcısı, etkinleştirilmiş ücretsiz model havuzu
+   ve/veya kayıtlı Gemini anahtarını kullanın. Abacus ilk denenir; kota/kredi
+   hatasında 15 dakika, geçici hatada 30 saniye beklemeye alınır. Bir yanıtın
+   bir kısmı iletildiyse aynı tur yeniden çalıştırılmaz.
+5. Abacus ana konuşma modeli seçildiğinde genel metin arka plan isteklerinde
+   de önceliklidir. Kaynaklı arama, kayıtlı ses ve özel iş sağlayıcısı
+   seçimleri mevcut yollarını korur.
+
+RouteLLM API kredileri Abacus hesabınızın koşullarına bağlıdır; abonelik
+tek başına sınırsız API erişimi anlamına gelmez.
+
+
 Until now this was a Gemini assistant, and only that. If you had no quota left, no
 connection, or a rule that says your microphone does not leave the building, you
 had no assistant. The configurable engine adds a second way to hold the conversation — speech
