@@ -32,6 +32,31 @@ routines use only what the app already had.
 
 ---
 
+## FRIDAY 30 çekirdek mod — otomatik yönlendirme
+
+Mevcut 1.000 özel özellik korunur. Çekirdek mod numarası özel özellik
+numarasıyla aynı şey değildir: `mod 0` özel modları kapatır, otomatik
+çekirdek yönlendirme çalışmaya devam eder. Yeni mod kataloğu
+`core/core_modes.py` dosyasındadır; her modun amaç, girdi, çıktı,
+sınır, Türkçe/İngilizce ipucu ve örneği vardır.
+
+Pipeline (Abacus dahil) son isteğe bir ana ve en fazla iki yardımcı mod
+önerir. Kısa devam komutları önceki rotayı kullanabilir. Bu yerel anahtar
+kelime tabanlı öneri ek bir API isteği yapmaz, yanlış sınıflandırma mümkün;
+model gerçek bağlama göre düzeltebilir. Native Gemini Live, ortak 30 mod
+talimatından kendi seçimini yapar. Her iki yolda da mod seçimi araç yetkisi,
+yeni donanım, otomatik kayıt veya gerçekleştirilmiş işlem anlamına gelmez.
+
+Düşünce Stüdyosu önce 30 çekirdek modu gösterir. Açılır kategoriden 1.000
+özel özelliğe ulaşılır. Yönlendirme önizle, örnek istek üzerinde ana/yardımcı
+modları gösterir; isteği yürütmez. `core_modes` eklentisi mod rehberi ve
+ad, amaç, girdi, kısıt, çıktı, kabul ölçütü içeren yeniden kullanılabilir
+alt görev taslağı üretir. Taslak açıkça kaydedilmedikçe kalıcı değildir.
+
+Regresyon testleri 30 modun olumlu örneğini, sınır yönergesini, boş ve
+sistem iletilerini, devam komutunu, güvenli taslağı ve pipeline mesaj
+bütünlüğünü kapsar; canlı model yanıtlarının tamamını doğrulamaz.
+
 ## FRIDAY Düşünce Stüdyosu (1–1000 ve normal mod 0)
 
 1000 numaralı özellik: 895 seçilebilir dil-modeli çalışma modu, 76 sürekli
