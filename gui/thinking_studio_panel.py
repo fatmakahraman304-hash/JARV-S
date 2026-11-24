@@ -53,6 +53,7 @@ class ThinkingStudioDialog(QDialog):
         history = QHBoxLayout()
         for label, callback in (
             ("Projeler ve arşiv", self.open_workspace),
+            ("Kayıt şablonu", self.open_template),
             ("Bugünkü kayıtlar", self.show_today),
             ("Son 100 kaydı dışa aktar", self.export_history),
             ("Kapat", self.close),
@@ -124,6 +125,15 @@ class ThinkingStudioDialog(QDialog):
         from gui.studio_workspace import WorkspaceDialog
         WorkspaceDialog(self, kind if isinstance(kind, str) else "", self.send_command).exec()
 
+
+    def open_template(self):
+        from core.studio_templates import FIELDS, draft
+        from gui.studio_workspace import WorkspaceDialog
+        ids = [item.data(Qt.ItemDataRole.UserRole) for item in self.rows.selectedItems()]
+        if len(ids) != 1 or ids[0] not in FIELDS:
+            self.status.setText("Şablon için desteklenen bir günlük, tarif, fatura veya kayıt modu seçin.")
+            return
+        WorkspaceDialog(self, "note", self.send_command, template=draft(ids[0])).exec()
 
     def show_usage(self):
         counts = studio.usage()
