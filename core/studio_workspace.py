@@ -40,16 +40,15 @@ class Workspace:
                     id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
                     body TEXT NOT NULL, tags TEXT NOT NULL, project TEXT NOT NULL,
                     stage TEXT NOT NULL, confidence TEXT NOT NULL, created TEXT NOT NULL,
+                    updated TEXT NOT NULL)""")
+                # Separate table: rolling back to the older application leaves
+                # its original records schema and record types usable.
+                db.execute("""CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
+                    body TEXT NOT NULL, tags TEXT NOT NULL, project TEXT NOT NULL,
+                    stage TEXT NOT NULL, confidence TEXT NOT NULL, created TEXT NOT NULL,
                     updated TEXT NOT NULL, due TEXT NOT NULL DEFAULT '',
                     priority TEXT NOT NULL DEFAULT 'Normal')""")
-                columns = {r["name"] for r in db.execute("PRAGMA table_info(records)")}
-                if not {"due", "priority"} <= columns:
-                    db.execute("BEGIN IMMEDIATE")
-                    columns = {r["name"] for r in db.execute("PRAGMA table_info(records)")}
-                    if "due" not in columns:
-                        db.execute("ALTER TABLE records ADD COLUMN due TEXT NOT NULL DEFAULT ''")
-                    if "priority" not in columns:
-                        db.execute("ALTER TABLE records ADD COLUMN priority TEXT NOT NULL DEFAULT 'Normal'")
                 db.execute("""CREATE TABLE IF NOT EXISTS versions (
                     seq INTEGER PRIMARY KEY, record_id TEXT NOT NULL, time TEXT NOT NULL,
                     data TEXT NOT NULL)""")
@@ -79,16 +78,42 @@ class Workspace:
             raise ValueError("Geçersiz tarih veya öncelik.")
         if due and date.fromisoformat(due).isoformat() != due:
             raise ValueError("Tarih YYYY-AA-GG biçiminde olmalı.")
+        if out["kind"] != "task" and (due or priority != "Normal"):
+            raise ValueError("Son tarih ve öncelik yalnız görevlerde kullanılabilir.")
         out["due"] = due
         out["priority"] = priority
         return out
 
+    @staticmethod
+    def _get(db, record_id):
+        if not record_id:
+            return None
+        row = db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone()
+        if row is not None:
+            return dict(row, due="", priority="Normal")
+        row = db.execute("SELECT * FROM tasks WHERE id=?", (record_id,)).fetchone()
+        return dict(row) if row is not None else None
+
+    @staticmethod
+    def _write(db, row):
+        if row["kind"] == "task":
+            db.execute("""INSERT OR REPLACE INTO tasks VALUES(
+                :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated,:due,:priority)""", row)
+        else:
+            db.execute("""INSERT OR REPLACE INTO records VALUES(
+                :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated)""", row)
+
     def save(self, *, kind, title, body="", tags="", project="", stage="Taslak",
              confidence="Belirtilmedi", record_id=None, due=None, priority=None):
         with self.db() as db:
-            old = db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone() if record_id else None
+            db.execute("BEGIN IMMEDIATE")
+            old = self._get(db, record_id)
             if record_id and old is None:
                 raise ValueError("Düzenlenecek kayıt bulunamadı.")
+            if old and (old["kind"] == "task") != (kind == "task"):
+                raise ValueError("Görev türü diğer kayıt türlerine dönüştürülemez; yeni kayıt oluşturun.")
+            if kind != "task" and (due or priority not in (None, "Normal")):
+                raise ValueError("Son tarih ve öncelik yalnız görev türünde kullanılabilir.")
             stamp = now()
             row = self.validate(dict(id=record_id or uuid.uuid4().hex, kind=kind, title=title.strip(),
                                      body=body, tags=tags, project=project, stage=stage,
@@ -99,13 +124,14 @@ class Workspace:
             if old:
                 db.execute("INSERT INTO versions(record_id,time,data) VALUES(?,?,?)",
                            (record_id, stamp, json.dumps(dict(old), ensure_ascii=False)))
-            db.execute("""INSERT OR REPLACE INTO records(id,kind,title,body,tags,project,stage,confidence,created,updated,due,priority) VALUES(
-                :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated,:due,:priority)""", row)
+            self._write(db, row)
             return row["id"]
 
     def list(self, query="", kind="", project=""):
         with self.db() as db:
-            rows = [dict(r) for r in db.execute("SELECT * FROM records ORDER BY updated DESC")]
+            rows = [dict(r, due="", priority="Normal") for r in db.execute("SELECT * FROM records")]
+            rows.extend(dict(r) for r in db.execute("SELECT * FROM tasks"))
+            rows.sort(key=lambda r:r["updated"], reverse=True)
         from core.voice_commands import normalize_command
         q = normalize_command(query)
         return [r for r in rows if (not kind or r["kind"] == kind)
@@ -115,7 +141,9 @@ class Workspace:
     def delete(self, record_id):
         with self.db() as db:
             db.execute("DELETE FROM versions WHERE record_id=?", (record_id,))
-            return bool(db.execute("DELETE FROM records WHERE id=?", (record_id,)).rowcount)
+            removed = db.execute("DELETE FROM records WHERE id=?", (record_id,)).rowcount
+            removed += db.execute("DELETE FROM tasks WHERE id=?", (record_id,)).rowcount
+            return bool(removed)
 
     def versions(self, record_id):
         with self.db() as db:
@@ -138,9 +166,11 @@ class Workspace:
         clean = [self.validate(row) for row in rows]
         count = 0
         with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
             for row in clean:
-                count += db.execute("""INSERT OR IGNORE INTO records(id,kind,title,body,tags,project,stage,confidence,created,updated,due,priority) VALUES(
-                    :id,:kind,:title,:body,:tags,:project,:stage,:confidence,:created,:updated,:due,:priority)""", row).rowcount
+                if self._get(db,row["id"]) is None:
+                    self._write(db,row)
+                    count += 1
         return count
 
     def task_overview(self, project="", today=None):
