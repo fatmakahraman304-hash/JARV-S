@@ -83,6 +83,8 @@ class WorkspaceDialog(QDialog):
         if initial_kind in KINDS:
             self.filter.setCurrentIndex(self.filter.findData(initial_kind))
             self.kind.setCurrentIndex(self.kind.findData(initial_kind))
+        self.kind.currentIndexChanged.connect(self.update_task_fields)
+        self.update_task_fields()
         self.refresh()
         if template is not None:
             self.kind.setCurrentIndex(self.kind.findData(template["kind"]))
@@ -90,6 +92,11 @@ class WorkspaceDialog(QDialog):
             self.tags.setText(template["tags"])
             self.body.setPlainText(template["body"])
             self.status.setText("Taslak oluşturuldu; Kaydet düğmesine basmadan hiçbir kayıt yazılmaz.")
+
+    def update_task_fields(self, *_):
+        enabled = self.kind.currentData() == "task"
+        self.due.setEnabled(enabled)
+        self.priority.setEnabled(enabled)
 
     def error(self, exc):
         self.status.setText("İşlem yapılamadı: " + str(exc)[:200])
