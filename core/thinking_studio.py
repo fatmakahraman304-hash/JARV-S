@@ -382,7 +382,8 @@ def workflow_for(n):
 def system_block() -> str:
     # Compact policy + directory; retrieve only selected full workflow details.
     policies = "\n".join(f"{n}. {FEATURES[n][1]}" for n in sorted(POLICY))
-    return ("[FRIDAY DÜŞÜNCE STÜDYOSU]\n" + policies +
+    from core.core_modes import system_block as core_block
+    return (core_block() + "\n\n[FRIDAY DÜŞÜNCE STÜDYOSU]\n" + policies +
             "\nModlar doğal Türkçe komutla veya 'mod 11 ve 16' şeklinde seçilir. "
             "Her mod dil modeliyle çalışan bir düşünme yaklaşımıdır; araç, sensör, "
             "kalıcı kayıt veya gerçek gelecek bilgisi yaratmaz. "
