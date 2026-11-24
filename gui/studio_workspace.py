@@ -11,7 +11,7 @@ LABELS = dict(zip(KINDS, ("Proje", "Fikir", "Karar", "Kaynak", "Geri bildirim", 
 
 
 class WorkspaceDialog(QDialog):
-    def __init__(self, parent=None, initial_kind="", send_command=None):
+    def __init__(self, parent=None, initial_kind="", send_command=None, template=None):
         super().__init__(parent)
         self.setWindowTitle("FRIDAY · Projeler ve Fikir Arşivi")
         self.resize(900, 720)
@@ -80,6 +80,12 @@ class WorkspaceDialog(QDialog):
             self.filter.setCurrentIndex(self.filter.findData(initial_kind))
             self.kind.setCurrentIndex(self.kind.findData(initial_kind))
         self.refresh()
+        if template is not None:
+            self.kind.setCurrentIndex(self.kind.findData(template["kind"]))
+            self.title.setText(template["title"])
+            self.tags.setText(template["tags"])
+            self.body.setPlainText(template["body"])
+            self.status.setText("Taslak oluşturuldu; Kaydet düğmesine basmadan hiçbir kayıt yazılmaz.")
 
     def error(self, exc):
         self.status.setText("İşlem yapılamadı: " + str(exc)[:200])
