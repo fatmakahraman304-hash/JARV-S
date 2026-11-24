@@ -95,6 +95,17 @@ gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
 
 ## FRIDAY 1.000 yerleşik yetenek — normal sohbet
 
+Yetenek yönlendirmesi, tüm katalogda yerel ters indeksle aday bulur; birden
+fazla bağımsız istek aynı mesajda varsa her birine öncelikli aday ayrılır
+(en fazla altı parça ve sınırlı yönerge bütçesi). Kod inceleme, bütçe, görev
+bağımlılıkları ve veri analizi için doğal komutlar genişletilmiştir. Uygun
+hesaplama iş akışlarına gerçek `studio_utilities` işlemleri bağlanır.
+`data_quality` verilen tablo satırlarında eksik ve karışık türde değerleri
+raporlar; `trend` eşit aralıklı gözlemlerin doğrusal eğimini hesaplar, geleceği
+tahmin etmez. Gider bölüşümü tam kesirlerle hesaplanır; Excel sütun sınırı
+XFD olarak doğrulanır. Bu değişiklikler yeni model veya harici erişim gerektirmez.
+
+
 1000 numaralı özellik: 895 otomatik erişilebilir dil-modeli yöntemi, 76 sürekli
 davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Pipeline her kullanıcı turunda
 `core/integrated_capabilities.py` ile ilgili tam yönergeleri getirir; bunlar
