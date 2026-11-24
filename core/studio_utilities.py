@@ -1,7 +1,7 @@
 """Pure local utilities for FRIDAY's workflows. No eval, file access or external actions."""
 from __future__ import annotations
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 from fractions import Fraction
 import difflib
 import math
@@ -170,9 +170,16 @@ def formula(kind, column, first, last):
 
 
 def task_schedule(tasks):
-    """Earliest-start schedule with dependencies and parallel capacity.
-    Durations are supplied by the user; no calendar or actual execution.
-    """
+    """Earliest-start schedule, critical path and slack from supplied durations."""
+    # Inputs are bounded to 100 characters and 200 tasks. Use a local context
+    # large enough for exact forward and backward sums, without global changes.
+    with localcontext() as ctx:
+        ctx.prec = 128
+        return _task_schedule(tasks)
+
+
+def _task_schedule(tasks):
+    """No calendar or actual execution."""
     rows = sequence(tasks, 200)
     data = {}
     for row in rows:
