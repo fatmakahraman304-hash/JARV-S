@@ -103,3 +103,28 @@ class UtilityTests(unittest.TestCase):
             u.formula("SUM","XFE",1,2)
         with self.assertRaises(ValueError):
             u.number("0"*101)
+
+    def test_critical_path_and_slack(self):
+        result=u.task_schedule([{"id":"A","minutes":4},{"id":"B","minutes":2},
+             {"id":"C","minutes":3,"depends":["A","B"]},{"id":"D","minutes":1}])
+        self.assertEqual(result["critical_path"],["A","C"])
+        self.assertEqual(result["critical_tasks"],["A","C"])
+        self.assertEqual(result["minimum_elapsed_minutes"],"7")
+        self.assertEqual({t["id"]:t["slack_minutes"] for t in result["tasks"]},
+                         {"A":"0","B":"2","C":"0","D":"6"})
+        tied=u.task_schedule([{"id":"A","minutes":2},{"id":"B","minutes":2},
+                              {"id":"C","minutes":1,"depends":["A","B"]}])
+        self.assertEqual(set(tied["critical_tasks"]),{"A","B","C"})
+        self.assertEqual(tied["critical_path"],["A","C"])
+
+    def test_priority_matrix(self):
+        result=u.priority_matrix([{"name":"A","important":True,"urgent":True},
+            {"name":"B","important":True,"urgent":False},
+            {"name":"C","important":False,"urgent":True},
+            {"name":"D","important":False,"urgent":False}])
+        self.assertEqual(result["groups"],{"do_first":["A"],"schedule":["B"],
+            "delegate_or_review":["C"],"defer_or_review":["D"]})
+        with self.assertRaises(ValueError):
+            u.priority_matrix([{"name":"A","important":"true","urgent":True}])
+        with self.assertRaises(ValueError):
+            u.priority_matrix([{"name":"A","important":True,"urgent":False}]*2)
