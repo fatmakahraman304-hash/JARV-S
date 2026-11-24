@@ -8,9 +8,9 @@ class ThinkingStudioTests(unittest.TestCase):
         studio.activate((0,))
 
     def test_complete_catalog(self):
-        self.assertEqual(set(studio.FEATURES), set(range(1, 141)))
+        self.assertEqual(set(studio.FEATURES), set(range(1, 501)))
         self.assertTrue(all(title and guide for title, guide in studio.FEATURES.values()))
-        self.assertEqual(set(studio.MODES) | set(studio.POLICY), set(range(1, 141)))
+        self.assertEqual(set(studio.MODES) | set(studio.POLICY) | set(studio.APP_FEATURES), set(range(1, 501)))
         self.assertTrue(set(studio.MODES).isdisjoint(studio.POLICY))
 
     def test_commands_and_reset(self):
@@ -41,3 +41,26 @@ class ThinkingStudioTests(unittest.TestCase):
     def test_every_mode_number_is_selectable(self):
         for n in studio.MODES:
             self.assertEqual(studio.parse(f"mod {n}"), (n,))
+
+    def test_zero_is_normal_mode(self):
+        studio.activate((145,))
+        self.assertEqual(studio.parse("mod 0"), (0,))
+        studio.apply_command("mod 0")
+        self.assertEqual(studio.active(), ())
+
+    def test_extended_search_and_real_status(self):
+        self.assertEqual([r[0] for r in studio.search_features("500")], [500])
+        self.assertEqual(studio.parse("mini sınav"), (145,))
+        self.assertEqual(studio.parse("mod 141 ve 410"), (141, 410))
+        self.assertIsNone(studio.parse("mod 471"))
+        self.assertIn("Feynman", plugin.run({"action": "guide", "number": 141}))
+        self.assertIn("Durum:", plugin.run({"action": "guide", "number": 500}))
+
+    def test_original_workflow_is_not_lost(self):
+        self.assertEqual(set(studio.DETAILS), set(range(1, 141)))
+        studio.activate((11,))
+        self.assertIn("iyimser", studio.mode_prompt().lower())
+
+    def test_all_app_features_and_policies_are_not_modes(self):
+        self.assertFalse(set(studio.APP_FEATURES) & set(studio.MODES))
+        self.assertTrue(all(studio.feature_status(n) for n in studio.FEATURES))
