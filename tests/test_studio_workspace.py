@@ -62,7 +62,8 @@ class WorkspaceTests(unittest.TestCase):
         import sqlite3
         self.store.save(kind="note",title="Eski kayıt")
         task = self.store.save(kind="task",title="Yeni görev",due="2026-11-30")
-        with sqlite3.connect(self.path) as db:
+        from contextlib import closing
+        with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(len(list(db.execute("PRAGMA table_info(records)"))),10)
             self.assertEqual(db.execute("SELECT count(*) FROM records").fetchone()[0],1)
             self.assertEqual(db.execute("SELECT count(*) FROM tasks").fetchone()[0],1)
@@ -73,3 +74,34 @@ class WorkspaceTests(unittest.TestCase):
             self.store.save(kind="note",title="Hatalı",record_id=task)
         self.assertTrue(self.store.delete(task))
         self.assertEqual(self.store.list(kind="task"),[])
+
+    def test_restore_version_and_stale_edit_protection(self):
+        rid = self.store.save(kind="task",title="İlk",body="eski",due="2026-11-30",priority="Acil")
+        first = self.store.get(rid)
+        self.store.save(kind="task",title="İkinci",body="yeni",record_id=rid,expected_updated=first["updated"])
+        current = self.store.get(rid)
+        history = self.store.versions(rid)
+        self.assertEqual(history[0]["title"],"İlk")
+        with self.assertRaises(ValueError):
+            self.store.save(kind="task",title="Çakışma",record_id=rid,expected_updated=first["updated"])
+        with self.assertRaises(ValueError):
+            self.store.restore_version(rid,history[0]["version_seq"],first["updated"])
+        restored = self.store.restore_version(rid,history[0]["version_seq"],current["updated"])
+        self.assertEqual(restored["body"],"eski")
+        self.assertEqual(restored["due"],"2026-11-30")
+        self.assertEqual(restored["priority"],"Acil")
+        self.assertEqual(self.store.versions(rid)[0]["body"],"yeni")
+        self.assertEqual(self.store.get(rid),restored)
+
+    def test_bounded_relationships_and_backup_limit(self):
+        from unittest.mock import patch
+        for i in range(4):
+            self.store.save(kind="idea",title=str(i),project="P")
+        nodes, edges = self.store.relationships(project="P",limit=2)
+        self.assertEqual((len(nodes),len(edges)),(2,1))
+        with self.assertRaises(ValueError):
+            self.store.relationships(limit=201)
+        with patch("core.studio_workspace.MAX_BACKUP",1):
+            with self.assertRaises(ValueError):
+                self.store.export()
+        self.assertEqual(len(self.store.list()),4)
