@@ -14,7 +14,7 @@ PLUGIN = {
     "parameters": {"type": "OBJECT", "properties": {
         "action": {"type": "STRING", "description": "list | search | status | select | guide"},
         "command": {"type": "STRING", "description": "select: kullanıcının tam komutu"},
-        "number": {"type": "INTEGER", "description": "guide: 1–500"},
+        "number": {"type": "INTEGER", "description": "guide: 1–1000"},
         "query": {"type": "STRING", "description": "search: Turkish feature name or number"},
         "first": {"type": "INTEGER", "description": "list: first feature number"},
         "last": {"type": "INTEGER", "description": "list: last feature number"},
@@ -24,7 +24,7 @@ PLUGIN = {
 def run(parameters, player=None, session_memory=None):
     action = parameters.get("action")
     if action == "list":
-        return studio.describe_modes(parameters.get("first") or 1, parameters.get("last") or 140)
+        return studio.describe_modes(parameters.get("first") or 1, parameters.get("last") or min((parameters.get("first") or 1) + 139, studio.MAX_FEATURE))
     if action == "search":
         rows = studio.search_features(str(parameters.get("query") or ""))[:20]
         return "\n".join(f"{n}. {title}: {guide} [{status}]" for n,title,guide,status in rows) or "Eşleşme yok."
@@ -34,7 +34,7 @@ def run(parameters, player=None, session_memory=None):
         try:
             n = int(parameters.get("number"))
             title, _ = studio.FEATURES[n]
-            guidance = studio.guidance_for(n)
+            guidance = studio.workflow_for(n)
             return f"{n}. {title}: {guidance}\nDurum: {studio.feature_status(n)}"
         except (TypeError, ValueError, KeyError):
             return "Geçersiz özellik numarası."
