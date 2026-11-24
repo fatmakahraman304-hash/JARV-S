@@ -32,6 +32,71 @@ routines use only what the app already had.
 
 ---
 
+## FRIDAY 30 çekirdek mod — otomatik yönlendirme
+
+Mevcut 1.000 özel özellik korunur. Çekirdek mod numarası özel özellik
+numarasıyla aynı şey değildir: `mod 0` özel modları kapatır, otomatik
+çekirdek yönlendirme çalışmaya devam eder. Yeni mod kataloğu
+`core/core_modes.py` dosyasındadır; her modun amaç, girdi, çıktı,
+sınır, Türkçe/İngilizce ipucu ve örneği vardır.
+
+Pipeline (Abacus dahil) son isteğe bir ana ve en fazla iki yardımcı mod
+önerir. Kısa devam komutları önceki rotayı kullanabilir. Bu yerel anahtar
+kelime tabanlı öneri ek bir API isteği yapmaz, yanlış sınıflandırma mümkün;
+model gerçek bağlama göre düzeltebilir. Native Gemini Live, ortak 30 mod
+talimatından kendi seçimini yapar. Her iki yolda da mod seçimi araç yetkisi,
+yeni donanım, otomatik kayıt veya gerçekleştirilmiş işlem anlamına gelmez.
+
+Düşünce Stüdyosu önce 30 çekirdek modu gösterir. Açılır kategoriden 1.000
+özel özelliğe ulaşılır. Yönlendirme önizle, örnek istek üzerinde ana/yardımcı
+modları gösterir; isteği yürütmez. `core_modes` eklentisi mod rehberi ve
+ad, amaç, girdi, kısıt, çıktı, kabul ölçütü içeren yeniden kullanılabilir
+alt görev taslağı üretir. Taslak açıkça kaydedilmedikçe kalıcı değildir.
+
+Regresyon testleri 30 modun olumlu örneğini, sınır yönergesini, boş ve
+sistem iletilerini, devam komutunu, güvenli taslağı ve pipeline mesaj
+bütünlüğünü kapsar; canlı model yanıtlarının tamamını doğrulamaz.
+
+## FRIDAY Düşünce Stüdyosu (1–1000 ve normal mod 0)
+
+1000 numaralı özellik: 895 seçilebilir dil-modeli çalışma modu, 76 sürekli
+davranış ilkesi ve 29 uygulama/arayüz gereksinimi. Mod 0 normal moda döner;
+ayrıca dört üslup modu vardır. İlk 140 maddenin ayrıntılı özgün yönergeleri
+ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
+
+- Ayarlar → DÜŞÜNCE STÜDYOSU veya `Ctrl+Shift+M`: aranabilir özellik seçici.
+- `FRIDAY, modları göster`, `mod 145`, `karşı ben`, `mod 11 ve 16`,
+  `sessiz eşlik`, `normal moda dön` veya `mod 0`.
+- Yeni 20 kategori: sağlıklı yaşam, ev, seyahat, yemek, finans farkındalığı, kariyer,
+  topluluk, bilim, tarih, felsefe, oyun, müzik, veri, otomasyon, eğitim,
+  yaratıcılık, hafıza, belge/görsel, kriz ve meta ilkeler.
+- `studio_utilities`: yerel birim, porsiyon, masraf bölüşümü, istatistik,
+  aykırı değer, toplam, yüzdelik fark, takvim çakışması, metin farkı, zar ve
+  sınırlı Excel formül üretimi. Takvim ve belgeler kendiliğinden okunmaz.
+- Kayıt şablonu: seçili 16 günlük/tarif/fatura/not türünde düzenlenebilir yerel
+  taslak. Kaydetmeden hiçbir kayıt yazılmaz. Hatırlatma isteyen kullanıcı için
+  mevcut reminder aracı tarih/saat ile kullanılır; mod seçmek bildirim kurmaz.
+- Projeler ve arşiv: yerel SQLite kayıtları; fikir, proje, kaynak, karar,
+  şablon, not, geri bildirim; etiket, aşama, proje filtresi, sürüm geçmişi,
+  karar tablosu, zaman çizelgesi, fikir grafiği.
+- Kayıt silme iki onay ister. JSON yedeği mevcut kayıtların üzerine yazmadan
+  içe aktarılır; seçili kayıt metin dosyasına aktarılabilir. Yedek yalnız
+  güncel stüdyo kayıtlarını içerir, tüm uygulamayı veya eski sürümleri değil.
+- Seçili yerel kayıt yalnız kullanıcının ayrıca onayladığı durumda etkin
+  modele gönderilir. Yerel arşiv otomatik olarak buluta gönderilmez.
+- Mod sayacı oturum içidir. Açık/koyu tema yalnız stüdyo paneline uygulanır.
+  Son 100 konuşma kaydı dışa aktarılabilir ve bugünkü kayıtlar görülebilir.
+- Harici Composio çalıştırmaları gerçek ekran onayı gerektirir; sonuç
+  uygulama panelinde gösterilir. Hafıza aracından kayıt silme de onay ister.
+  Bu değişiklik evrensel bir güvenlik geçidi değildir.
+
+Modlar farklı AI modelleri veya bağımsız cihaz yetenekleri değildir. Mevcut
+Abacus/Gemini ve yedek sağlayıcılar korunur. Kamera, akıllı ev ve çevrim içi
+araçlar bağlı cihaz ve hesap gerektirir. Her model çıktısının doğruluğu garanti
+edilemez. Kaynaklar elle kaydedilir; güven etiketi kullanıcı seçimine dayanır.
+Gerçek uygulama kapsamı ve eksikler 471–499 maddelerinin durum alanlarında
+görülebilir. Ayrı kişiselleştirme sayfası geri getirilmemiştir.
+
 ## 📦 Configurable engines
 
 ### Abacus AI / RouteLLM (FRIDAY)

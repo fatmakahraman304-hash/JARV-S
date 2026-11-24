@@ -220,7 +220,26 @@ class PipelineEngine:
 
     # ── history ──────────────────────────────────────────────────────────────
     def _messages(self) -> list[dict]:
-        msgs = [{"role": "system", "content": self._system}] if self._system else []
+        system = self._system
+        # Native Live receives the common mode directory; the modular pipeline
+        # additionally gets a per-turn, deterministic advisory route.
+        from core.core_modes import MARKER, route, turn_hint
+        if MARKER in system:
+            previous = ()
+            selected = ()
+            for item in self._history:
+                if item.get("role") != "user":
+                    continue
+                content = item.get("content")
+                if isinstance(content, list):
+                    content = " ".join(p.get("text", "") for p in content
+                                       if isinstance(p, dict) and p.get("type") == "text")
+                selected = route(content, previous)
+                if selected:
+                    previous = selected
+            if selected:
+                system += "\n\n" + turn_hint(selected)
+        msgs = [{"role": "system", "content": system}] if system else []
         return msgs + self._trimmed()
 
     def _trimmed(self) -> list[dict]:

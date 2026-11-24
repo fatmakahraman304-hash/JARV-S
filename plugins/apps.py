@@ -30,7 +30,7 @@ PLUGIN = {
         "connected, call action='connect' with toolkit (e.g. 'gmail') and tell the user to sign "
         "in on the page that opened, then search again. Then action='run' with tool_slug and "
         "arguments as a JSON object string. Use action='connected' to list connected apps. "
-        "Before sending email, posting publicly or deleting anything, confirm with the user. "
+        "Every run requires on-screen confirmation because unknown external tools may modify data.  "
         "Not for WhatsApp/Telegram messages (send_message) or local files (file_controller)."
     ),
     "parameters": {
@@ -114,11 +114,24 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                     raise ValueError
             except ValueError:
                 return outcome.failed("apps", "arguments is not a JSON object", tool=slug)
-            r = composio.execute(slug, args)
-            if not r["ok"]:
-                return outcome.failed("apps", r["error"] or "the app returned an error", tool=slug)
-            return (outcome.done("apps", tool=slug) + "\n"
-                    + outcome.untrusted(f"{slug} result", composio.compact(r["data"], 2500)))
+            # Unknown external app actions are not trusted to be read-only.
+            # Exact arguments are captured before the user approves; the model
+            # cannot forge the interface token or change the approved payload.
+            from core import confirm
+            snapshot = json.dumps(args, ensure_ascii=False, sort_keys=True)
+            if len(snapshot) > 1800:
+                return outcome.failed("apps", "onayda tam kapsam gösterilemiyor; işlemi daha küçük parçalara böl", tool=slug)
+            def execute_approved():
+                r = composio.execute(slug, json.loads(snapshot))
+                if not r["ok"]:
+                    return outcome.failed("apps", r["error"] or "the app returned an error", tool=slug)
+                result = (outcome.done("apps", tool=slug) + "\n"
+                          + outcome.untrusted(f"{slug} result", composio.compact(r["data"], 2500)))
+                if player is not None and hasattr(player, "show_content"):
+                    player.show_content("Uygulama işlem sonucu", result)
+                return result
+            return confirm.request("apps-run", "Harici uygulama işlemi",
+                                   f"{slug}\n{snapshot}", execute_approved)
         if action == "connected":
             items = composio.toolkits(connected_only=True)
             names = ", ".join(t["slug"] for t in items if t["connected"]) or "none"
