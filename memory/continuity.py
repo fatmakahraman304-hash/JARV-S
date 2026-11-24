@@ -172,6 +172,18 @@ def project(pid):
     return _project_row(row) if row else None
 
 
+
+def project_with_marker(marker, after_id=0):
+    """Newest matching job, independently of the display's history limit."""
+    if not marker:
+        return None
+    with connect() as db:
+        row = db.execute(
+            f"SELECT {_PROJECT_FIELDS} FROM projects WHERE id>? AND instr(instruction,?)>0 "
+            "ORDER BY id DESC LIMIT 1", (after_id, marker)).fetchone()
+    return _project_row(row) if row else None
+
+
 def set_application(name, status, detail):
     with _write_lock, connect() as db:
         db.execute("INSERT OR REPLACE INTO applications VALUES(?,?,?,?)",
