@@ -199,7 +199,7 @@ class WorkspaceDialog(QDialog):
         if QMessageBox.question(self, "Son onay", "Bu kaydı kalıcı olarak sil?") != QMessageBox.StandardButton.Yes:
             return
         try:
-            if self.store.delete(self.record_id):
+            if self.store.delete(self.record_id, expected_updated=self.expected_updated):
                 self.clear(force=True)
                 self.refresh()
                 self.status.setText("Seçili yerel kayıt silindi.")
@@ -345,7 +345,7 @@ class WorkspaceDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(self, "FRIDAY yerel arşiv yedeği", "friday-studio.json", "JSON (*.json)")
         if path:
             try:
-                Path(path).write_text(self.store.export(), encoding="utf-8")
+                self.store.write_backup(path)
                 self.status.setText("Arşiv yedeği yazıldı. Eski sürümler ve diğer uygulama verileri dahil değildir.")
             except Exception as exc:
                 self.error(exc)
@@ -374,11 +374,12 @@ class WorkspaceDialog(QDialog):
             if not row:
                 return
             if QMessageBox.question(self, "Seçili proje bağlamını kullan",
+                "Kaydedilmiş hâl gönderilecek; kaydedilmemiş değişiklikler dahil değildir. "
                 "Bu kayıt etkin yapay zekâ sağlayıcısına gönderilebilir ve sohbet geçmişine eklenebilir. "
                 "Sadece bu kaydı göndermek istiyor musunuz?") != QMessageBox.StandardButton.Yes:
                 return
             import json
-            payload = json.dumps({k: row[k] for k in ("title", "project", "stage", "confidence", "body")},
+            payload = json.dumps({k: row[k] for k in ("title", "project", "stage", "confidence", "due", "priority", "body")},
                                  ensure_ascii=False)
             if len(payload) > 16000:
                 self.status.setText("Kayıt çok uzun; gönderilecek kısmı küçültün.")
