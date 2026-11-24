@@ -197,7 +197,7 @@ GROUPS = (
     (976, 1000, "Meta ve son ilkeler"),
 )
 APP_STATUS = {
-    471: "Aranabilir yerel mod seçici",
+    471: "Aranabilir yerel yetenek rehberi",
     472: "Yerel proje arşivi; aşama alanları ve filtre",
     473: "Yerel aranabilir, etiketli fikir arşivi",
     474: "Mevcut hafıza ekranı; model silme isteklerinde onay",
@@ -211,17 +211,17 @@ APP_STATUS = {
     482: "Yerel kayıt ve düzenleme zaman çizelgesi",
     483: "Yerel karar tablosu",
     484: "Yerel etiket/proje ilişkilerinden görsel düğüm haritası",
-    485: "Ctrl+Shift+M ile mod seçici",
+    485: "Ctrl+Shift+M ile yetenek rehberi",
     486: "Mevcut işlem onayı ve arşiv silme/harici uygulama onayı; kapsamı sınırlı",
     487: "Yerel işlem hatası ve elle yeniden deneme; genel hata ekranı değil",
     488: "Panel kullanım açıklaması; ilk açılış turu yok",
-    489: "Numaralı iş akışları ve kaydedilebilir şablon arşivi",
+    489: "Otomatik iş akışları ve kaydedilebilir şablon arşivi",
     490: "Üslup modları; ayrı kişiselleştirme sayfası yok",
     491: "Yerel proje bazlı kayıt filtreleri; otomatik sohbet izolasyonu yok",
     492: "Seçili kaydı yerel dosyaya aktar; ağ paylaşımı yok",
     493: "Kullanıcının kaydettiği geri bildirim kayıtları; yanıta bağlı düğme yok",
     494: "Klavye erişimi ve alan etiketleri; ekran okuyucu uçtan uca doğrulanmadı",
-    495: "Oturum içi mod sayacı",
+    495: "Oturum içi açık etkileşim kontrolü sayacı",
     496: "Yerel arşiv yedeği ve çakışmasız içe aktarma; tam sistem yedeği değil",
     497: "Mevcut eklenti altyapısı; otomatik mod eklentisi yükleme yok",
     498: "Yerel kayıt değişikliklerinin geçmişi; genel ayar geçmişi değil",
@@ -234,14 +234,14 @@ def feature_status(n):
     if n in POLICY:
         return "Davranış ilkesi"
     if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
-        return "Dil modeli modu + yerel hesaplama/karşılaştırma aracı"
+        return "Yerleşik konuşma yöntemi + yerel hesaplama/karşılaştırma aracı"
     if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
-        return "Dil modeli modu + yerel düzenlenebilir kayıt şablonu"
+        return "Yerleşik konuşma yöntemi + yerel düzenlenebilir kayıt şablonu"
     if n in (501, 505, 510, 515, 833, 840, 909, 910):
-        return "Dil modeli modu; gerçek hatırlatma mevcut reminder aracıyla, açık istekle"
+        return "Yerleşik konuşma yöntemi; gerçek hatırlatma mevcut reminder aracıyla, açık istekle"
     if 926 <= n <= 950:
-        return "Dil modeli modu; verilen belge/görsel ve mevcut işleme aracı gerekir"
-    return "Dil modeli çalışma modu"
+        return "Yerleşik konuşma yöntemi; verilen belge/görsel ve mevcut işleme aracı gerekir"
+    return "Yerleşik konuşma yöntemi"
 
 EXTRA = {
     "kısa mod": -1, "detaylı mod": -2, "yaratıcı mod": -3,
@@ -389,7 +389,7 @@ def workflow_for(n):
     if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
         guidance += " Hesap/karşılaştırma gerekiyorsa studio_utilities aracını kullan; veri eksikse uydurma."
     if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
-        guidance += " Kayıt için kullanıcının açık tercihiyle Düşünce Stüdyosu panelindeki Kayıt şablonu düğmesini ve yerel arşivi öner; model kendi kendine kayıt yapmaz."
+        guidance += " Kayıt için kullanıcının açık tercihiyle Yetenekler ve Arşiv panelindeki Kayıt şablonu düğmesini ve yerel arşivi öner; model kendi kendine kayıt yapmaz."
     if n in (501, 505, 510, 515, 833, 840, 909, 910):
         guidance += " Kullanıcı gerçek bildirim isterse mevcut reminder/routines aracını uygun tarih ve saatle kullan; yalnız öneri verdiysen zamanlandı deme."
     return guidance
