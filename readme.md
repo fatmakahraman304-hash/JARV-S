@@ -66,6 +66,23 @@ Regresyon testleri 30 modun olumlu örneğini, sınır yönergesini, boş ve
 sistem iletilerini, devam komutunu, güvenli taslağı ve pipeline mesaj
 bütünlüğünü kapsar; canlı model yanıtlarının tamamını doğrulamaz.
 
+## FRIDAY yerel görev panosu ve planlama
+
+Düşünce Stüdyosu → Görevler: kullanıcı tarafından kaydedilen görevler,
+proje, aşama, son tarih ve öncelik; Görev panosu açık, bugün, gecikmiş,
+tamamlanmış ve arşivlenmiş durumları gösterir. Görevler ayrı SQLite
+tablosundadır; eski kayıt şeması değişmez. Eski uygulama sürümü görevleri
+göstermez, fakat kendi kayıtlarıyla çalışabilir. Yeni yedekler görevleri
+içerir; eski uygulama yeni görev kayıtlarını içeren yedeği okuyamaz.
+Bu pano otomatik bildirim veya arka plan takibi değildir.
+
+`studio_utilities` ayrıca `task_schedule` (bağımlılık sırası, en erken
+başlama ve bitiş, döngü tespiti), `budget_summary` (aynı para birimi,
+kategori toplamı ve kalan tutar) ve `weighted_options` (kullanıcı
+puanları ile ağırlıklı karar karşılaştırması) sağlar. Plan bağımsız
+görevlerin paralel çalışabileceğini varsayar; takvim rezervasyonu veya
+gerçek görev yürütümü yapmaz. Kullanıcı verileri eksikse tahmin edilmez.
+
 ## FRIDAY Düşünce Stüdyosu (1–1000 ve normal mod 0)
 
 1000 numaralı özellik: 895 seçilebilir dil-modeli çalışma modu, 76 sürekli
