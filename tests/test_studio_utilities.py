@@ -74,3 +74,32 @@ class UtilityTests(unittest.TestCase):
         self.assertEqual(ranked["ranking"],[{"name":"A","score":"7"},{"name":"B","score":"6"}])
         with self.assertRaises(ValueError):
             u.weighted_options({"Fiyat":1},[{"name":"A","ratings":{"Fiyat":11}}])
+
+    def test_data_quality_and_trend(self):
+        quality=u.data_quality([{"A":1,"B":None},{"A":"x","B":False},{"B":" "}])
+        self.assertEqual(quality["row_count"],3)
+        self.assertEqual(quality["columns"][0],{"column":"A","missing":1,"present":2,
+            "types":{"number":1,"text":1},"mixed_types":True})
+        self.assertEqual(quality["columns"][1]["missing"],2)
+        self.assertEqual(quality["columns"][1]["types"],{"boolean":1})
+        with self.assertRaises(ValueError):
+            u.data_quality([{"A":[1]}])
+        with self.assertRaises(ValueError):
+            u.data_quality([{"A":float("inf")}])
+        result=u.trend([2,4,6,8])
+        self.assertAlmostEqual(result["slope_per_step"],2)
+        self.assertAlmostEqual(result["intercept_at_step_zero"],2)
+        self.assertAlmostEqual(result["r_squared"],1)
+        self.assertIsNone(u.trend([2,2,2])["r_squared"])
+        with self.assertRaises(ValueError):
+            u.trend([1])
+
+    def test_exact_allocation_and_excel_boundary(self):
+        amount="999999999999.99"
+        shares=u.split_cost(amount,["0.000000000001","999999999999","999999999998"])
+        self.assertEqual(sum(map(Decimal,shares)),Decimal(amount))
+        self.assertEqual(u.formula("SUM","XFD",1,1048576),"=SUM(XFD1:XFD1048576)")
+        with self.assertRaises(ValueError):
+            u.formula("SUM","XFE",1,2)
+        with self.assertRaises(ValueError):
+            u.number("0"*101)

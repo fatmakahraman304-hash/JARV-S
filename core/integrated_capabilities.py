@@ -5,10 +5,11 @@ All catalog entries are indexed. Policies remain always-on, application
 entries describe observed implementation status, and workflow guidance is
 applied for the current answer only.
 """
-from dataclasses import dataclass
 from functools import lru_cache
 import math
-from collections import Counter
+from collections import Counter, defaultdict
+from types import MappingProxyType
+import re
 from core.voice_commands import normalize_command
 from core import thinking_studio as studio
 
@@ -43,6 +44,20 @@ PHRASES = {
     505: ("goz dinlendir","ekran molasi"),
     13: ("karsi ben","kor noktalarimi goster"),
     60: ("kararlarin on otopsisi","premortem"),
+    233: ("oncelik sirasi","onem aciliyet matrisi","prioritize tasks"),
+    237: ("haftami planla","haftalik program","weekly plan"),
+    242: ("gorev bagimliliklari","islerin bagimliliklarini","hangi is once","dependency schedule"),
+    261: ("hatayi bul","kod hatasini bul","debug code","hata ayikla"),
+    264: ("birim testleri yaz","test senaryolari","unit tests"),
+    269: ("performans darbogazi","performans analizi","performance bottleneck"),
+    274: ("kodlarimi incele","kodumu incele","code review","kod incele"),
+    393: ("haber dogrula","bu haber dogru mu","fact check news"),
+    601: ("gelir gider hesapla","gelir gider tablosu"),
+    612: ("butcemi hesapla","aylik butcemi","monthly budget"),
+    821: ("toplamlari kontrol et","toplam dogru mu","verify totals"),
+    824: ("yuzde farki","yuzdelik degisim","percentage change"),
+    901: ("notlarimi duzenle","organize notes"),
+    908: ("yarim kalan isler","acik kalan gorevler","unfinished tasks"),
 }
 # Core area -> relevant feature ranges. Boost only existing lexical matches.
 AREAS = {
@@ -89,9 +104,30 @@ def catalog():
         rows[n] = (name,title_words,body_words,aliases)
         freq.update(title_words | body_words)
     idf = {word: math.log1p(len(rows)/count) for word,count in freq.items()}
-    return rows,idf
+    return MappingProxyType(rows), MappingProxyType(idf)
 
-def resolve(query, core_ids=(), limit=4):
+@lru_cache(maxsize=1)
+def postings():
+    """Immutable inverted index; phrase candidates include short raw tokens."""
+    index = defaultdict(set)
+    names = defaultdict(set)
+    rows,_ = catalog()
+    for n,(title,tokens,body,aliases) in rows.items():
+        for word in tokens | body | frozenset(" ".join((title,*aliases)).split()):
+            index[word].add(n)
+        for phrase in (title,*aliases):
+            names[phrase].add(n)
+    return (MappingProxyType({k:frozenset(v) for k,v in index.items()}),
+            MappingProxyType({k:tuple(sorted(v)) for k,v in names.items()}))
+
+def candidates(value,words):
+    index,_ = postings()
+    ids = set()
+    for word in words | frozenset(value.split()):
+        ids.update(index.get(word,()))
+    return ids
+
+def _resolve_one(query, core_ids=(), limit=4):
     if not isinstance(query,str) or not query.strip() or query.lstrip().startswith("["):
         return ()
     limit = max(1,min(6,int(limit)))
@@ -108,10 +144,11 @@ def resolve(query, core_ids=(), limit=4):
     rows,idf = catalog()
     words = _roots(value)
     if not words:
-        return ()
+        return postings()[1].get(value,())[:limit]
     ranges = tuple(r for n in core_ids for r in AREAS.get(n,()))
     hits = []
-    for n,(title,tokens,body,aliases) in rows.items():
+    for n in candidates(value,words):
+        title,tokens,body,aliases = rows[n]
         exact = value==title or value in aliases
         phrase = _contains(value,title) or any(_contains(value,a) for a in aliases)
         t = words & tokens
@@ -137,6 +174,33 @@ def resolve(query, core_ids=(), limit=4):
     # Keep the strongest related entries; do not flood small prompts.
     best = hits[0][0]
     return tuple(n for score,n in hits if score>=max(3,best*.38))[:limit]
+
+# Split only explicit independent-request separators; an ordinary "ve"
+# may be part of a title or task and must not split it.
+_SPLIT = re.compile(r";|\n+|\b(?:ve ayrıca|ayrıca|bir de|bunun yanında|and also)\b", re.IGNORECASE)
+
+def resolve(query, core_ids=(), limit=4):
+    if not isinstance(query,str) or not query.strip() or query.lstrip().startswith("["):
+        return ()
+    limit = max(1,min(6,int(limit)))
+    # Preserve exact numbered/name lookups even if a title has punctuation.
+    if studio.parse(query[:16000]) or normalize_command(query[:16000]) in postings()[1]:
+        return _resolve_one(query,core_ids,limit)
+    clauses = [p.strip() for p in _SPLIT.split(query[:16000]) if p.strip()][:6]
+    if len(clauses)<2:
+        return _resolve_one(query,core_ids,limit)
+    from core.core_modes import route
+    ranked = [_resolve_one(p,route(p) or core_ids,limit) for p in clauses]
+    selected=[]
+    # Round robin: independent requests get a primary candidate before
+    # any request gets extra candidates.
+    for depth in range(limit):
+        for ids in ranked:
+            if depth<len(ids) and ids[depth] not in selected:
+                selected.append(ids[depth])
+                if len(selected)>=limit:
+                    return tuple(selected)
+    return tuple(selected)
 
 def history_features(history, core_ids=(), limit=4):
     from core.core_modes import FOLLOWUPS
@@ -177,7 +241,8 @@ def guidance(ids, max_chars=7000):
         remaining=max_chars-size
         if remaining<100:
             break
-        row=row[:remaining]
+        if len(row)>remaining:
+            continue  # never truncate a safety boundary mid-sentence
         chunks.append(row)
         size+=len(row)+1
     if not chunks:

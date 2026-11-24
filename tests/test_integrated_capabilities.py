@@ -77,3 +77,30 @@ class IntegratedCapabilitiesTests(unittest.TestCase):
         self.assertIn("otomatik kaynak yakalama yok",text)
         self.assertIn("otomatik sohbet izolasyonu yok",text)
         self.assertIn("tam sistem yedeği değil",text)
+
+    def test_multiple_independent_requests_and_index(self):
+        ids=integrated.resolve("Kodlarımı incele; ayrıca bütçemi hesapla; bir de zar at",limit=4)
+        self.assertEqual(ids[:3],(274,612,757))
+        self.assertLessEqual(len(ids),4)
+        self.assertEqual(integrated.resolve("code review and also monthly budget")[:2],(274,612))
+        self.assertEqual(integrated.resolve("mod 145 ve 578"),(145,578))
+        rows,_=integrated.catalog()
+        with self.assertRaises(TypeError):
+            rows[1]=None
+        self.assertIn(274,integrated.candidates("kodlarimi incele",integrated._roots("kodlarimi incele")))
+        self.assertEqual(integrated.resolve("merhaba"),())
+
+    def test_utility_bindings_are_real_operations(self):
+        from core.studio_utilities import OPERATIONS
+        for n,op in studio.UTILITY_BINDINGS.items():
+            with self.subTest(n=n):
+                self.assertIn(op,OPERATIONS)
+                self.assertIn("studio_utilities/"+op,studio.workflow_for(n))
+        self.assertIn("data_quality",integrated.guidance((801,)))
+        self.assertIn("trend",integrated.guidance((813,)))
+
+    def test_instruction_budget_does_not_cut_boundaries(self):
+        from unittest.mock import patch
+        with patch.object(studio,"workflow_for",return_value="x"*400+" Sınır."):
+            self.assertEqual(integrated.guidance((578,),max_chars=150),"")
+        self.assertEqual(integrated.resolve("[SYSTEM_ALERT] mini sınav; zar at"),())

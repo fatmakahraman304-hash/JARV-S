@@ -2,6 +2,7 @@
 from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 import difflib
 import math
 import secrets
@@ -11,8 +12,11 @@ import statistics
 def number(value):
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         raise ValueError("Sayı gerekli.")
+    raw = str(value)
+    if len(raw) > 100:
+        raise ValueError("Sayı metni çok uzun.")
     try:
-        d = Decimal(str(value))
+        d = Decimal(raw)
     except InvalidOperation as exc:
         raise ValueError("Geçersiz sayı.") from exc
     if not d.is_finite() or abs(d) > Decimal("1e12") or (d and abs(d) < Decimal("1e-12")):
@@ -84,7 +88,9 @@ def split_cost(amount, weights):
     cents = total * 100
     if cents != cents.to_integral_value():
         raise ValueError("Tutar en fazla iki ondalık basamak içermeli.")
-    shares = [cents * w / sum(weights) for w in weights]
+    exact = [Fraction(w) for w in weights]
+    denominator = sum(exact)
+    shares = [int(cents) * w / denominator for w in exact]
     result = [int(x) for x in shares]
     remainder = int(cents) - sum(result)
     order = sorted(range(len(weights)), key=lambda i: (shares[i] - result[i], -i), reverse=True)
@@ -155,6 +161,11 @@ def formula(kind, column, first, last):
     col = column.upper()
     if not re.fullmatch(r"[A-Z]{1,3}", col) or type(first) is not int or type(last) is not int or not 1 <= first <= last <= 1048576:
         raise ValueError("Geçersiz hücre aralığı.")
+    col_number = 0
+    for char in col:
+        col_number = col_number * 26 + ord(char) - ord("A") + 1
+    if col_number > 16384:
+        raise ValueError("Excel sütunu XFD sınırını aşıyor.")
     return f"={kind}({col}{first}:{col}{last})"
 
 
@@ -246,11 +257,65 @@ def weighted_options(weights, options):
             "assumption":"Kullanıcının ölçüt ve puanları; nihai karar kullanıcıya ait."}
 
 
+def trend(values):
+    """Least-squares line over equally spaced observed values; no forecast."""
+    data = [float(number(v)) for v in sequence(values)]
+    if len(data) < 2:
+        raise ValueError("Trend için en az iki gözlem gerekli.")
+    x = list(range(len(data)))
+    mx, my = statistics.mean(x), statistics.mean(data)
+    sxx = math.fsum((i-mx)**2 for i in x)
+    sxy = math.fsum((i-mx)*(y-my) for i,y in zip(x,data))
+    slope = sxy / sxx
+    intercept = my - slope * mx
+    syy = math.fsum((y-my)**2 for y in data)
+    r2 = min(1.0,max(0.0,sxy*sxy/(sxx*syy))) if syy else None
+    return {"count":len(data), "slope_per_step":slope, "intercept_at_step_zero":intercept,
+            "r_squared":r2, "first":data[0], "last":data[-1],
+            "assumption":"Eşit aralıklı gözlemler, doğrusal betimleme; gelecek tahmini değildir."}
+
+
+def data_quality(rows):
+    """Describe supplied table rows; no files, imputation or writes."""
+    records = sequence(rows, 1000)
+    columns = set()
+    for row in records:
+        if not isinstance(row,dict) or len(row)>100:
+            raise ValueError("En fazla 100 sütunlu satır nesnesi gerekli.")
+        for k,v in row.items():
+            if not isinstance(k,str) or not k.strip() or len(k)>120:
+                raise ValueError("Geçersiz sütun adı.")
+            if type(v) not in (str,int,float,bool,type(None)):
+                raise ValueError("Hücreler basit değer olmalı.")
+            if isinstance(v,str) and len(v)>10000:
+                raise ValueError("Hücre metni çok uzun.")
+            if type(v) in (int,float):
+                number(v)
+        columns.update(row)
+        if len(columns)>100:
+            raise ValueError("Toplam sütun sayısı en fazla 100.")
+    result=[]
+    for name in sorted(columns):
+        counts={}
+        missing=0
+        for row in records:
+            value=row.get(name)
+            if value is None or isinstance(value,str) and not value.strip():
+                missing+=1
+                continue
+            kind="boolean" if type(value) is bool else "number" if type(value) in (int,float) else "text"
+            counts[kind]=counts.get(kind,0)+1
+        result.append({"column":name,"missing":missing,"present":len(records)-missing,
+                       "types":counts,"mixed_types":len(counts)>1})
+    return {"row_count":len(records),"column_count":len(columns),"columns":result,
+            "assumption":"Eksik anahtar, null ve boş metin eksik sayılır; veri değiştirilmez."}
+
+
 OPERATIONS = {"convert": convert, "portions": portions, "split_cost": split_cost,
               "stats": stats, "compare": compare, "conflicts": conflicts,
               "text_diff": text_diff, "dice": dice, "check_total": check_total, "formula": formula,
               "task_schedule": task_schedule, "budget_summary": budget_summary,
-              "weighted_options": weighted_options}
+              "weighted_options": weighted_options, "trend": trend, "data_quality": data_quality}
 
 
 def run(operation, args):
