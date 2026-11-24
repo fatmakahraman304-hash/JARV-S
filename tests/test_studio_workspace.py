@@ -52,7 +52,7 @@ class WorkspaceTests(unittest.TestCase):
         counts, rows = self.store.task_overview(project="P",today="2026-11-24")
         self.assertEqual(counts,{"open":2,"overdue":1,"today":1,"completed":1,"archived":0})
         self.assertEqual([r["title"] for r in rows],["Gecikmiş","Bugün","Tamam"])
-        self.store.save(kind="task",title="Tamam güncel",record_id=done,stage="Tamamlandı")
+        self.store.save(kind="task",title="Tamam güncel",record_id=done,stage="Tamamlandı",project="P")
         self.assertEqual(self.store.versions(done)[0]["due"],"2026-11-23")
         other = Workspace(Path(self.tmp.name)/"copy.sqlite3")
         self.assertEqual(other.import_backup(self.store.export()),4)
