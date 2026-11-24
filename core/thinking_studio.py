@@ -235,8 +235,8 @@ def feature_status(n):
         return "Davranış ilkesi"
     if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
         return "Dil modeli modu + yerel hesaplama/karşılaştırma aracı"
-    if n in (508, 523, 564, 590, 598, 684, 797, 903, 912, 918, 920):
-        return "Dil modeli modu + isteğe bağlı yerel stüdyo kaydı"
+    if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
+        return "Dil modeli modu + yerel düzenlenebilir kayıt şablonu"
     if n in (501, 505, 510, 515, 833, 840, 909, 910):
         return "Dil modeli modu; gerçek hatırlatma mevcut reminder aracıyla, açık istekle"
     if 926 <= n <= 950:
@@ -372,8 +372,8 @@ def workflow_for(n):
         guidance += " Acil tehlikede önce gerçek insan/acil hizmet desteği; olası riski küçümseme."
     if n in (578, 619, 685, 757, 804, 805, 807, 821, 824, 907, 932):
         guidance += " Hesap/karşılaştırma gerekiyorsa studio_utilities aracını kullan; veri eksikse uydurma."
-    if n in (508, 523, 564, 590, 598, 684, 797, 903, 912, 918, 920):
-        guidance += " Kayıt için kullanıcının açık tercihiyle yerel stüdyo arşivini kullan; model kendi kendine kayıt yapmaz."
+    if n in (508, 523, 530, 540, 564, 590, 598, 604, 616, 684, 797, 903, 910, 912, 918, 920):
+        guidance += " Kayıt için kullanıcının açık tercihiyle Düşünce Stüdyosu panelindeki Kayıt şablonu düğmesini ve yerel arşivi öner; model kendi kendine kayıt yapmaz."
     if n in (501, 505, 510, 515, 833, 840, 909, 910):
         guidance += " Kullanıcı gerçek bildirim isterse mevcut reminder/routines aracını uygun tarih ve saatle kullan; yalnız öneri verdiysen zamanlandı deme."
     return guidance
