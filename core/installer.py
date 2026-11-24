@@ -65,12 +65,12 @@ def _available(module: str) -> bool:
     return importlib.util.find_spec(module) is not None
 
 
-def _pip(package: str, log: Callable | None = None) -> bool:
+def _pip(package: str, log: Callable | None = None, extra_packages: tuple[str, ...] = ()) -> bool:
     if log:
         log(f"SYS: pip install {package} …")
     result = subprocess.run(
         [
-            sys.executable, "-m", "pip", "install", package,
+            sys.executable, "-m", "pip", "install", package, *extra_packages,
             "--quiet", "--disable-pip-version-check",
         ],
         capture_output=True,

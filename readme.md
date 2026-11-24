@@ -5,6 +5,9 @@ A real-time voice AI that can hear, see, speak, and control your computer — on
 FRIDAY adı, kadın ses profili, 3D dünya ve uydu/sokak görünümü için
 [kullanım ve doğrulama notları](docs/friday-dunya.md).
 
+Kamera üzerinde el kontrolleri, yüzen paneller ve yerel 3D nesneler:
+[Holo Masa kullanımı ve gerçek test sınırları](docs/holo-masa-tr.md).
+
 ---
 
 ## ✨ Overview

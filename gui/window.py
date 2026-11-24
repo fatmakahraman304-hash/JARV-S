@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
     _route_result_sig = pyqtSignal(object)
     _map_places_sig = pyqtSignal(object)
     _prototype_sig = pyqtSignal(str)
+    _holo_desk_sig = pyqtSignal(object)
     _scan_research_sig = pyqtSignal(str, bool)
     _scan_research_result_sig = pyqtSignal(int, str, object)
     _page_gesture_sig = pyqtSignal(int, int)
@@ -418,6 +419,7 @@ class MainWindow(QMainWindow):
         self._scan_result_sig.connect(self._show_camera_scan)
         self._content_sig.connect(self._show_content)
         self._prototype_sig.connect(self._open_prototype)
+        self._holo_desk_sig.connect(self._holo_desk_command)
         self._map_places_sig.connect(self._show_map_places)
         self._route_choices_sig.connect(self._choose_route)
         self._route_result_sig.connect(self._show_route)
@@ -468,6 +470,8 @@ class MainWindow(QMainWindow):
         sc_intr.activated.connect(self._do_interrupt)
         sc_world = QShortcut(QKeySequence("Ctrl+Shift+O"), self)
         sc_world.activated.connect(lambda: self._show_world_map(True))
+        sc_holo = QShortcut(QKeySequence("Ctrl+Shift+H"), self)
+        sc_holo.activated.connect(lambda: self._holo_desk_command({"params":{"mode":"open"}}))
 
     def _open_prototype(self, text: str) -> None:
         from gui.prototype_panel import PrototypePanel
@@ -2039,6 +2043,10 @@ class MainWindow(QMainWindow):
         self._earth_btn.setToolTip("Dünya — 3D küre, uydu ve sokak haritası [Ctrl+Shift+O]")
         self._earth_btn.clicked.connect(lambda: self._show_world_map(True))
         row.addWidget(self._earth_btn)
+        self._holo_btn = IconButton("cube", 42)
+        self._holo_btn.setToolTip("Holo Masa — el hareketleri, yüzen paneller ve 3D nesneler")
+        self._holo_btn.clicked.connect(lambda: self._holo_desk_command({"params":{"mode":"open"}}))
+        row.addWidget(self._holo_btn)
         self._chess_btn = IconButton("knight", 42)
         self._chess_btn.setCheckable(True)
         self._chess_btn.setToolTip("Satranç — asistanla oyna")
@@ -2126,6 +2134,11 @@ class MainWindow(QMainWindow):
 
         fs_btn = _row(QPushButton("⛶  TAM EKRAN  [F11]"), self._BTN_DIM)
         fs_btn.clicked.connect(self._toggle_fullscreen)
+        holo_btn = _row(QPushButton("⬡  HOLO MASA  [Ctrl+Shift+H]"), self._BTN_DIM)
+        def open_holo():
+            self._close_controls()
+            self._holo_desk_command({"params":{"mode":"open"}})
+        holo_btn.clicked.connect(open_holo)
 
         self._brief_btn = _row(QPushButton())
         self._brief_btn.clicked.connect(self._toggle_brief)
@@ -2223,6 +2236,50 @@ class MainWindow(QMainWindow):
         self._large_city_map.set_location(chosen['lat'], chosen['lon'])
         self._map_place_label.setText(chosen['name'])
         self._log.append_log('HARİTA: ' + chosen['name'])
+
+    def _holo_desk_command(self, request):
+        try:
+            params=request.get("params",{})
+            mode=params.get("mode","open")
+            if mode not in {"open","close","reset","object","status"}:
+                raise ValueError("Bilinmeyen Holo Masa işlemi")
+            if mode=="status":
+                desk=getattr(self,"_holo_desk",None)
+                request["result"]={"status":"done","visible":bool(desk and desk.isVisible()),
+                    "camera_requested":bool(desk and desk.camera.isChecked()),
+                    "camera_thread_alive":bool(desk and desk._thread and desk._thread.is_alive()),
+                    "hands":len(desk.canvas.hands) if desk else 0}
+                return
+            if mode=="close":
+                desk=getattr(self,"_holo_desk",None)
+                if desk:desk.stop_camera()
+                if desk and self._hud_cam_stack.currentWidget() is desk:
+                    self._hud_cam_stack.setCurrentWidget(self.hud)
+            else:
+                if not hasattr(self,"_holo_desk"):
+                    from gui.holo_desk import HoloDesk
+                    self._holo_desk=HoloDesk(self)
+                    self._holo_desk.back_requested.connect(lambda:self._holo_desk_command({"params":{"mode":"close"}}))
+                    self._hud_cam_stack.addWidget(self._holo_desk)
+                self._cam_stop.set();self._gesture_stop.set()
+                self._hud_cam_stack.setCurrentWidget(self._holo_desk)
+                if mode=="reset":self._holo_desk.canvas.reset_view()
+                elif mode=="object":
+                    text=params.get("text")
+                    if text is not None:
+                        from core.holo_desk import parse_obj
+                        vertices,faces=parse_obj(text)
+                        self._holo_desk.canvas.vertices,self._holo_desk.canvas.faces=vertices,faces
+                        self._holo_desk.canvas.reset_view()
+                    else:self._holo_desk.set_shape(params.get("shape","Küp"))
+            if mode=="close" and desk and desk._thread and desk._thread.is_alive():
+                request["result"]={"status":"unverified","reason":"Panel kapatıldı; kamera aygıtının bırakılması sürüyor."}
+            else:request["result"]={"status":"done","mode":mode,"camera_started":False}
+        except Exception as exc:
+            request["result"]={"status":"failed","error":str(exc)}
+            self._log.append_log(f"HOLO MASA: {exc}")
+        finally:
+            if request.get("event") is not None:request["event"].set()
 
     def _show_world_map(self, visible):
         if visible:
