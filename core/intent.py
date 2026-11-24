@@ -115,7 +115,7 @@ _LOOK_ACTIONS = {"status", "list", "inspect", "info", "get", "read", "search", "
 def is_read_only(name: str, args: dict | None = None) -> bool:
     """A tool call that only looks. An explicit action decides first (todo_list action=add changes
     things, blender_studio action=status only looks); without one, the tool's name does."""
-    if name == "studio_utilities":
+    if name in ("studio_utilities", "core_modes"):
         return True
     args = args or {}
     for key in ("action", "mode", "op", "command"):
