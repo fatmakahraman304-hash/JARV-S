@@ -2105,6 +2105,7 @@ class MainWindow(QMainWindow):
         self._autostart_btn = _btn("◉  OTOMATİK BAŞLAT: KAPALI", self._toggle_autostart)
         _btn("🎧  SES CİHAZLARI", self._open_audio_devices)
         _btn("🧠  HAFIZA", self._open_memory_panel)
+        _btn("DÜŞÜNCE STÜDYOSU", self._open_thinking_studio)
         _btn("🧩  EKLENTİLER", self._open_plugin_manager)
         _btn("⚙  EKLENTİ AYARLARI", self._open_plugin_settings)
         # The button is built here with the rest of the drawer; the panel behind
