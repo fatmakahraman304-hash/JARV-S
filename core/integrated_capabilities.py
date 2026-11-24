@@ -96,6 +96,8 @@ def resolve(query, core_ids=(), limit=4):
         return ()
     limit = max(1,min(6,int(limit)))
     value = normalize_command(query[:16000])
+    if value.isdecimal() and len(value)>4:
+        return ()
     if value.isdecimal() and len(value)<=4:
         n=int(value)
         return (n,) if n in studio.FEATURES else ()
@@ -138,26 +140,27 @@ def resolve(query, core_ids=(), limit=4):
 
 def history_features(history, core_ids=(), limit=4):
     from core.core_modes import FOLLOWUPS
-    prior=()
-    latest=()
-    turns=[]
+    # Most requests require one lookup. Walk backward only on followups.
+    seen=0
     for item in reversed(history):
-        if isinstance(item,dict) and item.get("role")=="user":
-            turns.append(item.get("content"))
-            if len(turns)>=12:
-                break
-    for content in reversed(turns):
+        if not isinstance(item,dict) or item.get("role")!="user":
+            continue
+        seen+=1
+        if seen>12:
+            break
+        content=item.get("content")
         if isinstance(content,list):
             content=" ".join(p["text"] for p in content if isinstance(p,dict)
                              and p.get("type")=="text" and isinstance(p.get("text"),str))
         if not isinstance(content,str) or content.lstrip().startswith("["):
-            latest=()
+            if seen==1:
+                return ()
             continue
         value=normalize_command(content[:16000])
-        latest=prior if value in FOLLOWUPS and prior else resolve(content,core_ids,limit)
-        # A new unmatched request does not inherit stale guidance.
-        prior=latest
-    return latest
+        if value in FOLLOWUPS:
+            continue
+        return resolve(content,core_ids,limit)
+    return ()
 
 def guidance(ids, max_chars=7000):
     chunks=[]
