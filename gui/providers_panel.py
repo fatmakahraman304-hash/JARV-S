@@ -957,7 +957,7 @@ class ProvidersOverlay(_HudOverlay):
 
         if not sid:
             lay.addWidget(self._label(
-                "AETHER önce NVIDIA Build modellerini kullanır; NVIDIA kullanılamazsa "
+                "FRIDAY önce NVIDIA Build modellerini kullanır; NVIDIA kullanılamazsa "
                 "Gemini'ye geçer.",
                 7, C.TEXT_DIM))
         elif sid == self._sidecar:

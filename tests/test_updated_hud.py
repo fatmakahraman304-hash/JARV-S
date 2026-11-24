@@ -57,7 +57,7 @@ class UpdatedHudTests(unittest.TestCase):
                     "from PyQt6.QtWidgets import QTextEdit\n"
                     "from core import confirm\n"
                     "ui = AetherUI('')\n"
-                    "assert ui._win._assistant_name == 'AETHER'\n"
+                    "assert ui._win._assistant_name == 'FRIDAY'\n"
                     "confirm.bind(ui.show_confirm, ui.hide_confirm)\n"
                     "detail = '<b>literal</b>' * 60\n"
                     "confirm.request('test', 'Onay', detail, lambda: 'ok')\n"

@@ -1,0 +1,92 @@
+/* Real WebGL globe, viewport-only imagery; no camera, geolocation or account. */
+"use strict";
+(() => {
+  const readout = document.getElementById("readout");
+  const state = window.earthState = {ready:false, rendered:false, tiles:0, images:0, mode:"holo", error:""};
+  let viewer, mode = "holo", pending, desiredActive = !document.hidden;
+  function fail(message) { state.error = message; readout.textContent = message + "\nÜstteki Normal harita düğmesini kullanabilirsiniz."; }
+  window.fridayEarth = {
+    goTo(point) {
+      if (!point || ![point.lat,point.lon,point.height].every(Number.isFinite) || Math.abs(point.lat)>90 || Math.abs(point.lon)>180) return;
+      pending = point;
+      if (!viewer) return;
+      viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(point.lon,point.lat,Math.max(120,Math.min(24000000,point.height))),duration:1.35,orientation:{heading:0,pitch:-Math.PI/2,roll:0}});
+    },
+    setActive(active) {
+      desiredActive = Boolean(active);
+      state.active=desiredActive;
+      if (viewer) { viewer.useDefaultRenderLoop = desiredActive; if (desiredActive) { viewer.resize(); viewer.scene.requestRender(); } }
+    },
+    centre() {
+      if (!viewer) return null;
+      const scene=viewer.scene, pixel=new Cesium.Cartesian2(scene.canvas.clientWidth/2,scene.canvas.clientHeight/2);
+      const point=viewer.camera.pickEllipsoid(pixel,scene.globe.ellipsoid);
+      if (!point) return null;
+      const c=Cesium.Cartographic.fromCartesian(point);
+      return {lat:Cesium.Math.toDegrees(c.latitude),lon:Cesium.Math.toDegrees(c.longitude)};
+    }
+  };
+  try {
+    if (!window.Cesium) { fail("Dünya motoru indirilemedi. İnternet bağlantısını kontrol edin."); return; }
+    Cesium.Ion.defaultAccessToken = "";
+    viewer = new Cesium.Viewer("globe", {baseLayer:false,baseLayerPicker:false,geocoder:false,
+      terrainProvider:new Cesium.EllipsoidTerrainProvider(),animation:false,timeline:false,
+      navigationHelpButton:false,homeButton:false,sceneModePicker:false,fullscreenButton:false,
+      infoBox:false,selectionIndicator:false,requestRenderMode:true,maximumRenderTimeChange:Infinity,
+      contextOptions:{webgl:{alpha:false,preserveDrawingBuffer:true}},skyBox:false});
+    const scene=viewer.scene;
+    viewer.targetFrameRate=30;
+    viewer.resolutionScale=Math.min(1,1.5/(window.devicePixelRatio||1));
+    scene.globe.maximumScreenSpaceError=2;
+    scene.globe.tileCacheSize=100;
+    scene.globe.enableLighting=false;
+    scene.globe.baseColor=Cesium.Color.fromCssColorString("#063950");
+    scene.backgroundColor=Cesium.Color.fromCssColorString("#030915");
+    scene.screenSpaceCameraController.minimumZoomDistance=120;
+    scene.screenSpaceCameraController.maximumZoomDistance=42000000;
+    scene.globe.showGroundAtmosphere=true;
+    let layer;
+    function setMode(next) {
+      if (!["holo","natural","street"].includes(next)) return;
+      mode=state.mode=next;
+      state.images=0;
+      if (layer) viewer.imageryLayers.remove(layer,true);
+      const streets=next!=="natural";
+      const provider=new Cesium.UrlTemplateImageryProvider({
+        url:streets?"https://tile.openstreetmap.org/{z}/{x}/{y}.png":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        maximumLevel:19,tilingScheme:new Cesium.WebMercatorTilingScheme(),
+        credit:new Cesium.Credit(streets?'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>':'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',true)
+      });
+      const requestImage=provider.requestImage.bind(provider);
+      provider.requestImage=(...args)=>{
+        const request=requestImage(...args);
+        return request && request.then(image=>{state.images++;return image;});
+      };
+      provider.errorEvent.addEventListener(()=>fail("Harita görüntüleri alınamadı. Bağlantıyı veya başka bir görünümü deneyin."));
+      layer=viewer.imageryLayers.addImageryProvider(provider);
+      if(next==="holo") {layer.brightness=.78;layer.contrast=1.65;layer.saturation=0;layer.colorToAlpha=Cesium.Color.WHITE;layer.colorToAlphaThreshold=.16;}
+      document.querySelectorAll("[data-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.mode===next)));
+      state.error="";
+      scene.requestRender();
+    }
+    document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+    document.getElementById("home").onclick=()=>viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(28,22,21000000),duration:1.2});
+    document.getElementById("in").onclick=()=>{viewer.camera.zoomIn(viewer.camera.positionCartographic.height*.48);scene.requestRender();};
+    document.getElementById("out").onclick=()=>{viewer.camera.zoomOut(viewer.camera.positionCartographic.height*.70);scene.requestRender();};
+    document.getElementById("dimension").onclick=()=>{if(scene.mode===Cesium.SceneMode.SCENE3D) scene.morphTo2D(1);else scene.morphTo3D(1);};
+    scene.globe.tileLoadProgressEvent.addEventListener(count=>{state.tiles=count;if(!count)scene.requestRender();});
+    scene.postRender.addEventListener(()=>{state.rendered=true;state.sceneMode=scene.mode;state.height=viewer.camera.positionCartographic.height;});
+    scene.renderError.addEventListener(()=>fail("3D çizim durdu. Ekran kartı veya WebGL desteğini kontrol edin."));
+    viewer.camera.changed.addEventListener(()=>{
+      const c=viewer.camera.positionCartographic;
+      if(!state.error)readout.textContent=`${mode==="natural"?"DOĞAL / UYDU":mode==="street"?"SOKAK HARİTASI":"HOLOGRAFİK DÜNYA"}\n${Cesium.Math.toDegrees(c.latitude).toFixed(4)}° · ${Cesium.Math.toDegrees(c.longitude).toFixed(4)}° · ${(c.height/1000).toFixed(2)} km`;
+    });
+    viewer.camera.percentageChanged=.015;
+    setMode("holo");
+    viewer.camera.setView({destination:Cesium.Cartesian3.fromDegrees(28,22,21000000)});
+    state.ready=true;
+    window.fridayEarth.setActive(desiredActive);
+    if(pending)window.fridayEarth.goTo(pending);
+    document.addEventListener("visibilitychange",()=>window.fridayEarth.setActive(!document.hidden));
+  } catch(error) { fail("3D dünya başlatılamadı: " + String(error.message||error).slice(0,160)); }
+})();

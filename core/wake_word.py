@@ -1,4 +1,4 @@
-"""Offline 'Hey AETHER' detection on 16 kHz microphone frames."""
+"""Offline 'Hey FRIDAY' detection on 16 kHz microphone frames."""
 from __future__ import annotations
 
 from importlib.util import find_spec
@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Callable
 
 MODEL_NAME = "vosk-model-small-en-us-0.15"
-# Vosk may transcribe the AETHER (EY-TIR) wake word as "either".
-KEYPHRASE = "hey either"
-KEYPHRASES = ("hey either", "hey aether", "hey ether")
+# Vosk may transcribe the FRIDAY (EY-TIR) wake word as "either".
+KEYPHRASE = "hey friday"
+KEYPHRASES = ("hey friday", "hello friday", "hey either", "hey aether", "hey ether")
 DEFAULT_THRESHOLD = 0.8
 SAMPLE_RATE = 16000
 
@@ -41,14 +41,14 @@ def install_and_download(logger: Callable[[str], None] = print,
             if not _pip("vosk", log=logger):
                 return False, "Çevrimdışı ses tanıyıcı kurulamadı."
         from vosk import Model
-        message = "Hey AETHER için çevrimdışı ses modeli hazırlanıyor…"
+        message = "Hey FRIDAY için çevrimdışı ses modeli hazırlanıyor…"
         logger(message)
         if notify:
             notify(message)
         Model(model_name=MODEL_NAME)
         if not is_ready():
             return False, "Ses modeli bulunamadı."
-        return True, "Hazır. Uyandırmak için ‘Hey AETHER’ de."
+        return True, "Hazır. Uyandırmak için ‘Hey FRIDAY’ de."
     except (Exception, SystemExit) as exc:
         return False, f"Ses modeli kurulamadı: {exc}"
 
@@ -101,7 +101,7 @@ class WakeWordDetector:
         self._thread = threading.Thread(target=self._loop, args=(self._queue, self._model),
                                         daemon=True, name="WakeWordThread")
         self._thread.start()
-        self._logger("Wake word: listening for 'Hey AETHER'.")
+        self._logger("Wake word: listening for 'Hey FRIDAY'.")
         return True
 
     def stop(self) -> None:
@@ -128,7 +128,7 @@ class WakeWordDetector:
     @staticmethod
     def _reset_model(model) -> None:
         # The model keeps its recent audio features and scores. Left alone, one
-        # "Hey AETHER" fired a dozen times in a row (measured: 12), and audio
+        # "Hey FRIDAY" fired a dozen times in a row (measured: 12), and audio
         # from before the assistant woke was still in there when it went back
         # to sleep — so it could wake again on words said minutes earlier.
         try:

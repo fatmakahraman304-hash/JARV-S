@@ -26,24 +26,8 @@ aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama
 önce otomatik yayını kapatarak araştırma ve geliştirme sonuçlarını incele.
 Üretilen kontrolü uygulamanın gerçek arayüzünde denemeden doğrulanmış sayma.
 
-## WhatsApp Business asistanını bağlama
+## WhatsApp Business
 
-Ayarlar → Uygulamalar → WhatsApp Business → Ayarla. Twilio WhatsApp
-Business göndericisinin numarasını, Auth Token'ı ve dışarıdan erişilebilen
-HTTPS alan adını gir. HTTPS'te yalnızca aşağıdaki iki webhook yolunu,
-AETHER'ın çalıştığı bilgisayarda `127.0.0.1:8769` adresine yönlendir.
-
-- Twilio göndericisinin gelen mesaj webhook'u **POST `/whatsapp/message`**
-  olmalı. WhatsApp Sandbox üzerinden mesaj akışı da denenebilir.
-- Aramalar için göndericide WhatsApp Business Calling'i aç. Giriş için
-  bağladığın TwiML uygulamasının Voice Request URL'si **POST `/whatsapp/voice`**
-  olmalı. Proxy, sesli konuşma sırasındaki `?turn=` sorgusunu korumalı.
-
-Mesaj ve arama için ayrı açma/kapama seçenekleri var. Mesajlara tanımladığın
-metin döner. Aramalarda AETHER kendini otomatik asistan olarak tanıtır ve
-sık sorulan sorular alanındaki anahtar kelimelerle eşleşen cevapları Türkçe
-okur. Örnek kural `çalışma saatleri = Hafta içi 9–18.`. Arama sesi Twilio
-tarafında işlenir. AETHER arama transkriptini diske yazmaz. AETHER ve HTTPS
-bağlantısı açık olduğu sürece çalışır. Bu bağlantı Twilio'ya kayıtlı Business
-numarası içindir. Yerel dinleyicinin açılması dış bağlantının kurulduğunu
-belirtmez. Gerçek telefondan önce mesaj, ardından sesli arama yaparak doğrula.
+Business/Twilio otomatik yanıt dinleyicisi kaldırıldı. Eski yerel ayarlar
+çalıştırılmaz veya dışarı aktarılmaz; kullanıcı verileri silinmez. Normal
+WhatsApp için kullanıcı onayına bağlı mesajlaşma araçları korunur.

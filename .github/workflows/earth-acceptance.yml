@@ -1,0 +1,42 @@
+name: FRIDAY Earth WebGL acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["gui/earth_panel.py", "web/earth/**", "tools/verify_earth.py", ".github/workflows/earth-acceptance.yml"]
+permissions:
+  contents: read
+jobs:
+  earth:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install Qt
+        run: python -m pip install "PyQt6>=6.6,<7" "PyQt6-WebEngine>=6.6,<7" psutil numpy
+      - name: Linux display and WebGL
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libopengl0 libglx-mesa0 libnss3 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 libxcb-xkb1 libfontconfig1
+      - name: Real Earth (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader
+        run: xvfb-run -s "-screen 0 1280x900x24" python tools/verify_earth.py earth-preview
+      - name: Real Earth (Windows)
+        if: runner.os == 'Windows'
+        env:
+          QTWEBENGINE_CHROMIUM_FLAGS: --enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader
+        run: python tools/verify_earth.py earth-preview
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: earth-${{ matrix.os }}
+          path: earth-preview/
