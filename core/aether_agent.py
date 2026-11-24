@@ -661,18 +661,22 @@ class OpenAIBrain:
         headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
         # NVIDIA GLM-5.3 zaman aşımı yaşadığında tek model 5 dakika bloke etmesin.
         nvidia_timeout = 22 if self.model == "z-ai/glm-5.3-flash" else 90
-        timeout = nvidia_timeout if self.name.startswith("NVIDIA") else 300
+        timeout = nvidia_timeout if self.name.startswith("NVIDIA") else (
+            45 if self.name.startswith("FREE ") else 300)
         try:
             js = _http_json(f"{self.base}/chat/completions", body, headers, timeout=timeout)
         except BrainError as exc:
-            if self.name.startswith("NVIDIA"):
+            if self.name.startswith(("NVIDIA", "FREE ")):
                 # Ham sağlayıcı hatasını veya özel kimlik bilgilerini günlüğe yazma.
                 code = re.match(r"^([1-5][0-9]{2})\b", str(exc))
-                raise BrainError("NVIDIA API " + (
+                raise BrainError(self.name + " API " + (
                     code.group(1) if code else "bağlantı hatası")) from None
             raise
         if js.get("error"):
-            raise BrainError(str(js["error"])[:300])
+            raise BrainError("Sağlayıcı API hatası" if self.name.startswith("FREE ")
+                             else str(js["error"])[:300])
+        from core.free_models import record_usage
+        record_usage(self.base, self.model, js.get("usage"))
         choices = js.get("choices") or []
         if not choices or not isinstance(choices[0], dict):
             raise BrainError("NVIDIA modelinden geçerli yanıt alınamadı.")
@@ -756,9 +760,16 @@ def gemini_models(key: str) -> list[str]:
 
 def brains() -> list:
     """Kodlama modelleri: NVIDIA Build → Gemini."""
-    from core import nvidia_account
+    from core import nvidia_account, free_models
     cfg = _settings()
     out = []
+    if free_models.enabled():
+        out.extend(OpenAIBrain(base, key, model, "FREE " + vendor)
+                   for vendor, model, base, key in free_models.specs("coding"))
+        gemini_key = _gemini_key()
+        if gemini_key and cfg.get("use_gemini", True) is not False:
+            out.extend(GeminiBrain(gemini_key, m) for m in free_models.GEMINI_TEXT)
+        return out
     nvidia_key = nvidia_account.api_key()
     if nvidia_key:
         out.extend(OpenAIBrain(nvidia_account.BASE_URL, nvidia_key, model, "NVIDIA")
@@ -770,7 +781,9 @@ def brains() -> list:
 
 
 def available() -> bool:
-    from core import nvidia_account
+    from core import nvidia_account, free_models
+    if free_models.enabled():
+        return bool(free_models.specs("coding") or _gemini_key())
     return bool(nvidia_account.api_key() or _gemini_key())
 
 
@@ -832,7 +845,7 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("AETHER kod ajanı için NVIDIA veya Gemini API anahtarı gerekiyor.")
+        raise RuntimeError("AETHER kod ajanı için etkin bir model ve API anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
     log(f"  AETHER ajanı: {brain.name}")

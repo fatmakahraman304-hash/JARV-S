@@ -177,7 +177,7 @@ CATALOG = (
                 "model": "MiniMax-M3.1-Flash"}},
     {"id": "groq",       "label": "Groq",
      "note": "bulut · çok hızlı · ücretsiz kullanım hakkı", "local": False,
-     "values": {"base_url": PRESETS["Groq"], **_CLOUD}},
+     "values": {"base_url": PRESETS["Groq"], **_CLOUD, "model": "openai/gpt-oss-120b"}},
     {"id": "openai",     "label": "OpenAI",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["OpenAI"], **_CLOUD}},
@@ -202,13 +202,13 @@ CATALOG = (
      "values": {"base_url": PRESETS["xAI"], **_CLOUD}},
     {"id": "openrouter", "label": "OpenRouter",
      "note": "bulut · tek anahtarla birçok model", "local": False,
-     "values": {"base_url": PRESETS["OpenRouter"], **_CLOUD}},
+     "values": {"base_url": PRESETS["OpenRouter"], **_CLOUD, "model": "openrouter/free"}},
     {"id": "together",   "label": "Together",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["Together"], **_CLOUD}},
     {"id": "cerebras",   "label": "Cerebras",
      "note": "bulut · API anahtarı gerekir", "local": False,
-     "values": {"base_url": PRESETS["Cerebras"], **_CLOUD}},
+     "values": {"base_url": PRESETS["Cerebras"], **_CLOUD, "model": "gpt-oss-120b"}},
     {"id": "custom",     "label": "Diğer sağlayıcı",
      "note": "API adresini kendiniz girin", "local": None,
      "values": {}},
@@ -530,6 +530,8 @@ class OpenAICompatLLM:
         except Exception as e:
             raise _with_address(e, self.base) from None
 
+        from core.free_models import record_usage
+        record_usage(self.base, self.model, data.get("usage"))
         choice = (data.get("choices") or [{}])[0]
         msg = choice.get("message") or {}
         text = msg.get("content") or ""

@@ -231,6 +231,8 @@ class ProvidersOverlay(_HudOverlay):
         coding = get_coding_provider()
         self._coding = "" if coding in {"claude_code", "codex_cli", "openai_compat@deepseek"} else self._normalise(coding, "llm")
         self._sidecar_first = get_sidecar_first()
+        from core.free_models import enabled
+        self._free_multi = enabled()
         self._rebuild_body()
 
         outer.addWidget(self._footer)
@@ -881,8 +883,15 @@ class ProvidersOverlay(_HudOverlay):
         self._first_combo.addItem("Önce Gemini — seçilen model yedek", "after")
         self._first_combo.addItem(
             "Önce seçilen model — Gemini yedek", "before")
-        self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
+        self._first_combo.addItem("Ücretsiz çoklu beyin (Groq / Cerebras / OpenRouter)", "free")
+        self._first_combo.setCurrentIndex(2 if self._free_multi else (1 if self._sidecar_first else 0))
+        self._first_combo.currentIndexChanged.connect(self._free_mode_changed)
         lay.addWidget(self._first_combo)
+        lay.addWidget(self._label(
+            "Çoklu beyin: sağlayıcıları sırayla seçip anahtarlarını girin, ardından "
+            "bu modu seçip uygulayın. Ücretsiz hesap kullanın; ücretli planlar "
+            "sağlayıcı tarafından faturalandırılabilir. Ses motoru değişmez.",
+            7, C.TEXT_DIM))
 
         # In pipeline mode the model chosen for ② THINKING may answer these too,
         # and then there is nothing more to fill in. In Gemini mode there IS no
@@ -952,6 +961,10 @@ class ProvidersOverlay(_HudOverlay):
         else:
             self._fields_into(lay, "llm", sid)
         return w
+
+    def _free_mode_changed(self, _ix) -> None:
+        self._free_multi = self._first_combo.currentData() == "free"
+        self._sidecar_first = self._first_combo.currentData() == "before"
 
     def _sidecar_changed(self, _ix) -> None:
         sid = self._sidecar_combo.currentData() or ""
@@ -1213,6 +1226,7 @@ class ProvidersOverlay(_HudOverlay):
             sidecar=self._sidecar,
             sidecar_first=self._first_combo.currentData() == "before",
             coding=self._coding,
+            free_multi=self._free_multi,
         )
 
         # Providers are cached by configuration; a changed setting must not go

@@ -776,7 +776,7 @@ def save_sidecar_first(enabled: bool) -> None:
 @_locked
 def save_providers(mode: str = None, pipeline: dict = None, creds: dict = None,
                    sidecar: str = None, sidecar_first: bool = None,
-                   coding: str = None) -> None:
+                   coding: str = None, free_multi: bool = None) -> None:
     """Write the whole providers block in ONE file write.
 
     The settings panel used to call five setters in a row — one per provider's
@@ -821,6 +821,9 @@ def save_providers(mode: str = None, pipeline: dict = None, creds: dict = None,
         block["sidecar_first"] = bool(sidecar_first)
     if coding is not None:
         block["coding"] = str(coding or "").strip()
+
+    if free_multi is not None:
+        block["free_multi"] = bool(free_multi)
 
     data["providers"] = _without_deepseek(block)
     _write_config(data)
