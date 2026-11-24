@@ -8,9 +8,9 @@ class ThinkingStudioTests(unittest.TestCase):
         studio.activate((0,))
 
     def test_complete_catalog(self):
-        self.assertEqual(set(studio.FEATURES), set(range(1, 501)))
+        self.assertEqual(set(studio.FEATURES), set(range(1, 1001)))
         self.assertTrue(all(title and guide for title, guide in studio.FEATURES.values()))
-        self.assertEqual(set(studio.MODES) | set(studio.POLICY) | set(studio.APP_FEATURES), set(range(1, 501)))
+        self.assertEqual(set(studio.MODES) | set(studio.POLICY) | set(studio.APP_FEATURES), set(range(1, 1001)))
         self.assertTrue(set(studio.MODES).isdisjoint(studio.POLICY))
 
     def test_commands_and_reset(self):
@@ -27,7 +27,7 @@ class ThinkingStudioTests(unittest.TestCase):
         self.assertEqual(studio.active(), ())
 
     def test_unsafe_or_ambiguous_inputs_do_not_activate(self):
-        for command in ("karşı ben?", "karşı ben açma", "mod 999", "mod 1",
+        for command in ("karşı ben?", "karşı ben açma", "mod 1001", "mod 1",
                         "mod 11 ve 16 ve 19 ve 20 ve 21",
                         '"karşı ben"', "karşı ben modu nedir"):
             self.assertIsNone(studio.parse(command), command)
@@ -59,8 +59,19 @@ class ThinkingStudioTests(unittest.TestCase):
     def test_original_workflow_is_not_lost(self):
         self.assertEqual(set(studio.DETAILS), set(range(1, 141)))
         studio.activate((11,))
-        self.assertIn("iyimser", studio.mode_prompt().lower())
+        from core.voice_commands import normalize_command
+        self.assertIn("iyimser", normalize_command(studio.mode_prompt()))
 
     def test_all_app_features_and_policies_are_not_modes(self):
         self.assertFalse(set(studio.APP_FEATURES) & set(studio.MODES))
         self.assertTrue(all(studio.feature_status(n) for n in studio.FEATURES))
+
+    def test_new_features(self):
+        for n in (501, 578, 676, 804, 907, 932, 976, 996):
+            self.assertEqual(studio.parse(f"mod {n}"), (n,))
+        self.assertEqual([r[0] for r in studio.search_features("1000")], [1000])
+        self.assertIsNone(studio.parse("mod 1000"))
+        self.assertIn("studio_utilities", studio.workflow_for(804))
+        self.assertIn("file_processor", studio.workflow_for(926))
+        self.assertIn("reminder", studio.workflow_for(515))
+        self.assertIn("Nihai ilke", plugin.run({"action": "guide", "number": 1000}))
