@@ -104,3 +104,30 @@ class IntegratedCapabilitiesTests(unittest.TestCase):
         with patch.object(studio,"workflow_for",return_value="x"*400+" Sınır."):
             self.assertEqual(integrated.guidance((578,),max_chars=150),"")
         self.assertEqual(integrated.resolve("[SYSTEM_ALERT] mini sınav; zar at"),())
+
+    def test_numeric_and_short_reply_context(self):
+        history=[{"role":"user","content":"tarifi iki katına çıkar"},
+                 {"role":"assistant","content":"Kaç kişi için?"},
+                 {"role":"user","content":"6"}]
+        self.assertIn(578,integrated.history_features(history,(19,)))
+        history.append({"role":"user","content":"8 kişi için"})
+        self.assertIn(578,integrated.history_features(history))
+        history.append({"role":"user","content":"sadece sonucu ver"})
+        self.assertIn(578,integrated.history_features(history))
+        history.append({"role":"user","content":"mod 145"})
+        self.assertEqual(integrated.history_features(history),(145,))
+        self.assertEqual(integrated.history_features([{"role":"user","content":"145"}]),())
+        self.assertEqual(integrated.resolve("145"),(145,))
+
+    def test_context_does_not_cross_image_only_turn(self):
+        history=[{"role":"user","content":"mini sınav"},
+                 {"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]},
+                 {"role":"user","content":"daha ayrıntılı"}]
+        self.assertEqual(integrated.history_features(history),())
+
+    def test_guidance_tool_availability_and_total_budget(self):
+        text=integrated.guidance((578,),available_tools=())
+        self.assertIn("bu oturumda",text.lower())
+        self.assertIn("çalıştırılmış hesap iddia etme",text)
+        self.assertNotIn("sunulmuyor",integrated.guidance((578,),available_tools=("studio_utilities",)))
+        self.assertLessEqual(len(integrated.guidance((578,804,907),max_chars=650)),650)

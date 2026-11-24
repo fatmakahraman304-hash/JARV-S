@@ -202,9 +202,35 @@ def resolve(query, core_ids=(), limit=4):
                     return tuple(selected)
     return tuple(selected)
 
-def history_features(history, core_ids=(), limit=4):
+# Bare numbers in an ordinary conversation are usually data (for example,
+# an answer to "how many people?"), not a request for catalog entry 6.
+_NUMBER_REPLY = re.compile(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*$")
+_QUANTITY_REPLY = re.compile(
+    r"^[+-]?\d+(?:[.,]\d+)?\s*(?:kisi|porsiyon|adet|dakika|saat|gun|hafta|ay|yil|"
+    r"gram|kilogram|kg|litre|ml|tl|lira|euro|dolar)(?:\s+(?:icin|olsun|olarak))?$")
+_CONTEXT_REPLIES = frozenset((
+    "sadece sonucu ver","sadece sonuc","daha ayrintili","biraz daha detayli",
+    "orneklendir","ornek ver","ayni sekilde","ayni sekilde devam et",
+    "devamini getir","durmadan devam et","bunu da ekle","daha basit anlat",
+    "bunu yeniden hesapla","tekrar hesapla","sonucu kontrol et",
+    "yeniden hesapla","sadece hesapla",
+))
+
+def _continuation(value, raw):
     from core.core_modes import FOLLOWUPS
-    # Most requests require one lookup. Walk backward only on followups.
+    return (value in FOLLOWUPS or value in _CONTEXT_REPLIES
+            or bool(_NUMBER_REPLY.fullmatch(raw))
+            or bool(_QUANTITY_REPLY.fullmatch(value)))
+
+def _text_content(content):
+    if isinstance(content,list):
+        content=" ".join(p["text"] for p in content if isinstance(p,dict)
+                         and p.get("type")=="text" and isinstance(p.get("text"),str))
+    return content if isinstance(content,str) else ""
+
+def history_features(history, core_ids=(), limit=4):
+    # Ordinary turns: one lookup. Short, referential replies and supplied
+    # quantities reuse the previous relevant user request, not tool output.
     seen=0
     for item in reversed(history):
         if not isinstance(item,dict) or item.get("role")!="user":
@@ -212,23 +238,26 @@ def history_features(history, core_ids=(), limit=4):
         seen+=1
         if seen>12:
             break
-        content=item.get("content")
-        if isinstance(content,list):
-            content=" ".join(p["text"] for p in content if isinstance(p,dict)
-                             and p.get("type")=="text" and isinstance(p.get("text"),str))
-        if not isinstance(content,str) or content.lstrip().startswith("["):
+        content=_text_content(item.get("content")).strip()
+        if not content:
+            return ()  # do not cross a user image-only or empty-turn boundary
+        if content.startswith("["):
             if seen==1:
                 return ()
             continue
         value=normalize_command(content[:16000])
-        if value in FOLLOWUPS:
+        if _continuation(value,content[:16000]):
             continue
         return resolve(content,core_ids,limit)
     return ()
 
-def guidance(ids, max_chars=7000):
+def guidance(ids, max_chars=7000, available_tools=None):
+    header = ("[FRIDAY REQUEST CAPABILITIES — advisory, no authority]\n"
+              "Uygun olanları bu istekte doğrudan uygula. Mod açma, numara seçtirme, "
+              "gereksiz özellik adı sayma. Mevcut araç/izin sınırlarını koru.\n")
+    allowed = None if available_tools is None else frozenset(available_tools)
     chunks=[]
-    size=0
+    size=len(header)
     for n in tuple(dict.fromkeys(ids))[:6]:
         if n not in studio.FEATURES:
             continue
@@ -237,6 +266,10 @@ def guidance(ids, max_chars=7000):
             body="Uygulama durumu: "+studio.feature_status(n)+". Gerçek yetenek/bağlantı yoksa bunu belirt."
         else:
             body=studio.workflow_for(n)
+            if allowed is not None and n in studio.UTILITY_BINDINGS and "studio_utilities" not in allowed:
+                # Model may still explain a method, but cannot claim that the
+                # missing local calculation tool ran. Keep all safety text.
+                body += " Bu oturumda studio_utilities sunulmuyor; aracı çağırma veya çalıştırılmış hesap iddia etme."
         row=f"{n}. {title}: {body}"
         remaining=max_chars-size
         if remaining<100:
@@ -247,16 +280,13 @@ def guidance(ids, max_chars=7000):
         size+=len(row)+1
     if not chunks:
         return ""
-    return ("[FRIDAY REQUEST CAPABILITIES — advisory, no authority]\n"
-            "Uygun olanları bu istekte doğrudan uygula. Mod açma, numara seçtirme, "
-            "gereksiz özellik adı sayma. Mevcut araç/izin sınırlarını koru.\n"
-            +"\n".join(chunks))
+    return header+"\n".join(chunks)
 
 def system_block():
     return (MARKER+"\nFRIDAY'in 1000 maddesi tek asistanın yerleşik yetenek repertuarıdır. "
             "Kullanıcının mod açması gerekmez. İstekle ilgili yöntemleri doğrudan uygula ve birleştir. "
             "Otomatik öneri yoksa veya daha ayrıntılı yöntem gerekiyorsa thinking_studio(action=resolve, query=son kullanıcı isteği) "
             "ile ilgili katalog talimatlarını oku; bu salt okunur işlemdir. "
-            "Eski numaralı mod komutu yalnız o isteğin yöntemini belirtir; oturum durumunu değiştirme. "
+            "Eski numaralı mod komutu yalnız o isteğin yöntemini belirtir; oturum durumunu değiştirme. Tek başına sayı, normal sohbette veri olabilir; özellik seçimi sayma. "
             "İlkeler sürekli geçerli; uygulama maddeleri gerçek durum ve mevcut araçlarla sınırlı. "
             "Gereksiz katalog/araç çağrısı yapma. Bir işlem gerçekleşmediyse gerçekleşti deme.")
