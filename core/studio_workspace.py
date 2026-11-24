@@ -158,6 +158,7 @@ class Workspace:
 
     def list(self, query="", kind="", project=""):
         with self.db() as db:
+            db.execute("BEGIN")  # consistent snapshot across both tables
             rows = [dict(r, due="", priority="Normal") for r in db.execute("SELECT * FROM records")]
             rows.extend(dict(r) for r in db.execute("SELECT * FROM tasks"))
             rows.sort(key=lambda r:r["updated"], reverse=True)
@@ -192,10 +193,23 @@ class Workspace:
             raise ValueError("Arşiv tek yedek sınırını aşıyor; mevcut dosya değiştirilmedi.")
         return result
 
-    def write_backup(self, path):
-        """Replace the chosen backup atomically, only after validation and write."""
-        data = self.export()
+    def _safe_export_target(self, path):
+        """Protect the active SQLite database, its sidecars and path aliases."""
         target = Path(path)
+        resolved = target.resolve()
+        database = self.path.resolve()
+        protected = (database, *(Path(str(database)+suffix) for suffix in ("-wal","-shm","-journal")))
+        for item in protected:
+            if resolved == item or target.exists() and item.exists() and target.samefile(item):
+                raise ValueError("Aktif arşiv veritabanı veya yan dosyası dışa aktarma hedefi olamaz.")
+        if target.suffix.lower() not in (".json", ".txt"):
+            raise ValueError("Dışa aktarma hedefi JSON veya TXT olmalı.")
+        return target
+
+    def _write_export(self, path, data, suffix):
+        target = self._safe_export_target(path)
+        if target.suffix.lower() != suffix:
+            raise ValueError("Beklenen dosya uzantısı: "+suffix)
         temp = None
         try:
             with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
@@ -204,10 +218,22 @@ class Workspace:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
+            self._safe_export_target(target)
             os.replace(temp, target)
         finally:
             if temp is not None:
                 temp.unlink(missing_ok=True)
+
+    def write_backup(self, path):
+        """Replace only a valid JSON target after successful write."""
+        self._write_export(path, self.export(), ".json")
+
+    def write_record(self, record_id, path):
+        row = self.get(record_id)
+        if row is None:
+            raise ValueError("Kayıt bulunamadı.")
+        data = f"{row['title']}\n{row['confidence']}\n\n{row['body']}"
+        self._write_export(path, data, ".txt")
 
     def import_backup(self, text):
         if len(text.encode("utf-8")) > MAX_BACKUP:

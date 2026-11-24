@@ -122,3 +122,42 @@ class WorkspaceTests(unittest.TestCase):
                 self.store.write_backup(target)
         self.assertEqual(target.read_text(encoding="utf-8"),before)
         self.assertEqual(list(target.parent.glob(".friday-*.tmp")),[])
+
+    def test_exports_never_overwrite_active_database(self):
+        import os
+        rid=self.store.save(kind="note",title="Korunan kayıt",body="içerik")
+        before=self.path.read_bytes()
+        for target in (self.path, self.path.parent / (self.path.name+"-wal"),
+                       self.path.parent / (self.path.name+"-shm"),
+                       self.path.parent / (self.path.name+"-journal")):
+            with self.assertRaises(ValueError):
+                self.store.write_backup(target)
+            with self.assertRaises(ValueError):
+                self.store.write_record(rid,target)
+        alias=self.path.parent/"alias.json"
+        try:
+            os.link(self.path,alias)
+        except OSError:
+            pass
+        else:
+            with self.assertRaises(ValueError):
+                self.store.write_backup(alias)
+        self.assertEqual(self.path.read_bytes(),before)
+        self.assertEqual(self.store.get(rid)["body"],"içerik")
+
+    def test_record_export_atomic_and_extension_validation(self):
+        from unittest.mock import patch
+        rid=self.store.save(kind="note",title="Başlık",body="Metin")
+        target=self.path.parent/"record.txt"
+        self.store.write_record(rid,target)
+        old=target.read_text(encoding="utf-8")
+        self.assertIn("Metin",old)
+        with patch("core.studio_workspace.os.replace",side_effect=OSError("write failed")):
+            with self.assertRaises(OSError):
+                self.store.write_record(rid,target)
+        self.assertEqual(target.read_text(encoding="utf-8"),old)
+        self.assertEqual(list(target.parent.glob(".friday-*.tmp")),[])
+        with self.assertRaises(ValueError):
+            self.store.write_record(rid,self.path.parent/"wrong.json")
+        with self.assertRaises(ValueError):
+            self.store.write_backup(self.path.parent/"wrong.txt")

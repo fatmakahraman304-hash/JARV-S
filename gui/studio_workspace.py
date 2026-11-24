@@ -155,12 +155,15 @@ class WorkspaceDialog(QDialog):
         if not self.discard_ok():
             self.rows.clearSelection()
             return
-        r = self.store.get(item.data(Qt.ItemDataRole.UserRole)["id"])
-        if r is None:
-            self.status.setText("Kayıt bulunamadı.")
-            self.refresh()
-            return
-        self.load_record(r)
+        try:
+            r = self.store.get(item.data(Qt.ItemDataRole.UserRole)["id"])
+            if r is None:
+                self.status.setText("Kayıt bulunamadı.")
+                self.refresh()
+                return
+            self.load_record(r)
+        except Exception as exc:
+            self.error(exc)
 
     def load_record(self, r):
         self.record_id = r["id"]
@@ -400,7 +403,7 @@ class WorkspaceDialog(QDialog):
             path, _ = QFileDialog.getSaveFileName(self, "Seçili kaydı yerel dosyaya aktar",
                                                 "friday-kayit.txt", "Metin (*.txt)")
             if path:
-                Path(path).write_text(f"{row['title']}\n{row['confidence']}\n\n{row['body']}", encoding="utf-8")
+                self.store.write_record(self.record_id, path)
                 self.status.setText("Dosya yazıldı. Başka kişiye gönderilmedi.")
         except Exception as exc:
             self.error(exc)
