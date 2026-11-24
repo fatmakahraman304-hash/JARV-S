@@ -86,7 +86,7 @@
       const provider=new Cesium.UrlTemplateImageryProvider({
         url:streets?"https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         maximumLevel:19,tileDiscardPolicy:missing,tilingScheme:new Cesium.WebMercatorTilingScheme(),
-        credit:new Cesium.Credit(streets?'Tiles © Esri, HERE, Garmin, Intermap, increment P, GEBCO, USGS, FAO, NPS, NRCAN, and the GIS User Community':'Tiles © Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',true)
+        credit:new Cesium.Credit(streets?'Sources: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, (c) OpenStreetMap contributors, and the GIS User Community':'Tiles © Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',true)
       });
       const requestImage=provider.requestImage.bind(provider);
       provider.requestImage=(...args)=>{
