@@ -2,7 +2,8 @@
 from pathlib import Path
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton,
-    QFileDialog, QMessageBox, QFormLayout)
+    QFileDialog, QMessageBox, QFormLayout, QTableWidget, QTableWidgetItem,
+    QGraphicsScene, QGraphicsView)
 from PyQt6.QtCore import Qt
 from core.studio_workspace import Workspace, KINDS, STAGES, CONFIDENCE, MAX_BACKUP
 
@@ -10,7 +11,7 @@ LABELS = dict(zip(KINDS, ("Proje", "Fikir", "Karar", "Kaynak", "Geri bildirim", 
 
 
 class WorkspaceDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_kind=""):
         super().__init__(parent)
         self.setWindowTitle("FRIDAY · Projeler ve Fikir Arşivi")
         self.resize(900, 720)
@@ -59,6 +60,8 @@ class WorkspaceDialog(QDialog):
         for controls in (
             (("Yeni", self.clear), ("Kaydet", self.save), ("Sil", self.delete),
              ("Sürüm geçmişi", self.show_versions), ("Bağlantılar", self.show_links)),
+            (("Zaman çizelgesi", self.show_timeline), ("Karar tablosu", self.show_decisions),
+             ("Fikir haritası", self.show_graph), ("Kaynaklar", lambda: self.filter.setCurrentIndex(self.filter.findData("source")))),
             (("Yedekle", self.backup), ("Yedekten ekle", self.restore),
              ("Seçili kaydı paylaşmak için dışa aktar", self.export_selected), ("Kapat", self.close)),
         ):
@@ -72,6 +75,9 @@ class WorkspaceDialog(QDialog):
         self.filter.currentIndexChanged.connect(self.refresh)
         self.project_filter.textChanged.connect(self.refresh)
         self.rows.itemClicked.connect(self.load)
+        if initial_kind in KINDS:
+            self.filter.setCurrentIndex(self.filter.findData(initial_kind))
+            self.kind.setCurrentIndex(self.kind.findData(initial_kind))
         self.refresh()
 
     def error(self, exc):
@@ -160,6 +166,81 @@ class WorkspaceDialog(QDialog):
             names = {n["id"]: n["title"] for n in nodes}
             self.show_text("Etiket ve proje bağlantıları", "\n".join(
                 f"{names[e['from']]} ↔ {names[e['to']]} ({e['reason']})" for e in edges) or "Bağlantı yok.")
+        except Exception as exc:
+            self.error(exc)
+
+    def show_table(self, title, headers, rows):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(850, 520)
+        layout = QVBoxLayout(dialog)
+        table = QTableWidget(len(rows), len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        for i, row in enumerate(rows):
+            for j, val in enumerate(row):
+                table.setItem(i, j, QTableWidgetItem(str(val)))
+        table.resizeColumnsToContents()
+        table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(table)
+        dialog.exec()
+
+    def show_timeline(self):
+        try:
+            rows = self.store.list(project=self.project_filter.text())
+            events = [(r["created"], r["title"], r["stage"], "Oluşturuldu") for r in rows]
+            for r in rows:
+                for v in self.store.versions(r["id"]):
+                    events.append((v["saved_at"], v["title"], v["stage"], "Önceki sürüm"))
+                if r["updated"] != r["created"]:
+                    events.append((r["updated"], r["title"], r["stage"], "Son güncelleme"))
+            self.show_table("Proje zaman çizelgesi", ["Zaman (UTC)", "Kayıt", "Aşama", "Olay"],
+                            sorted(events))
+        except Exception as exc:
+            self.error(exc)
+
+    def show_decisions(self):
+        try:
+            rows = self.store.list(kind="decision", project=self.project_filter.text())
+            self.show_table("Karar tablosu", ["Seçenek / karar", "Proje", "Aşama", "Güven", "Ölçüt ve gerekçe"],
+                            [(r["title"], r["project"], r["stage"], r["confidence"], r["body"]) for r in rows])
+        except Exception as exc:
+            self.error(exc)
+
+    def show_graph(self):
+        import math
+        from PyQt6.QtGui import QColor, QPen, QBrush
+        try:
+            nodes, edges = self.store.relationships(self.project_filter.text())
+            shown = nodes[:60]
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Fikir haritası · açık etiket/proje ilişkileri")
+            dialog.resize(860, 660)
+            layout = QVBoxLayout(dialog)
+            layout.addWidget(QLabel(f"{len(shown)}/{len(nodes)} düğüm. Çizgiler ortak etiket veya projeyi gösterir."))
+            scene = QGraphicsScene(dialog)
+            positions = {}
+            for i, n in enumerate(shown):
+                angle = 2 * math.pi * i / max(len(shown), 1)
+                positions[n["id"]] = (360 * math.cos(angle), 360 * math.sin(angle))
+            pen = QPen(QColor("#6589a0"))
+            for e in edges:
+                if e["from"] in positions and e["to"] in positions:
+                    x1, y1 = positions[e["from"]]
+                    x2, y2 = positions[e["to"]]
+                    scene.addLine(x1,y1,x2,y2,pen).setToolTip(e["reason"])
+            for n in shown:
+                x, y = positions[n["id"]]
+                scene.addEllipse(x-6,y-6,12,12,pen,QBrush(QColor("#22b8cf")))
+                label = scene.addSimpleText(n["title"][:22])
+                label.setPos(x+8,y-10)
+                label.setToolTip(n["title"])
+            view = QGraphicsView(scene)
+            view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            layout.addWidget(view)
+            if shown:
+                view.fitInView(scene.itemsBoundingRect(), Qt.AspectRatioMode.KeepAspectRatio)
+            dialog.exec()
         except Exception as exc:
             self.error(exc)
 
