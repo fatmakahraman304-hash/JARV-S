@@ -62,3 +62,56 @@ class CoreModeTests(unittest.TestCase):
         self.assertNotIn("TURN ROUTING",fake._system)
         fake._history.append({"role":"user","content":"[SYSTEM_ALERT] disk"})
         self.assertNotIn("TURN ROUTING",PipelineEngine._messages(fake)[0]["content"])
+
+    def test_turkish_inflected_requests(self):
+        examples = {
+            "Kodlarını düzelt":12, "Bütçemi hesapla":16, "Tarifini değiştir":19,
+            "Notlarımı düzenle":29, "Sunumumu hazırla":15, "Gezimi planla":20,
+            "Arayüzünü tasarla":14, "Projeyi incele":9,
+        }
+        for request, mode in examples.items():
+            with self.subTest(request=request):
+                self.assertIn(mode,core.route(request))
+
+    def test_route_explanations_and_followups(self):
+        d = core.decide("böyle böyle geliştir",(12,9))
+        self.assertEqual(d.ids,(12,9))
+        self.assertEqual(d.reason,"followup")
+        self.assertIn("doğruluk yüzdesi değildir",core.explain(d))
+        self.assertEqual(core.decide("merhaba").reason,"fallback")
+        self.assertEqual(core.decide("yangın var").ids[0],28)
+        self.assertEqual(core.route("devam et",(99,)),(30,))
+        self.assertEqual(core.route("tarifini değiştir",(12,))[0],19)
+
+    def test_history_is_bounded_and_ignores_tools(self):
+        history = [{"role":"user","content":"Python kodla"}]
+        history.extend({"role":"tool","content":"tarif"} for _ in range(30))
+        history.append({"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,abc"}},
+                                                {"type":"text","text":"daha kısa yap"}]})
+        self.assertEqual(core.route_history(history).ids[0],12)
+        self.assertEqual(core.route_history(history,limit=1).ids,(30,))
+        history.append({"role":"user","content":"[SYSTEM_ALERT] disk"})
+        self.assertEqual(core.route_history(history).ids,())
+
+    def test_tool_hints_are_filtered(self):
+        self.assertEqual(core.available_hints((12,11),("studio_utilities","web_search")),("studio_utilities",))
+        self.assertEqual(core.available_hints((10,),()),())
+
+    def test_pipeline_reuses_route_across_tool_rounds(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        from providers.engine_pipeline import PipelineEngine
+        history = [{"role":"user","content":"Python kodla"}]
+        fake = SimpleNamespace(_system=core.system_block(),_history=history,
+                               _trimmed=lambda:history.copy(),tool_names=lambda:["code_helper"])
+        with patch("core.core_modes.route_history",wraps=core.route_history) as route:
+            first = PipelineEngine._messages(fake)
+            history.append({"role":"tool","content":"sonuç"})
+            second = PipelineEngine._messages(fake)
+            self.assertEqual(route.call_count,1)
+            self.assertEqual(first[0],second[0])
+            self.assertIn("code_helper",first[0]["content"])
+            history.append({"role":"user","content":"tarifini değiştir"})
+            third = PipelineEngine._messages(fake)
+            self.assertEqual(route.call_count,2)
+            self.assertIn("Ana: Yemek",third[0]["content"])
