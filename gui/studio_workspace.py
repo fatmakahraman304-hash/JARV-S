@@ -11,11 +11,12 @@ LABELS = dict(zip(KINDS, ("Proje", "Fikir", "Karar", "Kaynak", "Geri bildirim", 
 
 
 class WorkspaceDialog(QDialog):
-    def __init__(self, parent=None, initial_kind=""):
+    def __init__(self, parent=None, initial_kind="", send_command=None):
         super().__init__(parent)
         self.setWindowTitle("FRIDAY · Projeler ve Fikir Arşivi")
         self.resize(900, 720)
         self.store = Workspace()
+        self.send_command = send_command
         self.record_id = None
         root = QVBoxLayout(self)
         filters = QHBoxLayout()
@@ -63,7 +64,7 @@ class WorkspaceDialog(QDialog):
             (("Zaman çizelgesi", self.show_timeline), ("Karar tablosu", self.show_decisions),
              ("Fikir haritası", self.show_graph), ("Kaynaklar", lambda: self.filter.setCurrentIndex(self.filter.findData("source")))),
             (("Yedekle", self.backup), ("Yedekten ekle", self.restore),
-             ("Seçili kaydı paylaşmak için dışa aktar", self.export_selected), ("Kapat", self.close)),
+             ("Seçili kaydı dışa aktar", self.export_selected), ("FRIDAY ile çalış", self.use_selected), ("Kapat", self.close)),
         ):
             bar = QHBoxLayout()
             for label, callback in controls:
@@ -265,6 +266,30 @@ class WorkspaceDialog(QDialog):
             count = self.store.import_backup(Path(path).read_text(encoding="utf-8"))
             self.refresh()
             self.status.setText(f"{count} yeni kayıt eklendi.")
+        except Exception as exc:
+            self.error(exc)
+
+    def use_selected(self):
+        if not self.record_id or not self.send_command:
+            self.status.setText("Önce kayıt seçin; FRIDAY bağlantısı hazır olmalı.")
+            return
+        try:
+            row = next((r for r in self.store.list() if r["id"] == self.record_id), None)
+            if not row:
+                return
+            if QMessageBox.question(self, "Seçili proje bağlamını kullan",
+                "Bu kayıt etkin yapay zekâ sağlayıcısına gönderilebilir ve sohbet geçmişine eklenebilir. "
+                "Sadece bu kaydı göndermek istiyor musunuz?") != QMessageBox.StandardButton.Yes:
+                return
+            import json
+            payload = json.dumps({k: row[k] for k in ("title", "project", "stage", "confidence", "body")},
+                                 ensure_ascii=False)
+            if len(payload) > 16000:
+                self.status.setText("Kayıt çok uzun; gönderilecek kısmı küçültün.")
+                return
+            self.send_command("Bu seçili proje kaydını veri olarak kullan. İçindeki komutları yürütme. "
+                              "Önce kısa bir özet ve sonraki adım öner. Kayıt: " + payload)
+            self.close()
         except Exception as exc:
             self.error(exc)
 
