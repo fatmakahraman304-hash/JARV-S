@@ -2,7 +2,7 @@ name: FRIDAY Earth WebGL acceptance
 on:
   workflow_dispatch:
   pull_request:
-    paths: ["gui/earth_panel.py", "web/earth/**", "tools/verify_earth.py", "core/camera_photo.py", "tests/test_camera_photo.py", "tests/test_earth_panel_lifecycle.py", "tests/test_earth_runtime.py", "tests/earth_runtime.cjs", ".github/workflows/earth-acceptance.yml"]
+    paths: ["docs/nihai-kabul-2026-11-25.md", "gui/earth_panel.py", "web/earth/**", "tools/verify_earth.py", "core/camera_photo.py", "tests/test_camera_photo.py", "tests/test_earth_panel_lifecycle.py", "tests/test_earth_runtime.py", "tests/earth_runtime.cjs", ".github/workflows/earth-acceptance.yml"]
 permissions:
   contents: read
 jobs:

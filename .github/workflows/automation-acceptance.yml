@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "docs/nihai-kabul-2026-11-25.md"
       - "actions/browser_control.py"
       - "actions/computer_control.py"
       - "tests/test_automation_consent.py"

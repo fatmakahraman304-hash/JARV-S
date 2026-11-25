@@ -2,7 +2,7 @@ name: FRIDAY Holo Desk native and hand inference
 on:
   workflow_dispatch:
   pull_request:
-    paths: ["core/holo_desk.py", "gui/holo_desk.py", "plugins/holo_desk.py", "gui/window.py", "ui.py", "tests/test_holo_desk.py", "tools/verify_holo_desk.py", ".github/workflows/holo-desk.yml"]
+    paths: ["docs/nihai-kabul-2026-11-25.md", "core/holo_desk.py", "gui/holo_desk.py", "plugins/holo_desk.py", "gui/window.py", "ui.py", "tests/test_holo_desk.py", "tools/verify_holo_desk.py", ".github/workflows/holo-desk.yml"]
 permissions:
   contents: read
 jobs:

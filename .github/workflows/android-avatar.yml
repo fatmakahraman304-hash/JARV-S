@@ -3,7 +3,7 @@ on:
   push:
     branches: [feature/android-face]
   pull_request:
-    paths: ["gui/android_gl.py", "gui/hologram_glsl.py", "core/hologram_finish.py", "core/gideon_portrait.py", "core/avatar.py", "core/android_render.py", "core/hologram_face.py", "core/hologram_mesh.py",
+    paths: ["docs/nihai-kabul-2026-11-25.md", "gui/android_gl.py", "gui/hologram_glsl.py", "core/hologram_finish.py", "core/gideon_portrait.py", "core/avatar.py", "core/android_render.py", "core/hologram_face.py", "core/hologram_mesh.py",
             "tools/render_android_preview.py", "tests/test_hologram_face.py", "tests/test_gideon_portrait.py", "tests/test_android_render.py", ".github/workflows/android-avatar.yml"]
 permissions:
   contents: read

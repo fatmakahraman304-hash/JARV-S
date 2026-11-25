@@ -1,0 +1,104 @@
+name: FRIDAY source release candidate acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tools/release_package.py"
+      - "tools/measure_window_startup.py"
+      - "tests/test_release_package.py"
+      - "tests/test_installer_results.py"
+      - "core/installer.py"
+      - "docs/nihai-kabul-2026-11-25.md"
+      - ".github/workflows/release-acceptance.yml"
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Archive isolation and install failure regressions
+        run: python -m unittest -v tests.test_release_package tests.test_installer_results
+      - name: Build twice from the exact committed tree and verify
+        shell: python
+        run: |
+          import hashlib, pathlib, subprocess, sys
+          root = pathlib.Path.cwd()
+          commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          for name in ('friday-source.zip', 'repeat.zip'):
+              subprocess.run([sys.executable, 'tools/release_package.py', 'build', '--out', 'build/release/' + name], check=True)
+          first = root / 'build/release/friday-source.zip'
+          assert first.read_bytes() == (root / 'build/release/repeat.zip').read_bytes()
+          subprocess.run([sys.executable, 'tools/release_package.py', 'verify', str(first), '--commit', commit, '--extract', 'build/extracted'], check=True)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: friday-source-candidate
+          path: |
+            build/release/friday-source.zip
+            build/release/friday-source.zip.sha256
+  windows-package:
+    needs: source
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/download-artifact@v4
+        with:
+          name: friday-source-candidate
+          path: candidate-archive
+      - name: Verify exact source identity and extract without overwriting an installation
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          subprocess.run([sys.executable, 'tools/release_package.py', 'verify', 'candidate-archive/friday-source.zip', '--commit', sha, '--extract', 'build/installed'], check=True)
+      - name: Clean install, reinstall and dependency consistency from the actual ZIP
+        working-directory: build/installed
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe setup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\.venv\Scripts\python.exe setup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\.venv\Scripts\python.exe -m pip check
+      - name: Native packaged window, receipt and normal close
+        run: .\build\installed\.venv\Scripts\python.exe tools/measure_window_startup.py --root build/installed --python build/installed/.venv/Scripts/pythonw.exe --out build/package-window --installed
+      - name: Verify both installed browser engines and installed failure-reporting regressions
+        working-directory: build/installed
+        shell: python
+        run: |
+          import subprocess
+          probe = '''from playwright.sync_api import sync_playwright
+          with sync_playwright() as api:
+              for engine in (api.chromium, api.firefox):
+                  browser = engine.launch()
+                  page = browser.new_page()
+                  page.set_content('<title>FRIDAY ZIP acceptance</title>')
+                  assert page.title() == 'FRIDAY ZIP acceptance'
+                  browser.close()
+          '''
+          subprocess.run([r'.venv\Scripts\python.exe', '-c', probe], check=True)
+          subprocess.run([r'.venv\Scripts\python.exe', '-m', 'unittest', '-v', 'tests.test_installer_results', 'tests.test_updated_hud', 'tests.test_startup_guard', 'tests.test_restart_app'], check=True)
+      - name: Record actual installed dependency versions and license texts
+        run: .\build\installed\.venv\Scripts\python.exe tools/release_package.py inventory --out build/dependency-inventory
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: friday-package-acceptance
+          path: |
+            build/package-window/
+            build/dependency-inventory/

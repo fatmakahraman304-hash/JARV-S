@@ -1,5 +1,6 @@
 """Open the real Qt HUD from a ZIP installation after rollback and after commit."""
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -15,12 +16,26 @@ from core import app_updater
 
 class UpdatedHudTests(unittest.TestCase):
     def test_zip_rollback_then_update_reopens_personalized_hud(self):
-        # Read only tracked Python sources. Never copy local settings or keys.
+        # Read only tracked/manifested Python sources. A release installation
+        # has no Git metadata, and must not accidentally use a parent checkout
+        # or sweep its .venv / runtime files into the simulated update.
         repo = Path(__file__).resolve().parents[1]
-        paths = subprocess.check_output(
-            ["git", "ls-files", "-z", "*.py"], cwd=repo
-        ).decode("utf-8").split("\0")
+        from tools.release_package import MANIFEST, safe_name, private_path
+        manifest_path = repo / MANIFEST
+        if manifest_path.is_file():
+            declared = json.loads(manifest_path.read_text(encoding="utf-8"))["files"]
+            paths = [name for name in declared if name.endswith(".py")]
+            for name in paths:
+                self.assertTrue(safe_name(name) and not private_path(name))
+                data = (repo / name).read_bytes()
+                self.assertEqual(hashlib.sha256(data).hexdigest(), declared[name]["sha256"])
+                self.assertEqual(len(data), declared[name]["bytes"])
+        else:
+            paths = subprocess.check_output(
+                ["git", "ls-files", "-z", "*.py"], cwd=repo
+            ).decode("utf-8").split("\0")
         sources = {p: (repo / p).read_bytes() for p in paths if p and not p.startswith("tests/")}
+        self.assertTrue({"main.py", "ui.py", "gui/window.py"} <= sources.keys())
         sources["requirements.txt"] = (repo / "requirements.txt").read_bytes()
         def archive(version):
             buf = io.BytesIO()
