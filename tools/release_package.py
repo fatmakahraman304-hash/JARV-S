@@ -175,7 +175,9 @@ def inventory(output: Path):
                         and ('.dist-info' in str(file) or '.egg-info' in str(file))):
                     path = distribution.locate_file(file)
                     if path.is_file() and path.stat().st_size <= MAX_FILE:
-                        name = f'{index}/{file.name}'
+                        name = f'{index}/{file.as_posix()}'
+                        if not safe_name(name):
+                            continue
                         if name in row['license_files']:
                             continue
                         archive.writestr(name, path.read_bytes())

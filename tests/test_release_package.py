@@ -182,10 +182,13 @@ class LicenseInventory(unittest.TestCase):
             path = root / file
             path.parent.mkdir(parents=True)
             path.write_bytes(text)
+            other = Path('example.dist-info/licenses/vendor/LICENSE')
+            (root / other).parent.mkdir(parents=True)
+            (root / other).write_bytes(b'distinct upstream license')
             metadata = Message()
             metadata['Name'] = 'example'
             metadata['License-Expression'] = 'MIT'
-            distribution = SimpleNamespace(metadata=metadata, version='1.2.3', files=[file],
+            distribution = SimpleNamespace(metadata=metadata, version='1.2.3', files=[file, other],
                                            locate_file=lambda value: root / value)
             with patch.object(release.importlib.metadata, 'distributions', return_value=[distribution]):
                 self.assertEqual(release.inventory(root / 'inventory'), 1)
@@ -193,4 +196,5 @@ class LicenseInventory(unittest.TestCase):
             self.assertEqual(report['compatibility_review'], 'UNVERIFIED')
             self.assertEqual(report['distributions'][0]['version'], '1.2.3')
             with zipfile.ZipFile(root / 'inventory/dependency-licenses.zip') as archive:
-                self.assertEqual(archive.read('0/LICENSE'), text)
+                self.assertEqual(archive.read('0/example.dist-info/licenses/LICENSE'), text)
+                self.assertEqual(archive.read('0/example.dist-info/licenses/vendor/LICENSE'), b'distinct upstream license')
