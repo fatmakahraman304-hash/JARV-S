@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import platform as _platform
 import subprocess as _subprocess
 
@@ -74,8 +76,13 @@ except OSError as exc:
 import numpy as np
 from core.snap_wake import SnapDetector, is_sleep_command
 from core.voice_commands import is_close_command
-from google import genai
-from google.genai import types
+# The first window and local tools do not need Gemini's SDK. Deferred type
+# annotations keep these proxies cold until a real Live/config/tool response
+# first uses them; model IDs, payloads and provider routing stay unchanged.
+from core.lazyimport import LazyModule
+
+genai = LazyModule("google.genai")
+types = LazyModule("google.genai.types")
 from ui import AetherUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,

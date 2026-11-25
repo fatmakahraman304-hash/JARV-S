@@ -491,3 +491,35 @@ Aşama 7 aktiftir. Kullanıcının uzun süreli CPU/RAM ölçümü, fiziksel GPU
 tam uygulama ilk açılışı ve canlı ses/model yanıt gecikmesi **DOĞRULANMADI**.
 İzin, hafıza doğrulaması veya seçili FRIDAY ses/persona ayarı hız için
 kaldırılmaz/değiştirilmez.
+
+
+## Aşama 7: ilk pencereyi Gemini SDK yüklemesinden ayırma
+
+`main.py`, ilk pencere ve ilk kurulum ekranı görünmeden Gemini SDK'sını
+çalıştırıyordu. Artık mevcut `LazyModule` altyapısı ve ertelenmiş tip
+anotasyonları kullanılır. İlk gerçek Gemini yapılandırması/yanıt nesnesi/Live
+istemcisi aynı SDK'yı yükler; model kimliği, API yükü, sağlayıcı sırası, timeout,
+ses/persona ve anahtarlar değişmez. Ses sürücüsü, TLS sertifika doğrulaması ve
+kısmi güncelleme başlangıç kontrolü mevcut sırada korunur.
+
+`test_startup_imports` ayrı süreçte SDK import'unu engelleyerek `main` ve gerçek
+ilk kurulum penceresinin SDK çalıştırmadan açılabildiğini doğrular. İlk gerçek
+`FunctionResponse` erişiminde gerçek SDK yüklenmesi ve yanıt yapısı ayrıca
+sınanır. Bu testler model servisine bağlanmaz; canlı hizmet başarısı iddiası
+üretmez.
+
+`measure_window_startup.py`, Windows'ta PR tabanı ve adayı aynı kurulu Python
+ortamında, sırayı değiştirerek üçer kez çalıştırır. Ölçüm, yalnızca Git'teki
+Python kaynakları ve requirements'tan oluşturulmuş temiz ZIP benzeri
+kopyalarda yapılır; kullanıcı config/hafızası ve imzalama dosyaları kopyalanmaz.
+Çocuk süreç AppData yolları geçici klasöre alınır; sağlayıcı kimlik bilgisi
+ortam değişkenleri aktarılmaz. Gerçek görünür FRIDAY penceresi ve üretimdeki restart receipt birlikte
+beklenir; pencere `WM_CLOSE` ile normal kapatılır ve çıkış kodu doğrulanır.
+Hatalı açılış/kapanış başarılı ölçüm sayılmaz. Rapor ve süreç günlükleri
+workflow artifact'ına kaydedilir.
+
+Bu ölçüm **anahtarsız ilk kurulum penceresine** aittir. Yapılandırılmış kullanıcı
+profili, fiziksel mikrofon/GPU, ilk model bağlantısı ve ilk sesli yanıt
+gecikmesini doğrulamaz. SDK'nın ilk gerçek kullanım maliyeti ortadan
+kaldırılmadı; UI'nin önündeki gereksiz zorunluluk kaldırıldı. Aşama 7 aktiftir;
+üç tekrarlı Windows sonucu ve regresyonlar ilgili PR'de kaydedilir.

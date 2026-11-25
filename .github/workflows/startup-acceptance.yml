@@ -1,0 +1,59 @@
+name: FRIDAY Windows first-window comparison
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Baseline commit
+        default: affb85e4f2a894fc9c9d8c595229b70991933932
+        required: true
+  pull_request:
+    paths: ["main.py", "ui.py", "gui/**", "tools/measure_window_startup.py", "tests/test_startup_imports.py", ".github/workflows/startup-acceptance.yml"]
+permissions:
+  contents: read
+jobs:
+  first-window:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: baseline
+          ref: ${{ github.event.pull_request.base.sha || inputs.baseline_ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install the documented application environment
+        working-directory: candidate
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe setup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\.venv\Scripts\python.exe -m pip check
+      - name: Cold SDK import and first real use
+        working-directory: candidate
+        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_startup_imports
+      - name: Interleaved native first-window measurements
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          script = Path("candidate/tools/measure_window_startup.py").resolve()
+          pythonw = Path("candidate/.venv/Scripts/pythonw.exe").resolve()
+          python = Path("candidate/.venv/Scripts/python.exe").resolve()
+          for iteration in range(3):
+              names = ("baseline", "candidate") if iteration % 2 == 0 else ("candidate", "baseline")
+              for name in names:
+                  subprocess.run([str(python), str(script), "--root", str(Path(name).resolve()), "--python", str(pythonw), "--out", f"startup-results/{name}/{iteration}"], check=True)
+          subprocess.run([str(python), str(script), "--compare", "startup-results/baseline", "startup-results/candidate", "--out", "startup-results/comparison.json"], check=True)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-first-window
+          path: startup-results/
