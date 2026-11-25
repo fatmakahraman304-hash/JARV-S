@@ -71,3 +71,18 @@ bekleyen yazıcının devamı, zaman aşımında verinin korunması ve yeniden d
 Kilit işbirliği yapan yerel FRIDAY süreçleri içindir; harici editörler veya ağ
 dosya sistemi kilit davranışı için garanti verilmez. Gerçek fiziksel güç
 kesintisi ve uzun süreli kullanıcı cihazı kabulü **DOĞRULANMADI**.
+
+## Aşama 1: kilitli SQLite kaynağından yedekleme
+
+`sqlite3.Connection.backup` kendi yeniden deneme döngüsünü kullandığı için
+bağlantı zaman aşımı tek başına yedeklemeyi sınırlandırmıyordu. Gerçek SQLite
+özel kilidi altında ayrı bir yedekleme sürecinin beklemede kaldığı yeniden
+üretildi. Artık kopyalama aşaması ilerleme geri çağrısında 30 saniyelik bütçeyi
+denetler. Bütçe aşılırsa geçici kopya temizlenir; kaynak korunur ve yarım hedef
+yayımlanmaz. Kısa süreli kilitlerde işlem bütçe içinde devam edebilir.
+
+Yeni kabul testleri, gerçek ayrı süreç ve gerçek SQLite kilidiyle zaman aşımı,
+kilit kalkınca yeniden deneme ve kısa kilit sonrasında tamamlamayı sınar.
+Bu bütçe kopyalama/yeniden deneme aşamasına aittir; işletim sisteminde takılan
+dosya I/O'su veya sonraki bütünlük denetimi için gerçek zaman garantisi değildir.
+Yeni bağımlılık, şema veya kullanıcı verisi değişikliği yoktur. Aşama 1 aktiftir.
