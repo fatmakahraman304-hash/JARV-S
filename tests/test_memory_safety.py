@@ -143,7 +143,8 @@ class MemorySafety(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "disk flush"):
                 mm.remember("new", "must not publish")
         self.assertEqual(mm.MEMORY_PATH.read_bytes(), before)
-        self.assertEqual(sorted(p.name for p in Path(self.tmp.name).iterdir()), ["long_term.json"])
+        self.assertEqual(sorted(p.name for p in Path(self.tmp.name).iterdir()),
+                         ["long_term.json", "long_term.json.lock"])
 
     def test_failed_backup_flush_preserves_primary_and_previous_backup(self):
         mm.remember("one", "first")
