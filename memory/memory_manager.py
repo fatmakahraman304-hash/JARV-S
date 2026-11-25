@@ -1,5 +1,4 @@
 import json
-import time
 import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -82,7 +81,9 @@ def load_memory() -> dict:
                 recovered = _recover(FileNotFoundError(MEMORY_PATH))
                 if MEMORY_PATH.exists():
                     return {**_empty_memory(), **recovered}
-            if not MEMORY_PATH.exists() and _LEGACY_MEMORY_PATH.exists():
+            modern_evidence = (BACKUP_PATH.exists() or BACKUP_PATH.is_symlink()
+                               or any(MEMORY_PATH.parent.glob(MEMORY_PATH.stem + ".corrupt-*")))
+            if not MEMORY_PATH.exists() and not modern_evidence and _LEGACY_MEMORY_PATH.exists():
                 try:
                     legacy = json.loads(_LEGACY_MEMORY_PATH.read_text(encoding="utf-8"))
                     if isinstance(legacy, dict):
@@ -112,8 +113,15 @@ def _recover(error) -> dict:
     _log(f"[Memory] ⚠️ Load error: {error}")
     try:
         if MEMORY_PATH.exists():
-            aside = MEMORY_PATH.with_name(f"long_term.corrupt-{int(time.time())}.json")
-            os.replace(MEMORY_PATH, aside)
+            with tempfile.NamedTemporaryFile(dir=MEMORY_PATH.parent,
+                    prefix=MEMORY_PATH.stem + ".corrupt-", suffix=MEMORY_PATH.suffix,
+                    delete=False) as temporary:
+                aside = Path(temporary.name)
+            try:
+                os.replace(MEMORY_PATH, aside)
+            except OSError:
+                aside.unlink(missing_ok=True)
+                raise
             _log(f"[Memory] Broken file kept as {aside.name}")
     except OSError as exc:
         _log(f"[Memory] Could not keep the broken file: {exc}")
@@ -130,6 +138,12 @@ def _recover(error) -> dict:
             return data
     except Exception as exc:
         _log(f"[Memory] No usable backup: {exc}")
+    if _trim_notifier:
+        try:
+            _trim_notifier("SYS: Hafıza sağlam yedekten kurtarılamadı. Mevcut dosyalar korunuyor; "
+                           "eski kurulum hafızası otomatik içe aktarılmadı.")
+        except Exception:
+            pass
     return _empty_memory()
 
 def _all_entries(memory: dict) -> list[tuple]:

@@ -163,7 +163,23 @@ bu saha testlerinin tamamlandığı anlamına gelmez. Yeni aktif odak Aşama 4't
 - Hafıza araması ilgili sonuçları sınırlarıyla getirmeli; hassas kayıtlar yetkisiz dışa aktarılmamalı.
 - Windows/Linux regresyonları geçmeli; gerçek cihazlar arası eşitleme ve uzun süreli kullanım ayrı raporlanmalı.
 
-## Son çalışma: açılış ve yarım güncelleme
+## Aşama 4: eski hafızadan yanlış geri getirmeyi engelleme
+
+Güncel ana hafıza yokken yedek bozuksa veya önceki bozuk ana dosya karantinaya
+alınmışsa, sonraki okuma eski kurulum hafızasını yeniden içe aktarabiliyordu.
+Bu eski kopya silinmiş bilgiler içerebilir. Üç hata senaryosu sentetik kayıtlarla
+yeniden üretildi. Artık güncel yedek/karantina kanıtı varsa eski kurulumdan
+otomatik ilk taşıma yapılmaz. İlk kurulumdaki gerçek taşıma ve sağlam güncel
+yedekten kurtarma korunur. Eski dosyalar silinmez veya otomatik birleştirilmez.
+
+Bozuk ana dosyaların karantina adları benzersizdir; aynı saniyede ikinci
+kurtarma birinci bozuk dosyayı ezmez. Kurtarma başarısızlığı, kayıt içeriğini
+açığa çıkarmayan Türkçe bildirimle aktarılır; kurtarma başarıyla yapılmış
+gibi gösterilmez. Yeni veri şeması veya izin eklenmez. 21 Kasım 2026 unutma/
+eşitleme regresyonları korunur. Gerçek cihazlar arası eşitleme ve fiziksel
+disk arızası kabulü **DOĞRULANMADI**; Aşama 4 aktiftir.
+
+## Aşama 1: açılış ve yarım güncelleme
 
 `main.py`, üçüncü taraf modüllerden önce `core/startup_guard.py` kontrolünü çağırır.
 Bekleyen yazma/geri dönüş kaydı veya canlı güncelleyici varken normal açılış durur.

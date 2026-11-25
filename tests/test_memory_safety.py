@@ -104,6 +104,44 @@ class MemorySafety(unittest.TestCase):
         mm.update_memory({"notes": {"x": {"value": "y"}}})                   # and the next save keeps Murat
         self.assertEqual(json.loads(mm.MEMORY_PATH.read_text(encoding="utf-8"))["identity"]["name"]["value"], "Murat")
 
+    def test_damaged_current_backup_cannot_reimport_stale_legacy_facts(self):
+        legacy = Path(self.tmp.name) / "legacy.json"
+        legacy.write_text(json.dumps({"notes": {"forgotten": {"value": "synthetic old detail"}}}))
+        mm.BACKUP_PATH.write_text("{broken backup")
+        with patch.object(mm, "_LEGACY_MEMORY_PATH", legacy):
+            for _ in range(2):
+                self.assertNotIn("forgotten", mm.load_memory()["notes"])
+        self.assertFalse(mm.MEMORY_PATH.exists())
+        self.assertEqual(mm.BACKUP_PATH.read_text(), "{broken backup")
+        self.assertTrue(legacy.exists())
+
+    def test_quarantined_primary_blocks_legacy_reimport_on_later_reads(self):
+        legacy = Path(self.tmp.name) / "legacy.json"
+        legacy.write_text(json.dumps({"notes": {"forgotten": {"value": "synthetic old detail"}}}))
+        mm.MEMORY_PATH.write_text("{damaged current")
+        with patch.object(mm, "_LEGACY_MEMORY_PATH", legacy):
+            self.assertNotIn("forgotten", mm.load_memory()["notes"])
+            self.assertNotIn("forgotten", mm.load_memory()["notes"])
+        self.assertFalse(mm.MEMORY_PATH.exists())
+        self.assertEqual(len(list(mm.MEMORY_PATH.parent.glob("long_term.corrupt-*"))), 1)
+
+    def test_repeated_recovery_never_overwrites_earlier_damaged_files(self):
+        mm.BACKUP_PATH.write_text('{"notes":{}}')
+        with patch("time.time", return_value=100):
+            for broken in ("{first damaged", "{second damaged"):
+                mm.MEMORY_PATH.write_text(broken)
+                mm.load_memory()
+        preserved = list(mm.MEMORY_PATH.parent.glob("long_term.corrupt-*"))
+        self.assertEqual({path.read_text() for path in preserved}, {"{first damaged", "{second damaged"})
+
+    def test_unrecoverable_memory_reports_failure_without_exposing_fact_contents(self):
+        mm.MEMORY_PATH.write_text("{synthetic-private-content")
+        messages = []
+        with patch.object(mm, "_trim_notifier", messages.append):
+            mm.load_memory()
+        self.assertTrue(any("kurtarılamadı" in message for message in messages))
+        self.assertFalse(any("synthetic-private-content" in message for message in messages))
+
     def test_a_broken_file_never_becomes_the_backup(self):
         mm.update_memory({"identity": {"name": {"value": "Murat"}}})
         mm.update_memory({"identity": {"city": {"value": "Lefkoşa"}}})
