@@ -27,7 +27,9 @@ class MemoryTests(unittest.TestCase):
                     with self.assertRaises(OSError):
                         memory.save_memory({"notes": {"two": "sonra"}})
                 self.assertEqual(path.read_bytes(), old)
-                self.assertEqual(list(path.parent.iterdir()), [path])
+                lock = path.with_suffix(".json.lock")
+                self.assertEqual(set(path.parent.iterdir()), {path, lock})
+                self.assertEqual(lock.read_bytes(), b"\0")
 
     def test_concurrent_updates_share_a_single_transaction(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(

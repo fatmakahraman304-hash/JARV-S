@@ -2,7 +2,6 @@ import json
 import time
 import os
 from datetime import datetime, timezone, timedelta
-from threading import RLock
 from pathlib import Path
 import sys
 import tempfile
@@ -30,11 +29,12 @@ def get_base_dir() -> Path:
 
 BASE_DIR         = get_base_dir()
 from memory.continuity import data_dir, memory_words, recall_terms, related_word
+from memory.process_lock import FileRLock
 MEMORY_PATH      = data_dir() / "long_term.json"
 BACKUP_PATH      = MEMORY_PATH.with_suffix(".json.bak")        # the last good file, kept before every write
 ARCHIVE_PATH     = MEMORY_PATH.with_name("long_term_archive.json")   # what a full memory let go of — still searchable
 _LEGACY_MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
-_lock            = RLock()
+_lock            = FileRLock(lambda: MEMORY_PATH.with_suffix(".json.lock"))
 MAX_VALUE_LENGTH = 380
 
 # ── Why there are two very different numbers here ────────────────────────────
@@ -626,7 +626,9 @@ def pop_last_session() -> dict | None:
     Return the most recent session entry without consuming it.
     Compatibility name; restart must not destroy session history.
     """
-    with _lock:
+    # Atomic file replacement makes this read safe across processes. Do not
+    # open a writable OS lock file for this strictly read-only operation.
+    with _lock.thread_lock:
         if not MEMORY_PATH.exists():
             return None
         try:

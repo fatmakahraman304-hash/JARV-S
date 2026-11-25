@@ -49,5 +49,25 @@ Test kapsamı: sabit geçici adlardaki kullanıcı dosyaları; bozuk JSON/katego
 yapısı; ana dosya ve yedek `fsync` hataları; arşiv değiştirme hatası ve geçici
 dosya temizliği. 21 Kasım 2026 unutma/eşitleme regresyonları korunur.
 Bu koruma, gerçek elektrik kesintisinde disk/işletim sistemi dayanıklılığının
-donanım üzerinde doğrulandığı anlamına gelmez. Çok süreçli eşzamanlı uzun
-vadeli JSON yazımı ayrıca gözden geçirilmelidir. Aşama 1 **aktif** kalır.
+donanım üzerinde doğrulandığı anlamına gelmez. Aşama 1 **aktif** kalır.
+
+## Aşama 1: aynı hafızaya birden fazla süreçten yazma
+
+Önceden yalnızca süreç içi `RLock` vardı. İki ayrı süreç aynı eski hafızayı
+okuyup farklı tercihleri kaydettiğinde son yazan diğerinin kaydını silebiliyordu.
+Bu durum iki gerçek Python sürecinde eşzamanlı okuma/yazmayla yeniden üretildi.
+
+`memory/process_lock.py`, süreç içi yeniden girilebilir kilidi Windows dosya
+bölgesi kilidi/POSIX `flock` ile birleştirir. Kilit, okuma-değiştirme-yazma
+döngüsünün tamamını kapsar; `core/sync_hub.py` içindeki mevcut `_lock`
+bağlamları da aynı korumayı kullanır. On saniyede kilit alınamazsa kayıt
+uygulanmaz ve anlaşılır hata verilir. Süreç zorla kapatıldığında kilidi işletim
+sistemi bırakır. `.json.lock` dosyasının diskte kalması etkin kilit anlamına
+gelmez; kilit dosyasını elle silmeyin. Son oturum özetinin salt okunur yolu
+yazılabilir kilit dosyası açmaz.
+
+Kabul testleri: aynı anda iki farklı kayıt, tutan süreci zorla öldürme sonrası
+bekleyen yazıcının devamı, zaman aşımında verinin korunması ve yeniden deneme.
+Kilit işbirliği yapan yerel FRIDAY süreçleri içindir; harici editörler veya ağ
+dosya sistemi kilit davranışı için garanti verilmez. Gerçek fiziksel güç
+kesintisi ve uzun süreli kullanıcı cihazı kabulü **DOĞRULANMADI**.
