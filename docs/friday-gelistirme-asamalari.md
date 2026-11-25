@@ -5,8 +5,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 
 | Aşama | Kapsam | Durum |
 | --- | --- | --- |
-| 1 — Sistem kararlılığı | Hatalar, güncelleyici, veri güvenliği, dayanıklılık | **Aktif** |
-| 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | Bekliyor |
+| 1 — Sistem kararlılığı | Hatalar, güncelleyici, veri güvenliği, dayanıklılık | Otomatik kabul geçti; saha doğrulaması açık |
+| 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | **Aktif** |
 | 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Bekliyor |
 | 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Bekliyor |
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Bekliyor |
@@ -22,6 +22,53 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 - Veri yazımı, yedekleme ve geri yüklemenin hata senaryoları gözden geçirilmeli.
 - Temiz Windows kurulumu ve yeniden kurulum doğrulanmalı; donanım/servis gerektiren açıklar ayrıca kaydedilmeli.
 
+## Aşama 1 otomatik kabul kaydı ve geçiş
+
+Son kabul edilen temel commit: `678f7a69be85ac239231bca077269bc513e3e268` (#189).
+
+| Koşul | Doğrulama | Durum |
+| --- | --- | --- |
+| Güncelleme hatası/kesintisinde koruma | ZIP işlem günlüğü, hata enjeksiyonu, gerçek süreç kesintisi ve geri alma testleri; #181–182, #187 | Geçti |
+| Yarım kurulumda güvenli açılış | Gerçek main.py alt süreci, kesilmiş ZIP ve çevrimdışı kurtarma; #184 | Geçti |
+| Kurtarma, yeniden açılış ve kapanış | Gerçek alt süreçte erken kapanma, Qt HUD ve kaynak kapanışı; #189 | Geçti |
+| Veri yazımı ve yedekleme hataları | JSON/SQLite, flush/replace hataları, unutma/eşitleme ve çok süreçli kilit; #185–188 | Geçti |
+| Windows temiz/yeniden kurulum | Gerçek masaüstü penceresini açıp normal kapatma, tarayıcı motorları, yeniden kurulum ve pip check | Geçti |
+
+[Windows/Linux regresyonu](https://github.com/fatmakahraman304-hash/JARV-S/actions/runs/45576344452):
+her sistemde 873 test; 849 başarılı, 24 atlandı; sağlayıcı kontrolleri 99/99.
+[Windows kurulum kabulü](https://github.com/fatmakahraman304-hash/JARV-S/actions/runs/45576344388):
+kurulu ortamda 63 ilgili test geçti. Bu sonuçlar donanım ve canlı API kabulü değildir.
+Fiziksel güç kesintisi, kullanıcı cihazında uzun süreli sesli oturum ve disk/ACL
+kontrolleri Aşama 8'de **DOĞRULANMADI** olarak açık kalır. Aşama 2'ye geçiş,
+bu açıkların kapandığı veya nihai ürünün hazır olduğu iddiasını taşımaz.
+
+## Aşama 2 kabul koşulları
+
+- Kısa cevaplar ve düzeltmelerde konuşma yönlendirmesi ile yetenek seçimi tutarlı olmalı.
+- Konu değişimi, yalnız görsel/boş ileti ve sistem verisi sınırları ayrı ele alınmalı.
+- Katalogdaki 1.000 girdi, 1.000 doğrulanmış bağımsız araç gibi sunulmamalı;
+  gerçek işlem, açıklama yöntemi ve bağlı olmayan servis durumu ayrılmalı.
+- Abacus önceliği/fallback konuşma bağlamını korumalı; kısmi cevap veya araç çağrısı tekrarlanmamalı.
+- Yerel yöntemler ve mevcut araçlar istekle eşleşmeli; yönlendirme kullanıcı yetkisi sayılmamalı.
+- Model/servis erişimi olmadan canlı zekâ/kalite/öğrenme artışı iddia edilmemeli.
+- İlgili ve tam Windows/Linux regresyonları geçmeli; canlı servis ve davranış kabulü açıkça raporlanmalı.
+
+## Aşama 2: kısa yanıt ve bağlam sınırları
+
+Modüler konuşma hattında "Tarifi iki katına çıkar → Kaç kişi için? → 6"
+akışı, yetenek tarafında porsiyon hesabını korurken çekirdek yönlendirmede
+konuyu kaybediyordu. Görsel/boş kullanıcı iletisi ardından "devam et" ise
+çekirdek tarafta eski konuyu yanlış taşıyabiliyordu. İkisi de düzeltmeden
+önce testte yeniden üretildi.
+
+`core/conversation_context.py`, kısa sayısal/miktar cevapları ve devam
+ifadelerini iki yönlendirme katmanı için tek yerde tanımlar. Yalnız görsel
+ve boş kullanıcı iletileri eski yönlendirmeyi sıfırlar. Sistem metadata'sı
+yeni konu veya yetki oluşturmaz; sonraki gerçek devam mesajının önceki
+isteği bulmasını engellemez. Açık yeni istekler ve acil güvenlik ifadeleri
+normal biçimde yeniden yönlendirilir. Araçlar çalıştırılmaz, hafızaya yazılmaz,
+servis çağrısı veya yeni yetki verilmez.
+
 ## Son çalışma: açılış ve yarım güncelleme
 
 `main.py`, üçüncü taraf modüllerden önce `core/startup_guard.py` kontrolünü çağırır.
@@ -30,9 +77,10 @@ Kontrol, uygulama verisi veya yedek silmez; kurtarma çevrimdışı komutla yap�
 Regresyon testleri gerçek giriş noktasını ayrı süreçte çalıştırır ve uygulama
 modüllerine ulaşılmadığını, kişisel dosyaların korunduğunu sınar.
 
-Bu çalışma Aşama 1'in yalnızca bir parçasıdır. Fiziksel Windows cihazında güç
+Aşama 1'in aşağıdaki otomatik kabulü tamamlandı. Fiziksel Windows cihazında güç
 kesintisi, gerçek mikrofon/hoparlör ve uzun süreli çalışma **DOĞRULANMADI**.
-Nihai kabul ve Aşama 2'ye geçiş henüz ilan edilmedi.
+Bunlar Aşama 8 nihai kabulünde açık kontrol olarak korunur; genel ürün hazır
+ilan edilmedi. Yeni geliştirme odağı Aşama 2'dir.
 
 ## Aşama 1: hafıza dosyalarının güvenli yazımı
 
@@ -49,7 +97,7 @@ Test kapsamı: sabit geçici adlardaki kullanıcı dosyaları; bozuk JSON/katego
 yapısı; ana dosya ve yedek `fsync` hataları; arşiv değiştirme hatası ve geçici
 dosya temizliği. 21 Kasım 2026 unutma/eşitleme regresyonları korunur.
 Bu koruma, gerçek elektrik kesintisinde disk/işletim sistemi dayanıklılığının
-donanım üzerinde doğrulandığı anlamına gelmez. Aşama 1 **aktif** kalır.
+donanım üzerinde doğrulandığı anlamına gelmez. Bu düzeltme Aşama 1 otomatik kabul kapsamındadır.
 
 ## Aşama 1: aynı hafızaya birden fazla süreçten yazma
 
@@ -85,7 +133,7 @@ Yeni kabul testleri, gerçek ayrı süreç ve gerçek SQLite kilidiyle zaman aş
 kilit kalkınca yeniden deneme ve kısa kilit sonrasında tamamlamayı sınar.
 Bu bütçe kopyalama/yeniden deneme aşamasına aittir; işletim sisteminde takılan
 dosya I/O'su veya sonraki bütünlük denetimi için gerçek zaman garantisi değildir.
-Yeni bağımlılık, şema veya kullanıcı verisi değişikliği yoktur. Aşama 1 aktiftir.
+Yeni bağımlılık, şema veya kullanıcı verisi değişikliği yoktur. Bu düzeltme Aşama 1 otomatik kabul kapsamındadır.
 
 ## Aşama 1: ayar ve API anahtarı dosyalarının bütünlüğü
 
@@ -121,4 +169,4 @@ kodu ve doğrulanamayan açılış bildirilir; ikinci bir süreç otomatik başl
 Testler, onaydan önce kapanma, onay bırakmış ama bitmiş süreç, onaydan hemen
 sonra kapanma, onayla birlikte açık kalan süreç ve eski uygulamanın çıkmaması
 durumlarını kapsar. Bu gözlem uzun süreli çalışma veya ses/model hazırlığı
-garantisi değildir. Aşama 1 aktif kalır.
+garantisi değildir. Bu düzeltme Aşama 1 otomatik kabul kapsamındadır.
