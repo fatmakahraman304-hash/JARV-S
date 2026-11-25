@@ -36,6 +36,14 @@ edilmiş gibi sunulmaz. FRIDAY adı, mevcut yüz ve seçili konuşma motoru koru
    Panel başlığını tutarak taşı. Takip kaybolursa tutuş bırakılır; geri gelen
    elin eski konumuna göre nesne bir anda sıçratılmaz.
 
+**El kontrolünü duraklat** düğmesi kamerayı açmadan veya kapatmadan el
+komutlarını durdurur; fareyle kullanım devam eder. Duraklatılmışken el çıkarımı
+da atlanır. **Sürdür** sonrasında önce parmaklarını ayır; eski çimdik yeni bir
+işlem gibi uygulanmaz. El menüleri kamera görüntüsünün kenarlarında da görünür
+kalır. Menüyü tutan el kaybolur/bırakırsa kalan el kilitlenmez; ikinci çimdik
+iki elle ölçeklemeye geçebilir.
+Sesli durum sorgusu duraklatmayı ve parmakları ayırma bekleyişini de bildirir.
+
 Dosyalar panelinde kendi seçtiğin klasörün en fazla 200 girdisi gösterilir.
 Bir OBJ'ye çift tıklamak onu 3D görünümde açar; diğer dosyalar çalıştırılmaz,
 yalnızca ad/boyut gösterilir. Nesneler panelinde çekirdek, küp, küre ve piramit

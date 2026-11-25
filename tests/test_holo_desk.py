@@ -12,6 +12,7 @@ import numpy as np
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QPoint,Qt
 from PyQt6.QtTest import QTest
+from PyQt6.QtGui import QImage
 
 from core.holo_desk import mesh,parse_obj,obj_text,project,Hands
 from gui.holo_desk import HoloDesk
@@ -95,6 +96,7 @@ class SpatialUI(unittest.TestCase):
 
     def test_two_hand_scale_is_bounded_and_loss_does_not_jump(self):
         state=Hands();canvas=self.desk.canvas
+        canvas._grip=("menu","Left")
         canvas.consume_hands(state.update([hand(x=.3),hand("Right",x=.6)]))
         before=canvas.scale
         canvas.consume_hands(state.update([hand(x=.25),hand("Right",x=.7)]))
@@ -116,6 +118,68 @@ class SpatialUI(unittest.TestCase):
         self.assertNotEqual(panel.pos(),before)
         self.assertEqual(canvas.yaw,yaw)
         canvas.consume_hands([])
+
+    def test_remaining_hand_can_move_after_menu_owner_is_lost(self):
+        canvas=self.desk.canvas
+        canvas._grip=("menu","Left")
+        h=Hands().update([hand("Right",x=.6)])[0]
+        h["down"]=False
+        before=canvas.yaw
+        canvas.consume_hands([h])
+        canvas.consume_hands([dict(h,pointer=h["pointer"]+np.array([.08,0]))])
+        self.assertNotEqual(canvas.yaw,before)
+
+    def test_radial_controls_stay_inside_viewport_at_camera_edges(self):
+        canvas=self.desk.canvas
+        portrait=QImage(240,480,QImage.Format.Format_RGB888);portrait.fill(0)
+        for frame in (QImage(),portrait):
+            canvas.frame=frame
+            bounds=canvas.image_rect()
+            for palm in ([.01,.01],[.99,.01],[.01,.99],[.99,.99]):
+                for _,point in canvas.ring_items({"palm":palm,"width":.12}):
+                    self.assertGreaterEqual(point.x(),bounds.left()+21)
+                    self.assertLessEqual(point.x(),bounds.right()-21)
+                    self.assertGreaterEqual(point.y(),bounds.top()+21)
+                    self.assertLessEqual(point.y(),bounds.bottom()-21)
+
+    def test_pause_ignores_stale_frames_and_resume_waits_for_release(self):
+        desk=self.desk
+        rgb=np.zeros((360,640,3),np.uint8)
+        with desk._lock:desk._packet=(rgb,[hand()])
+        desk.pause.click()
+        desk._tick()
+        self.assertEqual(desk.canvas.hands,[])
+        self.assertFalse(desk.camera.isChecked())
+        desk.pause.click()
+        with desk._lock:desk._packet=(rgb,[hand()])
+        desk._tick()
+        self.assertTrue(desk._await_release)
+        self.assertEqual(desk.canvas.hands,[])
+        with desk._lock:desk._packet=(rgb,[hand(pinch=False)])
+        desk._tick()
+        self.assertFalse(desk._await_release)
+        self.assertFalse(desk.canvas.hands[0]["pinch"])
+        with desk._lock:desk._packet=(rgb,[hand()])
+        desk._tick()
+        self.assertTrue(desk.canvas.hands[0]["pinch"])
+
+    def test_voice_status_reports_the_real_pause_and_release_state(self):
+        from types import SimpleNamespace
+        from gui.window import MainWindow
+        owner=SimpleNamespace(_holo_desk=self.desk)
+        player=Mock()
+        self.desk.pause.click()
+        for paused in (True,False):
+            if not paused:self.desk.pause.click()
+            request={"params":{"mode":"status"}}
+            MainWindow._holo_desk_command(owner,request)
+            result=request["result"]
+            self.assertEqual(result["hand_control_paused"],paused)
+            self.assertEqual(result["awaiting_hand_release"],not paused)
+            self.assertFalse(result["camera_requested"])
+            player.holo_desk_command.return_value=result
+            spoken=command.run({"mode":"status"},player)
+            self.assertIn("duraklatıldı" if paused else "parmaklarını ayır",spoken)
 
     def test_notes_survive_close_and_invalid_obj_keeps_working_scene(self):
         self.desk.notes.setPlainText("Murat — proje notu")
