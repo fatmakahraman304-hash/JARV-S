@@ -42,6 +42,7 @@ da atlanır. **Sürdür** sonrasında önce parmaklarını ayır; eski çimdik y
 işlem gibi uygulanmaz. El menüleri kamera görüntüsünün kenarlarında da görünür
 kalır. Menüyü tutan el kaybolur/bırakırsa kalan el kilitlenmez; ikinci çimdik
 iki elle ölçeklemeye geçebilir.
+Sesli durum sorgusu duraklatmayı ve parmakları ayırma bekleyişini de bildirir.
 
 Dosyalar panelinde kendi seçtiğin klasörün en fazla 200 girdisi gösterilir.
 Bir OBJ'ye çift tıklamak onu 3D görünümde açar; diğer dosyalar çalıştırılmaz,

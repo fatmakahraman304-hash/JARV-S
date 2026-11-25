@@ -163,6 +163,24 @@ class SpatialUI(unittest.TestCase):
         desk._tick()
         self.assertTrue(desk.canvas.hands[0]["pinch"])
 
+    def test_voice_status_reports_the_real_pause_and_release_state(self):
+        from types import SimpleNamespace
+        from gui.window import MainWindow
+        owner=SimpleNamespace(_holo_desk=self.desk)
+        player=Mock()
+        self.desk.pause.click()
+        for paused in (True,False):
+            if not paused:self.desk.pause.click()
+            request={"params":{"mode":"status"}}
+            MainWindow._holo_desk_command(owner,request)
+            result=request["result"]
+            self.assertEqual(result["hand_control_paused"],paused)
+            self.assertEqual(result["awaiting_hand_release"],not paused)
+            self.assertFalse(result["camera_requested"])
+            player.holo_desk_command.return_value=result
+            spoken=command.run({"mode":"status"},player)
+            self.assertIn("duraklatıldı" if paused else "parmaklarını ayır",spoken)
+
     def test_notes_survive_close_and_invalid_obj_keeps_working_scene(self):
         self.desk.notes.setPlainText("Murat — proje notu")
         self.desk.hide();self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["notes"],"Murat — proje notu")

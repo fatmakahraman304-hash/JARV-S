@@ -2261,6 +2261,8 @@ class MainWindow(QMainWindow):
                 request["result"]={"status":"done","visible":bool(desk and desk.isVisible()),
                     "camera_requested":bool(desk and desk.camera.isChecked()),
                     "camera_thread_alive":bool(desk and desk._thread and desk._thread.is_alive()),
+                    "hand_control_paused":bool(desk and desk._control_paused),
+                    "awaiting_hand_release":bool(desk and desk._await_release),
                     "hands":len(desk.canvas.hands) if desk else 0}
                 return
             if mode=="close":
