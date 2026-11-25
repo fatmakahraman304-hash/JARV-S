@@ -2048,7 +2048,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self._cc_btn)
         self._brain_btn = IconButton("brain", 42)
         self._brain_btn.setCheckable(True)
-        self._brain_btn.setToolTip("İkinci Beyin — FRIDAY’ın gelişim alanı")
+        self._brain_btn.setToolTip("İkincil Beyin — özellik denetimi ve hata raporları")
         self._brain_btn.clicked.connect(lambda: self._set_second_brain(self._brain_btn.isChecked()))
         row.addWidget(self._brain_btn)
         self._earth_btn = IconButton("globe", 42)

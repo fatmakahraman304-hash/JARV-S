@@ -1,21 +1,71 @@
-# Otonom İkinci Beyin
+# FRIDAY ikincil beyni — özellik denetçisi
 
-Alt konuşma çubuğundaki **beyin simgesi**, AETHER’ın orta alanında gelişim ağını açar. Merkezde CORE, çevresinde ses, hafıza, model zekâsı, kod ajanı, testler, güncelleme, güvenlik, cihazlar, arayüz, araştırma, otomasyon, eklentiler ve uzun işler bulunur. Bir noktaya dokununca o alanın kayıtları süzülür. AETHER’a dön yüz ekranına döner.
+Konuşma çubuğundaki **beyin simgesi** denetim panelini orta alanda açar.
+CORE etrafındaki hareketler o anda gerçekten kontrol edilen alanı gösterir.
+Bir alana dokunarak sonuçlarını süzebilirsiniz. **Yalnız sorunlar** hata ve
+“doğrulanmadı” kayıtlarını gösterir; **Raporu kopyala** son kontrollerin
+zamanını, kapsamını, sürelerini, hata ayrıntısını ve kaynak konumunu kopyalar.
+Yazı/fikir girmeniz gerekmez. FRIDAY’a dön yüz ekranını geri getirir.
 
-## Otomatik çalışma
+## Kendiliğinden ne yapar?
 
-Normal main.py açılışında, mevcut ilk kurulum tamamlandıktan sonra İkinci Beyin arka planda başlar. Kayıtlı kurulumda ilk tarama 45 saniye sonra yapılır. Sesli oturumu ayrıca başlatmanız gerekmez. Paneli açmanız veya fikir yazmanız gerekmez.
+İlk kurulum hazırsa uygulama açılışından 45 saniye sonra, sonra her dakikada
+sıradaki alanın **yerel bileşen kontrolünü** çalıştırır. 12 bileşen alanı ve canlı izleme yaklaşık
+13 dakikada dolaşılır; kontroller uygulama açıkken tekrar eder. Bir defada
+bir kontrol çalışır. Panelin kapalı olması kontrolleri durdurmaz.
 
-Her 15 dakikada bir sıradaki alanın gerçek kaynak dosyaları ve test envanteri incelenir. Sözdizimi hataları yerelde belirlenir. Model incelemesinde kaynak dosyaları veri olarak gönderilir ve yalnızca sağlanan dosyalara dayanan bir bulgu kabul edilir. Bulgu varsa plan ve kabul testleri hazırlanır, mevcut kod ajanı ayrı geliştirme kopyasında çalıştırılır. Bir kod işi sürerken yenisi başlatılmaz. Aynı kaynak içeriğinde aynı denetim bulgusu yeniden işlenmez.
+İkincil beyin artık modelden geliştirme planı istemez, kod yazmaz, kod ajanı
+başlatmaz, commit/PR/yayın veya kendini güncelleme yapmaz. Eski fikir ve kod
+işi kayıtları silinmez; yeni kontrol sonuçları ayrı yerel SQLite tablolarına
+yazılır. Eski duraklatma tercihi korunur. Diğer, **kullanıcı talebiyle**
+çalışan kod ajanı değişmemiştir.
 
-Ağdaki hareketli noktalar gerçek analiz, planlama, kod yazma ve test durumunu gösterir. Testi geçmeyen veya başlatıldığı doğrulanamayan işler ayrı durumlarla görünür. Sonuçlar yerel SQLite günlüğünde saklanır. Uygulama yeniden açıldığında önceki geliştirme kaydı tekrar izlenir. Yayın, birleştirme ve çalışan uygulamayı güncelleme mevcut kullanıcı onaylı akışları kullanır.
+Bileşen kontrolleri kaynak kodun geçici bir kopyasında, ayrı Python sürecinde,
+geçici config/veri dizinleriyle yapılır. Kişisel ayar, konuşma ve API anahtarı
+dosyaları kopyalanmaz; anahtar/token ortam değişkenleri aktarılmaz. Model
+çağrısı veya harici ağ bağlantısı yapılmaz. Gerçek fare/klavye, dosya silme,
+mesaj, kamera, ödeme, akıllı ev veya güncelleme işlemi denenmez. Geçici test
+verileri işlem sonunda temizlenir. Bu mekanizma zararlı Python kodu için
+bir işletim sistemi sandbox'ı değildir; sabit, yerel FRIDAY kontrolleridir.
 
-Model çağrıları yapılandırılmış sağlayıcıyı, onun anahtarını ve kotasını kullanır. Kaynak incelemesine kişisel konuşma geçmişi, API anahtarı dosyası veya yerel ayarlar eklenmez. Geliştirme için yerel Git, kurulmuş model sağlayıcısı ve mevcut GitHub geliştirme çalışma alanı kuralları geçerlidir. Sağlayıcı veya geliştirme alanı kullanılamazsa hata ağın kayıtlarında gösterilir.
+Her kontrol 20 saniye sınırındadır. **Duraklat** çalışan kontrolü iptal eder
+ve yeni kontrolü engeller; **Devam ettir** kayıtlı sırayla sürdürür. Uygulama
+kapanırken bekleyen süreç sonlandırılır. Geçmiş en fazla 500 olay, panel son
+100 olayı tutar; her alanın son sonucu ayrıca saklanır. Sonuç saati önemlidir:
+eski bir geçiş daha yeni sürümün veya canlı hizmetin kabulü sayılmaz. Kaynak
+kontrol sırasında değişirse sonuç “doğrulanmadı” olur.
 
-**Duraklat**, yeni öz denetim ve kod işi başlatılmasını durdurur. Başlamış kod işinin sonucu izlenir. **Devam ettir** izlemeyi yeniden etkinleştirir. Bu seçim ve sıradaki inceleme zamanı yeniden başlatmalarda korunur. Paneli kapatmak otomatik çalışmayı durdurmaz.
+## Hata olursa
 
-## Erkek hologram yüz
+Yeni/değişmiş bir hata veya doğrulanamayan kontrol etkinlik günlüğünde
+bildirilir. Aynı sorun her turda tekrar bildirilmez; yeniden açılışta da
+önceki sonuç dikkate alınır. Daha önce sorunlu kontrol geçince düzeldiği
+bildirilir. Bildirim konuşmayı kesip otomatik ses üretmez; panel ve etkinlik
+günlüğünden izlenir. Kopyaladığınız raporu düzeltme için paylaşabilirsiniz.
+API anahtarı, kullanıcı konuşması ve kişisel hafıza rapora eklenmez.
 
-Varsayılan yüz, pürüzsüz 3D erkek başı, boyun ve omuz geometrisi üzerinde mavi hologram malzemesidir. OpenGL çizicisi gerçek yüzey normallerini, gölgeleri, göz çukurlarını, göz kapaklarını ve ağız içini işler. İnce tarama dokusu ile kenar ışığı malzemenin parçasıdır. Mevcut konuşma sesinin sürdürdüğü çene, göz kırpma ve bakış animasyonu korunur.
+**Geçti**, yalnız aşağıdaki kontrolün çalışıp beklenen sonucu verdiğidir.
+**Hata**, beklenen sonucun alınamaması veya zaman aşımıdır.
+**Doğrulanmadı**, bağımlılık/başlatıcı eksikliği, yarım kalmış süreç veya
+kaynak değişimi gibi nedenle sonuç alınamamasıdır; başarı sayılmaz.
 
-Çizici açılamazsa uygulama yedek yüz çizimine geçer ve nedeni günlüğe kaydeder. Bu durumda yüksek kaliteli 3D çizim doğrulanmış sayılmaz. Windows ve Linux render kabul aracı seçilen 3D yol çalışmadığında hata verir.
+| Alan | Gerçek çalıştırılan yerel kontrol | Bu sonuçla doğrulanmayan |
+| --- | --- | --- |
+| Ses | Türkçe döküm birleştirme, PCM kuyruk aktarımı ve kapanış | Fiziksel mikrofon, yankı, canlı ses |
+| Hafıza | Geçici hafızaya yazma/arama/unutma, tombstone birleşimi, SQLite arama | Kişisel veri bütünlüğü, gerçek cihaz eşitlemesi |
+| Modeller | Araç şemasını sağlayıcı biçimine dönüştürme | Model hesabı, kota, API erişimi |
+| Kod ajanı | Bozuk Python kodunu mevcut denetçiyle yakalama | Gerçek kod geliştirme; ajan başlatılmaz |
+| Güncelleme | ZIP içeriğini ve tehlikeli yolu doğrulama | Kurulu sürümü güncelleme/yeniden başlatma |
+| Güvenlik | Sahte onay tokenını reddetme ve iptal | Gerçek etkili işlem ve kullanıcı onayı |
+| Cihazlar | Boş cihaz listesinde ses sahibi seçmeme | Telefon, Home Assistant bağlantısı |
+| Arayüz | Gerçek yüz geometrisinin varlığı ve sonlu koordinatlar | GPU, pencere etkileşimi ve görsel kalite |
+| Araştırma | Sentetik yanıtla belirsiz kitap indirmesini reddetme | İnternet araştırması |
+| Otomasyon | done/unverified/failed sonuçlarını ayırma | Tarayıcı/masaüstü işlemi |
+| Eklentiler | Holo Masa OBJ aktarımının tutarlılığı | Blender ve fiziksel kamera |
+| Canlı izleme | Mevcut oturumdaki arka plan izleyicilerinin gerçek kalp atışı | Başlamayan izleyiciler, mikrofon/model bağlantısı |
+| Uzun işler | Eski araç sonuçlarını kısaltırken görev sırasını koruma | Canlı kullanıcı görevi |
+
+Bu kontroller bütün FRIDAY yeteneklerinin uçtan uca kabulü değildir.
+Canlı model, fiziksel donanım ve yüksek etkili işlemler otomatik olarak
+“geçti” gösterilmez. Paket ayrı Python alt süreci başlatmayı desteklemiyorsa
+kontroller “doğrulanmadı” olur; sahte başarı üretilmez.

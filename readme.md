@@ -8,6 +8,9 @@ FRIDAY adı, kadın ses profili, 3D dünya ve uydu/sokak görünümü için
 Kamera üzerinde el kontrolleri, yüzen paneller ve yerel 3D nesneler:
 [Holo Masa kullanımı ve gerçek test sınırları](docs/holo-masa-tr.md).
 
+Beyin simgesi artık kod geliştirme yerine otomatik yerel özellik denetimini açar:
+[denetim kapsamı, hata bildirimi ve rapor kopyalama](docs/ikinci-beyin.md).
+
 ---
 
 ## ✨ Overview
