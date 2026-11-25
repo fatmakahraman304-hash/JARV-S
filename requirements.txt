@@ -105,7 +105,7 @@ pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
 #   pip install pandas       # file_processor: spreadsheet/CSV analysis
 #   pip install pydub        # file_processor: audio metadata and conversion
 #                            #   (also needs ffmpeg on PATH for most formats)
-#   pip install mediapipe    # pushup_counter: elbow-angle rep detection
+#   pip install "mediapipe>=0.10.31,<0.11"  # Holo Masa hand tracking; installed only by its setup button
 
 # ── Optional: running the assistant on your own models ───────────────────────
 # ⚙ → ENGINE & PROVIDERS lets you replace Gemini Live with your own speech

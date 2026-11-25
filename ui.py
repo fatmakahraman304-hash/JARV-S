@@ -349,6 +349,18 @@ class AetherUI:
         """Thread-safe: show the native world map or close it."""
         self._win._world_map_sig.emit(visible)
 
+    def holo_desk_command(self, parameters: dict) -> dict:
+        """Thread-safe, bounded acknowledgement; never opens a camera."""
+        import threading
+        request={"params":dict(parameters),"event":threading.Event()}
+        self._win._holo_desk_sig.emit(request)
+        if not request["event"].wait(1.0):
+            return {"status":"unverified","reason":"Qt işlem sonucu zamanında alınamadı."}
+        return request["result"]
+
+    def show_holo_object(self, text: str) -> dict:
+        return self.holo_desk_command({"mode":"object","text":text})
+
     def show_second_brain(self):
         self._win._second_brain_sig.emit()
 

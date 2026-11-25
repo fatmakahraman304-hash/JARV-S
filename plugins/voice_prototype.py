@@ -100,10 +100,17 @@ def run(parameters, player=None, session_memory=None):
                 any(line.startswith("f ") for line in text.splitlines())
             ):
                 raise ValueError("Model köşe ve yüz bilgisi içeren bir OBJ döndürmedi.")
+            if extension == "obj":
+                from core.holo_desk import parse_obj
+                parse_obj(text)
             save_draft(path, text)
             player.write_log(f"PROTOTİP: {path}")
             if extension == "html" and callable(getattr(player, "show_prototype", None)):
                 player.show_prototype(text)
+            elif extension == "obj" and callable(getattr(player, "show_holo_object", None)):
+                result=player.show_holo_object(text)
+                if result.get("status")!="done":
+                    player.write_log(f"PROTOTİP: Dosya kaydedildi; 3D gösterim {result.get('status','unverified')}: {result.get('error','doğrulanamadı')}")
             else:
                 player.show_content("Prototip hazır", f"{path}\n\nÇalıştırmak veya açmak için dosyayı incele.\n\n{text[:2500]}")
         except Exception as exc:

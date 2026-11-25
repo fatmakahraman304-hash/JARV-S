@@ -941,6 +941,11 @@ def paint_icon(p: QPainter, kind: str, r: QRectF, col: QColor) -> None:
         path.arcTo(QRectF(cx + s * 0.1, cy - s * 0.95, s * 0.6, s * 0.6), 225, -180)
         path.lineTo(cx - s * 0.2, cy + s * 0.15)
         p.drawPath(path)
+    elif kind == "cube":
+        top=QPointF(cx,cy-s*.9);left=QPointF(cx-s*.8,cy-s*.4)
+        right=QPointF(cx+s*.8,cy-s*.4);middle=QPointF(cx,cy+s*.05)
+        p.drawPolygon(QPolygonF([top,right,QPointF(cx+s*.8,cy+s*.5),QPointF(cx,cy+s*.95),QPointF(cx-s*.8,cy+s*.5),left]))
+        for a,b in [(left,middle),(right,middle),(middle,QPointF(cx,cy+s*.95))]:p.drawLine(a,b)
     elif kind == "globe":
         p.drawEllipse(QPointF(cx, cy), s * 0.85, s * 0.85)
         p.drawEllipse(QPointF(cx, cy), s * 0.38, s * 0.85)
