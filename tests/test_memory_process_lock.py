@@ -6,6 +6,9 @@ import sys
 import tempfile
 import time
 import unittest
+import io
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 
 SETUP = '''
@@ -113,3 +116,25 @@ with m._lock:
         with lock:
             with lock:  # reentrant, including after an acquisition failure
                 self.assertEqual((self.root / "long_term.json").read_bytes(), before)
+
+    def test_empty_lock_file_is_initialized_only_after_kernel_lock(self):
+        from memory import process_lock
+        acquired = False
+        testcase = self
+        class WindowsFile(io.BytesIO):
+            def fileno(self):
+                return 123
+            def write(self, data):
+                testcase.assertTrue(acquired, "Writing before the kernel lock races on Windows")
+                return super().write(data)
+        handle = WindowsFile()
+        path = Mock()
+        path.open.return_value = handle
+        def kernel_lock(fd, mode, size):
+            nonlocal acquired
+            acquired = True
+        api = SimpleNamespace(LK_NBLCK=1, locking=kernel_lock)
+        with patch.object(process_lock.os, "name", "nt"), patch.dict(sys.modules, {"msvcrt": api}):
+            with process_lock.FileRLock(lambda: path):
+                self.assertEqual(handle.getvalue(), b"\0")
+        self.assertTrue(handle.closed)

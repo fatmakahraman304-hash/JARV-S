@@ -1,11 +1,12 @@
 import functools
 import json
-import shutil
 import os
 import sys
-import threading
 import time
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from memory.process_lock import FileRLock
 
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -35,8 +36,8 @@ def config_exists() -> bool:
 #
 # Writes now go to a temporary file that replaces the real one in a single step,
 # so a reader sees the old file or the new one and never half of either, and
-# setters in this process take turns.
-_lock = threading.RLock()
+# setters in cooperating local processes take turns across the whole change.
+_lock = FileRLock(lambda: CONFIG_FILE.with_name(CONFIG_FILE.name + ".lock"))
 
 
 def _locked(fn):
@@ -60,19 +61,27 @@ def _from_backup() -> dict | None:
         return None
 
 
-def _write_config(data: dict) -> None:
-    ensure_config_dir()
-    tmp = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=4), encoding="utf-8")
-    try:                                             # the current good file becomes the backup
-        if CONFIG_FILE.exists():
-            json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            shutil.copyfile(CONFIG_FILE, _backup_file())
-    except (OSError, ValueError):
-        pass                                         # never back up a broken file over a good backup
+@contextmanager
+def _staged_config(path, data):
+    temporary = None
+    try:
+        # api_keys.json.* is already ignored by Git, including while staged.
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False) as handle:
+            temporary = Path(handle.name)
+            json.dump(data, handle, indent=4)
+            handle.flush()
+            os.fsync(handle.fileno())
+        yield temporary
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _replace_config(temporary, target):
     for attempt in range(20):
         try:
-            os.replace(tmp, CONFIG_FILE)
+            os.replace(temporary, target)
             return
         except PermissionError:
             # Windows: an antivirus scan or a reader can hold the file for a
@@ -82,6 +91,25 @@ def _write_config(data: dict) -> None:
             time.sleep(0.05)
 
 
+def _atomic_config(path, data):
+    with _staged_config(path, data) as temporary:
+        _replace_config(temporary, path)
+
+
+def _write_config(data: dict) -> None:
+    ensure_config_dir()
+    with _staged_config(CONFIG_FILE, data) as temporary:
+        previous = None
+        if CONFIG_FILE.exists():
+            try:
+                previous = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass  # A damaged primary must not replace a valid backup.
+        if isinstance(previous, dict):
+            _atomic_config(_backup_file(), previous)
+        _replace_config(temporary, CONFIG_FILE)
+
+
 def _read_for_write() -> dict:
     """The current settings, for a setter to change one of them.
 
@@ -89,16 +117,18 @@ def _read_for_write() -> dict:
     api_keys.json.broken-<time> rather than silently replaced by one key — it
     may be a hand edit with a missing comma, and it still holds the user's key."""
     if not CONFIG_FILE.exists():
-        return {}
+        return _from_backup() or {}
     last = None
     for _ in range(3):
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
+            if not isinstance(data, dict):
+                raise ValueError("Settings file must contain a JSON object")
+            return data
         except (OSError, ValueError) as e:
             last = e
             time.sleep(0.05)
-    backup = CONFIG_FILE.with_name(f"{CONFIG_FILE.name}.broken-{int(time.time())}")
+    backup = CONFIG_FILE.with_name(f"{CONFIG_FILE.name}.broken-{time.time_ns()}")
     try:
         os.replace(CONFIG_FILE, backup)
         print(f"[Config] api_keys.json could not be read ({last}) - kept as {backup.name}")
@@ -133,10 +163,12 @@ def _normalize_identity(data):
 
 def load_api_keys() -> dict:
     if not CONFIG_FILE.exists():
-        return {}
+        return _normalize_identity(_from_backup())
     for attempt in range(3):
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("Settings file must contain a JSON object")
             return _normalize_identity(data)
         except Exception as e:
             if attempt == 2:
@@ -624,9 +656,7 @@ def purge_deepseek_settings() -> bool:
             if isinstance(original, dict):
                 safe = _purged_deepseek_data(original)
                 if safe != original:
-                    tmp = backup.with_name(backup.name + ".tmp")
-                    tmp.write_text(json.dumps(safe, indent=4), encoding="utf-8")
-                    os.replace(tmp, backup)
+                    _atomic_config(backup, safe)
         except (OSError, ValueError, TypeError):
             pass  # Hatalı yedek dosyayı silmeyelim.
     return changed
