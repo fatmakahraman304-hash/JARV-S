@@ -485,3 +485,35 @@ with patch.object(u.os, 'replace', side_effect=stop):
         self.assertEqual(json.loads((self.root / ".aether-update.json").read_bytes())["sha"], "a" * 40)
         self.assertFalse((self.root / "a-added.py").exists())
         self.assertEqual(self.private.read_bytes(), b"local settings")
+
+    def test_exception_after_replace_recovers_from_durable_journal(self):
+        marker = self.root / ".aether-update.lock"
+        marker.write_bytes(b"AETHER/1 checking")
+        new = dict(self.old, **{"main.py": b"new main"})
+        replace = u._replace_bytes
+        failed = False
+        def fail_after_write(path, data):
+            nonlocal failed
+            replace(path, data)
+            if path == self.root / "main.py" and not failed:
+                failed = True
+                raise OSError("injected post-replace failure")
+        with patch.object(u, "_replace_bytes", side_effect=fail_after_write):
+            with self.assertRaisesRegex(OSError, "post-replace"):
+                u._apply_zip(self.root, new, "b"*40, "main", marker=marker)
+        self.assertTrue(failed)
+        self.assertFalse(marker.exists())
+        for rel, data in self.old.items():
+            self.assertEqual((self.root / rel).read_bytes(), data)
+
+    def test_recovery_rejects_case_collision_before_writes(self):
+        self.interrupt("main.py")
+        marker = self.root / ".aether-update.lock"
+        journal = json.loads(marker.read_bytes()[len(u._ZIP_MARKER):])
+        journal["after"]["MAIN.PY"] = journal["after"]["main.py"]
+        marker.write_bytes(u._ZIP_MARKER + json.dumps(journal).encode())
+        with self.assertRaises(RuntimeError):
+            self.recover()
+        self.assertTrue(marker.exists())
+        self.assertEqual((self.root / "main.py").read_bytes(), b"new main")
+        self.assertTrue((self.root / "a-added.py").exists())

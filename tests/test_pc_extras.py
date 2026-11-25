@@ -214,9 +214,27 @@ class DayReportTests(unittest.TestCase):
         self.assertIn("SIRADAKİ HATIRLATICILAR", full)
 
     def test_focus_today(self):
-        now = time.time()
-        n, m = day_report.focus_today([{"start": now - 3000, "end": now - 1500}, {"start": now - 10 * 86400, "end": now - 10 * 86400 + 60}])
+        from datetime import datetime
+        today = date(2026, 11, 25)
+        now = datetime(2026, 11, 25, 12).timestamp()
+        with mock.patch.object(day_report.time, "time", return_value=now):
+            n, m = day_report.focus_today([
+                {"start": now - 3000, "end": now - 1500},
+                {"start": now - 10 * 86400, "end": now - 10 * 86400 + 60},
+            ], today=today)
         self.assertEqual(n, 1); self.assertAlmostEqual(m, 25, delta=0.1)
+
+    def test_focus_today_near_midnight_excludes_previous_day(self):
+        from datetime import datetime
+        today = date(2026, 11, 25)
+        midnight = datetime(2026, 11, 25).timestamp()
+        with mock.patch.object(day_report.time, "time", return_value=midnight + 600):
+            n, m = day_report.focus_today([
+                {"start": midnight - 3000, "end": midnight - 1500},
+                {"start": midnight + 60, "end": midnight + 360},
+            ], today=today)
+        self.assertEqual(n, 1)
+        self.assertAlmostEqual(m, 5, delta=0.1)
 
 
 class CancelReminderTests(unittest.TestCase):
