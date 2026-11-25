@@ -123,7 +123,9 @@ class ReleasePackage(unittest.TestCase):
 
     def test_private_paths_and_windows_paths_are_rejected(self):
         for name in ('../outside', '/absolute', 'C:/drive', 'dir\\file', 'CON.txt',
-                     'a/../file', 'a//file', 'file. ', 'config/api_keys.json',
+                     'a/../file', 'a//file', 'file. ', 'bad?.txt', 'bad*.txt', 'bad|file',
+                     'bad<file', 'bad>file', 'bad\"file', 'bad\tfile', 'CONIN$', 'CONOUT$',
+                     'config/api_keys.json',
                      'memory/continuity.sqlite3', 'x/private.pem', '.env.production'):
             with self.subTest(name=name):
                 payload = io.BytesIO()

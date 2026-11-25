@@ -34,10 +34,11 @@ SECRET_PATTERNS = {
 
 
 def safe_name(name):
-    if not isinstance(name, str) or not name or '\\' in name or ':' in name or '\0' in name:
+    if (not isinstance(name, str) or not name or '\\' in name or ':' in name
+            or any(ord(char) < 32 or char in '<>\"|?*' for char in name)):
         return False
     parts = name.split('/')
-    reserved = {'CON', 'PRN', 'AUX', 'NUL', *(f'COM{i}' for i in range(1, 10)),
+    reserved = {'CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$', *(f'COM{i}' for i in range(1, 10)),
                 *(f'LPT{i}' for i in range(1, 10))}
     return all(part not in ('', '.', '..') and part.rstrip(' .') == part
                and part.split('.')[0].upper() not in reserved for part in parts)
@@ -76,6 +77,8 @@ def build(root: Path, output: Path, ref='HEAD'):
     raw = subprocess.check_output(['git', 'archive', '--format=zip', commit], cwd=root)
     files, excluded, seen = {}, [], set()
     with zipfile.ZipFile(io.BytesIO(raw)) as source:
+        if sum(item.file_size for item in source.infolist()) > MAX_TOTAL:
+            raise ValueError('Oversized committed source tree')
         for item in source.infolist():
             if item.is_dir():
                 continue
