@@ -454,3 +454,40 @@ Yeni aktif odak Aşama 7'dir.
 - Görünmeyen paneller ve animasyonlar gereksiz render/CPU tüketmemeli.
 - Kaynak tüketimi ve kuyruklar sınırlandırılmalı; hız için hafıza/izin/veri doğrulaması kaldırılmamalı.
 - İyileştirmeler ilgili regresyon ve gerçek davranış testleriyle doğrulanmalı.
+
+
+## Aşama 7: gizli HUD ve OpenGL arabellek maliyeti
+
+Gizli/küçültülmüş HUD, çizim yapmasa da saniyede yaklaşık 60 kez animasyon
+hesaplıyordu. Artık gizliyken yalnızca 250 ms aralıkla görünürlük kontrolü
+çalışır; avatar/reaktör/viseme hesaplanmaz. Gösterildiğinde 16 ms timer geri
+gelir; ses, konuşma durumu ve model oturumu durdurulmaz. Güncel ses zamanlaması
+duvar saatinden okunur; süresi dolmuş visemeler geri oynatılmaz. Küçültme/
+geri getirme sırasında animasyonun zaman farkı sınırlanır.
+
+Başın fiziksel piksel sınırları her pozda birkaç piksel değiştiğinde dört
+örnekli OpenGL framebuffer yeniden oluşturuluyordu. Çizim hedefi artık 32
+piksel basamaklarıyla büyütülür; geometrinin piksel ölçeği azaltılmaz, sağ/alt
+kenara yalnızca şeffaf pay eklenir. 4096 piksel sınırı korunur. Aynı basamak
+aralığındaki küçük hareketler var olan arabelleği kullanır; başın görünüşü ve
+sesle animasyonu korunmalıdır.
+
+`tools/measure_hud_performance.py` ayrı süreçlerde HUD import/oluşturma süresi,
+gizli timer sayısı, animasyon adımı, süreç CPU zamanı/RSS ve gerçek OpenGL
+çizim süresi/FBO oluşturma sayısını kaydeder. Performans workflow'u PR tabanı
+ile adayı **aynı runner'da, sırayı değiştirerek üçer kez** çalıştırır. İstenen
+render'ın çalışması, gizli animasyonun durması, timer/FBO işinin azalması ve
+aynı pozdaki görüntünün ortalama RGB farkının 2/255'i geçmemesi gerekir.
+Rapor ve referans kareleri artifact olarak saklanır. Süre ölçümleri gürültü
+barındırır; timer sayısındaki azalma aynı oranda CPU tasarrufu iddiası değildir.
+
+Yerel offscreen ilk ölçümünde bir saniyede timer çağrısı 62'den 4'e, gizli
+animasyon adımı 62'den 0'a indi. Bu bir kullanıcı cihazı ölçümü değildir.
+Gerçek OpenGL, aynı runner önce/sonra kıyası ve regresyon sonuçları ilgili
+PR'de kaydedilir. HUD import süresi uygulamanın tam açılış süresi değildir;
+bu değişiklik için tam açılış/ilk model yanıtı hızlandı iddiası yoktur.
+
+Aşama 7 aktiftir. Kullanıcının uzun süreli CPU/RAM ölçümü, fiziksel GPU,
+tam uygulama ilk açılışı ve canlı ses/model yanıt gecikmesi **DOĞRULANMADI**.
+İzin, hafıza doğrulaması veya seçili FRIDAY ses/persona ayarı hız için
+kaldırılmaz/değiştirilmez.

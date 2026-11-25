@@ -577,8 +577,11 @@ class HoloAvatar:
             pad = 3.0 + 0.07 * float(ys.max() - ys.min())   # hair and ears stand off the mesh
             x0, x1 = float(xs.min()) - pad, float(xs.max()) + pad
             y0, y1 = float(ys.min()) - pad, float(ys.max()) + pad
-            w = min(4096, int(math.ceil((x1 - x0) * dpr)))
-            h = min(4096, int(math.ceil((y1 - y0) * dpr)))
+            # Keep physical resolution, adding only transparent right/bottom
+            # padding. Pixel-sized pose changes should not reallocate a
+            # multisampled OpenGL framebuffer on every frame.
+            w = min(4096, 32 * int(math.ceil((x1 - x0) * dpr / 32)))
+            h = min(4096, 32 * int(math.ceil((y1 - y0) * dpr / 32)))
             img = self._gl.render(
                 verts, norms, (xs - x0) * dpr, (ys - y0) * dpr, w, h,
                 accent=(primary.redF(), primary.greenF(), primary.blueF()),
