@@ -43,7 +43,7 @@ Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya 
 
 ## Dosyalar kurulduktan sonra HUD açılmıyorsa
 
-Normal yeniden başlatmada yardımcı süreç eski AETHER’ın çıkmasını bekler. Yeni pencere görünür olup Qt olay döngüsü çalıştığında açılış onayını `restart.log` dosyasına yazar. Süreç erken kapanırsa çıkış kodunu kaydeder. 90 saniyede onay gelmezse günlükte açılışın doğrulanamadığı belirtilir. Bu durumda Görev Yöneticisi’nde AETHER’ın hâlâ açık olup olmadığını kontrol edin.
+Normal yeniden başlatmada yardımcı süreç eski AETHER’ın çıkmasını bekler. Yeni pencere görünür olup Qt olay döngüsü çalıştığında açılış onayı üretir. Yardımcı araç, her kontrolde önce yeni sürecin hâlâ açık olduğunu denetler; onaydan sonra en az bir saniyelik ilk gözlem boyunca da süreç açık kalırsa sonucu `restart.log` dosyasına yazar. Böylece onay bırakıp hemen kapanan süreç başarılı sayılmaz. Bu kısa gözlem, mikrofon/model hazırlığını veya uzun süreli kararlılığı doğrulamaz. Süreç erken kapanırsa çıkış kodunu kaydeder. 90 saniyede doğrulama bitmezse günlükte açılışın doğrulanamadığı belirtilir. Bu durumda Görev Yöneticisi’nde AETHER’ın hâlâ açık olup olmadığını kontrol edin.
 
 Yeni kod kurulmuş ancak çalışmıyorsa, AETHER kapalıyken bu sürümün güncellediği **ZIP kurulumunda** son güncellemeyi çevrimdışı geri almak için kurulum klasöründe çalıştırın.
 

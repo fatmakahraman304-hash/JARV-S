@@ -109,3 +109,16 @@ Sentetik verilerle bozuk şekil, eksik ana dosya, geçici ad çakışması, ana/
 flush hatası, kilitli hedef ve iki süreçten yazma sınanır. Gerçek kullanıcı
 anahtarları okunup değiştirilmez; ses, persona ve sağlayıcı seçimi kuralları
 değiştirilmez. Fiziksel güç kesintisi ve uzun süreli cihaz kabulü **DOĞRULANMADI**.
+
+## Aşama 1: yeniden açılışta erken kapanmanın doğru raporlanması
+
+Yeniden başlatma aracı, Qt onay dosyası varsa yeni süreç zaten kapanmış olsa
+bile başarı bildiriyordu. Onay bırakıp kapanan gerçek alt süreçlerle yeniden
+üretildi. Artık önce süreç durumu denetlenir, onaydan sonra en az bir saniyelik
+ilk gözlem boyunca süreç açık kalırsa başarı kaydedilir. Erken kapanmada çıkış
+kodu ve doğrulanamayan açılış bildirilir; ikinci bir süreç otomatik başlatılmaz.
+
+Testler, onaydan önce kapanma, onay bırakmış ama bitmiş süreç, onaydan hemen
+sonra kapanma, onayla birlikte açık kalan süreç ve eski uygulamanın çıkmaması
+durumlarını kapsar. Bu gözlem uzun süreli çalışma veya ses/model hazırlığı
+garantisi değildir. Aşama 1 aktif kalır.

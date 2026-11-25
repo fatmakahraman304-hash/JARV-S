@@ -20,6 +20,8 @@ on:
       - "tests/test_config_safety.py"
       - "tests/test_memory_process_lock.py"
       - "core/restart_manager.py"
+      - "tools/restart_app.py"
+      - "tests/test_restart_app.py"
       - "gui/window.py"
       - "tests/test_updated_hud.py"
       - ".github/workflows/windows-acceptance.yml"

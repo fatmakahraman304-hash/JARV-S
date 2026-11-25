@@ -7,6 +7,8 @@ import tempfile
 import time
 import psutil
 
+_READY_GRACE = 1.0  # Observe early shutdown after the Qt-ready receipt.
+
 
 def restart(pid, project):
     try:
@@ -26,15 +28,23 @@ def restart(pid, project):
             print(f"AETHER başlatılamadı: {exc}", flush=True)
             return 1
         deadline = time.monotonic() + 90
+        ready_since = None
         while time.monotonic() < deadline:
-            if receipt.is_file():
-                print("Yeni AETHER penceresinin Qt olay döngüsü açıldı.", flush=True)
-                return 0
             code = child.poll()
             if code is not None:
-                print(f"AETHER pencereyi açmadan kapandı (kod {code}). "
+                print(f"FRIDAY yeniden açılırken kapandı (kod {code}). Açılış doğrulanamadı. "
                       "ZIP kurulumunda geri dönüş için docs/guncelleme-tr.md dosyasına bakın.", flush=True)
                 return 1
+            if receipt.is_file():
+                now = time.monotonic()
+                if ready_since is None:
+                    ready_since = now
+                if now - ready_since >= _READY_GRACE:
+                    print("Yeni AETHER penceresinin Qt olay döngüsü açıldı; süreç ilk açılış kontrolünde açık kaldı.",
+                          flush=True)
+                    return 0
+            else:
+                ready_since = None
             time.sleep(0.1)
         print("AETHER penceresinin açılışı 90 saniyede doğrulanamadı. Süreç çalışmaya devam edebilir.", flush=True)
         return 2
