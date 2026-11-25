@@ -68,13 +68,18 @@ def _available(module: str) -> bool:
 def _pip(package: str, log: Callable | None = None, extra_packages: tuple[str, ...] = ()) -> bool:
     if log:
         log(f"SYS: pip install {package} …")
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "pip", "install", package, *extra_packages,
-            "--quiet", "--disable-pip-version-check",
-        ],
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "pip", "install", package, *extra_packages,
+                "--quiet", "--disable-pip-version-check",
+            ],
+            capture_output=True, timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if log:
+            log(f"ERR: {package} install failed ({type(exc).__name__}).")
+        return False
     ok = result.returncode == 0
     if not ok and log:
         stderr = result.stderr.decode(errors="replace").strip()
@@ -84,12 +89,13 @@ def _pip(package: str, log: Callable | None = None, extra_packages: tuple[str, .
 
 # ── Public API ────────────────────────────────────────────────────────────
 
-def install_for_config(config: dict, log: Callable | None = None) -> None:
+def install_for_config(config: dict, log: Callable | None = None) -> bool:
     """
     Install all missing packages required by *config*.
 
     Blocking — always call from a background thread.
     Progress is reported via the optional *log* callback (receives a str).
+    Returns True only after installed modules and both browser engines verify.
     """
     stt = config.get("stt_engine", "whisper").lower()
     tts = config.get("tts_engine", "edgetts").lower()
@@ -110,32 +116,56 @@ def install_for_config(config: dict, log: Callable | None = None) -> None:
 
     missing = [(mod, pkg) for mod, pkg in unique if not _available(mod)]
 
-    if not missing:
-        if log:
-            log("SYS: All dependencies already installed ✓")
-        return
+    failures = []
+    if missing and log:
+        log(f"SYS: Installing {len(missing)} package(s): "
+            + ", ".join(pkg for _, pkg in missing))
+    for module, package in missing:
+        try:
+            installed = _pip(package, log)
+            importlib.invalidate_caches()
+            if not installed or not _available(module):
+                failures.append(package)
+        except Exception as exc:
+            failures.append(package)
+            if log:
+                log(f"ERR: {package} installation failed ({type(exc).__name__}).")
 
-    pkg_names = ", ".join(p for _, p in missing)
+    # A Python import is not proof that Playwright's browser executables work.
+    # Probe both supported engines in a child process, never on the Qt thread.
+    try:
+        if not _available("playwright"):
+            if not _pip("playwright", log):
+                failures.append("playwright")
+            else:
+                download = subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium", "firefox"],
+                    capture_output=True, timeout=600,
+                )
+                if download.returncode:
+                    failures.append("playwright browser download")
+        if not failures:
+            probe = subprocess.run(
+                [sys.executable, "-c",
+                 "from playwright.sync_api import sync_playwright\n"
+                 "with sync_playwright() as api:\n"
+                 "    for engine in (api.chromium, api.firefox):\n"
+                 "        browser = engine.launch()\n"
+                 "        browser.close()\n"],
+                capture_output=True, timeout=60,
+            )
+            if probe.returncode:
+                failures.append("playwright browser launch")
+    except Exception as exc:
+        failures.append(f"browser verification ({type(exc).__name__})")
+
+    if failures:
+        if log:
+            log("ERR: Dependencies not ready: " + ", ".join(failures))
+        return False
     if log:
-        log(f"SYS: Installing {len(missing)} package(s): {pkg_names}")
-
-    for _mod, pkg in missing:
-        _pip(pkg, log)
-
-    # Playwright: install the package + download Chromium browser
-    if not _available("playwright"):
-        _pip("playwright", log)
-        if log:
-            log("SYS: Downloading Playwright browser (Chromium, ~150 MB — one-time)…")
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True,
-        )
-        if log:
-            log("SYS: Playwright browser ready.")
-
-    if log:
-        log("SYS: All dependencies ready ✓")
+        log("SYS: All dependencies and browser engines ready ✓")
+    return True
 
 
 # ── Missing packages found while working ──────────────────────────────────

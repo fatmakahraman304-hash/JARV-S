@@ -69,3 +69,11 @@ Yeni bir Windows kurulumu veya boş bir veri klasöründe, AETHER kapalıyken ge
 ```powershell
 .\.venv\Scripts\python.exe -m memory.continuity --restore "$env:LOCALAPPDATA\AETHER-Yedek\gecmis-01.sqlite3"
 ```
+
+
+## Doğrulanabilir kaynak ZIP adayı
+
+Aşama 8'deki kaynak adayının commit/SHA-256 doğrulaması, temiz Windows kurulumu
+ve mevcut kurulumun üzerine yazmadan test adımları için
+[nihai kabul raporuna](nihai-kabul-2026-11-25.md) bakın. Bu aday imzalı EXE
+değildir; gerçek cihaz ve güvenli yayın kabulündeki açıklar raporda listelenir.

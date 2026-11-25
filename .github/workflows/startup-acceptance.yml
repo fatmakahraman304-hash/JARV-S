@@ -7,7 +7,7 @@ on:
         default: affb85e4f2a894fc9c9d8c595229b70991933932
         required: true
   pull_request:
-    paths: ["main.py", "ui.py", "gui/**", "tools/measure_window_startup.py", "tests/test_startup_imports.py", ".github/workflows/startup-acceptance.yml"]
+    paths: ["docs/nihai-kabul-2026-11-25.md", "main.py", "ui.py", "gui/**", "tools/measure_window_startup.py", "tests/test_startup_imports.py", ".github/workflows/startup-acceptance.yml"]
 permissions:
   contents: read
 jobs:

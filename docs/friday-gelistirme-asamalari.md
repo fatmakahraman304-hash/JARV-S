@@ -12,7 +12,7 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Otomatik kabul geçti; kullanıcı masaüstü kabulü açık |
 | 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Otomatik render kabulü geçti; kullanıcı GPU/kamera kabulü açık |
 | 7 — Performans | Açılış, CPU, RAM, yanıt süresi | Otomatik kabul kapsamı tamamlandı; kullanıcı cihazı ölçümü açık |
-| 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | **Aktif** |
+| 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | Otomatik kabul kapsamı tamamlandı; saha ve güvenli yayın engelleri açık |
 
 ## Aşama 1 kabul koşulları
 
@@ -601,3 +601,15 @@ sahte hız kazanımı yapılmaz. Yerel söz kesme bekleyen eski konuşmayı ipta
 Aşama 7 otomatik kapsamından geçiş, bu açıkları kapatmaz. Aşama 8 sürmektedir;
 nihai ürün durumu **KISMEN HAZIR**, tüm sistem için “HAZIR” kabulü verilmemiştir.
 Bu değişikliğin Windows/Linux iş ve test sonuçları PR kaydında tutulur.
+
+
+## Aşama 8 otomatik kapsamının kapanışı
+
+[Güncel nihai kabul raporu](nihai-kabul-2026-11-25.md) kaynak adayı üretimi,
+Windows ZIP kurulumu, paket bütünlüğü, kurucu hata sonuçları, tekrar çalıştırılan
+görsel/otomasyon testleri ve yayın engellerini bir araya getirir. Önceki “aktif”
+ifadeleri ilgili çalışma anıdır; güncel durum üst tablodadır. Bu geçiş yalnızca
+aynı PR head'inin bütün CI kontrolleri geçtiğinde kabul edilir. Gerçek cihaz,
+canlı hizmet, uzun kullanım ve güvenli dağıtım kabulü açık; genel durum
+**KISMEN HAZIR**. Kullanıcının verileri, seçili FRIDAY sesi ve kişiselleştirmesi
+bu aşama için sıfırlanmaz.

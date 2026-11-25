@@ -52,13 +52,15 @@ def window_for(process):
     return windows[0] if windows else None
 
 
-def measure(root: Path, interpreter: Path, output: Path):
+def measure(root: Path, interpreter: Path, output: Path, *, installed=False):
     if sys.platform != "win32":
         raise RuntimeError("This probe requires a real Windows desktop")
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="friday-first-window-") as directory:
         clean = Path(directory)
-        source_copy(root, clean)
+        if not installed:
+            source_copy(root, clean)
+        app_root = root if installed else clean
         receipt = clean / "window-ready"
         env = {**os.environ, "AETHER_RESTART_RECEIPT": str(receipt), "QT_OPENGL": "software",
                "LOCALAPPDATA": str(clean / "LocalAppData"), "APPDATA": str(clean / "AppData"),
@@ -70,7 +72,7 @@ def measure(root: Path, interpreter: Path, output: Path):
         # behaviour; no model/provider configuration is supplied to this probe.
         with (output / "process.log").open("wb") as log:
             started = time.perf_counter()
-            process = subprocess.Popen([str(interpreter), "main.py"], cwd=clean, env=env, stdout=log, stderr=log)
+            process = subprocess.Popen([str(interpreter), "main.py"], cwd=app_root, env=env, stdout=log, stderr=log)
             window = None
             try:
                 deadline = time.monotonic() + 90
@@ -104,7 +106,8 @@ def measure(root: Path, interpreter: Path, output: Path):
                         pass
                     process.wait(timeout=10)
         result = {"first_visible_window_ms": first_window_ms, "restart_receipt": True,
-                  "native_window": True, "normal_exit": True, "profile": "clean ZIP/source; no API key",
+                  "native_window": True, "normal_exit": True,
+                  "profile": "extracted source candidate; no API key" if installed else "clean ZIP/source; no API key",
                   "live_model_verified": False, "physical_user_hardware_verified": False}
         (output / "metrics.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result))
@@ -129,12 +132,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path)
     parser.add_argument("--python", type=Path)
+    parser.add_argument("--installed", action="store_true", help="Launch the actual extracted package, including shipped assets")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--compare", type=Path, nargs=2)
     args = parser.parse_args()
     if args.compare:
         compare(*args.compare, args.out)
     elif args.root and args.python:
-        measure(args.root, args.python, args.out)
+        measure(args.root.resolve(), args.python.resolve(), args.out.resolve(), installed=args.installed)
     else:
         parser.error("--root and --python, or --compare, are required")
