@@ -26,7 +26,9 @@ Bu sürümle başlayan bir güncelleme, kontrol veya indirme sırasında kesildi
 
 Bu sürümle başlatılan ZIP güncellemesi dosya yazarken kesilirse tekrar **GÜNCELLE** düğmesine basın. Kurtarma çevrimdışı çalışır. Sürüm kaydı henüz yazılmamışsa önceki sürüm geri yüklenir. Kayıt tamamlanmışsa yeni sürümün dosyaları doğrulanır. Kesintiden sonra sizin düzenlediğiniz bir dosya veya bozuk yedek tespit edilirse kurtarma durur ve yedekler saklanır.
 
-HUD açılmıyorsa AETHER kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa AETHER’ı normal şekilde açın.
+Normal açılış, bekleyen ZIP uygulama/geri dönüş kaydı veya belirsiz işlem kilidi varsa Qt, ses, ayarlar ve hafıza yüklenmeden durur. Canlı güncelleyici kilidi tutuyorsa da açılış engellenir. Kontrol aşamasında kesilmiş bir işlem tek başına açılışı engellemez. Kayıtlar otomatik silinmez ve bu kontrol kurtarma yapıldığını iddia etmez. `pythonw` ile konsolsuz Windows açılışında hata yerel bir ileti kutusunda gösterilir.
+
+Bekleyen ZIP işlemi nedeniyle açılış durduysa AETHER kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa AETHER’ı normal şekilde açın.
 
 ```powershell
 .\.venv\Scripts\python.exe -m core.app_updater --recover
