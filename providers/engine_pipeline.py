@@ -159,6 +159,7 @@ class PipelineEngine:
         self._followup = False
         self._mic: list[bytes] = []
         self._mic_bytes = 0
+        self._stt_lock = asyncio.Lock()
         # Turn detection state. `auto_turn` is off unless something switches it
         # on, so push-to-talk keeps behaving exactly as it does today.
         self.auto_turn = False
@@ -468,8 +469,14 @@ class PipelineEngine:
         was already said was heard, and deleting it would make the assistant
         deny having said something the user is replying to.
         """
-        if self._gen and not self._gen.done():
-            self._gen.cancel()
+        task = self._gen
+        if task and not task.done():
+            loop = task.get_loop()
+            try:
+                loop.call_soon_threadsafe(task.cancel)
+            except RuntimeError:
+                if not loop.is_closed():
+                    raise
 
     # ── generation ───────────────────────────────────────────────────────────
     def _queue_generation(self) -> None:
@@ -856,9 +863,17 @@ class PipelineEngine:
         the engine should not be the thing guessing when someone stopped
         talking.
         """
-        if self._stt is None or not self._mic:
+        if self._closed or self._stt is None or not self._mic:
             return ""
         pcm, self._mic, self._mic_bytes = b"".join(self._mic), [], 0
+        # Capture each utterance before waiting, but serialize recognition and
+        # publication. Rapid PTT releases must not reorder user commands.
+        async with self._stt_lock:
+            if self._closed:
+                return ""
+            return await self._recognize_pcm(pcm, sample_rate)
+
+    async def _recognize_pcm(self, pcm: bytes, sample_rate: int) -> str:
         from . import audio as _a
 
         self._timing = {"heard_s": _a.duration_s(pcm, sample_rate)}
@@ -866,8 +881,11 @@ class PipelineEngine:
         try:
             text = (await self._stt.transcribe(pcm, sample_rate)).strip()
         except Exception as e:
-            self._report("speech recognition", self._stt, e)
+            if not self._closed:
+                self._report("speech recognition", self._stt, e)
             return ""
+        if self._closed:
+            return ""  # A late provider result must not revive a closed session.
         self._timing["stt"] = time.monotonic() - t0
         if text:
             # THIS is what the user said, and the only thing that should reach
