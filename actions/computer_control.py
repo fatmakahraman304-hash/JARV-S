@@ -1,5 +1,7 @@
 #computer_control.py
 import io
+import copy
+import os
 import json
 import platform
 import re
@@ -283,9 +285,12 @@ def _focus_window(title: str) -> str:
 
     if os_name == "windows":
         try:
-            script = f'(New-Object -ComObject WScript.Shell).AppActivate("{title}")'
+            # Titles are untrusted data, never PowerShell source. Quoting an
+            # interpolated title is insufficient: it can contain quotes/$().
+            script = '(New-Object -ComObject WScript.Shell).AppActivate($env:FRIDAY_FOCUS_TITLE)'
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                env={**os.environ, "FRIDAY_FOCUS_TITLE": title},
                 capture_output=True, timeout=5, **_WIN_HIDE,
             )
             time.sleep(0.3)
@@ -294,13 +299,13 @@ def _focus_window(title: str) -> str:
             return f"focus_window (Windows) failed: {e}"
 
     if os_name == "mac":
-        script = (
-            f'tell application "System Events" to '
-            f'set frontmost of (first process whose name contains "{title}") to true'
-        )
+        script = ('on run argv\n'
+                  'tell application "System Events" to set frontmost of '
+                  '(first process whose name contains (item 1 of argv)) to true\n'
+                  'end run')
         try:
             subprocess.run(
-                ["osascript", "-e", script],
+                ["osascript", "-e", script, title],
                 capture_output=True, timeout=5,
             )
             time.sleep(0.3)
@@ -505,7 +510,7 @@ def _screen_find(description: str) -> tuple[int, int] | None:
 
     return None
 
-def computer_control(
+def _computer_control(
     parameters: dict,
     response=None,
     player=None,
@@ -565,7 +570,7 @@ def computer_control(
         # core/outcome.is_problem().
         print(f"[ComputerControl] {action}")
 
-    print(f"[ComputerControl] ▶ {action}  {params}")
+    print(f"[ComputerControl] ▶ {action}")
 
     try:
 
@@ -653,7 +658,7 @@ def computer_control(
         if action == "random_data":
             dt     = params.get("type", "name")
             result = _random_data(dt)
-            print(f"[ComputerControl] 🎲 random {dt} → {result}")
+            print(f"[ComputerControl] Generated synthetic field: {dt}")
             return result
 
         if action == "user_data":
@@ -662,20 +667,87 @@ def computer_control(
             value   = profile.get(field, "")
             if not value:
                 value = _random_data(field)
-                print(f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {value}")
+                print(f"[ComputerControl] No '{field}' in memory; synthetic fallback used")
             return value
 
         return f"Unknown action: '{action}'"
 
     except Exception as e:
         print(f"[ComputerControl] ❌ {action}: {e}")
-        return f"computer_control '{action}' failed: {e}"
+        return outcome.failed("computer_control", str(e), operation=action)
+
+
+# Generic input is not a reliable way to classify the effect of a UI action.
+_INPUT_ACTIONS = frozenset({"type", "smart_type", "click", "left_click", "double_click",
+                            "right_click", "drag", "hotkey", "press", "paste", "clear_field", "screen_click"})
+
+
+def _desktop_snapshot():
+    from core import screenview
+    view = screenview.look(budget_s=1.0, allow_ocr=False)
+    if view.degraded or not view.pid or not view.title or not view.digest or not view.elements:
+        raise RuntimeError("Hedef pencere güvenilir biçimde okunamadı; giriş yapılmadı.")
+    # The normal screen digest deliberately ignores coordinates. Consent must
+    # also reject controls that moved while the user reviewed the request.
+    return (view.pid, view.app, view.title, view.window_rect, view.digest,
+            tuple((element.rect, element.focused) for element in view.elements))
+
+
+def _request_desktop_input(params, response, player, session_memory):
+    from core import confirm
+    request = copy.deepcopy(params)
+    before = _desktop_snapshot()
+    if request["action"].lower().strip() == "screen_click":
+        coords = _screen_find(request.get("description", ""))
+        if not coords:
+            return outcome.failed("computer_control", "requested screen element was not found")
+        request.update(action="click", x=coords[0], y=coords[1])
+    if request["action"].lower().strip() in ("click", "left_click", "double_click", "right_click"):
+        if request.get("x") is None or request.get("y") is None:
+            _require_pyautogui()
+            request["x"], request["y"] = pyautogui.position()
+        points = [(request["x"], request["y"])]
+    elif request["action"].lower().strip() == "drag":
+        points = [(request.get("x1", 0), request.get("y1", 0)), (request.get("x2", 0), request.get("y2", 0))]
+    else:
+        points = []
+    left, top, width, height = before[3]
+    if any(not (left <= float(x) < left + width and top <= float(y) < top + height) for x, y in points):
+        return outcome.failed("computer_control", "input target lies outside the reviewed window")
+    detail = (f"Pencere: {before[2]}\nUygulama: {before[1]}\n"
+              f"İşlem: {json.dumps(request, ensure_ascii=False)}\n"
+              "Bu genel giriş mesaj, ödeme veya silme işlemi yapabilir. Yalnızca bu hedef için onaylayın.")
+
+    def execute():
+        try:
+            _focus_window(before[2])
+            if _desktop_snapshot() != before:
+                return outcome.failed("computer_control", "target changed after consent request; no input was delivered")
+            result = _computer_control(request, response, player, session_memory)
+            if str(result).startswith("status="):
+                return result
+            return outcome.unverified("computer_control", "input delivered; inspect the application's actual result", operation=request["action"])
+        except Exception as exc:
+            return outcome.failed("computer_control", str(exc))
+
+    return confirm.request("desktop_input", "Bilgisayar etkileşimini onayla", detail, execute)
+
+
+def computer_control(parameters: dict = None, response=None, player=None, session_memory=None) -> str:
+    try:
+        params = parameters or {}
+        if params.get("action", "").lower().strip() in _INPUT_ACTIONS:
+            return _request_desktop_input(params, response, player, session_memory)
+        return _computer_control(params, response, player, session_memory)
+    except Exception as exc:
+        return outcome.failed("computer_control", str(exc))
 
 
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "computer_control",
     "description": (
+        "Generic keyboard/mouse input requires a matching HUD approval bound to the observed window. Model flags cannot authorize it. "
         "Direct computer control: type, click, hotkeys, scroll, move mouse, "
         "screenshots, find elements on screen, and CLOSE an application. "
         "Use action='close_app' with 'app_name' whenever the user asks to "

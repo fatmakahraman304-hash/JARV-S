@@ -15,5 +15,11 @@ def run(parameters, player=None, session_memory=None):
     request = getattr(player, "scan_camera", None)
     if not callable(request):
         return "Kamera taraması için AETHER masaüstü arayüzü gerekli."
-    request()
-    return "Kamera taraması istendi. Sonucu AETHER ekranında göstereceğim."
+    from core import confirm
+
+    def capture():
+        request()  # thread-safe UI signal; no widget is created on this worker
+        return "status=unverified action=camera_scan — çekim istendi; sonucu ekrandan kontrol edin."
+
+    return confirm.request("camera_scan", "Kameradan tek kare al",
+                           "Masaüstü kamerasından bir görüntü alınacak ve mevcut kamera analizine aktarılacak.", capture)

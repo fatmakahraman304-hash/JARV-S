@@ -144,3 +144,35 @@ class PublicationConsentTests(unittest.TestCase):
                 params["files"].append("other")
                 gate.call_args.args[-1]()
                 self.assertEqual(start.call_args.args[0]["files"], ["gui/window.py"])
+
+
+class ExactHeadMergeTests(unittest.TestCase):
+    def info(self, **extra):
+        return {"headRefOid": "tested-head", "baseRefName": "main", "state": "OPEN",
+                "url": "https://example.invalid/pr/1", "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}]} | extra
+
+    def test_changed_head_or_base_cannot_merge(self):
+        for extra in ({"headRefOid": "new-untested-head"}, {"baseRefName": "other"}):
+            with self.subTest(extra=extra), patch.object(g, "command", return_value=json.dumps(self.info(**extra))) as command:
+                with self.assertRaises(ValueError):
+                    g._merge_checked("aether-dev/test", "tested-head")
+                self.assertEqual(command.call_count, 1)
+
+    def test_missing_pending_and_failed_checks_cannot_merge(self):
+        for checks in ([], [{"status": "IN_PROGRESS", "conclusion": None}], [{"status": "COMPLETED", "conclusion": "FAILURE"}]):
+            with self.subTest(checks=checks), patch.object(g, "command", return_value=json.dumps(self.info(statusCheckRollup=checks))) as command:
+                self.assertIn("kontrolleri", g._merge_checked("aether-dev/test", "tested-head"))
+                self.assertEqual(command.call_count, 1)
+
+    def test_successful_checks_use_exact_head_and_verify_merged_state(self):
+        with patch.object(g, "command", side_effect=[json.dumps(self.info()), "", '{"state":"MERGED"}']) as command:
+            self.assertIn("Main’e birleştirildi", g._merge_checked("aether-dev/test", "tested-head"))
+        merge = command.call_args_list[1].args[0]
+        self.assertIn("--match-head-commit", merge)
+        self.assertEqual(merge[-1], "tested-head")
+
+    def test_merge_command_alone_cannot_claim_success(self):
+        with patch.object(g, "command", side_effect=[json.dumps(self.info()), "", '{"state":"OPEN"}']):
+            result = g._merge_checked("aether-dev/test", "tested-head")
+        self.assertIn("henüz doğrulanamadı", result)
+        self.assertNotIn("Main’e birleştirildi", result)

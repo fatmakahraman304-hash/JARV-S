@@ -9,8 +9,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | Otomatik kabul geçti; canlı model kabulü açık |
 | 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Otomatik kabul geçti; gerçek ses kabulü açık |
 | 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Otomatik kabul geçti; gerçek cihaz eşitlemesi açık |
-| 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | **Aktif** |
-| 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Bekliyor |
+| 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Otomatik kabul geçti; kullanıcı masaüstü kabulü açık |
+| 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | **Aktif** |
 | 7 — Performans | Açılış, CPU, RAM, yanıt süresi | Bekliyor |
 | 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | Bekliyor |
 
@@ -222,7 +222,7 @@ akışlarına aittir. Bir yapılandırılmış bilgiyi unutmak ham konuşma arş
 tamamını silme işlemi değildir; tarihsel kayıtlar mevcut tercih veya işlem
 başarısı olarak yeniden yorumlanmamalıdır. Gerçek cihazlar arası bulut
 eşitleme, kullanıcı diski/güç kesintisi ve uzun süreli kullanım
-**DOĞRULANMADI** olarak Aşama 8'de açık kalır. Yeni aktif odak Aşama 5'tir.
+**DOĞRULANMADI** olarak Aşama 8'de açık kalır. Aşama 4 otomatik kabulü tamamlandı; güncel aktif aşama tablodadır.
 
 ## Aşama 5 kabul koşulları
 
@@ -335,3 +335,65 @@ Testler, onaydan önce kapanma, onay bırakmış ama bitmiş süreç, onaydan he
 sonra kapanma, onayla birlikte açık kalan süreç ve eski uygulamanın çıkmaması
 durumlarını kapsar. Bu gözlem uzun süreli çalışma veya ses/model hazırlığı
 garantisi değildir. Bu düzeltme Aşama 1 otomatik kabul kapsamındadır.
+
+
+## Aşama 5: otomasyon güvenilirliği ve gerçek onay
+
+Tarayıcı komutu için `future.result(timeout)` yalnızca bekleyen çağıranı
+bırakıyordu; asıl coroutine çalışmaya devam edebiliyordu. Artık süre aşımında
+iptal istenir. Daha önce teslim edilmiş tıklamanın geri alındığı iddia edilmez;
+böyle bir sonuç `unverified` döner ve yeniden denemeden önce sayfa kontrolü
+istenir. Başlatma hatası bekleyen thread'e aktarılır; kapanış bekleyen işleri
+iptal eder, Playwright kaynaklarını ve sahip olunan olay döngüsünü kapatır.
+Kapanış doğrulanamıyorsa başarı bildirilmez.
+
+Tıklama ve tuş teslimi uygulamanın amacına ulaşıldığı anlamına gelmez. Normal
+metin girişi ancak alanın gerçek değeri tekrar okunup eşleşince `done` olur.
+Eklemeli giriş veya okunamayan/dönüştürülen alan `unverified` kalır. Formun
+kısmi sonucu ayrı sayılır. Belirsiz tıklama başarısızlığından sonra başka
+seçiciye tıklayarak aynı işlemi tekrar etme kaldırıldı. Web sayfası metni ve
+URL güvenilmeyen veri sınırında modele aktarılır.
+
+Genel fare/klavye girdisinin ödeme, mesaj gönderimi veya hesap işlemi olup
+olmadığı model parametrelerinden güvenilir biçimde anlaşılamaz. Bu yüzden
+**genel tarayıcı ve bilgisayar girişleri gerçek, tek kullanımlık HUD onayı**
+gerektirir; `confirmed=true` ve benzeri model alanları yetki vermez. Tarayıcı
+isteği sayfa nesnesi, adres, DOM ve canlı form değerlerinin özetiyle bağlanır.
+Bilgisayar isteği gözlenen pencere, süreç, geometri, öğe konumları ve içerikle
+bağlanır; onaydan sonra pencere tekrar odaklanır ve durum yeniden okunur.
+Hedef değişmişse, güvenilir okunamıyorsa veya koordinat gözlenen pencerenin
+dışındaysa giriş yapılmaz. Onay beklerken istek nesnesini değiştirmek
+saklanan işlemi değiştirmez. Bu sıkı genel giriş akışı otomasyonda ek HUD
+onayları gerektirir; yalnızca gezinme/okuma gibi işlemler mevcut akışta kalır.
+Kamera aracının tek kare isteği de gerçek HUD kararından önce çalışmaz.
+
+Windows pencere başlığı PowerShell kaynak koduna, macOS başlığı AppleScript
+kaynak koduna eklenmez; ayrı veri olarak iletilir. Ham araç parametreleri ve
+girilen özel metin bilgisayar kontrolünün konsol günlüğüne yazılmaz.
+
+| Kabul | Kanıt |
+| --- | --- |
+| Süre aşımı, kapanış, başlangıç ve coroutine temizliği | `test_browser_lifecycle`: gerçek olay döngüsü/thread, gecikmiş etki iptali, kapanış hatası ve boşta coroutine koruması |
+| Sonuç dürüstlüğü | Okunmuş alan değeri, kısmi form, tekrar edilmeyen tıklama, `failed`/`unverified` ayrımı |
+| Kullanıcı yetkisi | `test_automation_consent`, `test_file_confirm`, `test_message_confirm`, `test_camera_scan`: model alanı, değişen hedef, iptal, HUD yokluğu, tek kullanım ve sabit istek |
+| Komut/veri sınırı | `test_computer_command_boundaries`: PowerShell/AppleScript başlık enjeksiyonu ve özel metin günlüğü regresyonu |
+| Kod ajanı | `test_agent_coding`, `test_agent_process`, `test_background_job_tracking`, `test_github_develop`: test hatası, güvenli geri alma, gerçek alt süreç iptali, yayın kapsamı, exact-head merge ve geçmiş/aktif iş ayrımı |
+| Gerçek tarayıcı | `tools/verify_browser_automation.py`: Chromium/Firefox, geçici profil ve çevrimdışı sentetik sayfa; Türkçe giriş, alan geri okuma, gerçek tıklama, form, sekme, sahte HUD üzerinden gerçek araç işçisi ve kaynak kapanışı |
+| Platform | Windows/Linux Python 3.13 tam regresyonu, iki platformdaki gerçek tarayıcı kabulü ve temiz Windows kurulu ortam testleri; sonuçlar ilgili PR'de kaydedilir |
+
+Bu otomatik kabul gerçek kullanıcı hesabında ödeme/mesaj/silme yapıldığı
+anlamına gelmez; bu işlemler test için gerçek hesaplarda yapılmaz. Kullanıcının
+Windows masaüstünde HUD kararı, pencere odak geri dönüşü, çoklu monitör/DPI,
+üçüncü taraf oturumları, fiziksel kamera ve uzun görev saha kabulü
+**DOĞRULANMADI** olarak Aşama 8'de açık kalır. DOM/ekran içeriği güvenilmeyen
+veridir; bu sınırlar işletim sistemi düzeyinde bir güvenlik sandbox'ı değildir.
+Yeni aktif odak Aşama 6'dır.
+
+## Aşama 6 kabul koşulları
+
+- Mevcut FRIDAY kimliği, kadın holografik yüz ve seçili ses korunmalı.
+- Qt widget işlemleri yalnızca ana thread'de; sahne üretimi ve ağ işleri arka planda olmalı.
+- Hologram, dünya haritası ve görsel analiz gerçek render sonuçlarıyla doğrulanmalı.
+- Dünya/normal harita geçişi, yakınlaşma ve dış sokak görünümü veri sağlayıcısının gerçek kapsamına göre raporlanmalı.
+- WebGL/GPU/zoom ve Windows QtWebEngine kabulü yalnızca çalıştırılan test kadar başarılı sayılmalı.
+- Kamera ve uzaktaki görsel içerik yetki/gizlilik sınırlarını aşmamalı.
