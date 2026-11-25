@@ -10,8 +10,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Otomatik kabul geçti; gerçek ses kabulü açık |
 | 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Otomatik kabul geçti; gerçek cihaz eşitlemesi açık |
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Otomatik kabul geçti; kullanıcı masaüstü kabulü açık |
-| 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | **Aktif** |
-| 7 — Performans | Açılış, CPU, RAM, yanıt süresi | Bekliyor |
+| 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Otomatik render kabulü geçti; kullanıcı GPU/kamera kabulü açık |
+| 7 — Performans | Açılış, CPU, RAM, yanıt süresi | **Aktif** |
 | 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | Bekliyor |
 
 ## Aşama 1 kabul koşulları
@@ -389,7 +389,7 @@ Windows masaüstünde HUD kararı, pencere odak geri dönüşü, çoklu monitör
 üçüncü taraf oturumları, fiziksel kamera ve uzun görev saha kabulü
 **DOĞRULANMADI** olarak Aşama 8'de açık kalır. DOM/ekran içeriği güvenilmeyen
 veridir; bu sınırlar işletim sistemi düzeyinde bir güvenlik sandbox'ı değildir.
-Yeni aktif odak Aşama 6'dır.
+Aşama 5 otomatik kabulü tamamlandı; güncel aktif aşama tablodadır.
 
 ## Aşama 6 kabul koşulları
 
@@ -399,3 +399,58 @@ Yeni aktif odak Aşama 6'dır.
 - Dünya/normal harita geçişi, yakınlaşma ve dış sokak görünümü veri sağlayıcısının gerçek kapsamına göre raporlanmalı.
 - WebGL/GPU/zoom ve Windows QtWebEngine kabulü yalnızca çalıştırılan test kadar başarılı sayılmalı.
 - Kamera ve uzaktaki görsel içerik yetki/gizlilik sınırlarını aşmamalı.
+
+
+## Aşama 6: görünürlük, harita katmanı ve fotoğraf doğrulaması
+
+Dünya panelinde eski bir katmandan geç gelen sonuç, aynı moda geri dönüldüğünde
+mevcut katmanın görüntü sayısını ve hata durumunu değiştirebiliyordu. Her katman
+artık ayrı nesil numarası taşır; eski görüntü/hata yanıtları yeni katmanın
+başarısı veya başarısızlığı gibi gösterilmez. Qt gizleme isteği ile belgenin
+visibility durumu birlikte uygulanır. Belge görünürlük olayı gizlenmiş panelin
+render döngüsünü yeniden açamaz; sayfa yüklenmesi panel gizlendikten sonra
+biterse Qt görünürlüğü tekrar aktarılır.
+
+Yer arama modülünün yüklenememesi artık çalışan işçiyi sessizce düşürüp Ara
+düğmesini kapalı bırakmaz. Hata tek sinyal ile ana thread'e aktarılır; panel
+silinmişse ikinci kez silinmiş QObject'e sinyal gönderilmez. Geçersiz/eski
+arama sonucu mevcut harita hedefine uygulanmaz. Ağ/model işi widget işçisine
+taşınmaz; worker yalnızca sinyal yayar.
+
+Fotoğrafın tanımlı 8 MB sınırı artık **dekoder açılmadan önce** uygulanır.
+Yanlış giriş türü doğrulama hatasıdır. Piksel sınırı, EXIF yön düzeltmesi ve
+metadata kaldırma korunur. Model/hizmet olmadan gerçek fotoğraf baytlarıyla
+sınır ve metadata kabulü test edilir. Fiziksel kamera veya canlı görsel model
+başarısı buradan türetilmez.
+
+Kadın FRIDAY hologramı, teması ve ses kimliği korunur. Gerçek OpenGL render
+kabulü, farklı kafa açılarının yanında **aynı pozda ayrı ağız, göz kırpma ve
+bakış** değişikliklerinin framebuffer piksellerini değiştirmesini gerektirir.
+İstenen motor yazılım yedeğine düşerse GPU/render kabul testi başarısız kalır;
+bu durum başarı sayılmaz. Render çıktıları ve kabul manifesti CI artifact'ına
+kaydedilir. CI yazılım OpenGL sonucu kullanıcının fiziksel GPU'su doğrulandı
+anlamına gelmez.
+
+| Kabul | Kanıt |
+| --- | --- |
+| Katman ve görünürlük yarışları | `earth_runtime.cjs`: dağıtılan gerçek JS, kontrollü eski/yeni provider yanıtları ve visibility olayları; Node testleri |
+| Qt yaşam döngüsü | `test_earth_panel_lifecycle`: gizli yüklenme, başarısız yükleme sonrası bekleyen hedef, import hatası ve eski arama sonucu |
+| Fotoğraf güvenliği | `test_camera_photo`: bayt/piksel sınırı, yanlış tür, gerçek JPEG EXIF yönü ve metadata silme |
+| Holografik yüz | Mevcut portre/mesh testleri ve `render_android_preview.py`: gerçek shader, ayrı animasyon pikselleri, 5 poz ve render manifesti |
+| Dünya ve yakınlaşma | `verify_earth.py`: gerçek QtWebEngine/WebGL framebuffer, doğal/uydu/sokak modları, hedef/irtifa, 2D geçiş ve gizle/göster |
+| Platform | Windows/Linux tam regresyonu ve ayrı gerçek yüz/dünya render workflow'ları; exact-head sonuçları ilgili PR'de |
+
+Otomatik kabul kullanıcı donanımında uzun süreli kullanım, fiziksel GPU/sürücü,
+çoklu monitör/DPI, canlı görsel model veya gerçek kamera kabulünü tamamlamaz.
+Bu sonuçlar **DOĞRULANMADI** olarak Aşama 8'de açıktır. Harita ve uydu ayrıntısı
+sağlayıcı kapsamasına bağlıdır; sokak panoraması ayrı tarayıcıda açılır.
+Yakınlaşma testi her bölgede her binanın görüntüsünün bulunduğu iddiası değildir.
+Yeni aktif odak Aşama 7'dir.
+
+## Aşama 7 kabul koşulları
+
+- Başlangıç, ilk yanıt ve tekrar eden çizim maliyeti ölçülmeli; CI ölçümü kullanıcı cihazı sonucu gibi sunulmamalı.
+- Ağ/model çağrıları ve ağır dosya işleri Qt ana thread'ini engellememeli.
+- Görünmeyen paneller ve animasyonlar gereksiz render/CPU tüketmemeli.
+- Kaynak tüketimi ve kuyruklar sınırlandırılmalı; hız için hafıza/izin/veri doğrulaması kaldırılmamalı.
+- İyileştirmeler ilgili regresyon ve gerçek davranış testleriyle doğrulanmalı.
