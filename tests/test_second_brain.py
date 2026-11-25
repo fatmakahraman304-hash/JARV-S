@@ -22,25 +22,14 @@ class SecondBrainTests(unittest.TestCase):
         brain.scan()
         self.assertEqual(brain.items()[0]["state"], "dismissed")
 
-    def test_agent_outcomes_require_the_matching_request(self):
-        brain.add("Türkçe konuşma")
+    def test_legacy_develop_entry_cannot_start_code_work(self):
+        brain.add("Eski kayıt")
         item = brain.items()[0]
-        player = Mock()
-        from plugins import github_develop
-        with patch.object(github_develop, "run", return_value="AETHER kod değişikliği için ayrı geliştirme alanı hazırlanıyor.") as develop:
-            brain.develop(item["id"], player)
-            with self.assertRaises(ValueError):
-                brain.develop(item["id"], player)
-        request = develop.call_args.args[0]
-        self.assertEqual(request["mode"], "self_edit")
-        pid = continuity.project_start("improve", "AETHER", "/code", request["instruction"])
-        continuity.project_update(pid, status="unverified")
-        brain.scan()
-        self.assertEqual(brain._get(item["id"])["state"], "unverified")
-        brain.update(item["id"], state="running")
-        continuity.project_update(pid, status="bitti")
-        brain.scan()
-        self.assertEqual(brain._get(item["id"])["state"], "verified")
+        with patch('plugins.github_develop.run') as develop:
+            with self.assertRaisesRegex(ValueError, "kod yazmaz"):
+                brain.develop(item['id'], Mock())
+        develop.assert_not_called()
+        self.assertEqual(brain._get(item['id'])['state'], 'idea')
 
     def test_failed_analysis_does_not_replace_existing_plan(self):
         brain.add("Konuşma")
@@ -51,21 +40,15 @@ class SecondBrainTests(unittest.TestCase):
                 brain.analyze(item["id"])
         self.assertEqual(brain._get(item["id"])["analysis"], "Eski plan")
 
-    def test_retry_ignores_old_success_and_preparation_errors_are_visible(self):
+    def test_legacy_analysis_cannot_call_a_model_or_replace_history(self):
         brain.add("Ses sistemi")
         item = brain.items()[0]
-        old = continuity.project_start("improve", "AETHER", "/code", f"[SECOND_BRAIN:{item['id']}]")
-        continuity.project_update(old, status="bitti")
-        def start(parameters, player):
-            player.write_log("GELİŞTİRME: Git bağlantısı kurulamadı.")
-            return "AETHER kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
-        from plugins import github_develop
-        with patch.object(github_develop, "run", side_effect=start):
-            brain.develop(item["id"], Mock())
-        brain.scan()
-        result = brain._get(item["id"])
-        self.assertEqual(result["state"], "unverified")
-        self.assertIn("Git bağlantısı", result["result"])
+        brain.update(item['id'], analysis='Önceki plan')
+        with patch('core.gemini.as_json') as model:
+            with self.assertRaisesRegex(ValueError, "yalnızca özellik"):
+                brain.analyze(item['id'])
+        model.assert_not_called()
+        self.assertEqual(brain._get(item['id'])['analysis'], 'Önceki plan')
 
     def test_completion_is_found_beyond_recent_project_history(self):
         brain.add("Eski geliştirme")
