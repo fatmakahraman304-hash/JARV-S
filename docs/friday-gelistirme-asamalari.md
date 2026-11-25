@@ -6,8 +6,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | Aşama | Kapsam | Durum |
 | --- | --- | --- |
 | 1 — Sistem kararlılığı | Hatalar, güncelleyici, veri güvenliği, dayanıklılık | Otomatik kabul geçti; saha doğrulaması açık |
-| 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | **Aktif** |
-| 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Bekliyor |
+| 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | Otomatik kabul geçti; canlı model kabulü açık |
+| 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | **Aktif** |
 | 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Bekliyor |
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Bekliyor |
 | 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Bekliyor |
@@ -69,6 +69,38 @@ isteği bulmasını engellemez. Açık yeni istekler ve acil güvenlik ifadeleri
 normal biçimde yeniden yönlendirilir. Araçlar çalıştırılmaz, hafızaya yazılmaz,
 servis çağrısı veya yeni yetki verilmez.
 
+## Aşama 2 otomatik kabulü ve Aşama 3'e geçiş
+
+| Koşul | Kanıt ve kapsam |
+| --- | --- |
+| Kısa yanıt, konu değişimi ve görsel sınırları | #190; çekirdek ve katalog yönlendirmesi ile gerçek pipeline mesaj oluşturma yolu |
+| 1.000 girdinin kapsamı | `test_integrated_capabilities` tüm girdileri ve gerçek araç bağlarını denetler; uygulama maddeleri doğrulanmış işlem gibi sunulmaz |
+| Abacus önceliği ve bağlam | `test_abacus_priority`: sağlıklı ana model önce, aynı konuşma ve araç bildirimiyle yedeğe geçiş |
+| Tekrar çalıştırmama | Kısmi metin veya araç çağrısı sonrasında fallback yeniden oynatılmaz |
+| Hatalı yedeklerin dinlendirilmesi | Kota/kimlik/model hatalarında mevcut uzun, geçici servis hatalarında kısa bekleme; süre bitince yeniden denenir |
+| Başarısızlığın açık bildirimi | Tüm modeller beklemedeyse ağ isteği tekrarlanmaz ve hata döner; başarı uydurulmaz |
+| Yetki ve yöntem sınırları | Yönlendirme yerel öneridir; gerçek araç ve onay sınırları korunur; katalog bağımsız işlem kanıtı sayılmaz |
+
+Yedek modellerin bekleme kaydı oturum içinde, sunucu/model bazında tutulur;
+ayar/anahtar dosyasına yazılmaz ve model sırası değişmez. Süresi bitmiş kayıtlar
+temizlenir. Sonuç, bu sürümün ilgili ve tam Windows/Linux regresyonlarıyla
+birlikte PR kabul raporunda kaydedilir. Canlı Abacus/Gemini/NVIDIA hesabı,
+model kalitesi, gerçek öğrenme kazanımı ve kullanıcı cihazında yanıt gecikmesi
+**DOĞRULANMADI** olarak Aşama 8 nihai kabul listesinde açık tutulur.
+Bu kabul, 1.000 bağımsız aracın veya bütün katalog yöntemlerinin canlı modelle
+ayrı ayrı sınandığı anlamına gelmez. Yeni aktif geliştirme odağı Aşama 3'tür.
+
+## Aşama 3 kabul koşulları
+
+- Mevcut FRIDAY ses seçimi korunmalı; kullanılan motorun gerçek yetenekleri raporlanmalı.
+- Sürekli dinleme ve uyandırma kontrollerinin etkin durumu tutarlı olmalı.
+- Ses arabelleği sessizlikte ve kesintisiz konuşma/gürültüde sınırlandırılmalı.
+- STT/TTS başarısızlığı, söz kesme, iptal ve kapanış kontrollü çalışmalı.
+- Türkçe ses girdileri, sayı/saat ifadeleri ve konuşma bağlamı regresyonları geçmeli.
+- Ses/model işlemleri Qt ana thread'ini engellememeli; veri ve izin sınırları korunmalı.
+- Windows/Linux otomatik kontrolleri ile gerçek mikrofon/hoparlör kabulü ayrı raporlanmalı.
+- Donanım ölçümü olmadan gecikme veya yankı engelleme başarısı ilan edilmemeli.
+
 ## Son çalışma: açılış ve yarım güncelleme
 
 `main.py`, üçüncü taraf modüllerden önce `core/startup_guard.py` kontrolünü çağırır.
@@ -80,7 +112,7 @@ modüllerine ulaşılmadığını, kişisel dosyaların korunduğunu sınar.
 Aşama 1'in aşağıdaki otomatik kabulü tamamlandı. Fiziksel Windows cihazında güç
 kesintisi, gerçek mikrofon/hoparlör ve uzun süreli çalışma **DOĞRULANMADI**.
 Bunlar Aşama 8 nihai kabulünde açık kontrol olarak korunur; genel ürün hazır
-ilan edilmedi. Yeni geliştirme odağı Aşama 2'dir.
+ilan edilmedi. Aşama 1 otomatik kabul kaydı yukarıdadır; güncel aktif aşama tablodadır.
 
 ## Aşama 1: hafıza dosyalarının güvenli yazımı
 
