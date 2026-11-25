@@ -927,6 +927,7 @@ class AbacusPriorityLLM(OpenAICompatLLM):
     def __init__(self, cfg: dict):
         super().__init__(cfg)
         self._retry_at = 0.0
+        self._backup_retry_at: dict[tuple[str, str], float] = {}
         self._log = cfg.get("log") or print
 
     def _fallbacks(self):
@@ -960,11 +961,17 @@ class AbacusPriorityLLM(OpenAICompatLLM):
             yield candidate
 
     async def chat(self, messages, tools=None, *, stream=True, temperature=None):
-        last = RuntimeError("Abacus AI is resting; no fallback model configured")
-        candidates = ([self] if time.monotonic() >= self._retry_at else [])
+        last = RuntimeError("Yapılandırılmış modeller beklemede veya kullanılabilir yedek model yok.")
+        now = time.monotonic()
+        self._backup_retry_at = {target: until for target, until in self._backup_retry_at.items()
+                                 if until > now}
+        candidates = ([self] if now >= self._retry_at else [])
         # Build the fallback providers lazily: healthy Abacus needs no extra calls.
         import itertools
         for candidate in itertools.chain(candidates, self._fallbacks()):
+            target = (candidate.base, candidate.model)
+            if candidate is not self and time.monotonic() < self._backup_retry_at.get(target, 0):
+                continue
             emitted = False
             try:
                 if candidate is self:
@@ -984,6 +991,10 @@ class AbacusPriorityLLM(OpenAICompatLLM):
                 if candidate is self:
                     self._retry_at = time.monotonic() + _abacus_rest_seconds(error)
                     self._log("SYS: Abacus AI resting; switching to configured backup models")
+                else:
+                    seconds = _abacus_rest_seconds(error)
+                    self._backup_retry_at[target] = time.monotonic() + seconds
+                    self._log(f"SYS: Backup {candidate.model} resting for {seconds}s")
                 if emitted:
                     raise
         raise last
