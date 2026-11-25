@@ -33,3 +33,21 @@ modüllerine ulaşılmadığını, kişisel dosyaların korunduğunu sınar.
 Bu çalışma Aşama 1'in yalnızca bir parçasıdır. Fiziksel Windows cihazında güç
 kesintisi, gerçek mikrofon/hoparlör ve uzun süreli çalışma **DOĞRULANMADI**.
 Nihai kabul ve Aşama 2'ye geçiş henüz ilan edilmedi.
+
+## Aşama 1: hafıza dosyalarının güvenli yazımı
+
+`memory/memory_manager.py`, ana JSON, önceki sürüm yedeği ve arşiv için
+aynı diskte benzersiz geçici dosya kullanır. Dosya içeriği `flush` ve `fsync`
+sonrasında atomik değiştirmeyle yayımlanır. Sabit `.tmp` adlarındaki mevcut
+dosyalara dokunulmaz. Bozuk veya yanlış yapılı arşiv, boş arşiv kabul edilmez;
+arşivleme ve ana hafızayı küçültme durur, mevcut dosyalar korunur. Arşivleme
+başarı mesajı ancak arşiv yazıldıktan sonra verilir.
+Son konuşma özetini okumak ana hafızayı veya yedeği yeniden yazmaz; disk yazma
+izni bulunmasa da mevcut geçerli özet okunabilir.
+
+Test kapsamı: sabit geçici adlardaki kullanıcı dosyaları; bozuk JSON/kategori
+yapısı; ana dosya ve yedek `fsync` hataları; arşiv değiştirme hatası ve geçici
+dosya temizliği. 21 Kasım 2026 unutma/eşitleme regresyonları korunur.
+Bu koruma, gerçek elektrik kesintisinde disk/işletim sistemi dayanıklılığının
+donanım üzerinde doğrulandığı anlamına gelmez. Çok süreçli eşzamanlı uzun
+vadeli JSON yazımı ayrıca gözden geçirilmelidir. Aşama 1 **aktif** kalır.

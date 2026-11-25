@@ -5,6 +5,8 @@ from datetime import datetime, timezone, timedelta
 from threading import RLock
 from pathlib import Path
 import sys
+import tempfile
+from contextlib import contextmanager
 
 
 def _log(message):
@@ -164,9 +166,10 @@ def _trim_to_limit(memory: dict) -> dict:
         archived.setdefault(cat, {})[key] = entry
         del memory[cat][key]
         dropped.append(f"{cat}/{key}")
-        _log(f"[Memory] 📦 Archived {cat}/{key}")
     if archived:
         _archive(archived)
+        for name in dropped:
+            _log(f"[Memory] 📦 Archived {name}")
     if dropped and _trim_notifier:
         try:
             _trim_notifier(
@@ -184,14 +187,32 @@ def save_memory(memory: dict) -> None:
         _write_memory(_trim_to_limit(memory))
 
 
+@contextmanager
+def _staged_json(path, data):
+    """Private same-volume file; flush before publishing, clean only our file."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                dir=path.parent, prefix=".friday-memory-", suffix=".tmp", delete=False) as handle:
+            temporary = Path(handle.name)
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        yield temporary
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _atomic_json(path, data):
+    with _staged_json(path, data) as temporary:
+        os.replace(temporary, path)
+
+
 def _write_memory(memory: dict) -> None:
     """Replace the complete file while the caller holds the memory lock."""
     MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temporary = MEMORY_PATH.with_suffix(".json.tmp")
-    try:
-        temporary.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+    with _staged_json(MEMORY_PATH, memory) as temporary:
         if MEMORY_PATH.exists():
             try:
                 previous = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
@@ -207,28 +228,21 @@ def _write_memory(memory: dict) -> None:
                             entries.pop(key, None)
                     tomb = previous.setdefault("_deleted", {})
                     tomb[path] = max(tomb.get(path, ""), timestamp)
-                backup_tmp = BACKUP_PATH.with_name(BACKUP_PATH.name + ".tmp")
-                try:
-                    backup_tmp.write_text(json.dumps(previous, ensure_ascii=False), encoding="utf-8")
-                    os.replace(backup_tmp, BACKUP_PATH)
-                finally:
-                    backup_tmp.unlink(missing_ok=True)
+                _atomic_json(BACKUP_PATH, previous)
         os.replace(temporary, MEMORY_PATH)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def _archive(entries: dict) -> None:
     """Older facts a full memory had to let go of: kept in a second file, searched by recall."""
     try:
         old = json.loads(ARCHIVE_PATH.read_text(encoding="utf-8")) if ARCHIVE_PATH.exists() else {}
-    except (OSError, ValueError):
-        old = {}
+    except (OSError, ValueError) as exc:
+        raise ValueError("Hafıza arşivi okunamadı; mevcut dosyalar korunuyor.") from exc
+    if not isinstance(old, dict) or any(not isinstance(items, dict) for items in old.values()):
+        raise ValueError("Hafıza arşivinin yapısı geçersiz; mevcut dosyalar korunuyor.")
     for cat, items in entries.items():
         old.setdefault(cat, {}).update(items)
-    tmp = ARCHIVE_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(old, indent=1, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, ARCHIVE_PATH)
+    _atomic_json(ARCHIVE_PATH, old)
 
 
 def _load_archive() -> dict:
@@ -621,8 +635,6 @@ def pop_last_session() -> dict | None:
             if not isinstance(sessions, list) or not sessions:
                 return None
             entry = sessions[-1]
-            memory["sessions"] = sessions
-            _write_memory(memory)
             return entry
         except Exception as e:
             _log(f"[Memory] ⚠️ pop_last_session error: {e}")

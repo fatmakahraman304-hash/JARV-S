@@ -112,6 +112,74 @@ class MemorySafety(unittest.TestCase):
         mm._write_memory({"identity": {}})
         self.assertEqual(mm.BACKUP_PATH.read_text(encoding="utf-8"), good_backup)
 
+    def test_memory_writes_preserve_existing_temporary_names(self):
+        sentinels = [mm.MEMORY_PATH.with_suffix(".json.tmp"),
+                     mm.BACKUP_PATH.with_name(mm.BACKUP_PATH.name + ".tmp"),
+                     mm.ARCHIVE_PATH.with_suffix(".json.tmp")]
+        for path in sentinels:
+            path.write_bytes(b"user file")
+        mm.remember("one", "first")
+        mm.remember("two", "second")
+        mm._archive({"notes": {"old": {"value": "saved"}}})
+        for path in sentinels:
+            self.assertEqual(path.read_bytes(), b"user file")
+
+    def test_corrupt_archive_blocks_trimming_without_losing_primary(self):
+        mm.remember("old", "saved fact")
+        previous = mm.MEMORY_PATH.read_bytes()
+        for invalid in (b"broken json", b"[]", b'{"notes": []}'):
+            with self.subTest(invalid=invalid):
+                mm.ARCHIVE_PATH.write_bytes(invalid)
+                with patch.object(mm, "MEMORY_MAX_CHARS", 50):
+                    with self.assertRaises(ValueError):
+                        mm.remember("new", "new fact" * 20)
+                self.assertEqual(mm.MEMORY_PATH.read_bytes(), previous)
+                self.assertEqual(mm.ARCHIVE_PATH.read_bytes(), invalid)
+
+    def test_flush_failure_does_not_publish_or_erase_files(self):
+        mm.remember("old", "saved fact")
+        before = mm.MEMORY_PATH.read_bytes()
+        with patch.object(mm.os, "fsync", side_effect=OSError("disk flush failed")):
+            with self.assertRaisesRegex(OSError, "disk flush"):
+                mm.remember("new", "must not publish")
+        self.assertEqual(mm.MEMORY_PATH.read_bytes(), before)
+        self.assertEqual(sorted(p.name for p in Path(self.tmp.name).iterdir()), ["long_term.json"])
+
+    def test_failed_backup_flush_preserves_primary_and_previous_backup(self):
+        mm.remember("one", "first")
+        mm.remember("two", "second")
+        before = {p: p.read_bytes() for p in (mm.MEMORY_PATH, mm.BACKUP_PATH)}
+        with patch.object(mm.os, "fsync", side_effect=[None, OSError("backup flush failed")]):
+            with self.assertRaisesRegex(OSError, "backup flush"):
+                mm.remember("three", "not committed")
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content)
+        self.assertEqual(list(Path(self.tmp.name).glob(".friday-memory-*.tmp")), [])
+
+    def test_failed_archive_publish_keeps_both_stores_and_reports_no_archive(self):
+        mm.remember("old", "saved fact")
+        mm._archive({"notes": {"earlier": {"value": "older fact"}}})
+        before = {p: p.read_bytes() for p in (mm.MEMORY_PATH, mm.ARCHIVE_PATH)}
+        with patch.object(mm, "MEMORY_MAX_CHARS", 50), patch.object(mm, "_log") as log:
+            with patch.object(mm.os, "replace", side_effect=OSError("archive locked")):
+                with self.assertRaisesRegex(OSError, "archive locked"):
+                    mm.remember("new", "new fact" * 20)
+            self.assertFalse(any("Archived" in str(call) for call in log.call_args_list))
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content)
+        self.assertEqual(list(Path(self.tmp.name).glob(".friday-memory-*.tmp")), [])
+
+    def test_reading_last_session_never_writes_or_rotates_the_backup(self):
+        mm.save_session_summary("Önceki proje")
+        mm.save_session_summary("Devam eden proje")
+        before = {p: p.read_bytes() for p in (mm.MEMORY_PATH, mm.BACKUP_PATH)}
+        with patch.object(mm.os, "replace", side_effect=OSError("read-only disk")) as replace:
+            self.assertEqual(mm.pop_last_session()["summary"], "Devam eden proje")
+            self.assertEqual(mm.pop_last_session()["summary"], "Devam eden proje")
+        replace.assert_not_called()
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content)
+
     def test_full_memory_archives_and_recall_still_finds_it(self):
         with patch.object(mm, "MEMORY_MAX_CHARS", 400):
             mm.update_memory({"notes": {"old_car": {"value": "Murat'ın eski arabası mavi bir Fiat Doblo", "updated": "2020-01-01"}}})
