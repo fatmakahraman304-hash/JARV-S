@@ -13,6 +13,8 @@ on:
       - "gui/android_gl.py"
       - "gui/hologram_glsl.py"
       - "core/app_updater.py"
+      - "core/startup_guard.py"
+      - "tests/test_startup_guard.py"
       - "core/restart_manager.py"
       - "gui/window.py"
       - "tests/test_updated_hud.py"
@@ -85,4 +87,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\.venv\Scripts\python.exe -m pip check
       - name: Verify update, rollback and reopened HUD
-        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_updated_hud tests.test_restart_app
+        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app

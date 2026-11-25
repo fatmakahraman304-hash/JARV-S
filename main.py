@@ -34,6 +34,12 @@ for _stream in ("stdout", "stderr"):
     except Exception:
         pass          # pythonw / redirected pipes / anything exotic — never fatal
 
+# Do not load Qt, audio, settings or memory from a partially applied version.
+if __name__ == "__main__":
+    from pathlib import Path as _StartupPath
+    from core.startup_guard import preflight as _startup_preflight
+    _startup_preflight(_StartupPath(__file__).resolve().parent)
+
 # ── HTTPS trusts the system's roots AND certifi's ────────────────────────────
 # A Windows store that never fetched a root failed every urllib call to that
 # site with an "SSL problem" (CERTIFICATE_VERIFY_FAILED). core/tls.py.
