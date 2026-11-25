@@ -106,6 +106,9 @@ def ladder(chosen: str = "", installed=None) -> list[str]:
         return [chosen] + order + [GEMINI]
     # Kullanıcı alternatif bir API modeli seçmişse yedek olarak kullanılabilir,
     # ancak kaldırılan eski abonelik/CLI kod ajanları geri yüklenmez.
+    from core.retired_providers import is_retired_provider
+    if is_retired_provider(chosen):
+        chosen = ""
     old_agents = {"claude_code", "codex_cli", "openai_compat@deepseek"}
     if chosen and chosen not in old_agents and chosen not in AGENTS and chosen != "auto":
         if chosen not in order and not resting(chosen):

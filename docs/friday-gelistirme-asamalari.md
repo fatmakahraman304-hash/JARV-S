@@ -6,7 +6,7 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | Aşama | Kapsam | Durum |
 | --- | --- | --- |
 | 1 — Sistem kararlılığı | Hatalar, güncelleyici, veri güvenliği, dayanıklılık | Otomatik kabul geçti; saha doğrulaması açık |
-| 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | Otomatik kabul geçti; canlı model kabulü açık |
+| 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, model yönlendirme, sohbet | Otomatik kabul geçti; canlı model kabulü açık |
 | 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Otomatik kabul geçti; gerçek ses kabulü açık |
 | 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Otomatik kabul geçti; gerçek cihaz eşitlemesi açık |
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Otomatik kabul geçti; kullanıcı masaüstü kabulü açık |
@@ -48,7 +48,7 @@ bu açıkların kapandığı veya nihai ürünün hazır olduğu iddiasını ta�
 - Konu değişimi, yalnız görsel/boş ileti ve sistem verisi sınırları ayrı ele alınmalı.
 - Katalogdaki 1.000 girdi, 1.000 doğrulanmış bağımsız araç gibi sunulmamalı;
   gerçek işlem, açıklama yöntemi ve bağlı olmayan servis durumu ayrılmalı.
-- Abacus önceliği/fallback konuşma bağlamını korumalı; kısmi cevap veya araç çağrısı tekrarlanmamalı.
+- Model yönlendirme/fallback konuşma bağlamını korumalı; kısmi cevap veya araç çağrısı tekrarlanmamalı.
 - Yerel yöntemler ve mevcut araçlar istekle eşleşmeli; yönlendirme kullanıcı yetkisi sayılmamalı.
 - Model/servis erişimi olmadan canlı zekâ/kalite/öğrenme artışı iddia edilmemeli.
 - İlgili ve tam Windows/Linux regresyonları geçmeli; canlı servis ve davranış kabulü açıkça raporlanmalı.
@@ -75,7 +75,7 @@ servis çağrısı veya yeni yetki verilmez.
 | --- | --- |
 | Kısa yanıt, konu değişimi ve görsel sınırları | #190; çekirdek ve katalog yönlendirmesi ile gerçek pipeline mesaj oluşturma yolu |
 | 1.000 girdinin kapsamı | `test_integrated_capabilities` tüm girdileri ve gerçek araç bağlarını denetler; uygulama maddeleri doğrulanmış işlem gibi sunulmaz |
-| Abacus önceliği ve bağlam | `test_abacus_priority`: sağlıklı ana model önce, aynı konuşma ve araç bildirimiyle yedeğe geçiş |
+| Model yönlendirme ve bağlam | Sağlayıcı regresyonları, konuşma devamlılığı ve kaldırılmış sağlayıcıların yeniden etkinleşmemesi |
 | Tekrar çalıştırmama | Kısmi metin veya araç çağrısı sonrasında fallback yeniden oynatılmaz |
 | Hatalı yedeklerin dinlendirilmesi | Kota/kimlik/model hatalarında mevcut uzun, geçici servis hatalarında kısa bekleme; süre bitince yeniden denenir |
 | Başarısızlığın açık bildirimi | Tüm modeller beklemedeyse ağ isteği tekrarlanmaz ve hata döner; başarı uydurulmaz |
@@ -84,7 +84,7 @@ servis çağrısı veya yeni yetki verilmez.
 Yedek modellerin bekleme kaydı oturum içinde, sunucu/model bazında tutulur;
 ayar/anahtar dosyasına yazılmaz ve model sırası değişmez. Süresi bitmiş kayıtlar
 temizlenir. Sonuç, bu sürümün ilgili ve tam Windows/Linux regresyonlarıyla
-birlikte PR kabul raporunda kaydedilir. Canlı Abacus/Gemini/NVIDIA hesabı,
+birlikte PR kabul raporunda kaydedilir. Canlı Gemini/NVIDIA ve diğer yapılandırılmış sağlayıcı hesapları,
 model kalitesi, gerçek öğrenme kazanımı ve kullanıcı cihazında yanıt gecikmesi
 **DOĞRULANMADI** olarak Aşama 8 nihai kabul listesinde açık tutulur.
 Bu kabul, 1.000 bağımsız aracın veya bütün katalog yöntemlerinin canlı modelle
@@ -523,3 +523,33 @@ profili, fiziksel mikrofon/GPU, ilk model bağlantısı ve ilk sesli yanıt
 gecikmesini doğrulamaz. SDK'nın ilk gerçek kullanım maliyeti ortadan
 kaldırılmadı; UI'nin önündeki gereksiz zorunluluk kaldırıldı. Aşama 7 aktiftir;
 üç tekrarlı Windows sonucu ve regresyonlar ilgili PR'de kaydedilir.
+
+
+## Kullanıcı isteği: Abacus AI entegrasyonunu kaldırma
+
+Abacus/RouteLLM katalog girdisi, hazır API adresi, özel öncelik yönlendirmesi,
+`AbacusPriorityLLM` ve bu özelliğe ait özel cooldown/fallback kodu kaldırıldı.
+Bu kaldırılmış özelliğin dokuz eski testi yerine kaldırma ve güvenli ayar
+geçişini doğrulayan regresyonlar eklendi; diğer sağlayıcı testleri korunur.
+README kurulum talimatları ve aktif yol haritası buna göre güncellendi.
+
+Eski kimlik, katalog veya resmi API adresiyle kaydedilmiş Abacus ayarları
+aktif yapılandırmadan ve geçerli son yedekten ayıklanır. Ayar kaydetme ve
+salt okunur çözümleme yolları eski kaydı tekrar etkinleştiremez. Registry ve
+OpenAI uyumlu sağlayıcı doğrudan eski/custom adresi çalıştırmayı ağ çağrısından
+önce reddeder. Kaldırmayı engelleyen/tanıyan migration ve regresyon adları
+kaynakta kalır; bunlar kullanılabilir bir Abacus özelliği değildir.
+
+Diğer sağlayıcıların anahtarları, seçili modelleri, STT/TTS ve FRIDAY ses/
+kimlik ayarları korunur. Abacus ana konuşma modeliyse yalnızca kayıtlı Gemini
+anahtarı bulunduğunda ve `local_only` kapalı olduğunda Gemini Live moduna
+geçilir. Aksi halde eski LLM seçimi temizlenir; yeni bir sağlayıcı yapılandırmak
+gerekir. Rastgele bir ücretli servise/hesaba geçilmez. Kişisel konuşma ve
+proje hafızası silinmez. Bozuk/yapısı okunamayan dosyalar, başka kullanıcı
+verilerini kaybetmemek için korunur; geçerli eski yedek yeniden Abacus'a
+yönlenemez. Harici Abacus hesabında anahtar iptali veya hesap silme yapılmaz.
+
+Kaldırma testleri; katalog/factory, özel adres/alias, eski ortak katalog,
+yerel kullanım sınırı, ayar/yedek temizliği, eski ekranın kaydetmesi, bozuk
+ve yalnızca yedek dosya senaryosu ve diğer sağlayıcıları korumayı kapsar.
+Aşama 7 aktiftir; kaldırma doğrulaması ilgili PR'de kaydedilir.

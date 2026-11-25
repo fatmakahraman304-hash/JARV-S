@@ -61,7 +61,6 @@ PRESETS: dict[str, str] = {
     "Jan":                  "http://127.0.0.1:1337/v1",
     "OpenAI":               "https://api.openai.com/v1",
     "Aether API":            "https://api.aetherapi.dev/v1",
-    "Abacus AI":             "https://routellm.abacus.ai/v1",
     "Groq":                 "https://api.groq.com/openai/v1",
     "NVIDIA":               "https://integrate.api.nvidia.com/v1",
     "Mistral":              "https://api.mistral.ai/v1",
@@ -182,9 +181,6 @@ CATALOG = (
     {"id": "openai",     "label": "OpenAI",
      "note": "bulut · API anahtarı gerekir", "local": False,
      "values": {"base_url": PRESETS["OpenAI"], **_CLOUD}},
-    {"id": "abacus",     "label": "Abacus AI (RouteLLM)",
-     "note": "bulut · öncelikli model · API kredileri kullanılır", "local": False,
-     "values": {"base_url": PRESETS["Abacus AI"], **_CLOUD, "model": "route-llm"}},
     {"id": "aether",     "label": "Aether API",
      "note": "bulut · sohbet / hızlı / araştırma / kodlama için ücretsiz akıllı seçim",
      "local": False,
@@ -417,6 +413,9 @@ class OpenAICompatLLM:
     """Speaks to anything that serves /v1/chat/completions."""
 
     def __init__(self, cfg: dict):
+        from core.retired_providers import is_retired_provider
+        if is_retired_provider(settings=cfg):
+            raise ValueError("Bu sağlayıcı kaldırıldı; kullanılabilir bir model seçin.")
         import httpx  # inside the factory path — never at module scope
 
         self._httpx = httpx
@@ -905,104 +904,7 @@ def _terse(text: str, limit: int = 160) -> str:
     return text[:limit] + ("..." if len(text) > limit else "")
 
 
-def _abacus_rest_seconds(error: Exception) -> int:
-    """Rest quota/auth errors longer than transient service failures."""
-    msg = str(error).lower()
-    if re.search(r"\b(402|429)\b", msg) or any(
-        word in msg for word in ("quota", "credit", "rate limit", "resource_exhausted")
-    ):
-        return 900
-    if re.search(r"\b(401|403|404)\b", msg):
-        return 900
-    return 30
-
-
-class AbacusPriorityLLM(OpenAICompatLLM):
-    """Keep the speech pipeline/history intact while changing text models.
-
-    Retry only before any text or tool call has been yielded: replaying a
-    partly spoken response or tool call could repeat an action. Fall back only
-    to explicitly configured sidecar/free-pool models and the saved Gemini key.
-    """
-    def __init__(self, cfg: dict):
-        super().__init__(cfg)
-        self._retry_at = 0.0
-        self._backup_retry_at: dict[tuple[str, str], float] = {}
-        self._log = cfg.get("log") or print
-
-    def _fallbacks(self):
-        from core import free_models
-        from memory.config_manager import get_provider_config, get_sidecar_provider, get_gemini_key, load_api_keys
-        seen = {(self.base, self.model)}
-        sidecar = get_sidecar_provider()
-        configs = []
-        if sidecar and sidecar != "openai_compat@abacus":
-            configs.append(get_provider_config(sidecar))
-        for vendor, model, base, key in free_models.specs("smart"):
-            configs.append(dict(base_url=base, model=model, api_key=key,
-                                aether_auto_models="0", aether_allow_paid="0"))
-        key = get_gemini_key() if not load_api_keys().get("local_only") else ""
-        if key:
-            configs.append(dict(base_url=PRESETS["Google Gemini"],
-                                model="gemini-3.5-flash", api_key=key))
-        for cfg in configs:
-            if not cfg.get("base_url") or not cfg.get("model"):
-                continue
-            try:
-                candidate = OpenAICompatLLM(cfg)
-            except Exception:
-                continue
-            target = (candidate.base, candidate.model)
-            if target in seen or candidate.base == self.base:
-                continue
-            if not candidate.key and not _is_own_hardware(candidate.base):
-                continue
-            seen.add(target)
-            yield candidate
-
-    async def chat(self, messages, tools=None, *, stream=True, temperature=None):
-        last = RuntimeError("Yapılandırılmış modeller beklemede veya kullanılabilir yedek model yok.")
-        now = time.monotonic()
-        self._backup_retry_at = {target: until for target, until in self._backup_retry_at.items()
-                                 if until > now}
-        candidates = ([self] if now >= self._retry_at else [])
-        # Build the fallback providers lazily: healthy Abacus needs no extra calls.
-        import itertools
-        for candidate in itertools.chain(candidates, self._fallbacks()):
-            target = (candidate.base, candidate.model)
-            if candidate is not self and time.monotonic() < self._backup_retry_at.get(target, 0):
-                continue
-            emitted = False
-            try:
-                if candidate is self:
-                    source = super().chat(messages, tools, stream=stream, temperature=temperature)
-                else:
-                    self._log(f"SYS: Abacus AI unavailable; trying {candidate.model}")
-                    source = candidate.chat(messages, tools, stream=stream, temperature=temperature)
-                async for event in source:
-                    if event.get("text") or event.get("tool_calls"):
-                        emitted = True
-                    yield event
-                if not emitted:
-                    raise RuntimeError("empty model response")
-                return
-            except Exception as error:
-                last = error
-                if candidate is self:
-                    self._retry_at = time.monotonic() + _abacus_rest_seconds(error)
-                    self._log("SYS: Abacus AI resting; switching to configured backup models")
-                else:
-                    seconds = _abacus_rest_seconds(error)
-                    self._backup_retry_at[target] = time.monotonic() + seconds
-                    self._log(f"SYS: Backup {candidate.model} resting for {seconds}s")
-                if emitted:
-                    raise
-        raise last
-
-
 def _make(cfg: dict) -> OpenAICompatLLM:
-    if _normalise(cfg.get("base_url") or "") == PRESETS["Abacus AI"]:
-        return AbacusPriorityLLM(cfg)
     return OpenAICompatLLM(cfg)
 
 
