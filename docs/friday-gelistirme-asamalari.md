@@ -11,8 +11,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Otomatik kabul geçti; gerçek cihaz eşitlemesi açık |
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Otomatik kabul geçti; kullanıcı masaüstü kabulü açık |
 | 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Otomatik render kabulü geçti; kullanıcı GPU/kamera kabulü açık |
-| 7 — Performans | Açılış, CPU, RAM, yanıt süresi | **Aktif** |
-| 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | Bekliyor |
+| 7 — Performans | Açılış, CPU, RAM, yanıt süresi | Otomatik kabul kapsamı tamamlandı; kullanıcı cihazı ölçümü açık |
+| 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | **Aktif** |
 
 ## Aşama 1 kabul koşulları
 
@@ -553,3 +553,51 @@ Kaldırma testleri; katalog/factory, özel adres/alias, eski ortak katalog,
 yerel kullanım sınırı, ayar/yedek temizliği, eski ekranın kaydetmesi, bozuk
 ve yalnızca yedek dosya senaryosu ve diğer sağlayıcıları korumayı kapsar.
 Aşama 7 aktiftir; kaldırma doğrulaması ilgili PR'de kaydedilir.
+
+
+## Aşama 7 otomatik kabul ve Aşama 8'e geçiş
+
+Önceki bölümlerdeki “Aşama 7 aktif” ifadeleri ilgili düzeltmenin yapıldığı
+anı anlatır; güncel durum üst tablodur. #199, #200 ve #201 temel alınmıştır.
+
+| Kontrol | Önce | Doğrulanan kapsam / sonra |
+| --- | --- | --- |
+| Gizli HUD | Saniyede 62 timer / 62 animasyon adımı | Aynı runner kıyasında 3 timer / 0 adım; #199 |
+| OpenGL FBO | 20 karede 18 yeniden oluşturma | 4; görüntü farkı yaklaşık 1.008/255; #199 |
+| Windows ilk kurulum penceresi | Üç tekrar medyanı 1.75 s | 1.04 s; temiz anahtarsız profil, aynı runner; #200 |
+| Pipeline çıktı kuyruğu | Sınırsız olay | 128 olay; yavaş okuyucu üreticiyi bekletir, olaylar düşürülmez |
+| Oynatma kuyruğu | Sınırsız PCM | 128 × en çok 2400 bayt; doluyken event loop çalışır |
+| Mikrofon yükleme taşması | QueueFull callback hatası, telefonda yeni ses düşmesi | En eski parça bırakılır, güncel PCM korunur; kayıp sayacı `_mic_dropped_chunks` |
+| Kapanış / söz kesme | Dolu kuyruğu bekleyen üretici için güvence yok | Bekleyen pipeline put iptal edilir; eski oturum/müdahale sonrası PCM geri gelmez |
+
+Yeni gerçek asyncio testleri 10.000 karışık metin/ses/araç/bitiş olayıyla sıra,
+kapasite ve geri basıncı; 10.000 mikrofon parçasıyla taşma davranışını sınar.
+PCM bölme tam bayt eşitliğiyle doğrulanır. Dolu kuyrukta kapanış, bekleyen
+okuyucu, tekrar kapatma/okuma, görev iptali, yeniden bağlantı ve gerçek
+`interrupt()` yolu ayrı testlerdir. Windows kurulum kabulüne de eklenmiştir.
+Bunlar sentetik yük testleridir; saatlerce gerçek kullanım veya canlı model
+gecikmesi ölçümü olarak sunulmaz.
+
+Oynatma ve pipeline kuyrukları ayrı ayrı en fazla 307.200 bayt PCM taşır;
+bu sayı tüm süreç RAM sınırı değildir. Sağlayıcının tek yanıtı, metin/araç
+payload'ları ve diğer uygulama bileşenleri ayrıca bellek kullanır. TTS'nin
+ürettiği büyük tek parça bölünür; sağlayıcının kendi iç arabelleği bu kodun
+dışındadır. Yavaş hoparlör ağ tüketicisine geri basınç uygular; ses atlanarak
+sahte hız kazanımı yapılmaz. Yerel söz kesme bekleyen eski konuşmayı iptal eder.
+
+## Aşama 8 — aktif nihai kabul
+
+- Windows/Linux Python 3.13 bütünleşik regresyonları ve sağlayıcı kontrolleri.
+- Windows temiz kurulum, yeniden kurulum, bağımlılık tutarlılığı, ilk görünür
+  pencere ve normal kapanış; güncelleme/geri alma/yeniden açılan HUD kabulü.
+- Önceki aşamaların render, tarayıcı, hafıza ve yetkilendirme sonuçlarının
+  son sürümle ilişkilendirilmesi; başarısız/atlanmış testlerin açık kaydı.
+- **DOĞRULANMADI:** kullanıcının Windows/GPU/WebGL ortamı, fiziksel mikrofon,
+  yankı/çift konuşma, FRIDAY sesi, canlı model hesabı/ilk yanıt, gerçek cihaz
+  eşitlemesi, gerçek kullanıcı oturumundaki otomasyon ve saatlerce CPU/RAM.
+- **DOĞRULANMADI:** nihai dağıtım paketinin kullanıcı cihazında kurulumu ve
+  sürüm yükseltmesi; imzalama anahtarı ve lisans denetiminin son sürüm kabulü.
+
+Aşama 7 otomatik kapsamından geçiş, bu açıkları kapatmaz. Aşama 8 sürmektedir;
+nihai ürün durumu **KISMEN HAZIR**, tüm sistem için “HAZIR” kabulü verilmemiştir.
+Bu değişikliğin Windows/Linux iş ve test sonuçları PR kaydında tutulur.

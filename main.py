@@ -1562,6 +1562,7 @@ class AetherLive:
 
     def interrupt(self) -> None:
         """Stop FRIDAY mid-speech: drain queued audio and open mic immediately."""
+        self._playback_epoch = getattr(self, "_playback_epoch", 0) + 1
         self._interrupted = True
         q = self.audio_in_queue
         if q:
@@ -2593,6 +2594,32 @@ class AetherLive:
             **_extra
         )
 
+    def _queue_mic_audio(self, queue, chunk):
+        """On the session loop, keep recent PCM when upload falls behind."""
+        if queue is not self.out_queue:
+            return  # a callback from the previous microphone/session
+        if queue.full():
+            queue.get_nowait()
+            self._mic_dropped_chunks = getattr(self, "_mic_dropped_chunks", 0) + 1
+        queue.put_nowait(chunk)
+
+    async def _queue_playback_audio(self, data):
+        queue = self.audio_in_queue
+        epoch = getattr(self, "_playback_epoch", 0)
+        for offset in range(0, len(data), 2400):
+            while (queue is self.audio_in_queue and self._awake
+                   and not self._interrupted
+                   and epoch == getattr(self, "_playback_epoch", 0)):
+                try:
+                    queue.put_nowait(data[offset:offset + 2400])
+                    break
+                except asyncio.QueueFull:
+                    # Keep the event loop responsive, and recheck interruption
+                    # BEFORE putting: a cut-in must not resurrect old speech.
+                    await asyncio.sleep(0.01)
+            else:
+                return
+
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
@@ -2613,6 +2640,7 @@ class AetherLive:
     async def _listen_audio(self):
         print("[FRIDAY] 🎤 Mic started")
         loop = asyncio.get_event_loop()
+        mic_queue = self.out_queue
 
         speech_blocks: list[bytes] = []
         interruption_pending = False
@@ -2620,6 +2648,8 @@ class AetherLive:
         def cut_in(blocks):
             nonlocal interruption_pending
             try:
+                if mic_queue is not self.out_queue:
+                    return
                 if not self._awake or self.ui.muted or self._phone_active or self._yield_voice:
                     return
                 if self._ptt_enabled and not self._ptt_held:
@@ -2632,7 +2662,7 @@ class AetherLive:
                     if turn_finished:
                         self._interrupted = False
                 for block in blocks:
-                    self.out_queue.put_nowait({"data": block, "mime_type": "audio/pcm"})
+                    self._queue_mic_audio(mic_queue, {"data": block, "mime_type": "audio/pcm"})
             finally:
                 interruption_pending = False
 
@@ -2697,7 +2727,7 @@ class AetherLive:
                 self._echo.reset()
 
             loop.call_soon_threadsafe(
-                self.out_queue.put_nowait,
+                self._queue_mic_audio, mic_queue,
                 {"data": indata.tobytes(), "mime_type": "audio/pcm"},
             )
             try:
@@ -2876,10 +2906,7 @@ class AetherLive:
                                 self._turn_done_event.clear()
                             # Split into ~50 ms chunks so interrupt() stops audio within 50 ms
                             # (24000 Hz × 2 bytes/sample × 0.05 s = 2400 bytes per slice)
-                            _audio_data = response.data
-                            _SLICE = 2400
-                            for _i in range(0, len(_audio_data), _SLICE):
-                                self.audio_in_queue.put_nowait(_audio_data[_i : _i + _SLICE])
+                            await self._queue_playback_audio(response.data)
 
                     if response.server_content:
                         sc = response.server_content
@@ -3515,10 +3542,7 @@ class AetherLive:
             with self._speaking_lock:
                 speaking = self._is_speaking
             if not speaking and not self.ui.muted:
-                try:
-                    self.out_queue.put_nowait(chunk)
-                except asyncio.QueueFull:
-                    pass
+                self._queue_mic_audio(self.out_queue, chunk)
 
     def _on_phone_connected(self) -> None:
         self.ui.write_log("SYS: Phone connected via Remote Dashboard.")
@@ -3816,7 +3840,7 @@ class AetherLive:
                     session.send_client_content = _send_and_arm
 
                     self.session          = session
-                    self.audio_in_queue   = asyncio.Queue()
+                    self.audio_in_queue   = asyncio.Queue(maxsize=128)
                     self.out_queue        = asyncio.Queue(maxsize=200)
                     self._turn_done_event = asyncio.Event()
                     self._rx_deadline     = None

@@ -141,7 +141,10 @@ class PipelineEngine:
             self._read_config(config)
 
         self._history: list[dict] = []
-        self._queue: asyncio.Queue = asyncio.Queue()
+        # Backpressure keeps a slow UI/audio consumer from retaining an entire
+        # streamed reply. No speech, transcript or tool call is dropped.
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=128)
+        self._pending_puts: set[asyncio.Task] = set()
         self._gen: Optional[asyncio.Task] = None
         self._closed = False
         # Tool calls handed out and not yet answered. A model that emits two
@@ -426,20 +429,31 @@ class PipelineEngine:
             self._start_generation()
 
     async def receive(self) -> AsyncIterator[Msg]:
-        while True:
+        while not (self._closed and self._queue.empty()):
             msg = await self._queue.get()
             if msg is None:
                 return
             yield msg
 
     async def close(self) -> None:
+        if self._closed:
+            return
         self._closed = True
         self._mic = []
         self._mic_bytes = 0
         self._reset_vad()
         if self._gen and not self._gen.done():
             self._gen.cancel()
-        await self._queue.put(None)
+        # Cancel blocked puts BEFORE freeing space: otherwise a producer can
+        # wake after the sentinel and leave an event from the closed session.
+        pending = tuple(self._pending_puts)
+        for task in pending:
+            task.cancel()
+        while not self._queue.empty():
+            self._queue.get_nowait()
+        self._queue.put_nowait(None)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def warmup(self) -> None:
         """Get every part ready before the user speaks.
@@ -714,11 +728,16 @@ class PipelineEngine:
             kwargs["language"] = language
         try:
             async for pcm in self._tts.speak(text, **kwargs):
+                if self._closed:
+                    return
                 if pcm:
                     if first is None:
                         first = time.monotonic() - t0
                     total += len(pcm)
-                    await self._emit(Msg.audio(pcm))
+                    # 50 ms of 24 kHz, 16-bit mono PCM per event. The event
+                    # bound also bounds queued audio to 128 * 2400 bytes.
+                    for offset in range(0, len(pcm), 2400):
+                        await self._emit(Msg.audio(pcm[offset:offset + 2400]))
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -833,8 +852,21 @@ class PipelineEngine:
         traceback.print_exception(type(exc), exc, exc.__traceback__)
 
     async def _emit(self, msg: Msg) -> None:
-        if not self._closed:
-            await self._queue.put(msg)
+        if self._closed:
+            return
+        try:
+            self._queue.put_nowait(msg)
+            return
+        except asyncio.QueueFull:
+            pass
+        # Only allocate a task when saturated. Tracking it lets close wake a
+        # blocked producer without waiting for a consumer that may have left.
+        put = asyncio.create_task(self._queue.put(msg))
+        self._pending_puts.add(put)
+        try:
+            await put
+        finally:
+            self._pending_puts.discard(put)
 
     # ── conversion ───────────────────────────────────────────────────────────
     def _to_content(self, parts: list) -> Any:
