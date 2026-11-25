@@ -179,6 +179,22 @@ gibi gösterilmez. Yeni veri şeması veya izin eklenmez. 21 Kasım 2026 unutma/
 eşitleme regresyonları korunur. Gerçek cihazlar arası eşitleme ve fiziksel
 disk arızası kabulü **DOĞRULANMADI**; Aşama 4 aktiftir.
 
+## Aşama 4: hafıza alanlarının yapı doğrulaması
+
+Geçerli JSON içindeki `notes: []`, `preferences: null` veya bozuk `_deleted`
+yapısı okunabilir sayılabiliyor; sonraki yazma bunu sağlam yedeğin yerine
+koyabiliyordu. Bilinen kategori alanları sözlük, silme kaydı anahtar ve
+zamanları metin olarak doğrulanır. Yeni kayıt geçersizse küçültme/arşivleme ve
+dosya yazımından önce reddedilir. Bozuk ana dosya yedeğe alınmaz; yalnızca
+yapısı geçerli yedek başarıyla geri yüklenmiş sayılır.
+
+Eksik kategori alanları, eski metin kayıtları, gün hassasiyetindeki silme
+zamanları ve özel kategoriler korunur. Veri biçimi dönüştürülmez; yeni şema
+sürümü veya bağımlılık eklenmez. Geçersiz yapıdaki ana/yedek dosyalar ve
+karantina kopyaları korunur. Sentetik dosyalarla bozuk alanlar, geçersiz girdi,
+yedek korunması, yanlış kurtarma başarısı ve eski biçim uyumluluğu sınanır.
+Aşama 4 aktiftir; gerçek bulut eşitleme/disk arızası kabulü **DOĞRULANMADI**.
+
 ## Aşama 1: açılış ve yarım güncelleme
 
 `main.py`, üçüncü taraf modüllerden önce `core/startup_guard.py` kontrolünü çağırır.

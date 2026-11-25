@@ -74,6 +74,20 @@ def _empty_memory() -> dict:
         "notes":         {},
     }
 
+def _validate_memory(data):
+    """Validate established category/tombstone shapes, keeping legacy entries."""
+    if not isinstance(data, dict):
+        raise ValueError("Hafıza dosyası bir JSON nesnesi olmalı.")
+    for category in _empty_memory():
+        if category in data and not isinstance(data[category], dict):
+            raise ValueError("Hafıza alanı sözlük olmalı: " + category)
+    deleted = data.get("_deleted", {})
+    if not isinstance(deleted, dict) or any(
+            not isinstance(key, str) or not isinstance(stamp, str)
+            for key, stamp in deleted.items()):
+        raise ValueError("Hafıza silme kayıtlarının yapısı geçersiz.")
+
+
 def load_memory() -> dict:
     if not MEMORY_PATH.exists():
         with _lock:
@@ -95,8 +109,7 @@ def load_memory() -> dict:
     with _lock:
         try:
             data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                raise ValueError("memory file is not an object")
+            _validate_memory(data)
         except Exception as e:
             data = _recover(e)
         base = _empty_memory()
@@ -127,6 +140,7 @@ def _recover(error) -> dict:
         _log(f"[Memory] Could not keep the broken file: {exc}")
     try:
         data = json.loads(BACKUP_PATH.read_text(encoding="utf-8"))
+        _validate_memory(data)
         if isinstance(data, dict):
             _write_memory(data)
             _log("[Memory] ✅ Restored from the last good copy")
@@ -198,6 +212,7 @@ def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
         return
     with _lock:
+        _validate_memory(memory)
         _write_memory(_trim_to_limit(memory))
 
 
@@ -225,11 +240,13 @@ def _atomic_json(path, data):
 
 def _write_memory(memory: dict) -> None:
     """Replace the complete file while the caller holds the memory lock."""
+    _validate_memory(memory)
     MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _staged_json(MEMORY_PATH, memory) as temporary:
         if MEMORY_PATH.exists():
             try:
                 previous = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+                _validate_memory(previous)
             except (OSError, ValueError):
                 previous = None  # retain the last good backup
             if isinstance(previous, dict):
