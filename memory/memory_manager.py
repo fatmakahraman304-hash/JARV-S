@@ -635,8 +635,6 @@ def pop_last_session() -> dict | None:
             if not isinstance(sessions, list) or not sessions:
                 return None
             entry = sessions[-1]
-            memory["sessions"] = sessions
-            _write_memory(memory)
             return entry
         except Exception as e:
             _log(f"[Memory] ⚠️ pop_last_session error: {e}")

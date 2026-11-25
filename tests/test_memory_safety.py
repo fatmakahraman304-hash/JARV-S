@@ -169,6 +169,17 @@ class MemorySafety(unittest.TestCase):
             self.assertEqual(path.read_bytes(), content)
         self.assertEqual(list(Path(self.tmp.name).glob(".friday-memory-*.tmp")), [])
 
+    def test_reading_last_session_never_writes_or_rotates_the_backup(self):
+        mm.save_session_summary("Önceki proje")
+        mm.save_session_summary("Devam eden proje")
+        before = {p: p.read_bytes() for p in (mm.MEMORY_PATH, mm.BACKUP_PATH)}
+        with patch.object(mm.os, "replace", side_effect=OSError("read-only disk")) as replace:
+            self.assertEqual(mm.pop_last_session()["summary"], "Devam eden proje")
+            self.assertEqual(mm.pop_last_session()["summary"], "Devam eden proje")
+        replace.assert_not_called()
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content)
+
     def test_full_memory_archives_and_recall_still_finds_it(self):
         with patch.object(mm, "MEMORY_MAX_CHARS", 400):
             mm.update_memory({"notes": {"old_car": {"value": "Murat'ın eski arabası mavi bir Fiat Doblo", "updated": "2020-01-01"}}})

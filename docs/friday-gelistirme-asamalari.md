@@ -42,6 +42,8 @@ sonrasında atomik değiştirmeyle yayımlanır. Sabit `.tmp` adlarındaki mevcu
 dosyalara dokunulmaz. Bozuk veya yanlış yapılı arşiv, boş arşiv kabul edilmez;
 arşivleme ve ana hafızayı küçültme durur, mevcut dosyalar korunur. Arşivleme
 başarı mesajı ancak arşiv yazıldıktan sonra verilir.
+Son konuşma özetini okumak ana hafızayı veya yedeği yeniden yazmaz; disk yazma
+izni bulunmasa da mevcut geçerli özet okunabilir.
 
 Test kapsamı: sabit geçici adlardaki kullanıcı dosyaları; bozuk JSON/kategori
 yapısı; ana dosya ve yedek `fsync` hataları; arşiv değiştirme hatası ve geçici
