@@ -69,6 +69,8 @@ class LocalStateTests(unittest.TestCase):
         if not (root / ".git").exists():
             self.skipTest("Git checkout required")
         paths = ["config/api_keys.json", "config/api_keys.json.broken-1",
+                 "config/api_keys.json.lock", "config/api_keys.json.random.tmp",
+                 "config/api_keys.json.bak.random.tmp",
                  "config/certs/aether.key", "config/whatsapp_web/session",
                  "memory/tasks/job.json", "memory/routines.json", "reports/result.md"]
         ignored = subprocess.check_output(

@@ -86,3 +86,23 @@ kilit kalkınca yeniden deneme ve kısa kilit sonrasında tamamlamayı sınar.
 Bu bütçe kopyalama/yeniden deneme aşamasına aittir; işletim sisteminde takılan
 dosya I/O'su veya sonraki bütünlük denetimi için gerçek zaman garantisi değildir.
 Yeni bağımlılık, şema veya kullanıcı verisi değişikliği yoktur. Aşama 1 aktiftir.
+
+## Aşama 1: ayar ve API anahtarı dosyalarının bütünlüğü
+
+Geçerli JSON olup kökü liste/null/metin olan ayar dosyası boş kabul ediliyordu;
+sonraki ayar yazımı anahtarı kaybedip sağlam yedeği de yanlış yapıyla
+değiştirebiliyordu. Sentetik anahtarla yeniden üretildi. Artık bu yapılar
+bozuk dosya olarak ele alınır, orijinal korunur ve sağlam yedek kullanılır.
+Ana dosya eksikse de okuma ve sonraki ayar değişikliği yedekteki değerleri korur.
+
+Ayarlar ve yedekleri benzersiz, aynı diskte geçici dosya, flush/fsync ve atomik
+değiştirmeyle yazılır. Geçici adlar mevcut Git gizlilik kurallarının kapsamındadır.
+Sabit `.tmp` adındaki kullanıcı dosyaları korunur; başarısız yazım geçici
+dosyaları temizler. Mevcut Windows kısa süreli dosya kilidi yeniden denemesi
+korunur. Ayar değişikliği boyunca süreçler arası kilit kullanılır; iki ayrı
+FRIDAY sürecinin farklı ayarları birbirini ezmez. Kilit dosyasını elle silmeyin.
+
+Sentetik verilerle bozuk şekil, eksik ana dosya, geçici ad çakışması, ana/yedek
+flush hatası, kilitli hedef ve iki süreçten yazma sınanır. Gerçek kullanıcı
+anahtarları okunup değiştirilmez; ses, persona ve sağlayıcı seçimi kuralları
+değiştirilmez. Fiziksel güç kesintisi ve uzun süreli cihaz kabulü **DOĞRULANMADI**.
