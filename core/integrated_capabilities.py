@@ -12,6 +12,7 @@ from types import MappingProxyType
 import re
 from core.voice_commands import normalize_command
 from core import thinking_studio as studio
+from core.conversation_context import is_continuation, text_content
 
 MARKER = "[FRIDAY INTEGRATED CAPABILITIES]"
 # Common words do not establish intent. Conservative suffix folding is used
@@ -202,32 +203,6 @@ def resolve(query, core_ids=(), limit=4):
                     return tuple(selected)
     return tuple(selected)
 
-# Bare numbers in an ordinary conversation are usually data (for example,
-# an answer to "how many people?"), not a request for catalog entry 6.
-_NUMBER_REPLY = re.compile(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*$")
-_QUANTITY_REPLY = re.compile(
-    r"^[+-]?\d+(?:[.,]\d+)?\s*(?:kisi|porsiyon|adet|dakika|saat|gun|hafta|ay|yil|"
-    r"gram|kilogram|kg|litre|ml|tl|lira|euro|dolar)(?:\s+(?:icin|olsun|olarak))?$")
-_CONTEXT_REPLIES = frozenset((
-    "sadece sonucu ver","sadece sonuc","daha ayrintili","biraz daha detayli",
-    "orneklendir","ornek ver","ayni sekilde","ayni sekilde devam et",
-    "devamini getir","durmadan devam et","bunu da ekle","daha basit anlat",
-    "bunu yeniden hesapla","tekrar hesapla","sonucu kontrol et",
-    "yeniden hesapla","sadece hesapla",
-))
-
-def _continuation(value, raw):
-    from core.core_modes import FOLLOWUPS
-    return (value in FOLLOWUPS or value in _CONTEXT_REPLIES
-            or bool(_NUMBER_REPLY.fullmatch(raw))
-            or bool(_QUANTITY_REPLY.fullmatch(value)))
-
-def _text_content(content):
-    if isinstance(content,list):
-        content=" ".join(p["text"] for p in content if isinstance(p,dict)
-                         and p.get("type")=="text" and isinstance(p.get("text"),str))
-    return content if isinstance(content,str) else ""
-
 def history_features(history, core_ids=(), limit=4):
     # Ordinary turns: one lookup. Short, referential replies and supplied
     # quantities reuse the previous relevant user request, not tool output.
@@ -238,15 +213,14 @@ def history_features(history, core_ids=(), limit=4):
         seen+=1
         if seen>12:
             break
-        content=_text_content(item.get("content")).strip()
+        content=text_content(item.get("content")).strip()
         if not content:
             return ()  # do not cross a user image-only or empty-turn boundary
         if content.startswith("["):
             if seen==1:
                 return ()
             continue
-        value=normalize_command(content[:16000])
-        if _continuation(value,content[:16000]):
+        if is_continuation(content[:16000]):
             continue
         return resolve(content,core_ids,limit)
     return ()

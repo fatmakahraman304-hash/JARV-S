@@ -1,6 +1,7 @@
 """Deterministic FRIDAY core-mode hints. No model calls, persistence or tool authority."""
 from dataclasses import dataclass
 from core.voice_commands import normalize_command
+from core.conversation_context import FOLLOWUPS, is_continuation, text_content
 
 @dataclass(frozen=True)
 class CoreMode:
@@ -125,14 +126,6 @@ TASK_CUES = {
     29: ("notumu", "notlarimi", "notlari", "hatirladiklarini", "arsivimi"),
     30: ("yanitimi kontrol et", "cevabi kontrol et", "ne istedigimi", "check your answer"),
 }
-FOLLOWUPS = frozenset((
-    "devam et", "devam", "kaldigin yerden devam et", "onu degistir", "bunu degistir",
-    "bunu duzelt", "onu duzelt", "daha kisa", "daha kisa yap", "daha detayli",
-    "daha detayli yap", "bir daha dene", "tekrar dene", "bunlari da ekle",
-    "bunlari da kodla", "bunu da yap", "bunu da ekle", "boyle boyle gelistir",
-    "continue", "keep going", "make it shorter", "make it longer", "try again",
-    "revise it", "do that too",
-))
 URGENT = ("nefes alamiyorum", "kendime zarar", "acil yardim", "yangin",
           "cannot breathe", "self harm")
 KEYWORDS = {n: frozenset(mode.keywords + EXTRA_KEYWORDS[n] + TASK_CUES[n])
@@ -158,7 +151,7 @@ def decide(text, previous=None):
     if not value:
         return RouteDecision((), "system_or_empty", "none")
     prior = _valid_previous(previous)
-    if value in FOLLOWUPS and prior and prior != (30,):
+    if is_continuation(text) and prior and prior != (30,):
         return RouteDecision(prior, "followup", "context")
     # Deduplicate overlapping phrases per mode: a longer phrase already
     # includes its individual tokens. Keep independent cues additive.
@@ -189,10 +182,7 @@ def route(text, previous=None):
 
 def route_content(content, previous=None):
     """Images and tool results are not instructions for the local classifier."""
-    if isinstance(content, list):
-        content = " ".join(p["text"] for p in content if isinstance(p, dict)
-                           and p.get("type") == "text" and isinstance(p.get("text"), str))
-    return decide(content, previous)
+    return decide(text_content(content), previous)
 
 def route_history(history, limit=12):
     """Bounded scan; no storage, no raw user text in the result."""
@@ -208,6 +198,10 @@ def route_history(history, limit=12):
         selected = route_content(content, prior)
         if selected.ids:
             prior = selected.ids
+        elif not text_content(content).lstrip().startswith("["):
+            # Empty/image-only user turns are a context boundary. System
+            # metadata supplies no domain but does not erase the real request.
+            prior = ()
     return selected
 
 def system_block():

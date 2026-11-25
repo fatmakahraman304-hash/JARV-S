@@ -125,6 +125,24 @@ class IntegratedCapabilitiesTests(unittest.TestCase):
                  {"role":"user","content":"daha ayrıntılı"}]
         self.assertEqual(integrated.history_features(history),())
 
+    def test_pipeline_core_and_capability_guidance_agree_on_short_answers(self):
+        from types import SimpleNamespace
+        from providers.engine_pipeline import PipelineEngine
+        history = [{"role": "user", "content": "Tarifi iki katına çıkar"},
+                   {"role": "assistant", "content": "Kaç kişi için?"},
+                   {"role": "user", "content": "6"}]
+        fake = SimpleNamespace(_system=studio.system_block(), _history=history,
+                               _trimmed=lambda: history.copy(), tool_names=lambda: ["studio_utilities"])
+        messages = PipelineEngine._messages(fake)
+        self.assertIn("Ana: Yemek", messages[0]["content"])
+        self.assertIn("578.", messages[0]["content"])
+        self.assertEqual(messages[1:], history)
+        history.extend([{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]},
+                        {"role": "user", "content": "devam et"}])
+        messages = PipelineEngine._messages(fake)
+        self.assertNotIn("Ana: Yemek", messages[0]["content"])
+        self.assertNotIn("578.", messages[0]["content"])
+
     def test_guidance_tool_availability_and_total_budget(self):
         text=integrated.guidance((578,),available_tools=())
         self.assertIn("bu oturumda",text.lower())

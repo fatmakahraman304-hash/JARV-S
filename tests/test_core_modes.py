@@ -97,6 +97,33 @@ class CoreModeTests(unittest.TestCase):
         self.assertEqual(core.available_hints((12,11),("studio_utilities","web_search")),("studio_utilities",))
         self.assertEqual(core.available_hints((10,),()),())
 
+    def test_numeric_quantity_and_brief_replies_keep_the_request_domain(self):
+        base = [{"role": "user", "content": "Tarifi iki katına çıkar"},
+                {"role": "assistant", "content": "Kaç kişi için?"}]
+        for reply in ("6", "-2,5", "8 kişi için", "sadece sonucu ver", "örneklendir"):
+            with self.subTest(reply=reply):
+                result = core.route_history(base + [{"role": "user", "content": reply}])
+                self.assertEqual(result.ids[0], 19)
+                self.assertEqual(result.reason, "followup")
+        self.assertEqual(core.route("6"), (30,))
+        self.assertEqual(core.route("yangın var", (19,))[0], 28)
+        self.assertEqual(core.route("Python kodla", (19,))[0], 12)
+
+    def test_empty_and_image_only_turns_reset_stale_request_context(self):
+        for boundary in ("", [], [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]):
+            with self.subTest(boundary=boundary):
+                history = [{"role": "user", "content": "Python kodla"},
+                           {"role": "user", "content": boundary},
+                           {"role": "user", "content": "devam et"}]
+                self.assertEqual(core.route_history(history).ids, (30,))
+
+    def test_system_metadata_is_not_a_new_domain_or_a_user_image_boundary(self):
+        history = [{"role": "user", "content": "Python kodla"},
+                   {"role": "user", "content": [{"type": "text", "text": "[SYSTEM_ALERT] tarif"}]}]
+        self.assertEqual(core.route_history(history).ids, ())
+        history.append({"role": "user", "content": "devam et"})
+        self.assertEqual(core.route_history(history).ids[0], 12)
+
     def test_pipeline_reuses_route_across_tool_rounds(self):
         from unittest.mock import patch
         from types import SimpleNamespace
