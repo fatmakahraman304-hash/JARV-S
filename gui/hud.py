@@ -121,7 +121,18 @@ class HudCanvas(QWidget):
 
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
-        self._tmr.start(16)
+        self._tmr.start(250)  # no 60 Hz animation work before the canvas is visible
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, "_tmr"):
+            self._step_t = time.time()
+            self._tmr.setInterval(16)
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if hasattr(self, "_tmr"):
+            self._tmr.setInterval(250)
 
     def glance(self, dx: float, dy: float, hold: float = 1.1) -> None:
         """Ask the avatar to look somewhere for a moment (see HoloAvatar.glance)."""
@@ -268,6 +279,16 @@ class HudCanvas(QWidget):
         return pm
 
     def _step(self):
+        if not self._on_screen():
+            # Keep a cheap visibility probe for window-manager minimise/restore
+            # events; skip avatar/viseme computation while there is no canvas.
+            self._tmr.setInterval(250)
+            self._step_t = time.time()
+            self._live_amp = self._amp_disp = 0.0
+            return
+        if self._tmr.interval() != 16:
+            self._tmr.setInterval(16)
+            self._step_t = time.time()
         self._tick += 1
         now = time.time()
 
@@ -372,8 +393,8 @@ class HudCanvas(QWidget):
                         else self._paint_tick % 3 == 0):
             # Nothing is on screen when the window is hidden or minimised, so
             # rendering the avatar into it is pure waste — and this app is meant
-            # to sit running all day. The animation state above keeps stepping,
-            # so it picks up mid-motion instead of snapping when you come back.
+            # to sit running all day. The entry guard pauses hidden animation;
+            # current wall-clock visemes are consumed when the canvas resumes.
             if self._on_screen():
                 self.update()
 

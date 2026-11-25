@@ -1,0 +1,74 @@
+name: FRIDAY HUD performance comparison
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Commit before the performance change
+        default: 5c72e01195dda6d8731fd8960cc067c32bafd61e
+        required: true
+  pull_request:
+    paths:
+      - "gui/hud.py"
+      - "core/avatar.py"
+      - "gui/android_gl.py"
+      - "tools/measure_hud_performance.py"
+      - "tests/test_hud_performance.py"
+      - ".github/workflows/performance-acceptance.yml"
+permissions:
+  contents: read
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || inputs.baseline_ref }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install existing dependencies
+        run: python -m pip install "PyQt6>=6.6,<7" numpy psutil pillow
+      - name: Linux OpenGL runtime
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 libopengl0 libglx-mesa0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 libxcb-xkb1 libfontconfig1
+      - name: Real Qt lifecycle regression
+        working-directory: candidate
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest -v tests.test_hud_performance
+      - name: Interleaved baseline and candidate measurements
+        shell: python
+        run: |
+          import os, subprocess, sys
+          from pathlib import Path
+          script = Path("candidate/tools/measure_hud_performance.py").resolve()
+          env = dict(os.environ)
+          if sys.platform == "win32":
+              env["QT_OPENGL"] = "software"
+          for iteration in range(3):
+              # Alternate order to reduce warm-cache / execution-order bias.
+              names = ("baseline", "candidate") if iteration % 2 == 0 else ("candidate", "baseline")
+              for name in names:
+                  command = [sys.executable, str(script), "--root", str(Path(name).resolve()), "--out", f"performance-results/{name}/{iteration}"]
+                  if sys.platform != "win32":
+                      command = ["xvfb-run", "-s", "-screen 0 1280x900x24", *command]
+                  subprocess.run(command, check=True, env=env)
+          subprocess.run([sys.executable, str(script), "--compare", "performance-results/baseline", "performance-results/candidate", "--out", "performance-results/comparison.json"], check=True, env=env)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hud-performance-${{ matrix.os }}
+          path: performance-results/
