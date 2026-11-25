@@ -269,6 +269,39 @@ class MemorySafety(unittest.TestCase):
         for path, content in before.items():
             self.assertEqual(path.read_bytes(), content)
 
+    def test_missing_primary_last_session_reads_good_backup_without_writing(self):
+        session = {"date": "2026-11-25", "summary": "Sentetik proje devam ediyor"}
+        mm.BACKUP_PATH.write_text(json.dumps({"sessions": [session]}))
+        before = {p: p.read_bytes() for p in mm.MEMORY_PATH.parent.iterdir()}
+        with patch.object(mm.os, "replace", side_effect=OSError("read only")) as replace:
+            self.assertEqual(mm.pop_last_session(), session)
+            self.assertEqual(mm.pop_last_session(), session)
+        replace.assert_not_called()
+        self.assertEqual({p: p.read_bytes() for p in mm.MEMORY_PATH.parent.iterdir()}, before)
+
+    def test_corrupt_primary_last_session_falls_back_without_recovery_writes(self):
+        session = {"date": "2026-11-24", "summary": "Son sağlam oturum"}
+        mm.MEMORY_PATH.write_text("{broken")
+        mm.BACKUP_PATH.write_text(json.dumps({"sessions": [session]}))
+        before = {p: p.read_bytes() for p in mm.MEMORY_PATH.parent.iterdir()}
+        with patch.object(mm.os, "replace", side_effect=OSError("read only")) as replace:
+            self.assertEqual(mm.pop_last_session(), session)
+        replace.assert_not_called()
+        self.assertEqual({p: p.read_bytes() for p in mm.MEMORY_PATH.parent.iterdir()}, before)
+
+    def test_intentionally_empty_session_list_does_not_revive_backup_session(self):
+        mm.MEMORY_PATH.write_text('{"sessions":[]}')
+        mm.BACKUP_PATH.write_text('{"sessions":[{"summary":"old private session"}]}')
+        self.assertIsNone(mm.pop_last_session())
+
+    def test_invalid_backup_fields_cannot_supply_a_session(self):
+        mm.BACKUP_PATH.write_text('{"notes":[],"sessions":[{"summary":"invalid backup"}]}')
+        self.assertIsNone(mm.pop_last_session())
+
+    def test_malformed_last_session_cannot_escape_as_a_string(self):
+        mm.MEMORY_PATH.write_text('{"sessions":["bad session"]}')
+        self.assertIsNone(mm.pop_last_session())
+
     def test_full_memory_archives_and_recall_still_finds_it(self):
         with patch.object(mm, "MEMORY_MAX_CHARS", 400):
             mm.update_memory({"notes": {"old_car": {"value": "Murat'ın eski arabası mavi bir Fiat Doblo", "updated": "2020-01-01"}}})

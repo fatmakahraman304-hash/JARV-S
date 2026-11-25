@@ -50,6 +50,19 @@ class ContinuityTests(unittest.TestCase):
         c.set_application('CapCut', 'geliştiriliyor', 'test bekliyor')
         c.recover_jobs()
         self.assertEqual(c.applications()[0][1], 'yarıda kaldı')
+
+    def test_past_assistant_success_claim_does_not_complete_or_replay_a_project(self):
+        active = c.project_start("test", "Aktif proje", "synthetic", "İşi sürdür")
+        completed = c.project_start("test", "Bitmiş proje", "synthetic", "Bitmiş iş")
+        c.project_update(completed, status="bitti")
+        c.record("FRIDAY", "Aktif projeyi tamamladım ve testler geçti.")
+        c.recover_jobs()
+        self.assertEqual(c.project(active)["status"], "yarıda kaldı")
+        self.assertEqual(c.project(completed)["status"], "bitti")
+        self.assertEqual([p["id"] for p in c.projects(unfinished_only=True)], [active])
+        c.recover_jobs()
+        self.assertEqual(c.project(active)["status"], "yarıda kaldı")
+        self.assertIn("Pending jobs need status inspection", c.prompt_context())
     def test_migration_and_summary_survive_repeated_reads(self):
         old = self.root / 'old.json'
         old.write_text('{"notes":{"test":{"value":"hatırla"}}}', encoding='utf8')

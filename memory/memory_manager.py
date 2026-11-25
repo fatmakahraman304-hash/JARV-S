@@ -660,15 +660,19 @@ def pop_last_session() -> dict | None:
     # Atomic file replacement makes this read safe across processes. Do not
     # open a writable OS lock file for this strictly read-only operation.
     with _lock.thread_lock:
-        if not MEMORY_PATH.exists():
-            return None
-        try:
-            memory   = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-            sessions = memory.get("sessions", [])
-            if not isinstance(sessions, list) or not sessions:
-                return None
-            entry = sessions[-1]
-            return entry
-        except Exception as e:
-            _log(f"[Memory] ⚠️ pop_last_session error: {e}")
-            return None
+        for source in (MEMORY_PATH, BACKUP_PATH):
+            if not source.exists():
+                continue
+            try:
+                memory = json.loads(source.read_text(encoding="utf-8"))
+                _validate_memory(memory)
+                sessions = memory.get("sessions", [])
+                # A valid primary with no summaries is authoritative. Do not
+                # resurrect an older summary after an intentional clear.
+                if not isinstance(sessions, list) or not sessions:
+                    return None
+                entry = sessions[-1]
+                return entry if isinstance(entry, dict) else None
+            except (OSError, ValueError, TypeError) as exc:
+                _log(f"[Memory] ⚠️ Session source unavailable ({source.name}): {exc}")
+        return None
