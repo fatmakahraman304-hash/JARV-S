@@ -23,6 +23,7 @@ _ready: set[str] = set()
 # slow Windows disk with many threads writing at once: "database is locked"
 # lost the event. Within one process a lock costs nothing and never loses one.
 _write_lock = threading.Lock()
+_BACKUP_TIMEOUT = 30.0  # Bound SQLite's internal busy/restart loop, not just connect().
 
 
 def _prepare(db, key):
@@ -329,6 +330,7 @@ def _copy_database(source, destination):
     """Publish a validated SQLite snapshot without replacing another file."""
     from contextlib import closing
     import tempfile
+    import time as clock
 
     source, destination = Path(source).resolve(), Path(destination).absolute()
     if destination.exists() or destination.is_symlink():
@@ -338,9 +340,18 @@ def _copy_database(source, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=destination.parent) as staging:
         snapshot = Path(staging) / "continuity.sqlite3"
-        with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=10)) as reader:
+        deadline = clock.monotonic() + _BACKUP_TIMEOUT
+        def progress(status, remaining, total):
+            # sqlite3.Connection.backup retries SQLITE_BUSY/LOCKED internally;
+            # connect(timeout=...) alone does not bound the whole operation.
+            if clock.monotonic() >= deadline:
+                raise TimeoutError(
+                    "SQLite yedekleme süre sınırını aştı; kaynak ve mevcut hedef korunuyor. "
+                    "Diğer yazma işlemi bittikten sonra yeniden deneyin.")
+        with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True,
+                                     timeout=min(1.0, _BACKUP_TIMEOUT))) as reader:
             with closing(sqlite3.connect(snapshot)) as writer:
-                reader.backup(writer, pages=256)
+                reader.backup(writer, pages=256, progress=progress, sleep=.05)
                 writer.execute("PRAGMA journal_mode=DELETE")
                 writer.execute("PRAGMA trusted_schema=OFF")
                 if writer.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
