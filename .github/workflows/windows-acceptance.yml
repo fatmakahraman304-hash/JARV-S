@@ -3,6 +3,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "actions/browser_control.py"
+      - "actions/computer_control.py"
+      - "tests/test_automation_consent.py"
+      - "plugins/camera_scan.py"
+      - "tests/test_camera_scan.py"
+      - "tests/test_browser_lifecycle.py"
+      - "tests/test_computer_command_boundaries.py"
       - "setup.py"
       - "requirements.txt"
       - "main.py"
@@ -100,4 +107,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\.venv\Scripts\python.exe -m pip check
       - name: Verify update, rollback and reopened HUD
-        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app tests.test_config_safety tests.test_memory_process_lock tests.test_pipeline_audio_bounds tests.test_pipeline_speech_lifecycle tests.test_memory_safety tests.test_continuity
+        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app tests.test_config_safety tests.test_memory_process_lock tests.test_pipeline_audio_bounds tests.test_pipeline_speech_lifecycle tests.test_memory_safety tests.test_continuity tests.test_browser_lifecycle tests.test_computer_command_boundaries tests.test_automation_consent tests.test_camera_scan tests.test_file_confirm tests.test_message_confirm tests.test_github_develop tests.test_agent_coding tests.test_agent_process tests.test_background_job_tracking

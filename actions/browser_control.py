@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import copy
+import hashlib
+import json
 import importlib.util
 import os
 import platform
@@ -608,6 +611,9 @@ class _BrowserSession:
         self._loop:    asyncio.AbstractEventLoop | None = None
         self._thread:  threading.Thread | None          = None
         self._ready    = threading.Event()
+        self._closing  = threading.Event()
+        self._startup_error: Exception | None = None
+        self._shutdown_error: Exception | None = None
 
         self._pw:      Playwright     | None = None
         self._context: BrowserContext | None = None
@@ -621,20 +627,62 @@ class _BrowserSession:
     def start(self):
         if self._thread and self._thread.is_alive():
             return
+        self._ready.clear()
+        self._closing.clear()
+        self._startup_error = None
+        self._shutdown_error = None
         self._thread = threading.Thread(
-            target=self._run_loop,
-            daemon=True,
+            target=self._run_loop, daemon=True,
             name=f"BrowserThread-{self.browser_name}",
         )
         self._thread.start()
-        self._ready.wait(timeout=20)
+        if not self._ready.wait(timeout=20):
+            self._closing.set()
+            if self._loop and self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            raise TimeoutError(f"Browser '{self.browser_name}' did not start in time.")
+        if self._startup_error:
+            raise RuntimeError(f"Browser initialization failed: {self._startup_error}") from self._startup_error
 
     def _run_loop(self):
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-        self._loop.run_until_complete(self._async_init())
-        self._ready.set()
-        self._loop.run_forever()
+        loop = self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        infrastructure = set()
+        initialized = False
+        initialization = loop.create_task(self._async_init())
+        try:
+            loop.run_until_complete(initialization)
+            # Playwright's connection/transport tasks must remain alive until
+            # context.close() and Playwright.stop() have completed.
+            infrastructure = asyncio.all_tasks(loop)
+            initialized = True
+            if not self._closing.is_set():
+                # Publish readiness from inside the running loop, not in the
+                # gap between run_until_complete() and run_forever().
+                loop.call_soon(self._ready.set)
+                loop.run_forever()
+        except Exception as exc:
+            self._startup_error = exc
+            self._ready.set()
+        finally:
+            self._closing.set()
+            pending = (asyncio.all_tasks(loop) - infrastructure if initialized
+                       else {initialization} if not initialization.done() else set())
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            try:
+                loop.run_until_complete(self._async_close())
+            except Exception as exc:
+                self._shutdown_error = exc
+                print(f"[Browser] Cleanup failed: {exc}")
+            remaining = asyncio.all_tasks(loop)
+            for task in remaining:
+                task.cancel()
+            if remaining:
+                loop.run_until_complete(asyncio.gather(*remaining, return_exceptions=True))
+            loop.close()
 
     async def _async_init(self):
         # The one door into a live session: nothing in this class reaches
@@ -643,28 +691,51 @@ class _BrowserSession:
         _load_playwright()
         self._pw = await async_playwright().start()
 
-    def run(self, coro, timeout: int = 60) -> str:
-        if not self._loop:
-            raise RuntimeError(f"Session for '{self.browser_name}' not started.")
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result(timeout=timeout)
+    def run(self, coro, timeout: float = 60) -> str:
+        loop = self._loop
+        if not loop or not loop.is_running() or self._closing.is_set():
+            coro.close()
+            raise RuntimeError(f"Session for '{self.browser_name}' is not running.")
+        try:
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+        except Exception:
+            coro.close()
+            raise
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            # result(timeout) only stops the caller waiting. Without cancelling
+            # the coroutine, a timed-out click/form could still run later.
+            future.cancel()
+            raise
 
     def close(self):
-        if self._loop:
-            asyncio.run_coroutine_threadsafe(self._async_close(), self._loop).result(10)
+        self._closing.set()
+        loop = self._loop
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(timeout=10)
+            if self._thread.is_alive():
+                raise TimeoutError("Browser shutdown could not be verified.")
+        if self._shutdown_error:
+            raise RuntimeError("Browser cleanup failed; closure is not verified.") from self._shutdown_error
 
     async def _async_close(self):
+        errors = []
         if self._context:
             try:
                 await self._context.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                errors.append(exc)
         if self._pw:
             try:
                 await self._pw.stop()
-            except Exception:
-                pass
-        self._context = self._page = None
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise RuntimeError("Browser resources could not all be closed.") from errors[0]
+        self._context = self._page = self._pw = None
 
     async def _adopt_page(self) -> Page:
         """
@@ -883,19 +954,16 @@ class _BrowserSession:
         try:
             if text:
                 await page.get_by_text(text, exact=False).first.click(timeout=8_000)
-                return f"Clicked text: '{text}'"
+                return outcome.unverified("browser_control", "click delivered; application result needs inspection", clicked=True)
             if selector:
                 await page.click(selector, timeout=8_000)
-                return f"Clicked selector: {selector}"
+                return outcome.unverified("browser_control", "click delivered; application result needs inspection", clicked=True)
             return outcome.failed("browser_control",
                                   "no element was named to click")
         except PlaywrightTimeout:
-            return outcome.failed(
-                "browser_control",
-                "no element matching that appeared on the page in time",
-                selector=selector or text)
+            return outcome.unverified("browser_control", "click timed out; inspect page before retrying", clicked=None)
         except Exception as e:
-            return f"Click error: {e}"
+            return outcome.unverified("browser_control", "click result unknown; inspect page before retrying", operation="click")
 
     async def type_text(self, selector: str = None, text: str = "",
                         clear_first: bool = True) -> str:
@@ -905,78 +973,90 @@ class _BrowserSession:
             if clear_first:
                 await el.clear()
             await el.type(text, delay=50)
-            # playwright raises when the field is not there, so reaching this
-            # line means the text went into a real input.
-            return outcome.done("browser_control", typed=True, verified=True)
+            return await self._typed_result(el, text, clear_first=clear_first)
         except Exception as e:
-            return f"Type error: {e}"
+            return outcome.failed("browser_control", str(e), operation="type")
 
     async def scroll(self, direction: str = "down", amount: int = 500) -> str:
         page = await self._get_page()
         try:
             y = amount if direction == "down" else -amount
             await page.mouse.wheel(0, y)
-            return f"Scrolled {direction}."
+            return outcome.unverified("browser_control", "scroll delivered; inspect viewport", scrolled=True)
         except Exception as e:
-            return f"Scroll error: {e}"
+            return outcome.failed("browser_control", str(e), operation="scroll")
 
     async def press(self, key: str) -> str:
         page = await self._get_page()
         try:
             await page.keyboard.press(key)
-            return f"Pressed: {key}"
+            return outcome.unverified("browser_control", "key delivered; application result needs inspection", pressed=key)
         except Exception as e:
-            return f"Key error: {e}"
+            return outcome.unverified("browser_control", "key result unknown; inspect before retrying", operation="press")
 
     async def get_text(self) -> str:
         page = await self._get_page()
         try:
             text = await page.inner_text("body")
-            return text[:4_000]
+            return outcome.untrusted("browser", text[:4_000])
         except Exception as e:
-            return f"Could not get page text: {e}"
+            return outcome.failed("browser_control", str(e), operation="get_text")
 
     async def get_url(self) -> str:
         page = await self._get_page()
-        return page.url
+        return outcome.untrusted("browser", page.url)
+
+    async def _typed_result(self, element, text: str, *, clear_first=True) -> str:
+        if clear_first:
+            try:
+                if await element.input_value() == text:
+                    return outcome.done("browser_control", typed=True, verified=True)
+            except Exception:
+                pass  # contenteditable and script-controlled fields may not expose a value
+        return outcome.unverified("browser_control", "text entry requested; final value could not be verified", typed=True)
 
     async def fill_form(self, fields: dict) -> str:
-        page    = await self._get_page()
-        results = []
+        page = await self._get_page()
+        verified = failed = uncertain = 0
         for selector, value in fields.items():
             try:
                 el = page.locator(selector).first
                 await el.clear()
                 await el.type(str(value), delay=40)
-                results.append(f"✓ {selector}")
-            except Exception as e:
-                results.append(f"✗ {selector}: {e}")
-        return "Form filled: " + ", ".join(results)
+                result = await self._typed_result(el, str(value))
+                if result.startswith("status=done "):
+                    verified += 1
+                else:
+                    uncertain += 1
+            except Exception:
+                failed += 1
+        facts = dict(verified_fields=verified, failed_fields=failed, unverified_fields=uncertain)
+        if fields and verified == len(fields):
+            return outcome.done("browser_control", **facts)
+        return outcome.unverified("browser_control", "form not fully verified; inspect before submitting", **facts)
 
     async def smart_click(self, description: str) -> str:
         page = await self._get_page()
-        for role in ("button", "link", "searchbox", "textbox", "menuitem", "tab"):
+        candidates = [page.get_by_role(role, name=description)
+                      for role in ("button", "link", "searchbox", "textbox", "menuitem", "tab")]
+        candidates.extend((page.get_by_text(description, exact=False),
+                           page.get_by_placeholder(description, exact=False),
+                           page.get_by_alt_text(description, exact=False),
+                           page.get_by_title(description, exact=False)))
+        for loc in candidates:
             try:
-                loc = page.get_by_role(role, name=description)
-                if await loc.count() > 0:
-                    await loc.first.click(timeout=5_000)
-                    return f"Clicked ({role}): '{description}'"
+                if not await loc.count():
+                    continue
             except Exception:
-                pass
-        for attempt in (
-            lambda: page.get_by_text(description, exact=False).first.click(timeout=5_000),
-            lambda: page.get_by_placeholder(description, exact=False).first.click(timeout=5_000),
-            lambda: page.locator(
-                f'[alt*="{description}" i],[title*="{description}" i],'
-                f'[aria-label*="{description}" i]'
-            ).first.click(timeout=5_000),
-        ):
+                continue
             try:
-                await attempt()
-                return f"Clicked: '{description}'"
+                await loc.first.click(timeout=5_000)
+                return outcome.unverified("browser_control", "click delivered; application result needs inspection", clicked=True)
             except Exception:
-                pass
-        return f"Could not find element: '{description}'"
+                # A navigation timeout may happen after the click took effect.
+                # Trying a second selector could pay/send/delete twice.
+                return outcome.unverified("browser_control", "click result unknown; no alternate click attempted")
+        return outcome.failed("browser_control", "no matching element was found")
 
     async def smart_type(self, description: str, text: str) -> str:
         page = await self._get_page()
@@ -992,12 +1072,15 @@ class _BrowserSession:
                 el = loc.first
                 if await el.count() == 0:
                     continue
-                await el.clear()
-                await el.type(text, delay=50)
-                return f"Typed into ({method}): '{description}'"
             except Exception:
                 continue
-        return f"Could not find input: '{description}'"
+            try:
+                await el.clear()
+                await el.type(text, delay=50)
+                return await self._typed_result(el, text)
+            except Exception:
+                return outcome.unverified("browser_control", "input result unknown; no alternate field attempted")
+        return outcome.failed("browser_control", "no matching input was found")
 
     async def new_tab(self, url: str = "") -> str:
         page = await self._get_page()
@@ -1006,7 +1089,9 @@ class _BrowserSession:
         self._page = new
         if url:
             return await self.go_to(url)
-        return "New tab opened."
+        if new in ctx.pages and not new.is_closed():
+            return outcome.done("browser_control", new_tab=True, verified=True)
+        return outcome.unverified("browser_control", "new tab not observed after request")
 
     async def close_tab(self) -> str:
         page = self._page
@@ -1015,45 +1100,49 @@ class _BrowserSession:
             await page.close()
             pages = ctx.pages
             self._page = pages[-1] if pages else None
-            return "Tab closed."
-        return "No active tab to close."
+            if page.is_closed():
+                return outcome.done("browser_control", tab_closed=True, verified=True)
+            return outcome.unverified("browser_control", "tab closure not observed")
+        return outcome.failed("browser_control", "no active tab to close")
 
     async def screenshot(self, path: str = None) -> str:
         page = await self._get_page()
         try:
             save_path = path or str(Path.home() / "Desktop" / "aether_screenshot.png")
             await page.screenshot(path=save_path, full_page=False)
-            return f"Screenshot saved: {save_path}"
+            if Path(save_path).is_file() and Path(save_path).stat().st_size:
+                return outcome.done("browser_control", screenshot=save_path, verified=True)
+            return outcome.unverified("browser_control", "screenshot file was not observed")
         except Exception as e:
-            return f"Screenshot error: {e}"
+            return outcome.failed("browser_control", str(e), operation="screenshot")
 
     async def back(self) -> str:
         page = await self._get_page()
         try:
             await page.go_back(timeout=10_000)
-            return f"Navigated back: {page.url}"
+            return outcome.unverified("browser_control", "history request returned; inspect destination", operation="back")
         except Exception as e:
-            return f"Back error: {e}"
+            return outcome.unverified("browser_control", "navigation result unknown; inspect page", operation="back")
 
     async def forward(self) -> str:
         page = await self._get_page()
         try:
             await page.go_forward(timeout=10_000)
-            return f"Navigated forward: {page.url}"
+            return outcome.unverified("browser_control", "history request returned; inspect destination", operation="forward")
         except Exception as e:
-            return f"Forward error: {e}"
+            return outcome.unverified("browser_control", "navigation result unknown; inspect page", operation="forward")
 
     async def reload(self) -> str:
         page = await self._get_page()
         try:
             await page.reload(timeout=15_000)
-            return f"Page reloaded: {page.url}"
+            return outcome.unverified("browser_control", "reload returned; inspect page", operation="reload")
         except Exception as e:
-            return f"Reload error: {e}"
+            return outcome.unverified("browser_control", "navigation result unknown; inspect page", operation="reload")
 
     async def close_browser(self) -> str:
         await self._async_close()
-        return f"{self.browser_name} closed."
+        return outcome.done("browser_control", browser=self.browser_name, closed=True)
 
 class _SessionRegistry:
     """Manages all active browser sessions."""
@@ -1105,26 +1194,36 @@ class _SessionRegistry:
 
     def close_one(self, browser_name: str) -> str:
         with self._lock:
-            sess = self._sessions.pop(browser_name, None)
+            sess = self._sessions.get(browser_name)
         if sess:
             sess.close()
+            with self._lock:
+                if self._sessions.get(browser_name) is sess:
+                    self._sessions.pop(browser_name)
             if self._active_browser == browser_name:
                 self._active_browser = ""
-            return f"{browser_name} closed."
-        return f"No active session for: {browser_name}"
+            return outcome.done("browser_control", browser=browser_name, closed=True)
+        return outcome.failed("browser_control", "no active session", browser=browser_name)
 
     def close_all(self) -> str:
         with self._lock:
-            names    = list(self._sessions.keys())
-            sessions = list(self._sessions.values())
-            self._sessions.clear()
-            self._active_browser = ""
-        for s in sessions:
+            sessions = list(self._sessions.items())
+        failures = closed = 0
+        for name, session in sessions:
             try:
-                s.close()
+                session.close()
             except Exception:
-                pass
-        return "All browsers closed: " + (", ".join(names) if names else "none")
+                failures += 1
+                continue
+            closed += 1
+            with self._lock:
+                if self._sessions.get(name) is session:
+                    self._sessions.pop(name)
+                    if self._active_browser == name:
+                        self._active_browser = ""
+        if failures:
+            return outcome.unverified("browser_control", "some browser closures could not be verified", failed_sessions=failures, closed_sessions=closed)
+        return outcome.done("browser_control", closed_sessions=closed, verified=True)
 
     def list_sessions(self) -> str:
         with self._lock:
@@ -1151,6 +1250,12 @@ _ACTIONS = (
 )
 
 
+def _timeout_result(action: str) -> str:
+    return outcome.unverified(
+        "browser_control", "deadline exceeded; cancellation requested; inspect current page before retrying",
+        operation=action, cancellation_requested=True)
+
+
 def _unknown_action(action: str) -> str:
     """Refuse an action this tool does not have, and say what it does have.
 
@@ -1175,16 +1280,20 @@ def _unknown_action(action: str) -> str:
         valid_actions=", ".join(_ACTIONS))
 
 
-def browser_control(
+def _browser_control(
     parameters:    dict = None,
     response=None,
     player=None,
     session_memory=None,
+    _session=None,
 ) -> str:
     params  = parameters or {}
     action  = params.get("action", "").lower().strip()
     browser = params.get("browser", "").lower().strip() or None
     result  = _unknown_action(action)
+
+    if action not in _ACTIONS:
+        return _unknown_action(action)
 
     if action == "switch":
         target = browser or params.get("target", "").lower().strip()
@@ -1226,9 +1335,9 @@ def browser_control(
                 else:
                     result = sess.run(sess.go_to(params.get("url", "")))
             except concurrent.futures.TimeoutError:
-                result = f"Browser action '{action}' timed out (60s)."
+                result = _timeout_result(action)
             except Exception as e:
-                result = f"Browser error ({action}): {e}"
+                result = outcome.failed("browser_control", str(e), operation=action)
             _log(player, result)
             return result
 
@@ -1254,14 +1363,14 @@ def browser_control(
     # only opens here, and as soon as it opens it goes to the user's last
     # navigated page — it doesn't sit on a blank page.
     try:
-        sess = _registry.get(browser)
+        sess = _session or _registry.get(browser)
     except Exception as e:
-        result = f"Could not start browser session: {e}"
+        result = outcome.failed("browser_control", str(e), operation="start")
         _log(player, result)
         return result
 
     try:
-        last = _registry.pop_native_url()
+        last = "" if _session else _registry.pop_native_url()
         if last:
             try:
                 sess.run(sess.go_to(last))
@@ -1301,12 +1410,66 @@ def browser_control(
             result = _unknown_action(action)
 
     except concurrent.futures.TimeoutError:
-        result = f"Browser action '{action}' timed out (60s)."
+        result = _timeout_result(action)
     except Exception as e:
-        result = f"Browser error ({action}): {e}"
+        result = outcome.failed("browser_control", str(e), operation=action)
 
     _log(player, result)
     return result
+
+
+# Generic input can submit a payment, send a message or change an account.
+# Its effect cannot be inferred safely from model-supplied selectors/flags.
+_INPUT_ACTIONS = frozenset({"click", "smart_click", "type", "smart_type", "fill_form", "press"})
+
+
+async def _page_snapshot(session):
+    page = await session._get_page()
+    content = await page.content()
+    # Live input values are properties and may not appear in page.content().
+    fields = await page.locator("input,textarea,select").evaluate_all(
+        "els => els.map(el => [el.type, el.value, el.checked, el.selectedIndex])")
+    state = json.dumps([content, fields, page.viewport_size], ensure_ascii=False)
+    return page, page.url, hashlib.sha256(state.encode("utf-8")).hexdigest()
+
+
+def _request_browser_input(params, response, player, session_memory):
+    from core import confirm
+    request = copy.deepcopy(params)
+    session = _registry.get(request.get("browser") or None)
+    last = _registry.pop_native_url()
+    if last:
+        result = session.run(session.go_to(last))
+        if outcome.is_problem(result):
+            return result
+    before = session.run(_page_snapshot(session))
+    detail = (f"Sayfa: {before[1]}\nİşlem: {json.dumps(request, ensure_ascii=False)}\n"
+              "Bu genel giriş ödeme, mesaj veya hesap işlemi yapabilir. Yalnızca ekrandaki hedef uygunsa onaylayın.")
+
+    def execute():
+        try:
+            if session.run(_page_snapshot(session)) != before:
+                return outcome.failed("browser_control", "page changed after consent request; nothing was executed")
+            return _browser_control(request, response, player, session_memory, _session=session)
+        except Exception as exc:
+            return outcome.failed("browser_control", str(exc))
+
+    return confirm.request("browser_input", "Tarayıcı etkileşimini onayla", detail, execute)
+
+
+def browser_control(parameters: dict = None, response=None, player=None, session_memory=None) -> str:
+    try:
+        params = parameters or {}
+        action = params.get("action", "").lower().strip()
+        if action in _INPUT_ACTIONS:
+            return _request_browser_input(params, response, player, session_memory)
+        return _browser_control(params, response, player, session_memory)
+    except concurrent.futures.TimeoutError:
+        return _timeout_result("browser_control")
+    except Exception as exc:
+        if isinstance(parameters, dict) and parameters.get("action", "").lower().strip() in ("close", "close_all"):
+            return outcome.unverified("browser_control", "browser shutdown failed; actual closure needs inspection")
+        return outcome.failed("browser_control", str(exc))
 
 
 def _log(player, text: str):
@@ -1322,6 +1485,7 @@ def _log(player, text: str):
 TOOL = {
     "name": "browser_control",
     "description": (
+        "Generic click/type/press/form inputs require the user's matching HUD approval; model flags cannot authorize them. "
         "Controls the web browser and everything INSIDE a web page: open an "
         "address, search, click, type, scroll, read the page, manage tabs, go "
         "back and forward. Anything happening on a website is this tool - it "

@@ -16,8 +16,20 @@ class ScanCommandTests(unittest.TestCase):
 
     def test_tool_requests_one_desktop_scan(self):
         player = Mock()
-        command.run({}, player)
+        from core import confirm
+        with patch.object(confirm, "request", return_value="pending") as gate:
+            self.assertEqual(command.run({"confirmed": True}, player), "pending")
+            player.scan_camera.assert_not_called()
+            result = gate.call_args.args[-1]()
         player.scan_camera.assert_called_once()
+        self.assertIn("status=unverified", result)
+
+    def test_missing_hud_cannot_authorize_camera_from_model_flags(self):
+        from core import confirm
+        player = Mock()
+        with patch.object(confirm, "_show_cb", None):
+            command.run({"confirmed": True}, player)
+        player.scan_camera.assert_not_called()
 
     def test_busy_scan_does_not_start_another_analysis(self):
         with camera_scan._lock:
