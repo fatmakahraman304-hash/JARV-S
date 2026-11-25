@@ -95,6 +95,10 @@ class SpatialCanvas(QWidget):
     def ring_items(self, hand):
         centre=self.screen(hand["palm"])
         radius=max(48,min(78,hand["width"]*self.image_rect().width()*1.05))
+        margin=radius+23
+        visible=self.image_rect()
+        centre=QPointF(max(visible.left()+margin,min(visible.right()-margin,centre.x())),
+                       max(visible.top()+margin,min(visible.bottom()-margin,centre.y())))
         keys=("Dosyalar","Nesneler","Notlar","Widget","Taşı/Döndür","Sıfırla")
         return [(key,QPointF(centre.x()+math.cos(-math.pi/2+i*math.tau/6)*radius,
                             centre.y()+math.sin(-math.pi/2+i*math.tau/6)*radius)) for i,key in enumerate(keys)]
@@ -136,7 +140,9 @@ class SpatialCanvas(QWidget):
                     return
             self._panel_grip=None
         if self._grip and self._grip[0]=="menu":
-            return
+            if len(held)==1 and any(h["id"]==self._grip[1] for h in held):
+                return
+            self._grip=None
         if len(held)==2:
             distance=float(np.linalg.norm(held[0]["pointer"]-held[1]["pointer"]))
             ids=tuple(sorted(h["id"] for h in held))
@@ -249,6 +255,8 @@ class HoloDesk(QWidget):
         self._stop=threading.Event();self._thread=None
         self._lock=threading.Lock();self._packet=None;self._generation=0
         self._hands=Hands();self._setup_thread=None
+        self._control_paused=False
+        self._await_release=False
         self._notes_path=notes_path
         root=QVBoxLayout(self)
         row=QHBoxLayout()
@@ -270,6 +278,10 @@ class HoloDesk(QWidget):
             b=QPushButton(name);b.setStyleSheet(btn_css("dim"));b.clicked.connect(lambda checked=False,name=name:self.action(name));dock.addWidget(b)
         self.mode=QComboBox();self.mode.addItems(["Döndür","Taşı"])
         self.mode.currentTextChanged.connect(self._mode);dock.addWidget(self.mode)
+        self.pause=QPushButton("El kontrolünü duraklat")
+        self.pause.setCheckable(True)
+        self.pause.toggled.connect(self._pause_hand_control)
+        dock.addWidget(self.pause)
         root.addLayout(dock)
         self.canvas.action.connect(self.action)
         self._panels={}
@@ -319,6 +331,15 @@ class HoloDesk(QWidget):
 
     def _mode(self,name):
         self.canvas.mode=name;self.canvas._grip=None
+
+    def _pause_hand_control(self,paused):
+        self._control_paused=bool(paused)
+        self._await_release=not paused
+        self._hands=Hands()
+        self.canvas.consume_hands([]);self.canvas.update()
+        self.pause.setText("El kontrolünü sürdür" if paused else "El kontrolünü duraklat")
+        self.status.setText("El kontrolü duraklatıldı. Kamera durumu değişmedi; fareyle kullanabilirsin." if paused
+            else "El kontrolü açık. Önce parmaklarını ayır, ardından çimdikle tut.")
 
     def action(self,name):
         if name=="Sıfırla":self.canvas.reset_view()
@@ -435,7 +456,7 @@ class HoloDesk(QWidget):
                 ok,frame=camera.read()
                 if not ok:raise RuntimeError("Kameradan kare alınamadı.")
                 rgb=cv2.cvtColor(cv2.flip(cv2.resize(frame,(640,360)),1),cv2.COLOR_BGR2RGB)
-                hands=tracker.detect(rgb,int(time.monotonic()*1000)) if tracker else []
+                hands=tracker.detect(rgb,int(time.monotonic()*1000)) if tracker and not self._control_paused else []
                 with self._lock:
                     if generation==self._generation and not stop.is_set():self._packet=(rgb,hands)
                 stop.wait(max(0,1/24-(time.monotonic()-started)))
@@ -455,7 +476,13 @@ class HoloDesk(QWidget):
                 self._last_packet=time.monotonic()
                 h,w,_=rgb.shape
                 self.canvas.frame=QImage(rgb.data,w,h,w*3,QImage.Format.Format_RGB888).copy()
-                self.canvas.consume_hands(self._hands.update(values,aspect=w/h));self.canvas.update()
+                filtered=[] if self._control_paused else self._hands.update(values,aspect=w/h)
+                if self._await_release:
+                    if any(h["pinch"] for h in filtered):
+                        filtered=[]
+                    elif filtered:
+                        self._await_release=False
+                self.canvas.consume_hands(filtered);self.canvas.update()
         if self.canvas.auto_rotate:
             self.canvas.yaw+=.012;self.canvas.update()
         now=time.monotonic()
