@@ -21,6 +21,7 @@ on:
       - "tests/test_memory_process_lock.py"
       - "providers/engine_pipeline.py"
       - "tests/test_pipeline_audio_bounds.py"
+      - "tests/test_pipeline_speech_lifecycle.py"
       - "core/restart_manager.py"
       - "tools/restart_app.py"
       - "tests/test_restart_app.py"
@@ -95,4 +96,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\.venv\Scripts\python.exe -m pip check
       - name: Verify update, rollback and reopened HUD
-        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app tests.test_config_safety tests.test_memory_process_lock tests.test_pipeline_audio_bounds
+        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app tests.test_config_safety tests.test_memory_process_lock tests.test_pipeline_audio_bounds tests.test_pipeline_speech_lifecycle

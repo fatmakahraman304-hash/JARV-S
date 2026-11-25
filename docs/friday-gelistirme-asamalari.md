@@ -7,8 +7,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | --- | --- | --- |
 | 1 — Sistem kararlılığı | Hatalar, güncelleyici, veri güvenliği, dayanıklılık | Otomatik kabul geçti; saha doğrulaması açık |
 | 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | Otomatik kabul geçti; canlı model kabulü açık |
-| 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | **Aktif** |
-| 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Bekliyor |
+| 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Otomatik kabul geçti; gerçek ses kabulü açık |
+| 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | **Aktif** |
 | 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Bekliyor |
 | 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Bekliyor |
 | 7 — Performans | Açılış, CPU, RAM, yanıt süresi | Bekliyor |
@@ -88,7 +88,7 @@ birlikte PR kabul raporunda kaydedilir. Canlı Abacus/Gemini/NVIDIA hesabı,
 model kalitesi, gerçek öğrenme kazanımı ve kullanıcı cihazında yanıt gecikmesi
 **DOĞRULANMADI** olarak Aşama 8 nihai kabul listesinde açık tutulur.
 Bu kabul, 1.000 bağımsız aracın veya bütün katalog yöntemlerinin canlı modelle
-ayrı ayrı sınandığı anlamına gelmez. Yeni aktif geliştirme odağı Aşama 3'tür.
+ayrı ayrı sınandığı anlamına gelmez. Aşama 2 otomatik kabulü bu kapsamda tamamlandı; güncel aktif aşama tablodadır.
 
 ## Aşama 3 kabul koşulları
 
@@ -120,7 +120,48 @@ bekleme davranışını korur; otomatik sınır manuel kaydı kendi kendine gön
 `test_pipeline_audio_bounds` gerçek pipeline girişinden sentetik PCM ile
 kesintisiz ses, büyük sessizlik paketi, PCM hizası, STT hatası ve kapanışı
 sınar. Mikrofon, hoparlör, wake-word doğruluğu, yankı ve canlı STT/TTS servis
-kabulü **DOĞRULANMADI**. Aşama 3 aktif kalır; ses/persona seçimi değiştirilmez.
+kabulü **DOĞRULANMADI**. Bu düzeltme Aşama 3 otomatik kabul kapsamındadır; ses/persona seçimi değiştirilmez.
+
+## Aşama 3: tanıma sırası, geç sonuçlar ve iptal
+
+Arka arkaya bas-konuş bırakmalarında iki STT isteği aynı anda çalışabiliyor,
+sonuçlar ters sırada gelerek eski komutu yeni mesajın arkasına ekleyebiliyordu.
+Ses parçaları beklemeden ayrı yakalanır; tanıma ve konuşmaya ekleme işlemi
+motorun asyncio kilidiyle sıralanır. STT hatası sırayı kilitlemez. Motor
+kapandıktan sonra geç dönen sonuç yok sayılır; sırada bekleyen tanıma yeni
+servis çağrısı yapmaz. Bu, sağlayıcıya zaten gönderilmiş veriyi geri alma
+veya native STT hesaplamasını zorla durdurma garantisi değildir.
+
+Söz kesme, çağıran thread yerine üretim görevinin kendi asyncio döngüsünde
+iptal edilir. Kontrollü TTS akışında iptal ve sonradan ses yayımlanmaması
+sınanır. Otomatik akustik barge-in yeteneği hâlâ destekleniyor gibi sunulmaz.
+
+## Aşama 3 otomatik kabulü ve Aşama 4'e geçiş
+
+| Koşul | Otomatik kanıt ve sınır |
+| --- | --- |
+| Mevcut FRIDAY ses/personası | Ayar regresyonları; ses veya sağlayıcı seçimi değiştirilmedi |
+| Uyandırma ve etkin durum | `test_wake_settings`, `test_typed_wakes`: başarısız algılayıcı etkin gösterilmez, çift kurulum engellenir, reset eski kareyi kullanmaz |
+| Sessizlik/kesintisiz ses sınırı | #192 ve `test_pipeline_audio_bounds`; sentetik PCM |
+| STT sırası/hata/kapanış | `test_pipeline_speech_lifecycle`: kontrollü async sağlayıcılar ve gerçek motor girişleri |
+| İptal/TTS | Farklı thread'den iptal kendi döngüsüne aktarılır; kontrollü TTS iptal sonrası ses üretmez |
+| Türkçe ve konuşma bağlamı | `test_turkish_voice_understanding`, kısa cevap ve pipeline bağlam regresyonları; canlı ASR doğruluğu değildir |
+| Motor sınırları | Desteklenmeyen otomatik barge-in/resumption yetenekleri açılmaz; widget oluşturulmaz veya worker'dan değiştirilmez |
+| Platform kabulü | Tam Windows/Linux regresyonu ve kurulu Windows ses yaşam döngüsü testleri PR kabul raporunda kaydedilir |
+
+Gerçek mikrofon/hoparlör, FRIDAY sesinin işitsel kalitesi, Türkçe canlı ASR,
+akustik yankı/yanlış uyandırma oranı, cihaz değiştirme ve gerçek gecikme
+**DOĞRULANMADI** olarak Aşama 8 nihai kabulünde açıktır. Otomatik kabul,
+bu saha testlerinin tamamlandığı anlamına gelmez. Yeni aktif odak Aşama 4'tür.
+
+## Aşama 4 kabul koşulları
+
+- Onaylı tercihler, proje ve konuşma bağlamı yeniden başlatmada korunmalı.
+- 21 Kasım 2026 unutma/eşitleme kuralları; arşiv ve yedekten silinen bilgiyi geri getirmeme regresyonları geçmeli.
+- Proje günlüğü gerçek durumdan devam etmeli; asistanın eski iddiası işlem kanıtı sayılmamalı.
+- Eşzamanlı JSON/SQLite erişimi ve yedek/geri yükleme hatalarında veriler korunmalı.
+- Hafıza araması ilgili sonuçları sınırlarıyla getirmeli; hassas kayıtlar yetkisiz dışa aktarılmamalı.
+- Windows/Linux regresyonları geçmeli; gerçek cihazlar arası eşitleme ve uzun süreli kullanım ayrı raporlanmalı.
 
 ## Son çalışma: açılış ve yarım güncelleme
 
