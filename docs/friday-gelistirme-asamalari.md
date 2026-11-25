@@ -369,7 +369,9 @@ Kamera aracının tek kare isteği de gerçek HUD kararından önce çalışmaz.
 
 Windows pencere başlığı PowerShell kaynak koduna, macOS başlığı AppleScript
 kaynak koduna eklenmez; ayrı veri olarak iletilir. Ham araç parametreleri ve
-girilen özel metin bilgisayar kontrolünün konsol günlüğüne yazılmaz.
+girilen özel metin bilgisayar kontrolünün konsol günlüğüne yazılmaz. Panodan
+okunan içerik güvenilmeyen veri olarak işaretlenir; kayıtsız kişisel alan
+sahte rastgele kimlikle doldurulmaz.
 
 | Kabul | Kanıt |
 | --- | --- |

@@ -36,3 +36,10 @@ class CommandBoundaries(unittest.TestCase):
         with redirect_stdout(output), patch.object(computer, "_type", return_value="requested"):
             computer._computer_control({"action": "type", "text": "synthetic-private-value"})
         self.assertNotIn("synthetic-private-value", output.getvalue())
+
+
+    def test_missing_personal_field_is_not_replaced_with_invented_identity(self):
+        with patch.object(computer, "_user_profile", return_value={}), patch.object(computer, "_random_data") as random:
+            result = computer.computer_control({"action": "user_data", "field": "name"})
+        random.assert_not_called()
+        self.assertTrue(result.startswith("status=failed "))

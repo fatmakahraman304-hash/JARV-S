@@ -562,7 +562,7 @@ def _computer_control(
     action = params.get("action", "").lower().strip()
 
     if not action:
-        return "No action specified for computer_control."
+        return outcome.failed("computer_control", "no action specified")
 
     if player:
         # Terminal, not the HUD: the activity log is for the conversation and
@@ -666,11 +666,10 @@ def _computer_control(
             profile = _user_profile()
             value   = profile.get(field, "")
             if not value:
-                value = _random_data(field)
-                print(f"[ComputerControl] No '{field}' in memory; synthetic fallback used")
+                return outcome.failed("computer_control", "requested user field is not recorded", field=field)
             return value
 
-        return f"Unknown action: '{action}'"
+        return outcome.failed("computer_control", "unknown action", operation=action)
 
     except Exception as e:
         print(f"[ComputerControl] ❌ {action}: {e}")
@@ -738,7 +737,13 @@ def computer_control(parameters: dict = None, response=None, player=None, sessio
         params = parameters or {}
         if params.get("action", "").lower().strip() in _INPUT_ACTIONS:
             return _request_desktop_input(params, response, player, session_memory)
-        return _computer_control(params, response, player, session_memory)
+        result = _computer_control(params, response, player, session_memory)
+        action = params.get("action", "").lower().strip()
+        if action == "copy":
+            return outcome.untrusted("clipboard", result)
+        if action in ("move", "scroll", "focus_window") and not str(result).startswith("status="):
+            return outcome.unverified("computer_control", "request returned; actual desktop result needs inspection", operation=action)
+        return result
     except Exception as exc:
         return outcome.failed("computer_control", str(exc))
 

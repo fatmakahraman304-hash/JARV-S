@@ -83,6 +83,25 @@ class BrowserLifecycle(unittest.TestCase):
             session.close()
         self.assertFalse(session._thread.is_alive())
 
+    def test_driver_task_stays_alive_until_resource_cleanup(self):
+        session = self.session()
+        driver = []
+
+        async def initialize():
+            driver.append(asyncio.create_task(asyncio.sleep(30)))
+
+        async def cleanup():
+            if driver[0].done():
+                raise RuntimeError("driver cancelled before context.close")
+            driver[0].cancel()
+
+        session._async_init = initialize
+        session._async_close = cleanup
+        session.start()
+        session.close()
+        self.assertFalse(session._thread.is_alive())
+        self.assertTrue(driver[0].cancelled())
+
     def test_closed_session_rejects_and_closes_new_coroutine(self):
         session = self.start_session()
         session.close()

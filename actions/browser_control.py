@@ -647,17 +647,27 @@ class _BrowserSession:
     def _run_loop(self):
         loop = self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        infrastructure = set()
+        initialized = False
+        initialization = loop.create_task(self._async_init())
         try:
-            loop.run_until_complete(self._async_init())
-            self._ready.set()
+            loop.run_until_complete(initialization)
+            # Playwright's connection/transport tasks must remain alive until
+            # context.close() and Playwright.stop() have completed.
+            infrastructure = asyncio.all_tasks(loop)
+            initialized = True
             if not self._closing.is_set():
+                # Publish readiness from inside the running loop, not in the
+                # gap between run_until_complete() and run_forever().
+                loop.call_soon(self._ready.set)
                 loop.run_forever()
         except Exception as exc:
             self._startup_error = exc
             self._ready.set()
         finally:
             self._closing.set()
-            pending = asyncio.all_tasks(loop)
+            pending = (asyncio.all_tasks(loop) - infrastructure if initialized
+                       else {initialization} if not initialization.done() else set())
             for task in pending:
                 task.cancel()
             if pending:
@@ -667,6 +677,11 @@ class _BrowserSession:
             except Exception as exc:
                 self._shutdown_error = exc
                 print(f"[Browser] Cleanup failed: {exc}")
+            remaining = asyncio.all_tasks(loop)
+            for task in remaining:
+                task.cancel()
+            if remaining:
+                loop.run_until_complete(asyncio.gather(*remaining, return_exceptions=True))
             loop.close()
 
     async def _async_init(self):
@@ -1192,19 +1207,23 @@ class _SessionRegistry:
 
     def close_all(self) -> str:
         with self._lock:
-            names    = list(self._sessions.keys())
-            sessions = list(self._sessions.values())
-            self._sessions.clear()
-            self._active_browser = ""
-        failures = 0
-        for session in sessions:
+            sessions = list(self._sessions.items())
+        failures = closed = 0
+        for name, session in sessions:
             try:
                 session.close()
             except Exception:
                 failures += 1
+                continue
+            closed += 1
+            with self._lock:
+                if self._sessions.get(name) is session:
+                    self._sessions.pop(name)
+                    if self._active_browser == name:
+                        self._active_browser = ""
         if failures:
-            return outcome.unverified("browser_control", "some browser closures could not be verified", failed_sessions=failures)
-        return outcome.done("browser_control", closed_sessions=len(names), verified=True)
+            return outcome.unverified("browser_control", "some browser closures could not be verified", failed_sessions=failures, closed_sessions=closed)
+        return outcome.done("browser_control", closed_sessions=closed, verified=True)
 
     def list_sessions(self) -> str:
         with self._lock:
