@@ -101,6 +101,9 @@ def catalog_entry(provider_id: str) -> dict:
 
 
 def get_declaration(provider_id: str) -> Optional[dict]:
+    from core.retired_providers import is_retired_provider
+    if is_retired_provider(provider_id):
+        return None
     provider_id = split_id(provider_id)[0]
     if provider_id in _declarations:
         return _declarations[provider_id]
@@ -139,6 +142,9 @@ def build(provider_id: str, cfg: dict):
     configuration itself, so changing the model in the panel produces a new
     instance rather than silently reusing the old one.
     """
+    from core.retired_providers import is_retired_provider
+    if is_retired_provider(provider_id, cfg):
+        raise LookupError("Bu sağlayıcı kaldırıldı; kullanılabilir bir model seçin.")
     if provider_id == "openai_compat@cloudflare":
         cfg = dict(cfg, catalog="cloudflare")
     key = _fingerprint(provider_id, cfg)

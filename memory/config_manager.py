@@ -97,6 +97,7 @@ def _atomic_config(path, data):
 
 
 def _write_config(data: dict) -> None:
+    data = _purged_abacus_data(data)
     ensure_config_dir()
     with _staged_config(CONFIG_FILE, data) as temporary:
         previous = None
@@ -106,7 +107,7 @@ def _write_config(data: dict) -> None:
             except (OSError, ValueError):
                 pass  # A damaged primary must not replace a valid backup.
         if isinstance(previous, dict):
-            _atomic_config(_backup_file(), previous)
+            _atomic_config(_backup_file(), _purged_abacus_data(previous))
         _replace_config(temporary, CONFIG_FILE)
 
 
@@ -156,6 +157,7 @@ def normalized_assistant_name(value):
     return "FRIDAY"
 
 def _normalize_identity(data):
+    data = _purged_abacus_data(data) if isinstance(data, dict) else {}
     if isinstance(data, dict) and "assistant_name" in data:
         data["assistant_name"] = normalized_assistant_name(data["assistant_name"])
     return data if isinstance(data, dict) else {}
@@ -662,9 +664,77 @@ def purge_deepseek_settings() -> bool:
     return changed
 
 
+def _without_abacus(block: dict) -> dict:
+    from core.retired_providers import is_retired_provider
+    block = dict(block or {})
+    creds = block.get("creds")
+    creds = creds if isinstance(creds, dict) else {}
+    removed = {pid for pid, values in creds.items() if is_retired_provider(pid, values)}
+    if removed:
+        block["creds"] = {pid: values for pid, values in creds.items() if pid not in removed}
+    for key in ("sidecar", "coding"):
+        if (isinstance(block.get(key), str) and block.get(key) in removed) or is_retired_provider(block.get(key)):
+            block[key] = ""
+    pipe = block.get("pipeline")
+    if isinstance(pipe, dict):
+        block["pipeline"] = {slot: "" if (isinstance(value, str) and value in removed) or is_retired_provider(value) else value
+                             for slot, value in pipe.items()}
+    return block
+
+
+def _purged_abacus_data(data: dict) -> dict:
+    from core.retired_providers import is_retired_provider
+    data = dict(data or {})
+    for key in ("abacus_api_key", "abacus_key", "abacus_ai_key", "routellm_api_key", "abacus_config"):
+        data.pop(key, None)
+    pc = data.get("plugin_config")
+    if isinstance(pc, dict):
+        pc = {key: value for key, value in pc.items() if not is_retired_provider(key)}
+        coding = pc.get("coding")
+        if isinstance(coding, dict):
+            pc["coding"] = {key: value for key, value in coding.items()
+                            if not str(key).casefold().startswith(("abacus_", "routellm_"))}
+        data["plugin_config"] = pc
+    block = data.get("providers")
+    if isinstance(block, dict):
+        block = dict(block)
+        old_llm = (block.get("pipeline") or {}).get("llm") if isinstance(block.get("pipeline"), dict) else None
+        clean = _without_abacus(block)
+        if (old_llm and not (clean.get("pipeline") or {}).get("llm") and
+                data.get("gemini_api_key") and not data.get("local_only") and
+                block.get("mode") == PROVIDER_MODE_PIPELINE):
+            clean["mode"] = PROVIDER_MODE_GEMINI
+        data["providers"] = clean
+    return data
+
+
+@_locked
+def purge_abacus_settings() -> bool:
+    """Remove only retired credentials, including the last valid backup."""
+    changed = False
+    if CONFIG_FILE.exists():
+        data = _read_for_write()
+        clean = _purged_abacus_data(data)
+        if clean != data:
+            _write_config(clean)
+            changed = True
+    backup = _backup_file()
+    if backup.exists():
+        try:
+            original = json.loads(backup.read_text(encoding="utf-8"))
+            if isinstance(original, dict):
+                clean = _purged_abacus_data(original)
+                if clean != original:
+                    _atomic_config(backup, clean)
+                    changed = True
+        except (OSError, ValueError, TypeError):
+            pass  # Preserve malformed files for manual recovery, never delete them.
+    return changed
+
+
 def get_providers() -> dict:
     """Aktif sağlayıcılar (kaldırılan DeepSeek ayarları hariç)."""
-    val = load_api_keys().get("providers")
+    val = _purged_abacus_data(load_api_keys()).get("providers")
     if not isinstance(val, dict):
         return {}
     return _without_deepseek(_upgrade_ids(dict(val)))

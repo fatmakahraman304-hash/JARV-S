@@ -107,6 +107,11 @@ class AetherUI:
             purge_deepseek_settings()
         except (OSError, ValueError, TypeError):
             pass
+        try:
+            from memory.config_manager import purge_abacus_settings
+            purge_abacus_settings()
+        except (OSError, ValueError, TypeError):
+            pass
         _apply_ui_scale()
         if QApplication.instance() is None:
             QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)

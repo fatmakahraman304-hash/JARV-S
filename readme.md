@@ -52,7 +52,7 @@ isteğe bağlı etkileşim/üslup ayarını sıfırlar. Yeni mod kataloğu
 `core/core_modes.py` dosyasındadır; her modun amaç, girdi, çıktı,
 sınır, Türkçe/İngilizce ipucu ve örneği vardır.
 
-Pipeline (Abacus dahil) son isteğe bir ana ve en fazla iki yardımcı mod
+Pipeline son isteğe bir ana ve en fazla iki yardımcı mod
 önerir. Kısa devam komutları önceki rotayı kullanabilir. Bu yerel anahtar
 kelime tabanlı öneri ek bir API isteği yapmaz, yanlış sınıflandırma mümkün;
 model gerçek bağlama göre düzeltebilir. Native Gemini Live, ortak 30 mod
@@ -155,34 +155,13 @@ ve 141–1000 maddelerinin metni ayrı kaynak modüllerinde korunur.
   Bu değişiklik evrensel bir güvenlik geçidi değildir.
 
 Modlar farklı AI modelleri veya bağımsız cihaz yetenekleri değildir. Mevcut
-Abacus/Gemini ve yedek sağlayıcılar korunur. Kamera, akıllı ev ve çevrim içi
+Gemini ve yapılandırılmış diğer sağlayıcılar korunur. Kamera, akıllı ev ve çevrim içi
 araçlar bağlı cihaz ve hesap gerektirir. Her model çıktısının doğruluğu garanti
 edilemez. Kaynaklar elle kaydedilir; güven etiketi kullanıcı seçimine dayanır.
 Gerçek uygulama kapsamı ve eksikler 471–499 maddelerinin durum alanlarında
 görülebilir. Ayrı kişiselleştirme sayfası geri getirilmemiştir.
 
 ## 📦 Configurable engines
-
-### Abacus AI / RouteLLM (FRIDAY)
-
-1. Abacus AI RouteLLM hesabınızdan API anahtarı alın:
-   https://abacus.ai/help/developer-platform/route-llm
-2. Ayarlar → ENGINE & PROVIDERS → kendi kurulumunuz (pipeline) → DÜŞÜNME:
-   **Abacus AI (RouteLLM)** seçin. Varsayılan API adresi
-   `https://routellm.abacus.ai/v1`, model `route-llm`.
-3. API anahtarını yalnızca yerel ayara girin. Sesli kullanım için mevcut
-   dinleme ve konuşma sağlayıcılarınızı seçin. Kaydet ve uygula.
-4. Yedek olarak arka plan sağlayıcısı, etkinleştirilmiş ücretsiz model havuzu
-   ve/veya kayıtlı Gemini anahtarını kullanın. Abacus ilk denenir; kota/kredi
-   hatasında 15 dakika, geçici hatada 30 saniye beklemeye alınır. Bir yanıtın
-   bir kısmı iletildiyse aynı tur yeniden çalıştırılmaz.
-5. Abacus ana konuşma modeli seçildiğinde genel metin arka plan isteklerinde
-   de önceliklidir. Kaynaklı arama, kayıtlı ses ve özel iş sağlayıcısı
-   seçimleri mevcut yollarını korur.
-
-RouteLLM API kredileri Abacus hesabınızın koşullarına bağlıdır; abonelik
-tek başına sınırsız API erişimi anlamına gelmez.
-
 
 Until now this was a Gemini assistant, and only that. If you had no quota left, no
 connection, or a rule that says your microphone does not leave the building, you
@@ -192,7 +171,7 @@ recognition, a language model and a voice, assembled from parts you pick in
 requests at a different model without touching the voice at all.
 
 The local model can be on your machine (Ollama, LM Studio, llama.cpp, vLLM) or
-somebody else's API (OpenAI, Groq, DeepSeek, Mistral, xAI, OpenRouter, Together).
+somebody else's API (OpenAI, Groq, Mistral, xAI, OpenRouter, Together).
 Both are the same setting, because all of them speak the same protocol.
 
 **None of it costs anything if you do not use it.** On a default install the
