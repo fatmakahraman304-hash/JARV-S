@@ -1,5 +1,6 @@
 """A locked SQLite source must not leave backup running indefinitely."""
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -57,7 +58,7 @@ else:
             with patch.object(c, "data_dir", return_value=root):
                 self.assertEqual(c.recent()[0][2], "korunacak kayıt")
                 c.backup_history(destination)
-            with sqlite3.connect(destination) as restored:
+            with closing(sqlite3.connect(destination)) as restored:
                 self.assertEqual(restored.execute("SELECT text FROM events").fetchall(),
                                  [("korunacak kayıt",)])
 
@@ -76,6 +77,6 @@ else:
             finally:
                 release.join(3)
                 holder.close()
-            with sqlite3.connect(root / "backup.sqlite3") as restored:
+            with closing(sqlite3.connect(root / "backup.sqlite3")) as restored:
                 self.assertEqual(restored.execute("SELECT text FROM events").fetchall(),
                                  [("kısa kilit sonrası korunacak",)])
