@@ -101,6 +101,27 @@ ayrı ayrı sınandığı anlamına gelmez. Yeni aktif geliştirme odağı Aşam
 - Windows/Linux otomatik kontrolleri ile gerçek mikrofon/hoparlör kabulü ayrı raporlanmalı.
 - Donanım ölçümü olmadan gecikme veya yankı engelleme başarısı ilan edilmemeli.
 
+## Aşama 3: otomatik dinlemede ses tamponu sınırları
+
+Kesintisiz sesin yüksek enerji dalı 30 saniyelik azami tur kontrolünü
+atlıyordu. 31 saniyeden uzun sentetik PCM akışında sınırın aşıldığı ve STT'ye
+hiç aktarım yapılmadığı yeniden üretildi. Artık otomatik tur algılamada yüksek
+ses dalı da aynı sınırda turu kapatır. Normal mikrofon paketlerinde aşım en
+fazla son girdi paketinin uzunluğudur. Bu, keyfi büyüklükte tek bir giriş
+paketine mutlak bellek sınırı veya donanım gecikme garantisi değildir.
+
+Konuşma başlamadan gelen tek büyük sessizlik paketi de 0,3 saniyelik ön
+tampona indirilir; sessizlik gereksiz yere STT'ye gönderilmez. PCM16 paketinin
+sonundaki yarım örnek, sonraki paketin örnek hizasını kaydırmadan atılır.
+Kapanış, nesnenin bekleyen mikrofon listesini/sayacını ve VAD durumunu temizler;
+kapanmış motora yeni ses eklenmez. Manuel bas-konuş açıkça flush edilene kadar
+bekleme davranışını korur; otomatik sınır manuel kaydı kendi kendine göndermez.
+
+`test_pipeline_audio_bounds` gerçek pipeline girişinden sentetik PCM ile
+kesintisiz ses, büyük sessizlik paketi, PCM hizası, STT hatası ve kapanışı
+sınar. Mikrofon, hoparlör, wake-word doğruluğu, yankı ve canlı STT/TTS servis
+kabulü **DOĞRULANMADI**. Aşama 3 aktif kalır; ses/persona seçimi değiştirilmez.
+
 ## Son çalışma: açılış ve yarım güncelleme
 
 `main.py`, üçüncü taraf modüllerden önce `core/startup_guard.py` kontrolünü çağırır.

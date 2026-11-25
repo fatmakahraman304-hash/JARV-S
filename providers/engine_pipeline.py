@@ -297,6 +297,10 @@ class PipelineEngine:
         if self._stt is None or self._closed:
             return
         data = _pcm_of(audio)
+        if len(data) % 2:
+            # Each frame is PCM16. Keep analysis and buffered STT samples
+            # aligned; a trailing half-sample must not shift the next frame.
+            data = data[:-1]
         if not data:
             return
         self._mic.append(data)
@@ -325,12 +329,16 @@ class PipelineEngine:
             self._vad_floor += (rms - self._vad_floor) * 0.002
 
         threshold = max(self._vad_floor * _VAD_FLOOR_MARGIN, _VAD_ABSOLUTE_MIN)
+        max_bytes = int(_a.MIC_RATE * _VAD_MAX_TURN_S) * _a.SAMPLE_WIDTH
 
         if rms >= threshold:
             self._vad_speech_ms += ms
             self._vad_quiet_ms = 0.0
             if self._vad_speech_ms >= _VAD_MIN_SPEECH_MS:
                 self._vad_started = True
+            if self._mic_bytes >= max_bytes:
+                self._reset_vad()
+                await self.flush_microphone()
             return
 
         if not self._vad_started:
@@ -340,11 +348,13 @@ class PipelineEngine:
             keep = int(_a.MIC_RATE * 0.3) * _a.SAMPLE_WIDTH
             while self._mic_bytes > keep and len(self._mic) > 1:
                 self._mic_bytes -= len(self._mic.pop(0))
+            if self._mic_bytes > keep:
+                self._mic[0] = self._mic[0][-keep:]
+                self._mic_bytes = len(self._mic[0])
             self._vad_speech_ms = 0.0
             return
 
         self._vad_quiet_ms += ms
-        max_bytes = int(_a.MIC_RATE * _VAD_MAX_TURN_S) * _a.SAMPLE_WIDTH
         if self._vad_quiet_ms >= _VAD_SILENCE_MS or self._mic_bytes >= max_bytes:
             self._reset_vad()
             await self.flush_microphone()
@@ -423,6 +433,9 @@ class PipelineEngine:
 
     async def close(self) -> None:
         self._closed = True
+        self._mic = []
+        self._mic_bytes = 0
+        self._reset_vad()
         if self._gen and not self._gen.done():
             self._gen.cancel()
         await self._queue.put(None)
