@@ -1031,20 +1031,18 @@ def test_panel_settings_survive():
 
         import pathlib
         writes = [0]
-        real = pathlib.Path.write_text
+        real = config_manager.os.replace
 
-        def counted(self, *a, **k):
-            # The config is written to api_keys.json.tmp and moved into place
-            # in one step (memory/config_manager.py), so either name is a write.
-            if self.name in ("api_keys.json", "api_keys.json.tmp"):
+        def counted(source, destination, *a, **k):
+            result = real(source, destination, *a, **k)
+            # Count successful publication of the actual config, independent
+            # of private temporary names and separate backup replacements.
+            if pathlib.Path(destination) == config_manager.CONFIG_FILE:
                 writes[0] += 1
-            return real(self, *a, **k)
+            return result
 
-        pathlib.Path.write_text = counted
-        try:
+        with patch.object(config_manager.os, "replace", side_effect=counted):
             ov._apply()
-        finally:
-            pathlib.Path.write_text = real
 
         check("APPLY writes the config once", writes[0] == 1, str(writes[0]))
         check("the mode was stored", get_provider_mode() == "pipeline",
