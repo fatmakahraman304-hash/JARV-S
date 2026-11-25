@@ -3,7 +3,12 @@
 (() => {
   const readout = document.getElementById("readout");
   const state = window.earthState = {ready:false, rendered:false, tiles:0, images:0, mode:"holo", error:""};
-  let viewer, mode = "holo", pending, desiredActive = !document.hidden;
+  let viewer, mode = "holo", pending, desiredActive = true;
+  function applyActivity() {
+    const active = desiredActive && !document.hidden;
+    state.active = active;
+    if (viewer) { viewer.useDefaultRenderLoop = active; if (active) { viewer.resize(); viewer.scene.requestRender(); } }
+  }
   function fail(message) { state.error = message; readout.textContent = message + "\nÜstteki Normal harita düğmesini kullanabilirsiniz."; }
   window.fridayEarth = {
     goTo(point) {
@@ -14,8 +19,7 @@
     },
     setActive(active) {
       desiredActive = Boolean(active);
-      state.active=desiredActive;
-      if (viewer) { viewer.useDefaultRenderLoop = desiredActive; if (desiredActive) { viewer.resize(); viewer.scene.requestRender(); } }
+      applyActivity();
     },
     capture() { if(viewer){viewer.scene.requestRender();viewer.scene.render();return viewer.canvas.toDataURL("image/png");}return null; },
     refresh() { if(viewer)viewer.scene.requestRender(); },
@@ -66,9 +70,10 @@
           out_FragColor=vec4(color,1.);
         }`
     }));
-    let layer;
+    let layer, generation = 0;
     function setMode(next) {
       if (!["holo","natural","street"].includes(next)) return;
+      const currentGeneration = ++generation;
       mode=state.mode=next;
       hologram.enabled=next==="holo";
       state.images=0;
@@ -91,9 +96,9 @@
       const requestImage=provider.requestImage.bind(provider);
       provider.requestImage=(...args)=>{
         const request=requestImage(...args);
-        return request && request.then(image=>{if(mode===next)state.images++;return image;});
+        return request && request.then(image=>{if(generation===currentGeneration)state.images++;return image;});
       };
-      provider.errorEvent.addEventListener(()=>mode===next&&fail("Harita görüntüleri alınamadı. Bağlantıyı veya başka bir görünümü deneyin."));
+      provider.errorEvent.addEventListener(()=>generation===currentGeneration&&fail("Harita görüntüleri alınamadı. Bağlantıyı veya başka bir görünümü deneyin."));
       layer=viewer.imageryLayers.addImageryProvider(provider);
       if(next==="holo") {layer.brightness=.78;layer.contrast=1.65;layer.saturation=0;layer.colorToAlpha=Cesium.Color.WHITE;layer.colorToAlphaThreshold=.16;}
       document.querySelectorAll("[data-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.mode===next)));
@@ -119,6 +124,6 @@
     state.ready=true;
     window.fridayEarth.setActive(desiredActive);
     if(pending)window.fridayEarth.goTo(pending);
-    document.addEventListener("visibilitychange",()=>window.fridayEarth.setActive(!document.hidden));
+    document.addEventListener("visibilitychange",applyActivity);
   } catch(error) { fail("3D dünya başlatılamadı: " + String(error.message||error).slice(0,160)); }
 })();

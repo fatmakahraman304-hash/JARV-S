@@ -135,6 +135,10 @@ class EarthPanel(QWidget):
 
     def _ready(self, ok):
         self._loaded = ok
+        if ok and self.view:
+            # loadFinished may arrive after hideEvent; the page must inherit
+            # the current Qt visibility, not restart its default render loop.
+            self.view.page().runJavaScript("window.fridayEarth?.setActive(" + json.dumps(self.isVisible()) + ")")
         if ok and self._pending is not None:
             self.go_to(**self._pending)
         elif not ok:
@@ -156,11 +160,17 @@ class EarthPanel(QWidget):
         self.status.setText("Yer aranıyor…")
 
         def work():
-            from plugins.normal_map import search
             try:
-                self._search_done.emit(generation, search(query), "")
+                from plugins.normal_map import search
+                places, error = search(query), ""
             except Exception:
-                self._search_done.emit(generation, [], "Yer arama servisine ulaşılamadı; mevcut görünüm korundu.")
+                places, error = [], "Yer arama servisine ulaşılamadı; mevcut görünüm korundu."
+            try:
+                self._search_done.emit(generation, places, error)
+            except RuntimeError:
+                # The Qt owner may have been destroyed while the network was
+                # working. Never try to emit a second signal on a deleted UI.
+                pass
         threading.Thread(target=work, daemon=True, name="friday-earth-search").start()
 
     def _finish_search(self, generation, places, error):

@@ -10,6 +10,7 @@ it. Used by .github/workflows/android-avatar.yml as a visual check.
 from __future__ import annotations
 
 import math
+import json
 import sys
 import time
 from pathlib import Path
@@ -46,10 +47,45 @@ def main() -> int:
         av.paint(p, size / 2, size * 0.43, r, qcol(C.PRI), qcol(C.ACC), qcol(C.BG))
         times.append(time.perf_counter() - t0)
         p.end()
-        img.save(str(out / f"{name}.png"))
+        if not img.save(str(out / f"{name}.png")):
+            raise RuntimeError("Rendered face could not be saved")
         if av.style != look:
             print("Requested face rendering failed:", av.render_note)
             return 1
+    # Isolate animation changes at the SAME pose. Different yaw alone must
+    # not let a broken mouth/blink/gaze pass the real shader acceptance.
+    import numpy as np
+    probe_dir = out / "animation-probes"
+    probe_dir.mkdir(exist_ok=True)
+    probes = {}
+    av._yaw = av._pitch = av._glow = 0.0
+    for label, mouth, blink, gaze in (("neutral", 0., 0., (0., 0.)),
+                                      ("mouth", .85, 0., (0., 0.)),
+                                      ("blink", 0., .95, (0., 0.)),
+                                      ("gaze", 0., 0., (.8, -.4))):
+        av._mouth, av._blink, av._gaze = mouth, blink, list(gaze)
+        image = QImage(560, 560, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(qcol(C.BG))
+        painter = QPainter(image)
+        try:
+            av.paint(painter, 280, 560 * .43, 560 * .30, qcol(C.PRI), qcol(C.ACC), qcol(C.BG))
+        finally:
+            painter.end()
+        if av.style != look:
+            raise RuntimeError("Requested renderer fell back during animation acceptance: " + av.render_note)
+        if not image.save(str(probe_dir / (label + ".png"))):
+            raise RuntimeError("Animation probe could not be saved")
+        bits = image.bits(); bits.setsize(image.sizeInBytes())
+        probes[label] = np.frombuffer(bits, dtype=np.uint8).copy().reshape(560, 560, 4)
+    changes = {label: int(np.count_nonzero(np.any(probes[label] != probes["neutral"], axis=2)))
+               for label in ("mouth", "blink", "gaze")}
+    for label, changed in changes.items():
+        if changed < 25:
+            raise AssertionError(f"Real {label} animation did not change the framebuffer: {changed}")
+    print("Verified same-pose animation pixels:", changes)
+    manifest = {"requested_look": look, "renderer": getattr(av._gl, "renderer_name", "projection"),
+                "same_pose_changed_pixels": changes, "physical_user_gpu_verified": False}
+    (out / "acceptance.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     # steady-state timing at HUD size (1080p and 4K head heights)
     for label, s in (("1080p", 560), ("4K", 1120)):
         img = QImage(s, s, QImage.Format.Format_ARGB32_Premultiplied)

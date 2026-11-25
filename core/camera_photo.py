@@ -12,6 +12,10 @@ class InvalidPhoto(ValueError):
 def prepare_photo(data: bytes) -> bytes:
     from PIL import Image, ImageOps, UnidentifiedImageError
 
+    if not isinstance(data, (bytes, bytearray)):
+        raise InvalidPhoto("Fotoğraf ikili JPEG, PNG veya WebP verisi olmalı.")
+    if len(data) > MAX_PHOTO_BYTES:
+        raise InvalidPhoto("Fotoğraf 8 MB sınırını aşıyor. Daha küçük bir fotoğraf yükle.")
     try:
         with Image.open(BytesIO(data), formats=_FORMATS) as photo:
             if photo.width * photo.height > 20_000_000:
