@@ -101,6 +101,9 @@ Sabit `.tmp` adındaki kullanıcı dosyaları korunur; başarısız yazım geçi
 dosyaları temizler. Mevcut Windows kısa süreli dosya kilidi yeniden denemesi
 korunur. Ayar değişikliği boyunca süreçler arası kilit kullanılır; iki ayrı
 FRIDAY sürecinin farklı ayarları birbirini ezmez. Kilit dosyasını elle silmeyin.
+Windows kurulu ortam testinde boş kilit dosyasının kilit alınmadan önce
+yazılması yüzünden ilk oluşturma yarışı da yakalandı. İlk bayt artık işletim
+sistemi kilidi alındıktan sonra yazılır; hafıza ve ayarlar aynı düzeltmeyi kullanır.
 
 Sentetik verilerle bozuk şekil, eksik ana dosya, geçici ad çakışması, ana/yedek
 flush hatası, kilitli hedef ve iki süreçten yazma sınanır. Gerçek kullanıcı

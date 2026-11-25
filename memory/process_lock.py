@@ -21,10 +21,6 @@ class FileRLock:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 handle = path.open("a+b")
                 try:
-                    handle.seek(0, os.SEEK_END)
-                    if handle.tell() == 0:
-                        handle.write(b"\0")
-                        handle.flush()
                     deadline = time.monotonic() + self.timeout
                     while True:
                         handle.seek(0)
@@ -44,6 +40,13 @@ class FileRLock:
                                     "Hafıza başka bir süreç tarafından kullanılıyor; kayıt uygulanmadı. "
                                     "Diğer işlemin bitmesini bekleyip yeniden deneyin.") from exc
                             time.sleep(.025)
+                    # Windows permits locking beyond EOF. Initialize only
+                    # after acquiring that region: another process may have
+                    # locked byte zero after we opened the still-empty file.
+                    handle.seek(0, os.SEEK_END)
+                    if handle.tell() == 0:
+                        handle.write(b"\0")
+                        handle.flush()
                     self._handle = handle
                 except BaseException:
                     handle.close()
