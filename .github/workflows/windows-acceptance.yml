@@ -19,6 +19,8 @@ on:
       - "memory/process_lock.py"
       - "memory/memory_manager.py"
       - "tests/test_memory_safety.py"
+      - "memory/continuity.py"
+      - "tests/test_continuity.py"
       - "tests/test_config_safety.py"
       - "tests/test_memory_process_lock.py"
       - "providers/engine_pipeline.py"
@@ -98,4 +100,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\.venv\Scripts\python.exe -m pip check
       - name: Verify update, rollback and reopened HUD
-        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app tests.test_config_safety tests.test_memory_process_lock tests.test_pipeline_audio_bounds tests.test_pipeline_speech_lifecycle tests.test_memory_safety
+        run: .\.venv\Scripts\python.exe -m unittest -v tests.test_app_updater tests.test_startup_guard tests.test_updated_hud tests.test_restart_app tests.test_config_safety tests.test_memory_process_lock tests.test_pipeline_audio_bounds tests.test_pipeline_speech_lifecycle tests.test_memory_safety tests.test_continuity

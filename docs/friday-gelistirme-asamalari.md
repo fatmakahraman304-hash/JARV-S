@@ -8,8 +8,8 @@ Bir düzeltmenin birleşmesi, bütün aşamanın tamamlandığı anlamına gelme
 | 1 — Sistem kararlılığı | Hatalar, güncelleyici, veri güvenliği, dayanıklılık | Otomatik kabul geçti; saha doğrulaması açık |
 | 2 — Yapay zekâ beyni | 1.000 yetenek, düşünme, öğrenme, Abacus AI, sohbet | Otomatik kabul geçti; canlı model kabulü açık |
 | 3 — Ses sistemi | FRIDAY sesi, sürekli dinleme, hızlı konuşma | Otomatik kabul geçti; gerçek ses kabulü açık |
-| 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | **Aktif** |
-| 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | Bekliyor |
+| 4 — Hafıza sistemi | Kalıcı hafıza, projeler, bağlam | Otomatik kabul geçti; gerçek cihaz eşitlemesi açık |
+| 5 — Otomasyon | Bilgisayar, uygulamalar, gerçek araçlar | **Aktif** |
 | 6 — Görsel sistem | 3D yüz, holografik arayüz, dünya, görsel analiz | Bekliyor |
 | 7 — Performans | Açılış, CPU, RAM, yanıt süresi | Bekliyor |
 | 8 — Nihai sistem | Bütünleşik testler, Windows kurulumu, son denetim | Bekliyor |
@@ -152,7 +152,7 @@ sınanır. Otomatik akustik barge-in yeteneği hâlâ destekleniyor gibi sunulma
 Gerçek mikrofon/hoparlör, FRIDAY sesinin işitsel kalitesi, Türkçe canlı ASR,
 akustik yankı/yanlış uyandırma oranı, cihaz değiştirme ve gerçek gecikme
 **DOĞRULANMADI** olarak Aşama 8 nihai kabulünde açıktır. Otomatik kabul,
-bu saha testlerinin tamamlandığı anlamına gelmez. Yeni aktif odak Aşama 4'tür.
+bu saha testlerinin tamamlandığı anlamına gelmez. Aşama 3 otomatik kabulü bu kapsamda tamamlandı; güncel aktif aşama tablodadır.
 
 ## Aşama 4 kabul koşulları
 
@@ -177,7 +177,7 @@ kurtarma birinci bozuk dosyayı ezmez. Kurtarma başarısızlığı, kayıt içe
 açığa çıkarmayan Türkçe bildirimle aktarılır; kurtarma başarıyla yapılmış
 gibi gösterilmez. Yeni veri şeması veya izin eklenmez. 21 Kasım 2026 unutma/
 eşitleme regresyonları korunur. Gerçek cihazlar arası eşitleme ve fiziksel
-disk arızası kabulü **DOĞRULANMADI**; Aşama 4 aktiftir.
+disk arızası kabulü **DOĞRULANMADI**; Bu düzeltme Aşama 4 otomatik kabul kapsamındadır.
 
 ## Aşama 4: hafıza alanlarının yapı doğrulaması
 
@@ -194,6 +194,45 @@ sürümü veya bağımlılık eklenmez. Geçersiz yapıdaki ana/yedek dosyalar v
 karantina kopyaları korunur. Sentetik dosyalarla bozuk alanlar, geçersiz girdi,
 yedek korunması, yanlış kurtarma başarısı ve eski biçim uyumluluğu sınanır.
 Aşama 4 aktiftir; gerçek bulut eşitleme/disk arızası kabulü **DOĞRULANMADI**.
+
+## Aşama 4: salt okunur son oturum geri dönüşü
+
+Son oturum özeti, ana dosya yok veya bozukken sağlam yedekten okunmuyordu.
+Artık son geçerli kopya salt okunur kullanılır; dosya onarımı, yedek döndürme
+veya tüketme yapılmaz. Geçerli ana dosyada özet listesi boşsa bu tercih
+geçerlidir; yedekten eski özet getirilmez. Yanlış türde oturum girdisi çağırana
+metin gibi dönmez. Bu özet tarihsel bağlamdır; güncel proje/işlem başarısı
+olarak kabul edilmez.
+
+## Aşama 4 otomatik kabulü ve Aşama 5'e geçiş
+
+| Koşul | Otomatik kanıt ve kapsam |
+| --- | --- |
+| Tercihler ve oturum devamlılığı | `test_memory_safety`, `test_continuity`: yeniden okuma, sağlam yedek ve salt okunur oturum özeti |
+| Unutma ve eski verinin dönmemesi | 21 Kasım 2026 tombstone/eşitleme; #194 legacy kurtarma ve #195 bozuk alan/yedek regresyonları |
+| Gerçek proje durumu | Yarım iş günlüğü tekrar çalıştırılmaz; eski asistan başarı iddiası aktif projeyi tamamlamaz; bitmiş proje korunur |
+| Eşzamanlı yazım | Gerçek ayrı süreçlerde JSON kilidi, SQLite thread yazımları ve hata sonrası devam |
+| Yedek ve geri yükleme | Committed WAL snapshot, boş hedefe doğrulanmış restore, bozuk kaynak/hedef koruması ve kilit zaman aşımı |
+| Arama ve geçmiş | Türkçe farklı ipuçları, sıralama, tam günlük sorgu ve sınırlandırılmış tarihsel konuşma sonuçları |
+| Erişim ve dosya koruması | Etkin veri tabanı/yan dosyaları dışa aktarmayla ezilmez; anahtarlar git'e eklenmez; eski konuşma talimat/işlem kanıtı sayılmaz |
+| Platform kabulü | Tam Windows/Linux regresyonu ve kurulu Windows hafıza/continuity kabulü ilgili PR sonucunda kaydedilir |
+
+Bu kabul, yapılandırılmış hafıza kayıtları, proje günlüğü ve yerel yedekleme
+akışlarına aittir. Bir yapılandırılmış bilgiyi unutmak ham konuşma arşivinin
+tamamını silme işlemi değildir; tarihsel kayıtlar mevcut tercih veya işlem
+başarısı olarak yeniden yorumlanmamalıdır. Gerçek cihazlar arası bulut
+eşitleme, kullanıcı diski/güç kesintisi ve uzun süreli kullanım
+**DOĞRULANMADI** olarak Aşama 8'de açık kalır. Yeni aktif odak Aşama 5'tir.
+
+## Aşama 5 kabul koşulları
+
+- Bilgisayar/tarayıcı araçları gerçek sonuçlarını done, unverified veya failed olarak bildirmeli.
+- İzin verilen işlemlerde işlem sonrası durum doğrulanmalı; belirsiz sonuç başarı sayılmamalı.
+- Dosya silme, ödeme, mesaj gönderimi, hesap/kamera ve yüksek etkili işlemler gerçek kullanıcı yetkisi gerektirmeli.
+- Ekran/web içeriği güvenilmeyen veri olmalı; model kendi onayını üretmemeli.
+- Uzun işler arka planda, izole çalışma alanında yürümeli; durdurma ve yeniden başlatma gerçek durumu korumalı.
+- Kod ajanı test/CI sonucu olmadan başarılı sayılmamalı; güvenli commit/PR/merge sınırları korunmalı.
+- Windows/Linux testleri ile gerçek kullanıcı masaüstü/oturum entegrasyonları ayrı raporlanmalı.
 
 ## Aşama 1: açılış ve yarım güncelleme
 
