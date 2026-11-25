@@ -94,6 +94,56 @@ class MemorySafety(unittest.TestCase):
         mm.save_memory({"notes": {}})
         self.assertEqual(json.loads(mm.BACKUP_PATH.read_text()), {"notes": {}})
 
+    def test_invalid_known_fields_recover_from_valid_backup(self):
+        good = {"notes": {"keep": {"value": "retained"}}}
+        for damaged in ({"notes": []}, {"preferences": None}, {"_deleted": []},
+                        {"_deleted": {"notes/item": {"value": "bad timestamp"}}}):
+            with self.subTest(damaged=damaged):
+                mm.BACKUP_PATH.write_text(json.dumps(good))
+                mm.MEMORY_PATH.write_text(json.dumps(damaged))
+                restored = mm.load_memory()
+                self.assertEqual(restored["notes"]["keep"]["value"], "retained")
+                self.assertEqual(json.loads(mm.BACKUP_PATH.read_text()), good)
+
+    def test_structurally_damaged_primary_never_becomes_the_backup(self):
+        good = {"notes": {"keep": "retained"}}
+        mm.BACKUP_PATH.write_text(json.dumps(good))
+        mm.MEMORY_PATH.write_text('{"notes":[]}')
+        mm.save_memory({"notes": {"new": "new fact"}})
+        self.assertEqual(json.loads(mm.BACKUP_PATH.read_text()), good)
+        self.assertEqual(mm.load_memory()["notes"]["new"], "new fact")
+
+    def test_invalid_incoming_fields_are_rejected_before_file_changes(self):
+        mm.remember("first", "one")
+        mm.remember("second", "two")
+        before = {path: path.read_bytes() for path in mm.MEMORY_PATH.parent.iterdir()}
+        for incoming in ({"notes": []}, {"preferences": None}, {"_deleted": []},
+                         {"_deleted": {"notes/item": 42}}):
+            with self.subTest(incoming=incoming):
+                with self.assertRaises(ValueError):
+                    mm.save_memory(incoming)
+                self.assertEqual({path: path.read_bytes() for path in mm.MEMORY_PATH.parent.iterdir()}, before)
+
+    def test_invalid_backup_shape_is_not_published_as_successful_recovery(self):
+        mm.MEMORY_PATH.write_text("{broken primary")
+        mm.BACKUP_PATH.write_text('{"notes":[]}')
+        notices = []
+        with patch.object(mm, "_trim_notifier", notices.append):
+            restored = mm.load_memory()
+        self.assertIsInstance(restored["notes"], dict)
+        self.assertFalse(mm.MEMORY_PATH.exists())
+        self.assertEqual(mm.BACKUP_PATH.read_text(), '{"notes":[]}')
+        self.assertTrue(any("kurtarılamadı" in text for text in notices))
+        self.assertFalse(any("geri yüklendi" in text for text in notices))
+
+    def test_legacy_string_entries_and_custom_categories_remain_compatible(self):
+        original = {"notes": {"simple": "legacy fact"}, "custom": {"label": "extra"},
+                    "_deleted": {"notes/removed": "2026-11-21"}, "sessions": []}
+        mm.save_memory(original)
+        restored = mm.load_memory()
+        for field, value in original.items():
+            self.assertEqual(restored[field], value)
+
     def test_broken_file_comes_back_from_the_last_good_copy(self):
         mm.update_memory({"identity": {"name": {"value": "Murat"}}})
         mm.update_memory({"preferences": {"drink": {"value": "çay"}}})       # second write: first is now the backup
