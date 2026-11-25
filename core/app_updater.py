@@ -245,6 +245,12 @@ def _recover_zip(root, lock, raw, progress):
     if manifest not in (journal["old_manifest"], journal["new_manifest"]):
         raise _RecoveryRequired("Yerel sürüm kaydı değişmiş. Kurtarma durduruldu.")
     before, after = journal["before"], journal["after"]
+    _validate_names(before)
+    _validate_names(after)
+    _validate_names(set(before) | set(after))
+    if any(not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
+           for digest in (*before.values(), *after.values())):
+        raise _RecoveryRequired("ZIP kurtarma kaydında geçersiz dosya özeti.")
     previous_manifest = None
     if rollback and journal["old_manifest"] is not None:
         previous_manifest = _target(backup, ".previous-manifest").read_bytes()
@@ -391,6 +397,14 @@ def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marke
                 raise RuntimeError(f'Yazılan dosya doğrulanamadı: {name}')
         _replace_bytes(state_path, state_bytes)
     except Exception:
+        if marker is not None:
+            # Use the durable journal rather than the in-memory touched list.
+            # A replacement can succeed immediately before an exception.
+            try:
+                _recover_zip(root, marker, marker.read_bytes(), progress)
+            except Exception as exc:
+                raise _RecoveryRequired("Otomatik kurtarma tamamlanamadı; işlem kaydı ve yedekler korunuyor.") from exc
+            raise
         failed = []
         for name in reversed(touched):
             path = root / name
