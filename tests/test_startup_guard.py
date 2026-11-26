@@ -58,7 +58,7 @@ class StartupGuardTests(unittest.TestCase):
         self.assertNotIn("APPLICATION_IMPORT_REACHED", result.stderr)
         self.assertIn("güncelleme", result.stderr)
 
-    def test_killed_update_blocks_then_offline_recovery_allows_launch(self):
+    def test_killed_update_recovers_and_restarts_before_application_imports(self):
         script = '''
 import os
 from pathlib import Path
@@ -70,16 +70,22 @@ marker.write_bytes(b"AETHER/1 checking")
 replace = u.os.replace
 def stop(src, dst):
     replace(src, dst)
-    if Path(dst) == root / "a-added.py":
+    if Path(dst) == root / "main.py":
         os._exit(79)
 with patch.object(u.os, "replace", side_effect=stop):
-    u._apply_zip(root, {"main.py": (root / "main.py").read_bytes(),
+    u._apply_zip(root, {"main.py": b"from pathlib import Path\\nfrom core.startup_guard import preflight\\npreflight(Path.cwd())\\nraise RuntimeError('MIXED_VERSION_EXECUTED')\\n",
                        "a-added.py": b"new file"}, "b" * 40, "main", marker=marker)
 '''
         killed = subprocess.run([sys.executable, "-c", script], cwd=self.root,
                                 capture_output=True, timeout=15)
         self.assertEqual(killed.returncode, 79, killed.stderr)
-        self.assertIn("--recover", self.launch().stderr)
+        launched = self.launch()
+        self.assertIn('FRIDAY_RECOVERY_VERIFIED', launched.stdout)
+        self.assertIn('APPLICATION_IMPORT_REACHED', launched.stderr)
+        self.assertNotIn('MIXED_VERSION_EXECUTED', launched.stderr)
+        self.assertNotIn('MIXED_VERSION_EXECUTED', launched.stderr)
+        self.assertFalse((self.root / 'a-added.py').exists())
+        # The offline command remains idempotent after automatic recovery.
         recovery = subprocess.run(
             [sys.executable, "-X", "utf8", "-m", "core.app_updater", "--recover"],
             cwd=self.root, capture_output=True, timeout=15)

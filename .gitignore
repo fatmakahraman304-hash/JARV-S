@@ -15,6 +15,14 @@
 .env
 .env.*
 
+# Signing material belongs outside the checkout.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+*.pem
+
 # Personal data and generated reports
 /memory/long_term.json
 /memory/long_term.json.tmp
