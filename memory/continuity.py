@@ -42,6 +42,7 @@ def _prepare(db, key):
             return
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, time TEXT, role TEXT, text TEXT)")
+        db.execute("CREATE TABLE IF NOT EXISTS realtime_events (id INTEGER PRIMARY KEY, time TEXT, role TEXT, text TEXT)")
         db.execute("CREATE TABLE IF NOT EXISTS applications (name TEXT PRIMARY KEY, status TEXT, detail TEXT, updated TEXT)")
         db.execute("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, kind TEXT, title TEXT, folder TEXT, "
                    "instruction TEXT, status TEXT, stage INTEGER, stages TEXT, note TEXT, started TEXT, updated TEXT)")
@@ -77,6 +78,39 @@ def record(role, text):
     with _write_lock, connect() as db:
         db.execute("INSERT INTO events(time,role,text) VALUES(?,?,?)",
                    (datetime.now(timezone.utc).isoformat(), role, text[:12000]))
+
+
+
+def record_realtime(role, text):
+    """Separate local journal; not included in shared prompt_context or search."""
+    if role not in ("Kullanıcı", "FRIDAY"):
+        raise ValueError("Geçersiz Realtime geçmiş rolü.")
+    text = str(text or "").strip()
+    if not text:
+        return
+    with _write_lock, connect() as db:
+        db.execute("INSERT INTO realtime_events(time,role,text) VALUES(?,?,?)",
+                   (datetime.now(timezone.utc).isoformat(), role, text[:12000]))
+
+
+def realtime_history(query="", limit=16):
+    """Local display only. No model call, automatic memory extraction or export."""
+    query = str(query or "").strip()[:200]
+    limit = max(1, min(int(limit), 30))
+    with connect() as db:
+        if query:
+            term = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            rows = db.execute(
+                "SELECT time,role,text FROM realtime_events WHERE text LIKE ? ESCAPE '!' "
+                "ORDER BY id DESC LIMIT ?", ("%" + term + "%", limit)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT time,role,text FROM realtime_events ORDER BY id DESC LIMIT ?",
+                (limit,)).fetchall()
+    if not rows:
+        return "Realtime geçmişinde kayıt bulunamadı."
+    return "\n".join(f"{date[:16]} | {role}: {text[:600]}"
+                     for date, role, text in reversed(rows))[-6000:]
 
 
 def recent(limit=16):
