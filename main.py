@@ -1419,7 +1419,7 @@ class FridayLive:
         if text.strip().casefold() in ("/hafiza", "nerede kaldık", "nerede kaldik"):
             self.ui.show_content("Nerede kaldık", resume_text())
             return
-        if not str(text).startswith("["):          # internal notes ([FILE_UPLOADED] …) are not chat
+        if not (realtime_selected or realtime_active) and not str(text).startswith("["):
             from core import activity as _activity
             _activity.record("chat", f"Yazdın: {str(text)[:80]}", "info")
         if is_close_command(text):
@@ -3040,12 +3040,12 @@ class FridayLive:
                                         self._studio_refresh_pending = True
                                 self._last_out_logged = ""   # new exchange
                                 self.ui.write_log(f"You: {full_in}")
-                                from core import activity as _activity
-                                _activity.record("voice", f"FRIDAY'la konuştun: {full_in[:80]}", "info")
                                 if not getattr(self, "_session_realtime", False):
+                                    from core import activity as _activity
+                                    _activity.record("voice", f"FRIDAY'la konuştun: {full_in[:80]}", "info")
                                     self._session_log.append(f"User: {full_in}")
                                 self._persist_turn("Kullanıcı", full_in)
-                                if self._dashboard:
+                                if self._dashboard and not getattr(self, "_session_realtime", False):
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "user",
                                         "text": full_in,
@@ -3066,9 +3066,9 @@ class FridayLive:
                             if full_out and self._awake:
                                 self._last_out_logged = full_out
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
-                                from core import activity as _activity
-                                _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                 if not getattr(self, "_session_realtime", False):
+                                    from core import activity as _activity
+                                    _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
                                     self._session_log.append(f"{self._asst_name}: {full_out}")
                                     try:
                                         from core import sync_hub
@@ -3076,7 +3076,7 @@ class FridayLive:
                                     except Exception:
                                         pass
                                 self._persist_turn("FRIDAY", full_out)
-                                if self._dashboard:
+                                if self._dashboard and not getattr(self, "_session_realtime", False):
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "aether",
                                         "text": full_out,
@@ -3946,6 +3946,7 @@ class FridayLive:
                     # until somebody adds the twelfth and it silently is not
                     # covered. The wrapper is per-session, so it goes away with
                     # the session it belongs to.
+                    realtime_mode = callable(getattr(session, "send_user_content", None))
                     _orig_send = session.send_client_content
 
                     async def _send_and_arm(*a, **kw):
