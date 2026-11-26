@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from . import audio
 from .base import Msg
 from . import realtime_transport as rt
+from . import realtime_tools as tools
 
 MAX_TURNS = 12
 MAX_TRANSCRIPT = 16_000
@@ -23,9 +24,14 @@ TURN_SECONDS = 60
 
 
 class RealtimeSession:
-    def __init__(self, ws, voice="marin"):
+    def __init__(self, ws, voice="marin", guide_enabled=None):
         self._ws = ws
         self._setup = rt.session_event(voice)
+        self._guide_enabled = guide_enabled or (lambda: False)
+        if self._guide_enabled():
+            self._setup['session']['tools'] = [tools.declaration()]
+            self._setup['session']['instructions'] += (
+                " You may read the static FRIDAY guide with assistant_help, but cannot execute actions.")
         self._ready = False
         self._closed = False
         self._busy = False
@@ -77,6 +83,9 @@ class RealtimeSession:
         total = 0
         transcript = []
         transcript_len = 0
+        seen = set()
+        rounds = 0
+        response_audio_start = 0
         try:
             await self._before(deadline, rt._send, self._ws, item)
             await self._before(deadline, rt._send, self._ws, {"type": "response.create"})
@@ -119,8 +128,33 @@ class RealtimeSession:
                     response = event.get("response")
                     if (not response_id or not isinstance(response, dict)
                             or response.get("id") != response_id
-                            or response.get("status") != "completed" or not total):
+                            or response.get("status") != "completed"):
                         raise rt.RealtimeError("Realtime yanıtı tamamlanmadı.")
+                    # Only completed output items can request a tool; never
+                    # execute partial arguments or undeclared functions.
+                    has_calls = any(isinstance(item, dict) and item.get("type") == "function_call"
+                                    for item in (response.get("output") or []))
+                    if has_calls:
+                        if rounds >= tools.MAX_ROUNDS:
+                            raise rt.RealtimeError("Realtime araç tur sınırı aşıldı.")
+                        output = tools.guide_output(
+                            response, enabled=lambda: bool(self._setup["session"]["tools"])
+                                and self._guide_enabled(), seen=seen)
+                        if output is None:
+                            raise rt.RealtimeError("Realtime araç sonucu geçersiz.")
+                        line = "".join(transcript).strip()
+                        if line:
+                            yield Msg.said(line)
+                        await self._before(deadline, rt._send, self._ws, output)
+                        await self._before(deadline, rt._send, self._ws, {"type": "response.create"})
+                        rounds += 1
+                        response_id = None
+                        response_audio_start = total
+                        transcript = []
+                        transcript_len = 0
+                        continue
+                    if total == response_audio_start:
+                        raise rt.RealtimeError("Realtime ses döndürmedi.")
                     line = "".join(transcript).strip()
                     if line:
                         yield Msg.said(line)
@@ -146,10 +180,10 @@ class RealtimeSession:
 
 
 @asynccontextmanager
-async def conversation(api_key: str, model=rt.MODELS[0], voice="marin"):
+async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None):
     """Explicit opt-in cloud connection; session history is not saved locally."""
     async with rt.open_realtime(api_key, model) as ws:
-        session = RealtimeSession(ws, voice)
+        session = RealtimeSession(ws, voice, guide_enabled=guide_enabled)
         try:
             await session.start()
             yield session
