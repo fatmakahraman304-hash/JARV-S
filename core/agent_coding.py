@@ -104,24 +104,29 @@ def _stream(cmd: list[str], cwd: Path, stdin_text: str, on_line, timeout: float,
     timer = threading.Timer(timeout, _kill, args=(proc, flag))
     timer.start()
     err_parts: list[str] = []
-    t_err = threading.Thread(target=lambda: err_parts.append(proc.stderr.read() or ""), daemon=True)
+    def read_stderr():
+        with proc.stderr as stream:
+            err_parts.append(stream.read() or "")
+
+    t_err = threading.Thread(target=read_stderr, daemon=True)
     t_err.start()
     lines: list[str] = []
     try:
         try:
-            proc.stdin.write(stdin_text)
-            proc.stdin.close()
+            with proc.stdin as stream:
+                stream.write(stdin_text)
         except Exception:
             pass
-        for line in proc.stdout:
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            lines.append(line)
-            try:
-                on_line(line)
-            except Exception:
-                pass
+        with proc.stdout as stream:
+            for line in stream:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                lines.append(line)
+                try:
+                    on_line(line)
+                except Exception:
+                    pass
         proc.wait()
     finally:
         timer.cancel()
