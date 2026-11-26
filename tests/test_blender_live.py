@@ -58,9 +58,10 @@ class LiveLink(unittest.TestCase):
     def tearDownClass(cls):
         cls.stop.write_text("x")
         try:
-            cls.proc.wait(timeout=30)
+            cls.proc.communicate(timeout=30)
         except subprocess.TimeoutExpired:
             cls.proc.kill()
+            cls.proc.communicate()
         for p in cls.p:
             p.stop()
         cls.tmp.cleanup()

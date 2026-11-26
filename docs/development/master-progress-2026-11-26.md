@@ -282,3 +282,13 @@ bırakılır ve otomatik yeniden başlatma durur. Bu durum kullanıcı tarafınd
 incelenmelidir. Linux ve Python 3.13 ortamında gerçek Git depoları ile
 çakışma ve eşzamanlı düzenleme senaryolarını içeren 58 test geçti.
 Windows CI sonuçları PR üzerinde izlenir.
+
+## Açık dosya tanıtıcısı araştırması
+
+Test bekliyor — 1.158 testlik Linux koşusu başarılı oldu, beş test atlandı.
+Koşudaki iki açık metin dosyası uyarısı testlerdeki main.py okuyucularına
+izlendi. Kapanışta görülen açık ikili okuyucu uyarısı, gerçek Blender alt
+sürecini kullanan LiveLink testinin tek başına çalıştırılmasında yeniden
+üretildi. Test kapatılırken süreç çıktısı artık toplanır ve süreç beklenir.
+Üç hedefli test grubu 17 testte ResourceWarning uyarısı vermeden geçti.
+Bu bulgu tüm uygulamanın uzun süreli kaynak kullanımını doğrulamaz.
