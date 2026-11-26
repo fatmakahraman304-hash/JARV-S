@@ -72,7 +72,10 @@ class ReleasePackage(unittest.TestCase):
             self.assertNotIn('memory/long_term.json', archive.namelist())
 
     def test_committed_signing_and_runtime_files_are_excluded_without_deletion(self):
-        for name in ('android-receiver/app/aether-alici.jks', 'config/api_keys.json', 'memory/data.db-wal'):
+        names = ('android-receiver/app/aether-alici.jks', 'config/api_keys.json',
+                 'memory/data.db-wal', 'local/history.SQLITE3-WAL',
+                 'local/history.sqlite3-shm', 'local/history.sqlite3-journal')
+        for name in names:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('sensitive fixture')
@@ -81,7 +84,7 @@ class ReleasePackage(unittest.TestCase):
         for name in manifest['excluded_paths']:
             self.assertTrue((self.root / name).is_file())
             self.assertNotIn(name, manifest['files'])
-        self.assertEqual(len(manifest['excluded_paths']), 3)
+        self.assertEqual(set(manifest['excluded_paths']), set(names))
 
     def test_credential_in_tracked_source_blocks_build_without_printing_value(self):
         value = 'AIza' + 'x' * 35

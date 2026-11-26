@@ -119,6 +119,33 @@ class UpdaterTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(RuntimeError):
                 u._archive(self.archive({name: b"bad"}))
 
+    def test_update_preserves_live_database_and_legacy_sidecar_entries(self):
+        import sqlite3
+        from contextlib import closing
+
+        database = self.root / "history.db"
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("CREATE TABLE events (message TEXT)")
+            connection.execute("INSERT INTO events VALUES ('remember me')")
+            connection.commit()
+            sidecars = ["history.db-wal", "history.db-shm"]
+            original = {name: (self.root / name).read_bytes() for name in sidecars}
+            manifest = {"sha": "b" * 40, "branch": "main", "files": {
+                name: u._hash(data) for name, data in original.items()
+            }}
+            (self.root / ".aether-update.json").write_text(json.dumps(manifest))
+            # The incoming ZIP collides with one sidecar and omits the other.
+            # Neither an overwrite nor an obsolete-file deletion is appropriate.
+            archive = self.archive({"history.db-wal": b"foreign content"})
+            with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), archive]):
+                self.assertTrue(u.update(self.root)[0])
+            for name, data in original.items():
+                self.assertEqual((self.root / name).read_bytes(), data)
+        with closing(sqlite3.connect(database)) as reopened:
+            self.assertEqual(reopened.execute("PRAGMA integrity_check").fetchone(), ("ok",))
+            self.assertEqual(reopened.execute("SELECT message FROM events").fetchone(), ("remember me",))
+
     def test_case_insensitive_runtime_protection(self):
         runtime = {"CONFIG/keys.json": b"private", "Memory/Tasks/job.py": b"private",
                    "Logs/debug.txt": b"private", "history.sqlite3": b"private"}
