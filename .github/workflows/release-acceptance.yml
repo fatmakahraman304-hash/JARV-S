@@ -12,6 +12,7 @@ on:
       - "tests/test_release_package.py"
       - "tests/test_installer_results.py"
       - "core/installer.py"
+      - "core/app_updater.py"
       - "docs/nihai-kabul-2026-11-25.md"
       - ".github/workflows/release-acceptance.yml"
 permissions:
