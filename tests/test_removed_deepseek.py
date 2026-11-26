@@ -1,4 +1,4 @@
-"""AETHER: kaldırılan DeepSeek'in yeniden etkinleşmemesi ve anahtar temizliği."""
+"""FRIDAY: kaldırılan DeepSeek'in yeniden etkinleşmemesi ve anahtar temizliği."""
 from __future__ import annotations
 
 import json

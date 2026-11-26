@@ -1,6 +1,6 @@
-/* AETHER and the projector (HY320 and any Android projector / TV box).
+/* FRIDAY and the projector (HY320 and any Android projector / TV box).
  *
- * On the projector's own AETHER page:
+ * On the projector's own FRIDAY page:
  *  1. Pure-black, high-contrast look (dark gradients turn grey on a projector).
  *  2. Focus / keystone test pattern — key 0, or "test desenini aç".
  *  3. Presentation mode: only the core and the answer, big — key P, or "sunum modu".
@@ -18,7 +18,7 @@
  */
 (() => {
   'use strict';
-  const J = window.AETHER, K = window.AetherKit; if (!J || !K) return;
+  const J = window.FRIDAY, K = window.FridayKit; if (!J || !K) return;
   const $ = J.$, S = J.S;
 
   J.css(`
@@ -120,7 +120,7 @@
     const rx = J.receiver, pc = J.findPc('');
     const dot = on => `<span class="dot ${on ? 'on' : ''}"></span>`;
     st.innerHTML = J.lanRemote ? `${dot(true)} Yerel Wi-Fi kumandası kayıtlı · GitHub gerekmez`
-      : rx && J.online(rx) ? `${dot(true)} AETHER Alıcı açık — laptop kapalıyken de çalışır`
+      : rx && J.online(rx) ? `${dot(true)} FRIDAY Alıcı açık — laptop kapalıyken de çalışır`
       : pc && J.online(pc) ? `${dot(true)} ${J.esc(pc.name)} üzerinden (ADB)${rx ? ' · Alıcı çevrimdışı' : ''}`
       : `${dot(false)} Ulaşılamıyor: projeksiyon kapalı ya da Alıcı/laptop çevrimdışı`;
   }
@@ -143,7 +143,7 @@
     ${corner(4, 4, 1, 1)}${corner(1596, 4, -1, 1)}${corner(4, 896, 1, -1)}${corner(1596, 896, -1, -1)}
     <circle cx="800" cy="450" r="300" fill="none" stroke="#fff" stroke-width="4"/><circle cx="800" cy="450" r="150" fill="none" stroke="#ff8a1c" stroke-width="4"/>
     <line x1="800" y1="0" x2="800" y2="900" stroke="#fff" stroke-width="3"/><line x1="0" y1="450" x2="1600" y2="450" stroke="#fff" stroke-width="3"/>
-    <g font-family="sans-serif" fill="#fff" text-anchor="middle"><text x="800" y="120" font-size="44">AETHER · ODAK / KEYSTONE</text>
+    <g font-family="sans-serif" fill="#fff" text-anchor="middle"><text x="800" y="120" font-size="44">FRIDAY · ODAK / KEYSTONE</text>
     <text x="800" y="820" font-size="26" fill="#bbb">Çizgiler düz, köşeler eşit, yazı keskin olana kadar ayarla · kapatmak için Geri / 0</text>
     <text x="800" y="470" font-size="14" fill="#aaa">ince yazı: keskin mi?</text></g></svg>`;
   document.body.appendChild(pat);
@@ -169,7 +169,7 @@
     if (!warned && Date.now() - onSince > 3 * 3600e3) { warned = true; J.toast('Projeksiyon 3 saattir açık — lamba için biraz ara vermek iyi olur'); J.sys('💡 Projeksiyon 3 saattir aralıksız açık.'); }
   }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { onSince = Date.now(); warned = false; } });
-  const usage = () => `Bugün ${K.fmtMinutes((S.lamp || {})[today()] || 0)} açık; AETHER'ın saydığı toplam ${K.fmtMinutes(K.lampTotal(S.lamp))} (son 90 gün). Şu anki oturum ${K.fmtMinutes((Date.now() - onSince) / 60000)}.`;
+  const usage = () => `Bugün ${K.fmtMinutes((S.lamp || {})[today()] || 0)} açık; FRIDAY'ın saydığı toplam ${K.fmtMinutes(K.lampTotal(S.lamp))} (son 90 gün). Şu anki oturum ${K.fmtMinutes((Date.now() - onSince) / 60000)}.`;
 
   J.tool({ name: 'projector_screen', description: 'Projeksiyonun kendi ekranı: pattern (odak/keystone test deseni), present (sunum modu: yalnız çekirdek ve yanıt), normal (ikisini kapat), usage ("projeksiyon ne kadar açık kaldı", lamba süresi). action: pattern | present | normal | usage.',
            parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' } }, required: ['action'] } },

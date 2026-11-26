@@ -1,9 +1,9 @@
-"""NVIDIA Build / NIM API: AETHER'ın güvenli kodlama yedeği.
+"""NVIDIA Build / NIM API: FRIDAY'ın güvenli kodlama yedeği.
 
 Ücretsiz API anahtarı bir kullanım kotası garantisi değildir. NVIDIA Build
 deneme erişimindeki sınırlar model/hesaba göre değişir; sayısal kota veya
 kalan kredi miktarı bu kod tarafından uydurulmaz. 429/402/403 yanıtında
-AETHER sıradaki modele geçebilir.
+FRIDAY sıradaki modele geçebilir.
 
 Gizli anahtar yalnızca kullanıcının yerel kayıtlı sağlayıcı ayarlarından
 veya ortam değişkeninden okunur; GitHub, günlükler ve model istemleri
@@ -37,7 +37,7 @@ _CACHE: dict = {"key": None, "at": 0., "models": None, "reason": None}
 
 
 def api_key() -> str:
-    """Önce AETHER'ın kayıtlı NVIDIA sağlayıcısı, sonra gizli ortam anahtarı."""
+    """Önce FRIDAY'ın kayıtlı NVIDIA sağlayıcısı, sonra gizli ortam anahtarı."""
     from memory.config_manager import get_plugin_config, get_providers
     config = get_plugin_config("coding")
     key = str(config.get("nvidia_key") or "").strip()
@@ -133,7 +133,7 @@ def available_models(key: str | None = None, *, refresh: bool = False, verified_
 def status_text() -> str:
     key = api_key()
     if not key:
-        return ("NVIDIA API anahtarı henüz AETHER'a eklenmedi. "
+        return ("NVIDIA API anahtarı henüz FRIDAY'a eklenmedi. "
                 "Motor ve Sağlayıcılar → Kodlama → NVIDIA alanından ekleyin.")
     listing, reason = _get_models(key, refresh=True)
     if reason == "unauthorized":
@@ -153,7 +153,7 @@ def status_text() -> str:
 
 
 def complete_text(prompt: str, *, model: str | None = None) -> str:
-    """AETHER'ın araçsız kodlama yolu için OpenAI uyumlu NVIDIA isteği."""
+    """FRIDAY'ın araçsız kodlama yolu için OpenAI uyumlu NVIDIA isteği."""
     key = api_key()
     if not key:
         raise RuntimeError("NVIDIA API anahtarı bulunamadı.")
@@ -165,7 +165,7 @@ def complete_text(prompt: str, *, model: str | None = None) -> str:
         "model": chosen,
         "messages": [
             {"role": "system", "content":
-             "Sen AETHER'ın kodlama asistanısın. Kod üret, gerekçelendir ve Türkçe yanıt ver."},
+             "Sen FRIDAY'ın kodlama asistanısın. Kod üret, gerekçelendir ve Türkçe yanıt ver."},
             {"role": "user", "content": str(prompt)},
         ],
         "temperature": 0.2,

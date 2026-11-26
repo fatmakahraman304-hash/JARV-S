@@ -1,7 +1,7 @@
-"""Türkçe öncelikli, yalnızca açıkça belirtilen AETHER uygulama komutları.
+"""Türkçe öncelikli, yalnızca açıkça belirtilen FRIDAY uygulama komutları.
 
 Komutlar hem ses dökümünden hem de yazılı girişten gelir. Burada yalnızca
-AETHER uygulamasını kapatan kesin ifadeler eşleştirilir; "bilgisayarı kapat",
+FRIDAY uygulamasını kapatan kesin ifadeler eşleştirilir; "bilgisayarı kapat",
 "pencereyi kapat" gibi başka hedeflere dokunulmaz.
 """
 
@@ -19,39 +19,36 @@ def normalize_command(text: str) -> str:
 
 
 _CLOSE_COMMANDS = {
-    "aether uygulamasini kapat",
-    "aether uygulamasini kapatir misin",
-    "aether uygulamasini kapatin",
-    "aether uygulamasini kapat lutfen",
-    "lutfen aether uygulamasini kapat",
-    "aether uygulamasindan cik",
-    "aether programini kapat",
-    "aether programindan cik",
-    "aether i kapat",
-    "aether i kapatir misin",
-    "aetheri kapat",
-    "aetheri kapatir misin",
-    "aether kapat kendini",
-    "aether kendini kapat",
-    "aether kapan",
-    "aether cik",
-    "aether cikis yap",
-    "aethertan cik",
-    "aether tan cik",
-    "aether i sonlandir",
-    "aetheri sonlandir",
+    "friday uygulamasini kapat",
+    "friday uygulamasini kapatir misin",
+    "friday uygulamasini kapatin",
+    "friday uygulamasini kapat lutfen",
+    "lutfen friday uygulamasini kapat",
+    "friday uygulamasindan cik",
+    "friday programini kapat",
+    "friday programindan cik",
+    "friday i kapat",
+    "friday i kapatir misin",
+    "fridayi kapat",
+    "fridayi kapatir misin",
+    "friday kapat kendini",
+    "friday kendini kapat",
+    "friday kapan",
+    "friday cik",
+    "friday cikis yap",
+    "fridaydan cik",
+    "friday dan cik",
+    "friday i sonlandir",
+    "fridayi sonlandir",
     "uygulamadan cik",
     "programdan cik",
-    # Eski komutları kullananlar için geriye dönük uyumluluk.
-    "close the aether app",
-    "quit aether",
+    # English commands target the same assistant.
+    "close the friday app",
+    "quit friday",
 }
 
 
 def is_close_command(text: str) -> bool:
-    """Yalnızca AETHER'ı kapatma niyeti açık olan tam komutları kabul et."""
+    """Yalnızca FRIDAY'ı kapatma niyeti açık olan tam komutları kabul et."""
     command = normalize_command(text)
-    # Legacy name remains a valid explicit command during the FRIDAY upgrade.
-    return command in _CLOSE_COMMANDS or command in {
-        c.replace("aether", "friday") for c in _CLOSE_COMMANDS
-    }
+    return command in _CLOSE_COMMANDS

@@ -1,5 +1,5 @@
 """
-memory/learner.py — AETHER learns about the user from the conversation itself.
+memory/learner.py — FRIDAY learns about the user from the conversation itself.
 
 Every so often (after a pause, or every ten things the user says) Gemini's
 text model reads the latest conversation and files lasting facts about the
@@ -54,7 +54,7 @@ def turn(role: str, text: str) -> None:
 
 
 def build_prompt(turns: list[tuple[str, str]], known: list[str]) -> str:
-    convo = "\n".join(f"{'Kullanıcı' if r == 'user' else 'AETHER'}: {t}" for r, t in turns)[-6000:]
+    convo = "\n".join(f"{'Kullanıcı' if r == 'user' else 'FRIDAY'}: {t}" for r, t in turns)[-6000:]
     return ("Aşağıdaki konuşmadan kullanıcı hakkında KALICI ve işe yarar yeni bilgileri çıkar (kim olduğu, "
             "ailesi ve yakınları, tercihleri, alışkanlıkları, projeleri, istekleri, önemli tarihler). Geçici "
             "şeyleri (bugünkü ruh hali, tek seferlik istekler), sağlık, din, siyaset, para bilgilerini ve zaten "

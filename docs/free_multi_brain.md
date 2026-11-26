@@ -1,4 +1,4 @@
-# AETHER — Ücretsiz çoklu beyin (deneysel)
+# FRIDAY — Ücretsiz çoklu beyin (deneysel)
 
 ## Kurulum
 
@@ -11,7 +11,7 @@
 Motor ve Sağlayıcılar → Arka Plan İstekleri bölümünde Groq, Cloudflare ve
 OpenRouter'ı tek tek seçerek API anahtarlarını girin. Her seçim değişiminde
 ayarlar yerelde saklanır. Sonra öncelik menüsünde **Ücretsiz çoklu beyin**
-seçip Uygula deyin. Kodlama ajanı için yerleşik AETHER ajanını seçin.
+seçip Uygula deyin. Kodlama ajanı için yerleşik FRIDAY ajanını seçin.
 Cloudflare için API adresi alanına 32 karakterli Account ID girin; API anahtarı
 alanına sadece Workers AI izinli token girin. Cerebras ödeme yöntemi istediği
 için otomatik havuza dahil değildir. Sesli konuşma mevcut Gemini Live veya

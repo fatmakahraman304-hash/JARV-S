@@ -1,4 +1,4 @@
-"""AETHER's own coding agent: the loop, the tools, the safety rules, the
+"""FRIDAY's own coding agent: the loop, the tools, the safety rules, the
 brain hand-over and the Gemini request format."""
 import json
 import sys

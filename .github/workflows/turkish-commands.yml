@@ -1,4 +1,4 @@
-name: AETHER Türkçe komut testleri
+name: FRIDAY Türkçe komut testleri
 
 on:
   pull_request:

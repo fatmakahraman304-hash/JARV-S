@@ -11,10 +11,10 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <title>AETHER</title>
+  <title>FRIDAY</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --pri: #18cfff; --acc: #8ceaff; --hot: #f6feff; --text: #f3ece5; --dim: #9b9087; --med: #d2c7bd;
+    :root { --pri: #18cfff; --acc: #8ceaff; --hot: #f6feff; --text: #e9f4ff; --dim: #7894ab; --med: #aec8db;
             --line: rgba(25,205,255,.16); --line2: rgba(25,205,255,.34); --card: rgba(26,19,13,.62);
             --green: #5ef0a8; --red: #ff5f5f; --glow: rgba(17,200,255,.5); }
     /* The iPhone home-screen app: the page must paint the whole screen, under the
@@ -170,7 +170,7 @@
   <div class="app">
     <header class="top">
       <button class="ib" id="b-menu" type="button" aria-label="Menü">☰</button>
-      <div class="brand"><b id="brand-name">AETHER</b><small id="brand-sub">AI OS</small></div>
+      <div class="brand"><b id="brand-name">FRIDAY</b><small id="brand-sub">AI OS</small></div>
       <div class="top-r">
         <button class="ib" id="b-chat" type="button" aria-label="Konuşma">💬</button>
         <button class="ib" id="b-set" type="button" aria-label="Ayarlar">⚙</button>
@@ -181,7 +181,7 @@
       <div class="hud" id="hud"></div></aside>
 
     <section class="main">
-      <div class="core"><canvas id="core" aria-label="AETHER çekirdeği"></canvas></div>
+      <div class="core"><canvas id="core" aria-label="FRIDAY çekirdeği"></canvas></div>
       <div id="st-title">Hazır</div>
       <div id="st-sub">Mikrofona dokun ya da yaz.</div>
       <canvas id="wave" width="600" height="68"></canvas>
@@ -196,7 +196,7 @@
     <section class="bottom">
       <form class="ask" id="ask" autocomplete="off">
         <button class="mic" id="mic" type="button" aria-label="Konuş">🎙️</button>
-        <input id="inp" placeholder="AETHER'a bir şey sor…" enterkeyhint="send">
+        <input id="inp" placeholder="FRIDAY'a bir şey sor…" enterkeyhint="send">
         <button class="mic send" type="submit" aria-label="Gönder">➤</button>
       </form>
       <div class="tools">
@@ -220,14 +220,14 @@
   <div class="scrim" id="scrim" hidden></div>
 
   <section class="sheet" id="s-setup" hidden>
-    <h2>AETHER KURULUMU</h2>
-    <div class="note" id="f-ios" hidden><b>Ana ekrandaki AETHER, Safari'deki ayarları göremez</b> (Apple uygulamayı ayrı tutar). Hafızan kaybolmadı, ortak hafızada duruyor.
-      Safari'de AETHER'ı aç → ⚙️ → <b>"Ana ekran için kopyala"</b>, sonra buraya dön ve:
+    <h2>FRIDAY KURULUMU</h2>
+    <div class="note" id="f-ios" hidden><b>Ana ekrandaki FRIDAY, Safari'deki ayarları göremez</b> (Apple uygulamayı ayrı tutar). Hafızan kaybolmadı, ortak hafızada duruyor.
+      Safari'de FRIDAY'ı aç → ⚙️ → <b>"Ana ekran için kopyala"</b>, sonra buraya dön ve:
       <div class="row" style="margin-top:8px"><button class="btn pri" id="f-paste" type="button">📋 Kurulumu yapıştır</button></div></div>
-    <div class="note" id="f-move" hidden>Ana ekrana ekleyeceksen önce bunu kopyala; ana ekrandaki AETHER'ta "Yapıştır" de, her şey taşınır:
+    <div class="note" id="f-move" hidden>Ana ekrana ekleyeceksen önce bunu kopyala; ana ekrandaki FRIDAY'ta "Yapıştır" de, her şey taşınır:
       <div class="row" style="margin-top:8px"><button class="btn pri" id="f-copy" type="button">📱 Ana ekran için kopyala</button></div></div>
-    <p>Bu cihazdaki AETHER'ın beyni Gemini'dir; bilgisayarın kapalıyken de çalışır. En kolayı: bilgisayardaki AETHER'a
-      <b>"AETHER'ı her cihaza kur"</b> de, çıkan karekodu bu cihazla okut. Ya da bilgileri elle gir:</p>
+    <p>Bu cihazdaki FRIDAY'ın beyni Gemini'dir; bilgisayarın kapalıyken de çalışır. En kolayı: bilgisayardaki FRIDAY'a
+      <b>"FRIDAY'ı her cihaza kur"</b> de, çıkan karekodu bu cihazla okut. Ya da bilgileri elle gir:</p>
     <label for="f-key">Gemini API anahtarı</label><input id="f-key" type="password" autocomplete="off" placeholder="AIza…">
     <label for="f-tok">GitHub anahtarı (ortak hafıza için, gist izni)</label><input id="f-tok" type="password" autocomplete="off" placeholder="ghp_… (isteğe bağlı)">
     <label for="f-gist">Ortak hafıza kimliği (gist)</label><input id="f-gist" autocomplete="off" placeholder="boş bırakırsan yeni açılır">
@@ -240,7 +240,7 @@
     <select id="f-voice"><option>Charon</option><option>Puck</option><option>Kore</option><option>Fenrir</option><option>Aoede</option><option>Orus</option><option>Zephyr</option></select>
     <div class="row"><button class="btn pri" id="f-save" type="button">Kaydet</button><button class="btn" id="f-link" type="button">Bu kurulumu başka cihaza gönder</button>
       <button class="btn" id="f-close" type="button">Kapat</button></div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="f-alici" type="button">📲 AETHER Alıcı'yı indir (projeksiyon/TV)</button><button class="btn" id="f-alici-link" type="button">🔗 Alıcıyı bağla</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="f-alici" type="button">📲 FRIDAY Alıcı'yı indir (projeksiyon/TV)</button><button class="btn" id="f-alici-link" type="button">🔗 Alıcıyı bağla</button></div>
     <div class="row" style="margin-top:8px"><button class="btn" id="f-paste2" type="button">📋 Kurulum bağlantısı yapıştır</button><button class="btn" id="f-push" type="button">🔔 Bildirimleri aç (sayfa kapalıyken de)</button></div>
     <p id="f-status" style="margin-top:10px"></p>
   </section>
@@ -275,7 +275,7 @@
           <button class="btn pri" id="rm-lan-save" type="button">💾 Bağlantıyı kaydet</button>
         </div>
       </details>
-      <small>📽️ Ses, yön tuşları, YouTube ve sesli komutlar eski AETHER arayüzünde çalışır. Komutlar üçüncü taraf HTTPS köprüsünde uçtan uca şifrelenir; GitHub kotası kullanılmaz. İnternet kesilirse yedek yerel kumandayı aç.</small>
+      <small>📽️ Ses, yön tuşları, YouTube ve sesli komutlar eski FRIDAY arayüzünde çalışır. Komutlar üçüncü taraf HTTPS köprüsünde uçtan uca şifrelenir; GitHub kotası kullanılmaz. İnternet kesilirse yedek yerel kumandayı aç.</small>
     </div>
     <div class="pad">
       <span></span><button class="btn" data-k="up" type="button">▲</button><span></span>
@@ -327,7 +327,7 @@
 
   <section class="sheet" id="s-pc" hidden>
     <h2>BİLGİSAYAR <button class="ib" data-close type="button">✕</button></h2>
-    <p id="pc-note">Bilgisayardaki AETHER'a doğrudan komut.</p>
+    <p id="pc-note">Bilgisayardaki FRIDAY'a doğrudan komut.</p>
     <div class="pcgrid">
       <button class="btn" data-q="volume_down" type="button">🔉 Ses −</button><button class="btn" data-q="mute" type="button">🔇 Sessiz</button><button class="btn" data-q="volume_up" type="button">🔊 Ses +</button>
       <button class="btn" data-q="prev" type="button">⏮ Önceki</button><button class="btn" data-q="play_pause" type="button">⏯ Oynat</button><button class="btn" data-q="next" type="button">⏭ Sonraki</button>
@@ -345,7 +345,7 @@
 
   <section class="sheet" id="s-image" hidden>
     <h2>RESİM <button class="ib" data-close type="button">✕</button></h2>
-    <img id="img-view" alt="AETHER'ın çizdiği resim" style="width:100%;max-height:62vh;object-fit:contain;border-radius:12px;border:1px solid var(--line2);background:#000">
+    <img id="img-view" alt="FRIDAY'ın çizdiği resim" style="width:100%;max-height:62vh;object-fit:contain;border-radius:12px;border:1px solid var(--line2);background:#000">
     <p id="img-note" style="margin-top:8px"></p>
     <form class="ask" id="img-edit" autocomplete="off" style="margin-top:10px">
       <input id="img-edit-inp" placeholder="Değiştir: ör. gökyüzünü mor yap">

@@ -34,7 +34,7 @@ import java.util.Set;
 import java.util.TimeZone;
 
 /**
- * Listens for commands from the phone (or any AETHER device) in the shared
+ * Listens for commands from the phone (or any FRIDAY device) in the shared
  * gist — inbox-<id>.json — and carries them out on this projector/TV:
  * open apps and pages, search, remote keys, volume, media, typing, Wi-Fi,
  * and a picture of the screen sent back to the device that asked.
@@ -75,8 +75,8 @@ public class ReceiverService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationManager nm = getSystemService(NotificationManager.class);
-            nm.createNotificationChannel(new NotificationChannel("alici", "AETHER Alıcı", NotificationManager.IMPORTANCE_MIN));
-            Notification n = new Notification.Builder(this, "alici").setContentTitle("AETHER Alıcı dinliyor")
+            nm.createNotificationChannel(new NotificationChannel("alici", "FRIDAY Alıcı", NotificationManager.IMPORTANCE_MIN));
+            Notification n = new Notification.Builder(this, "alici").setContentTitle("FRIDAY Alıcı dinliyor")
                     .setSmallIcon(android.R.drawable.ic_menu_view).build();
             startForeground(1, n);
         }
@@ -202,7 +202,7 @@ public class ReceiverService extends Service {
     }
 
     private String needA11y() {
-        return "Bunun için projeksiyonda Ayarlar → Erişilebilirlik → AETHER Alıcı'yı bir kez açman gerekiyor.";
+        return "Bunun için projeksiyonda Ayarlar → Erişilebilirlik → FRIDAY Alıcı'yı bir kez açman gerekiyor.";
     }
 
     private String key(String k) {

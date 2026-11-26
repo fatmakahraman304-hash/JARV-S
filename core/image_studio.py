@@ -1,5 +1,5 @@
 """
-core/image_studio.py — AETHER draws and edits pictures itself.
+core/image_studio.py — FRIDAY draws and edits pictures itself.
 
 No extra app, no ComfyUI, no download: Gemini's own image models ("Nano
 Banana") make the picture from a description, and change an existing picture
@@ -8,14 +8,14 @@ The same key the voice already uses; the same models the web app calls on the
 phone and TV (web/app.js), so a picture can be made anywhere.
 
 Gemini's image models have NO free quota (Google answers "429 ... limit: 0"
-until billing is turned on for the key). So when they cannot draw, AETHER
+until billing is turned on for the key). So when they cannot draw, FRIDAY
 still draws: Gemini's free text model turns the request into a detailed
 English picture description and a free, keyless image service (Pollinations,
 FLUX) paints it. An edit on that path re-paints the same scene from the same
 seed with the change worked into the description. While Gemini says "no
 quota" it is not asked again for a few hours, so pictures come quickly.
 
-Every picture is saved under Pictures/AETHER. The last one is remembered across
+Every picture is saved under Pictures/FRIDAY. The last one is remembered across
 restarts (config/image_studio.json), so "change it" works the next day too.
 
 Standard library only; nothing raises — callers get (path | None, message).
@@ -50,7 +50,7 @@ ASPECTS = ("1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:
 def out_dir() -> Path:
     for base in (Path.home() / "Pictures", Path.home() / "Resimler", Path.home() / "Desktop", BASE_DIR):
         if base.exists():
-            d = base / "AETHER"
+            d = base / "FRIDAY"
             try:
                 d.mkdir(parents=True, exist_ok=True)
                 return d
@@ -250,7 +250,7 @@ def history_entry(path: str | Path) -> dict:
 def _free_call(prompt_en: str, aspect: str, seed: int) -> tuple[bytes | None, str, str]:
     """(image bytes, mime, error) from the free, keyless painter."""
     url = free_url(prompt_en, aspect, seed)
-    req = urllib.request.Request(url, headers={"User-Agent": "AETHER/1.0", "Accept": "image/*"})
+    req = urllib.request.Request(url, headers={"User-Agent": "FRIDAY/1.0", "Accept": "image/*"})
     ctx = None
     try:
         from core import tls

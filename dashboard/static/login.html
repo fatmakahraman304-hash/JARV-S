@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AETHER</title>
+  <title>FRIDAY</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:     #07090f;
+      --bg:     #030915;
       --card:   rgba(255,255,255,0.04);
       --border: rgba(255,255,255,0.08);
-      --accent: #6366f1;
-      --adim:   rgba(99,102,241,0.15);
-      --text:   #dde3ed;
-      --muted:  #5e6a7e;
+      --accent: #26d9ff;
+      --adim:   rgba(38,217,255,0.15);
+      --text:   #e9f9ff;
+      --muted:  #79a7bb;
     }
     html, body {
       height: 100%;
@@ -81,7 +81,7 @@
     .key-input:focus {
       border-color: var(--accent);
       background: var(--adim);
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+      box-shadow: 0 0 0 3px rgba(38,217,255,0.12);
     }
     .err {
       font-size: 12px;
@@ -134,10 +134,10 @@
 </head>
 <body>
   <div class="card" id="card">
-    <div class="logo"><em>J</em>ARVIS</div>
+    <div class="logo"><em>F</em>RIDAY</div>
     <div class="sub">Uzaktan Erişim</div>
     <p id="reconnecting">Reconnecting…</p>
-    <p class="hint">QR kod veya oturum anahtarı almak için masaüstündeki AETHER uygulamasında <strong style="color:var(--text)">Uzaktan Kontrol</strong> bölümünü açın.</p>
+    <p class="hint">QR kod veya oturum anahtarı almak için masaüstündeki FRIDAY uygulamasında <strong style="color:var(--text)">Uzaktan Kontrol</strong> bölümünü açın.</p>
     <div class="key-wrap">
       <input class="key-input" id="key" type="text" maxlength="6"
              autocomplete="off" autocorrect="off" spellcheck="false"
@@ -148,7 +148,7 @@
     <p class="voice-note">
       🎤 <strong style="color:var(--text)">Voice commands:</strong> open
       <code>chrome://flags</code> on your phone, search
-      <code>Insecure origins treated as secure</code>, add your AETHER URL, tap Relaunch.
+      <code>Insecure origins treated as secure</code>, add your FRIDAY URL, tap Relaunch.
     </p>
   </div>
 

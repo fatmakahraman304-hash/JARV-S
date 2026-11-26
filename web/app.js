@@ -1,4 +1,4 @@
-/* AETHER — the same assistant on every device.
+/* FRIDAY — the same assistant on every device.
  *
  * This page is the whole assistant for a phone, tablet, TV, projector or watch.
  * Its brain is Gemini Live, reached straight from the device, so it works when
@@ -28,14 +28,14 @@
 
   // ── settings ─────────────────────────────────────────────────────────────
   const S = (() => { try { const key = "aether_web"; const legacy = Object.keys(localStorage).find(k => k.endsWith("_web") && k !== key); return JSON.parse(localStorage.getItem(key) || (legacy && localStorage.getItem(legacy)) || "{}"); } catch { return {}; } })();
-S.name = "AETHER";
-  const assistantName = value => "AETHER";
+S.name = "FRIDAY";
+  const assistantName = value => "FRIDAY";
   S.name = assistantName(S.name);
   const save = () => localStorage.setItem('aether_web', JSON.stringify(S));
   if (!S.id) { S.id = 'w' + Math.random().toString(36).slice(2, 12); save(); }
   if (!S.voice) S.voice = 'Charon';
   // A setup link (…#s=<code>) carries the keys from one device to another —
-  // and from Safari to the home-screen AETHER on an iPhone, which Apple keeps
+  // and from Safari to the home-screen FRIDAY on an iPhone, which Apple keeps
   // in separate storage.
   function importSetup(text) {
     const m = String(text || '').match(/(?:[#&?]s=|^)([A-Za-z0-9_-]{20,})\s*$/);
@@ -58,7 +58,7 @@ S.name = "AETHER";
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (/[#&]s=/.test(location.hash)) {
     const ok = importSetup(location.hash);
-    setTimeout(() => toast(ok ? 'Kurulum tamam — AETHER bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
+    setTimeout(() => toast(ok ? 'Kurulum tamam — FRIDAY bu cihazda hazır' : 'Kurulum bağlantısı okunamadı'), 600);
     history.replaceState(null, '', location.pathname);
   }
 
@@ -89,18 +89,18 @@ S.name = "AETHER";
     history.replaceState(null, '', location.pathname + location.search);
   }
 
-  // Pop-up command returns to HTTPS AETHER and reports back to its opener.
+  // Pop-up command returns to HTTPS FRIDAY and reports back to its opener.
   // When Safari allows closing script-opened tabs the main assistant remains
   // at its current position, without losing the microphone/chat UI state.
   if (lanResult && window.opener) {
     try { window.opener.postMessage({ type: 'aether-lan-result', text: lanResult }, location.origin); } catch {}
     try { window.close(); } catch {}
     // On iOS versions which refuse window.close(), keep this extra tab
-    // lightweight instead of booting another AETHER session / GitHub sync.
+    // lightweight instead of booting another FRIDAY session / GitHub sync.
     document.body.textContent = '';
     document.body.style.cssText = 'margin:0;padding:28px;background:#120d09;color:#fff;font:18px system-ui';
     const reply = document.createElement('p'); reply.textContent = '📽️ ' + lanResult;
-    const hint = document.createElement('p'); hint.textContent = 'Komut sonucu asıl AETHER sekmesine gönderildi. Bu sekmeyi kapatabilirsin.';
+    const hint = document.createElement('p'); hint.textContent = 'Komut sonucu asıl FRIDAY sekmesine gönderildi. Bu sekmeyi kapatabilirsin.';
     const close = document.createElement('button'); close.textContent = 'Sekmeyi kapat';
     close.style.cssText = 'padding:14px;background:#f69b32;border:0;border-radius:12px;font-size:18px';
     close.onclick = () => window.close();
@@ -128,8 +128,8 @@ S.name = "AETHER";
     document.body.classList.toggle('big', KIND === 'tv' || KIND === 'projector');
     document.body.classList.toggle('watch', KIND === 'watch');
     for (const k of Object.keys(KIND_NAMES)) document.body.classList.toggle('k-' + k, KIND === k);
-    const displayName = (S.name || 'AETHER').toUpperCase();
-    $('brand-name').textContent = displayName === 'AETHER' ? 'AETHER' : displayName;
+    const displayName = (S.name || 'FRIDAY').toUpperCase();
+    $('brand-name').textContent = displayName === 'FRIDAY' ? 'FRIDAY' : displayName;
     $('brand-sub').textContent = 'AI OS · ' + (S.devName || KIND_NAMES[KIND]);
   }
   applyKind();
@@ -154,7 +154,7 @@ S.name = "AETHER";
                    setup: ['Kurulum gerekli', 'Ayarlardan Gemini anahtarını gir.'] };
   let state = 'idle';
   let micOn = false, micLvl = 0;
-  const core = AetherReactor($('core'), { small: KIND === 'watch' });
+  const core = FridayReactor($('core'), { small: KIND === 'watch' });
   function setState(s) {
     state = s; core.state = (s === 'listening' || s === 'connecting') ? 'idle' : (s === 'setup' ? 'sleeping' : s);
     $('st-title').textContent = STATES[s][0]; $('st-sub').textContent = STATES[s][1];
@@ -202,7 +202,7 @@ S.name = "AETHER";
   function renderLog() {
     const L = transcript.slice(-60);
     $('log').innerHTML = L.map(t => `<div class="msg ${t.role === 'user' ? 'u' : t.role === 'sys' ? 's' : 'j'}">${esc(t.text)}</div>`).join('');
-    $('side-log').innerHTML = L.filter(t => t.role !== 'sys').slice(-10).map(t => `<div><b>${t.role === 'user' ? 'Sen' : 'AETHER'}:</b> ${esc(t.text.slice(0, 160))}</div>`).join('');
+    $('side-log').innerHTML = L.filter(t => t.role !== 'sys').slice(-10).map(t => `<div><b>${t.role === 'user' ? 'Sen' : 'FRIDAY'}:</b> ${esc(t.text.slice(0, 160))}</div>`).join('');
     const lastJ = [...L].reverse().find(t => t.role === 'aether'), lastU = [...L].reverse().find(t => t.role === 'user');
     if (lastJ || lastU) {
       $('reply').hidden = false;
@@ -254,8 +254,8 @@ S.name = "AETHER";
       return this.req('PATCH', '/gists/' + S.gist, body);
     },
     async create() {
-      const g = await this.req('POST', '/gists', { description: 'AETHER — ortak hafıza (gizli, silme)', public: false,
-        files: { 'memory.json': { content: '{}' }, 'recent.json': { content: '[]' }, 'README.md': { content: 'AETHER ortak hafıza. Silme.' } } });
+      const g = await this.req('POST', '/gists', { description: 'FRIDAY — ortak hafıza (gizli, silme)', public: false,
+        files: { 'memory.json': { content: '{}' }, 'recent.json': { content: '[]' }, 'README.md': { content: 'FRIDAY ortak hafıza. Silme.' } } });
       return g.id;
     },
   };
@@ -299,8 +299,8 @@ S.name = "AETHER";
       const f = Cloud.cache || await Cloud.read();
       let id = J(f['archive.json'], {}).gist || '';
       if (!id) {
-        const g = await Cloud.req('POST', '/gists', { description: 'AETHER — konuşma arşivi (gizli, silme)', public: false,
-          files: { 'README.md': { content: 'AETHER konuşma arşivi: her ay bir dosya. Silme.' } } });
+        const g = await Cloud.req('POST', '/gists', { description: 'FRIDAY — konuşma arşivi (gizli, silme)', public: false,
+          files: { 'README.md': { content: 'FRIDAY konuşma arşivi: her ay bir dosya. Silme.' } } });
         id = g.id; await Cloud.write({ 'archive.json': JSON.stringify({ gist: id }) });
       }
       return id;
@@ -348,7 +348,7 @@ S.name = "AETHER";
       const pick = new Set();
       for (const [, i] of hits.slice(0, 8)) { pick.add(i - 1); pick.add(i); pick.add(i + 1); }   // with the line around it
       const lines = [...pick].filter(i => all[i]).sort((a, b) => a - b).map(i => { const t = all[i];
-        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'AETHER'}: ${t.text}`; });
+        return `${new Date(t.ts).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} [${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'FRIDAY'}: ${t.text}`; });
       return lines.length ? `Arşivden (${all.length} satır arandı):\n` + lines.join('\n').slice(0, 6000) : 'Arşivde bununla ilgili bir konuşma bulamadım.';
     },
   };
@@ -357,7 +357,7 @@ S.name = "AETHER";
 
   // ── learning: every so often Gemini's free text model reads the latest
   // conversation and files lasting facts about the user into shared memory
-  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like AETHER knowing Tony.
+  // ("annesinin adı Ayşe", "kahveyi şekersiz içer") — like FRIDAY knowing Tony.
   const Learn = {
     buf: [], timer: null,
     turn(t) { this.buf.push(t); clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 90000); if (this.buf.filter(x => x.role === 'user').length >= 10) this.run(); },
@@ -369,7 +369,7 @@ S.name = "AETHER";
         'Geçici şeyleri (bugünkü ruh hali, tek seferlik istekler), sağlık, din, siyaset, para bilgilerini ve zaten bilinenleri ALMA. Emin değilsen alma. ' +
         `Kategoriler: ${CATS.join(', ')}. Bilinen anahtarlar: ${known || '(yok)'}\n` +
         'Sadece JSON dizi döndür: [{"category":"...","key":"kısa_anahtar","value":"kısa değer"}] ya da [].\n\nKONUŞMA:\n' +
-        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'AETHER'}: ${t.text}`).join('\n').slice(-6000);
+        turns.map(t => `${t.role === 'user' ? 'Kullanıcı' : 'FRIDAY'}: ${t.text}`).join('\n').slice(-6000);
       for (const model of TEXT_MODELS) {
         try {
           const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST',
@@ -661,8 +661,8 @@ S.name = "AETHER";
     let n = 0;
     ringing = setInterval(() => { beep(); if (navigator.vibrate) navigator.vibrate([400, 100, 400]); if (++n > 20) stop(); }, 1500);
     document.addEventListener('pointerdown', stop, true);
-    toast(`📳 ${from || 'AETHER'} bu cihazı arıyor — durdurmak için dokun`);
-    sys(`📳 ${from || 'AETHER'} bu cihazı arıyor.`);
+    toast(`📳 ${from || 'FRIDAY'} bu cihazı arıyor — durdurmak için dokun`);
+    sys(`📳 ${from || 'FRIDAY'} bu cihazı arıyor.`);
   }
 
   // ── guard mode: this device's camera watches; on movement a photo goes to
@@ -749,7 +749,7 @@ S.name = "AETHER";
     if (!Cloud.ok()) return 'Ortak hafıza kurulu değil; bilgisayara ulaşamıyorum.';
     await syncNow();
     const pc = findPc(name);
-    if (!pc) return 'Bağlı bir bilgisayar yok. Bilgisayarda AETHER açıkken "AETHER\'ı her cihaza kur" demen gerekiyor.';
+    if (!pc) return 'Bağlı bir bilgisayar yok. Bilgisayarda FRIDAY açıkken "FRIDAY\'ı her cihaza kur" demen gerekiyor.';
     if (!online(pc)) return `${pc.name} şu an kapalı ya da çevrimdışı görünüyor.`;
     const id = S.id + '-' + Date.now().toString(36);
     const f = await Cloud.read();
@@ -775,9 +775,9 @@ S.name = "AETHER";
     { name: 'forget', description: 'Ortak hafızadan bir bilgiyi sil.',
       parameters: { type: 'OBJECT', properties: { category: { type: 'STRING' }, key: { type: 'STRING' } }, required: ['key'] } },
     { name: 'search_memory', description: 'Ortak hafızada ara.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-    { name: 'list_devices', description: 'AETHER\'ın çalıştığı cihazları ve hangisinin açık olduğunu listele.', parameters: { type: 'OBJECT', properties: {} } },
-    { name: 'computer_command', description: 'Bilgisayardaki/laptoptaki AETHER\'a bir komut gönder ve yanıtını al: uygulama ya da dosya açmak, projede kod yazıp çalıştırmak, bilgisayarın ekranına bakmak, mesaj göndermek gibi yalnızca bilgisayarın yapabildiği her şey. Evdeki akıllı cihazlar da buradan (Home Assistant bilgisayara bağlı): "salonun ışığını kapat", "açık kalan ışıkları kapat", "klimayı 22 yap", "kapı kilitli mi" → command olarak aynen ilet. Bilgisayar kapalıysa bunu söyle.',
-      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'bilgisayarın adı ya da "laptop"; boşsa açık olan' }, command: { type: 'STRING', description: 'bilgisayardaki AETHER\'a söylenecek komut, Türkçe' } }, required: ['command'] } },
+    { name: 'list_devices', description: 'FRIDAY\'ın çalıştığı cihazları ve hangisinin açık olduğunu listele.', parameters: { type: 'OBJECT', properties: {} } },
+    { name: 'computer_command', description: 'Bilgisayardaki/laptoptaki FRIDAY\'a bir komut gönder ve yanıtını al: uygulama ya da dosya açmak, projede kod yazıp çalıştırmak, bilgisayarın ekranına bakmak, mesaj göndermek gibi yalnızca bilgisayarın yapabildiği her şey. Evdeki akıllı cihazlar da buradan (Home Assistant bilgisayara bağlı): "salonun ışığını kapat", "açık kalan ışıkları kapat", "klimayı 22 yap", "kapı kilitli mi" → command olarak aynen ilet. Bilgisayar kapalıysa bunu söyle.',
+      parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'bilgisayarın adı ya da "laptop"; boşsa açık olan' }, command: { type: 'STRING', description: 'bilgisayardaki FRIDAY\'a söylenecek komut, Türkçe' } }, required: ['command'] } },
     { name: 'computer_quick', description: 'Bilgisayarda anında: volume_up, volume_down, mute, play_pause, next, prev, lock.',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, action: { type: 'STRING' } }, required: ['action'] } },
     { name: 'show_code', description: 'Yazdığın kodu bu cihazın ekranında göster (kopyalanabilir, indirilebilir) ve ortak hafızaya kaydet. Kod yazman istenince bunu kullan; kodu sesli okuma.',
@@ -801,7 +801,7 @@ S.name = "AETHER";
     { name: 'send_to_device', description: 'Başka bir cihaza bir şey gönder ya da orada aç: "bunu televizyonda aç", "resmi tablete gönder", "kodu bilgisayara at", "telefona yaz". what: open (bağlantı/video/harita) | image (son resim) | code (son kod) | text | say (o cihaz sesli söylesin). device: cihazın adı ya da türü (telefon, tablet, tv, projeksiyon, saat, bilgisayar).',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' }, what: { type: 'STRING', description: 'open | image | code | text | say' },
         url: { type: 'STRING' }, text: { type: 'STRING' }, title: { type: 'STRING' } }, required: ['device', 'what'] } },
-    { name: 'projects', description: 'Bilgisayarda AETHER\'ın yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
+    { name: 'projects', description: 'Bilgisayarda FRIDAY\'ın yaptığı/yarım kalan projelerin (site, uygulama, kod) güncel durumu: "projem ne durumda", "site bitti mi". Devam ettirmek için computer_command ile "yarım kalan işe devam et" gönder.',
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'protocol', description: 'Protokoller (Iron Man tarzı): tek komutla sırayla birçok iş. "çalışma protokolü", "film moduna geç", "uyku protokolü", "günaydın", "protokollerim neler", "yeni protokol kaydet". action: run | list | save | delete. run bir adım listesi döner: o adımları sırayla araçlarınla yap.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, name: { type: 'STRING' }, steps: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['action'] } },
@@ -809,7 +809,7 @@ S.name = "AETHER";
       parameters: { type: 'OBJECT', properties: {} } },
     { name: 'guard', description: 'Güvenlik modu: bu cihazın (ya da device verilirse o cihazın) kamerası odayı izler; hareket olursa fotoğraf çekip bütün cihazlara gönderir ve sesli haber verir. "odayı izle", "güvenlik modunu aç/kapat", "tableti kamera yap".',
       parameters: { type: 'OBJECT', properties: { on: { type: 'BOOLEAN' }, device: { type: 'STRING', description: 'boşsa bu cihaz' } }, required: ['on'] } },
-    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (AETHER sayfası açıksa). device: cihazın adı ya da türü.',
+    { name: 'find_device', description: '"Telefonumu bul", "tablet nerede": o cihaz yüksek sesle çalar ve titrer (FRIDAY sayfası açıksa). device: cihazın adı ya da türü.',
       parameters: { type: 'OBJECT', properties: { device: { type: 'STRING' } }, required: ['device'] } },
     { name: 'gallery', description: 'Bütün cihazlarda çizilen resimlerin ortak galerisi: "galerimde ne var", "dünkü resmi göster", "laptopta çizdiğin logoyu aç", "ikinci resmi TV\'ye gönder". action: list | show | send. number: 1 = en yeni, ya da query: resimde ne vardı. send için device.',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, number: { type: 'NUMBER' }, query: { type: 'STRING' }, device: { type: 'STRING' } }, required: ['action'] } },
@@ -831,7 +831,7 @@ S.name = "AETHER";
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, move: { type: 'STRING' }, color: { type: 'STRING' }, level: { type: 'STRING' }, on: { type: 'BOOLEAN' } }, required: ['action'] } },
     { name: 'coffee_fortune', description: 'Kahve falı (eğlence): fal ekranını açar; kullanıcı fincanın fotoğrafını çekince falı okur. "falıma bak", "kahve falı".',
       parameters: { type: 'OBJECT', properties: { question: { type: 'STRING', description: 'kullanıcının merak ettiği konu (aşk, iş …)' } } } },
-    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin where=youtube; Chrome\'da ara → op=search arg=aranacak metin where=chrome. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, AETHER arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
+    { name: 'projector', description: 'HY320 veya Android TV projeksiyon kontrolü. Ana sohbetten açma/kapatma, uygulama, ses ve arama komutlarında projector aracını hemen çağır. Projeksiyonda Chrome aç → op=app arg=chrome; YouTube aç → op=app arg=youtube; sesi aç → op=key arg=volume_up; sesi kıs → op=key arg=volume_down; YouTube ara → op=search arg=aranacak metin where=youtube; Chrome\'da ara → op=search arg=aranacak metin where=chrome. Kayıtlı yerel bağlantı varsa GitHub kullanmadan, FRIDAY arayüzünde kalıp şifreli HTTPS köprüsünden gönderilir; işlem sonucunu kontrol et. Desteklenen: app, key, search, url, type. Desteklenmeyen look/wifi için yapılmış gibi söyleme. Kumanda ekranı için open: true.',
       parameters: { type: 'OBJECT', properties: { op: { type: 'STRING' }, arg: { type: 'STRING' }, where: { type: 'STRING' }, password: { type: 'STRING' }, question: { type: 'STRING' }, open: { type: 'BOOLEAN' } } } },
     { name: 'todo', description: 'Ortak yapılacaklar listesi (tüm cihazlar ve bilgisayar aynı listeyi görür): "listeye süt ekle", "yapılacaklarım ne", "faturayı ödedim, sil". action: add | list | done | clear_done | clear (tüm listeyi sil).',
       parameters: { type: 'OBJECT', properties: { action: { type: 'STRING' }, item: { type: 'STRING' } }, required: ['action'] } },
@@ -893,7 +893,7 @@ S.name = "AETHER";
       }
       case 'make_image': {
         // Drawing can take half a minute; the conversation goes on meanwhile and
-        // AETHER says so when the picture is on screen.
+        // FRIDAY says so when the picture is on screen.
         const edit = String(a.mode || 'new') === 'edit';
         if (imgBusy) return 'Önceki resmi hâlâ çiziyorum; o bitince bunu yaparım.';
         if (edit && !lastImage) return 'Değiştirilecek resim yok; önce yeni bir resim çizeyim mi?';
@@ -927,7 +927,7 @@ S.name = "AETHER";
         }
         const pc = findPc('');
         if (pc && online(pc)) return await sendToPc('', `Projeksiyon/TV (android_device aracı): ${op} ${a.arg || ''} ${a.where || ''} ${a.question || ''}`.trim());
-        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona AETHER Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
+        return 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona FRIDAY Alıcı uygulamasını kur (laptop kapalıyken de çalışır) ya da laptopu aç.';
       }
       case 'chess': return chessTool(a);
       case 'coffee_fortune': {
@@ -977,7 +977,7 @@ S.name = "AETHER";
         const d = findDevice(a.device);
         if (!d) return `"${a.device}" adında bir cihaz bulamadım.`;
         if (d.kind === 'pc') return await sendToPc(d.name, 'quick:volume_up');
-        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, AETHER sayfası açık değilse çalamaz.');
+        return (await sendToDevice(d.name, { kind: 'ring' })) + ' Birkaç saniye içinde çalmaya başlar' + (online(d) ? '.' : '; ama şu an kapalı görünüyor, FRIDAY sayfası açık değilse çalamaz.');
       }
       case 'guard': {
         if (a.device && findDevice(a.device)) return await sendToDevice(a.device, { kind: 'guard', on: !!a.on });
@@ -1006,7 +1006,7 @@ S.name = "AETHER";
       case 'screen_share':
         if (!a.on) { stopVideo(); return 'Ekran paylaşımı kapandı.'; }
         if (!navigator.mediaDevices?.getDisplayMedia) return 'Bu cihaz ekran paylaşamıyor (telefonlar desteklemiyor). Kamerayı açabilirim.';
-        askUser('Ekranı göster', 'AETHER ekranını görmek istiyor.', () => startVideo('screen'));
+        askUser('Ekranı göster', 'FRIDAY ekranını görmek istiyor.', () => startVideo('screen'));
         return 'Kullanıcıdan ekran paylaşımı onayı istendi.';
     }
     return 'Bilinmeyen araç.';
@@ -1154,9 +1154,9 @@ S.name = "AETHER";
     a.download = 'aether-' + Date.now() + (lastImage.mime.includes('jpeg') ? '.jpg' : '.png'); a.click(); };
   $('img-share').onclick = async () => {
     if (!lastImage) return;
-    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'AETHER' }); } catch { window.open(lastImage.url, '_blank'); } return; }
+    if (!lastImage.data) { try { await navigator.share({ url: lastImage.url, title: 'FRIDAY' }); } catch { window.open(lastImage.url, '_blank'); } return; }
     const file = new File([imageBlob()], 'aether.png', { type: lastImage.mime });
-    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'AETHER' }); else $('img-dl').click(); } catch {}
+    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'FRIDAY' }); else $('img-dl').click(); } catch {}
   };
   $('img-full').onclick = () => { try { $('img-view').requestFullscreen(); } catch {} };
 
@@ -1320,7 +1320,7 @@ S.name = "AETHER";
   }
 
   // ── chess on every device (engine: web/chess.js, same as the desktop's) ──
-  const CH = window.AetherChess;
+  const CH = window.FridayChess;
   // Built-in SVG pieces: no OS emoji fallback (iOS renders ♟ as a 3-D
   // black pawn even for the white side). Every piece uses the same viewBox.
   const PIECE_SHAPES = {
@@ -1343,7 +1343,7 @@ S.name = "AETHER";
   function chessState(b = chessBoard()) {
     const out = b.outcome(), pgn = chess.sans.map((m, i) => (i % 2 ? '' : (i / 2 + 1) + '. ') + m).join(' ');
     const userTurn = b.white === chess.userWhite;
-    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'AETHER düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
+    const status = out ? `Oyun bitti: ${out[0]} (${out[1]})` : (userTurn ? 'Sıra sende' : 'FRIDAY düşünüyor…') + (b.inCheck() ? ' — ŞAH!' : '');
     return { fen: b.fen(), moves: pgn || 'yok', status, user_color: chess.userWhite ? 'beyaz' : 'siyah', level: chess.level, teach: chess.teach };
   }
   function renderChess() {
@@ -1451,7 +1451,7 @@ S.name = "AETHER";
 
   // ── projector / Android TV remote: the laptop drives it over ADB ────────
   // (core/adb_control.py); this page sends "adb:…" to the laptop's mailbox.
-  // The AETHER Alıcı app on the projector (android-receiver/) works even when
+  // The FRIDAY Alıcı app on the projector (android-receiver/) works even when
   // the laptop is off; without it, the laptop drives the projector over ADB.
   const receiver = () => devices.filter(d => d.kind === 'receiver').sort((a, b) => online(b) - online(a) || Date.parse(b.seen || 0) - Date.parse(a.seen || 0))[0] || null;
   let lanPopup = null;
@@ -1469,12 +1469,12 @@ S.name = "AETHER";
   async function sendLanCommand(kind, arg, extra = {}) {
     const link = parseLanUrl(S.lanRemote);
     if (!link) return 'Yerel projeksiyon bağlantısı kaydedilmemiş.';
-    if (!window.AETHERRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. AETHER sayfasını güncelle.';
+    if (!window.FRIDAYRelay) return 'Şifreli HTTPS kumanda modülü yüklenemedi. FRIDAY sayfasını güncelle.';
     // Unlike a local http:// fetch or a popup, this uses an encrypted HTTPS
-    // channel and preserves the exact existing AETHER UI and voice session.
+    // channel and preserves the exact existing FRIDAY UI and voice session.
     const result = $('rm-lan-result');
     if (result) { result.textContent = '📡 Komut şifreli HTTPS üzerinden gönderiliyor…'; result.hidden = false; }
-    const reply = await window.AETHERRelay.send(link, kind, arg, { where: extra.where || 'youtube' });
+    const reply = await window.FRIDAYRelay.send(link, kind, arg, { where: extra.where || 'youtube' });
     if (result) { result.textContent = '📽️ ' + reply; result.hidden = false; }
     const failed = /(?:yanıt vermedi|başarısız|kurulamadı|desteklenmiyor|geçersiz)/i.test(reply);
     $('rm-lan-state').textContent = failed
@@ -1502,22 +1502,22 @@ S.name = "AETHER";
     if (rx) return await sendToReceiver(rx, { op: kind, arg, ...extra });
     const pc = findPc('');
     if (pc && online(pc)) { const r = await sendToPc('', `adb:${kind}:${arg}`); return r.replace(/^[^:]+: /, ''); }
-    return rx ? 'Projeksiyon yanıt vermedi; AETHER Alıcı uygulamasının bağlantısını kontrol et.'
-              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona AETHER Alıcı uygulamasını kur ya da laptopu aç.';
+    return rx ? 'Projeksiyon yanıt vermedi; FRIDAY Alıcı uygulamasının bağlantısını kontrol et.'
+              : 'Projeksiyonu kontrol edecek bir şey açık değil: projeksiyona FRIDAY Alıcı uygulamasını kur ya da laptopu aç.';
   }
   function renderLanSettings() {
     const link = parseLanUrl(S.lanRemote);
     $('rm-lan-url').value = link;
     $('rm-lan-state').textContent = link
       ? '🔒 Eşleştirme kayıtlı: ' + new URL(link).hostname + ' · HTTPS köprüsü ilk komutta doğrulanacak.'
-      : 'Bağlantı henüz kayıtlı değil. AETHER Alıcı adresini bir kez ekle.';
+      : 'Bağlantı henüz kayıtlı değil. FRIDAY Alıcı adresini bir kez ekle.';
     $('rm-lan-config').open = !link;
     $('rm-lan-open').disabled = !link;
     $('s-remote').classList.remove('lan-ios-native');
     $('rm-lan-open').textContent = '📱 Yedek yerel kumandayı aç';
     const note = $('rm-lan-guide');
     if (note) { note.hidden = !link; note.textContent =
-      'AETHER içindeki tuşlar ve sesli komutlar şifreli HTTPS üzerinden çalışır; sayfa değişmez. İnternet kesilirse yedek yerel Wi-Fi kumandasını kullan.'; }
+      'FRIDAY içindeki tuşlar ve sesli komutlar şifreli HTTPS üzerinden çalışır; sayfa değişmez. İnternet kesilirse yedek yerel Wi-Fi kumandasını kullan.'; }
   }
   $('rm-lan-save').onclick = () => {
     const raw = $('rm-lan-url').value.trim();
@@ -1533,14 +1533,14 @@ S.name = "AETHER";
   $('t-remote').onclick = () => {
     const rx = receiver(), pc = findPc('');
     $('rm-note').textContent = S.lanRemote
-      ? '📽️ AETHER kumandası hazır · Tuşlar ve sesli komutlar bu ekrandan, sayfa değiştirmeden gönderilir.'
-      : rx ? 'AETHER Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
+      ? '📽️ FRIDAY kumandası hazır · Tuşlar ve sesli komutlar bu ekrandan, sayfa değiştirmeden gönderilir.'
+      : rx ? 'FRIDAY Alıcı: ' + rx.name + (online(rx) ? ' · çevrimiçi' : ' · son durum eski')
       : pc ? pc.name + ' üzerinden kumanda' : 'Projeksiyonun yerel Wi-Fi kumanda adresini aşağıya kaydet.';
     renderLanSettings(); openSheet('s-remote');
   };
   document.querySelectorAll('#s-remote [data-k]').forEach(b => b.onclick = async () => { if (navigator.vibrate) navigator.vibrate(15); toast(await remote('key', b.dataset.k, { popup: true })); });
   document.querySelectorAll('#s-remote [data-app]').forEach(b => b.onclick = async () => toast(await remote('app', b.dataset.app, { popup: true })));
-  // Keep the original AETHER keypad: decide whether its one search box sends
+  // Keep the original FRIDAY keypad: decide whether its one search box sends
   // the text to YouTube or performs a Google search in Chrome.
   function searchWhere() { return S.rmSearchWhere === 'chrome' ? 'chrome' : 'youtube'; }
   function renderSearchWhere() {
@@ -1751,7 +1751,7 @@ S.name = "AETHER";
       const late = now - r.due > 10 * 60000 ? ' (geç kaldı, sayfa kapalıydı)' : '';
       toast('⏰ ' + r.text + late);
       if (amOwner()) { beep(); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); }
-      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('AETHER hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('FRIDAY hatırlatıyor', { body: r.text, icon: 'icon-192.png' }); } catch {}
       sys('⏰ Hatırlatma: ' + r.text + late);
       if (amOwner()) {
         const note = r.protocol ? `Zamanlanmış protokol zamanı: "${r.protocol}". Şimdi protocol aracıyla çalıştır.` : `Hatırlatma zamanı: ${r.text}.`;
@@ -1761,7 +1761,7 @@ S.name = "AETHER";
     }
   }, 5000);
 
-  // ── keep the screen awake while AETHER is listening or on a big screen ──
+  // ── keep the screen awake while FRIDAY is listening or on a big screen ──
   let wakeLock = null;
   async function keepAwake() {
     const want = micOn || !!guard || KIND === 'tv' || KIND === 'projector';
@@ -1795,9 +1795,9 @@ S.name = "AETHER";
   const resumeHandle = () => (resume && Date.now() - resume.t < RESUME_MS ? resume.h : '');
   function setResume(h) { resume = h ? { h, t: Date.now() } : null; try { h ? sessionStorage.setItem('aether_resume', JSON.stringify(resume)) : sessionStorage.removeItem('aether_resume'); } catch {} }
   function systemText() {
-    const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'AETHER'}: ${t.text}`).join('\n');
+    const r = recent.slice(-16).map(t => `[${t.device}] ${t.role === 'user' ? 'Kullanıcı' : 'FRIDAY'}: ${t.text}`).join('\n');
     const pcs = devices.filter(d => d.kind === 'pc').map(d => `${d.name} (${online(d) ? 'açık' : 'kapalı'})`).join(', ') || 'yok';
-    return `Adın ${S.name || 'AETHER'}. Kullanıcının kişisel asistanısın. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
+    return `Adın ${S.name || 'FRIDAY'}. Kullanıcının kişisel asistanısın. Şu an "${devName()}" adlı ${KIND_NAMES[KIND].toLowerCase()} üzerinde çalışıyorsun; ` +
       `aynı sen bilgisayarda, laptopta, telefonda, tablette, TV'de ve saatte de varsın ve hepsi aynı hafızayı paylaşır. ` +
       `Türkçe (tr-TR) varsayılan komut ve yanıt dilindir. Türkçe sesli ve yazılı istekleri, günlük söyleyişleri ve ekleri anlayıp mevcut araçlara yönlendir. ` +
       `Örneğin 'uygulamayı aç', 'şunu araştır', 'dosyayı bul', 'hatırlatıcı kur', 'telefona gönder', 'projeksiyonu aç' ve 'testleri çalıştır' uygun aracı çağırmalıdır. ` +
@@ -1981,7 +1981,7 @@ S.name = "AETHER";
   }
   $('mic').onclick = () => { if (micOn) { resumeMic = false; stopMic(); } else { claimHere(); startMic(); } };
 
-  // Direct local-language projector actions from AETHER's MAIN chat input.
+  // Direct local-language projector actions from FRIDAY's MAIN chat input.
   // These commands must not depend on the model deciding to call a tool.
   // Normal conversation still goes through the AI unchanged.
   function projectorCommand(input) {
@@ -2122,7 +2122,7 @@ S.name = "AETHER";
 
   // ── settings ─────────────────────────────────────────────────────────────
   function openSetup() {
-    // iPhone home-screen AETHER starting empty: say why and offer the paste
+    // iPhone home-screen FRIDAY starting empty: say why and offer the paste
     $('f-ios').hidden = !(isIOS && standalone && !S.key);
     $('f-move').hidden = !(isIOS && !standalone && S.key);
     $('f-key').value = S.key || ''; $('f-tok').value = S.tok || ''; $('f-gist').value = S.gist || '';
@@ -2136,14 +2136,14 @@ S.name = "AETHER";
     let text = '';
     try { text = await navigator.clipboard.readText(); } catch {}
     if (!importSetup(text)) text = prompt('Kurulum bağlantısını buraya yapıştır:') || '';
-    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir AETHER kurulum bağlantısı değil.'; return; }
+    if (!importSetup(text)) { $('f-status').textContent = 'Bu bir FRIDAY kurulum bağlantısı değil.'; return; }
     $('f-status').textContent = 'Kurulum geldi, hafıza yükleniyor…';
     openSetup(); lastBeat = 0; await syncNow(); setState(S.key ? 'idle' : 'setup');
     $('f-status').textContent = 'Tamam — hafızan ve ayarların bu uygulamada.'; setTimeout(closeSheets, 1200);
   }
   $('f-paste').onclick = pasteSetup; $('f-paste2').onclick = pasteSetup;
   $('f-copy').onclick = async () => {
-    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki AETHER\'ı açınca "Yapıştır"a bas.'; }
+    try { await navigator.clipboard.writeText(setupLink()); $('f-status').textContent = 'Kopyalandı. Şimdi Paylaş ⬆︎ → "Ana Ekrana Ekle"; ana ekrandaki FRIDAY\'ı açınca "Yapıştır"a bas.'; }
     catch { prompt('Bu bağlantıyı kopyala:', setupLink()); }
   };
   $('f-save').onclick = async () => {
@@ -2159,7 +2159,7 @@ S.name = "AETHER";
   };
   $('f-link').onclick = async () => {
     const link = setupLink();
-    try { if (navigator.share) await navigator.share({ title: 'AETHER kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
+    try { if (navigator.share) await navigator.share({ title: 'FRIDAY kurulumu', url: link }); else { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı — kendi cihazına gönder'); } }
     catch { try { await navigator.clipboard.writeText(link); toast('Bağlantı kopyalandı'); } catch { prompt('Bağlantı:', link); } }
   };
 
@@ -2237,20 +2237,20 @@ S.name = "AETHER";
   const b64uBytes = t => { const b = atob(String(t).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(t).length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
   async function enablePush() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return /iPhone|iPad/.test(navigator.userAgent)
-      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile AETHER\'ı ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
+      ? 'iPhone\'da bildirim için önce Paylaş → "Ana Ekrana Ekle" ile FRIDAY\'ı ekle, sonra oradan açıp tekrar dene.' : 'Bu tarayıcı bildirim desteklemiyor.';
     if (!Cloud.ok()) return 'Önce ortak hafıza (GitHub anahtarı) kurulmalı.';
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return 'Bildirim izni verilmedi.';
     const f = await Cloud.read();
     const pub = J(f['push.json'], {}).publicKey;
-    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda AETHER bir kez açılınca oluşur. Sonra tekrar dene.';
+    if (!pub) return 'Bildirim anahtarı henüz yok: bilgisayarda FRIDAY bir kez açılınca oluşur. Sonra tekrar dene.';
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (sub && J(localStorage.getItem('aether_push_key'), '') !== pub) { await sub.unsubscribe(); sub = null; }
     sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(pub) });
     localStorage.setItem('aether_push_key', JSON.stringify(pub));
     await Cloud.write({ [`push-sub-${S.id}.json`]: JSON.stringify(sub.toJSON()) });
-    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki AETHER açıkken).';
+    return 'Bildirimler açık: sayfa kapalıyken de hatırlatıcılar, gönderilenler ve güvenlik uyarıları bildirim olarak gelecek (bilgisayardaki FRIDAY açıkken).';
   }
   $('f-alici').onclick = () => { window.open(ALICI_APK, '_blank'); $('f-status').textContent = 'İndirilen aether-alici.apk\'yı aç ve kur (bilinmeyen kaynaklara izin ver). Sonra "Alıcıyı bağla"ya bas.'; };
   $('f-alici-link').onclick = () => {
@@ -2258,10 +2258,10 @@ S.name = "AETHER";
     const code = btoa(unescape(encodeURIComponent(j))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     if (!S.tok || !S.gist) { $('f-status').textContent = 'Önce ortak hafıza (GitHub anahtarı) kurulu olmalı.'; return; }
     const link = 'aetheralici://setup?s=' + code;
-    // Only Android devices with AETHER Alıcı installed can open this scheme.
+    // Only Android devices with FRIDAY Alıcı installed can open this scheme.
     // iOS Safari/PWA otherwise displays an unhelpful "invalid address" error.
     if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      const note = 'Bu bağlantı iPhone\'da açılmaz. Projeksiyondaki AETHER Alıcı uygulamasının 2. adımına yapıştırmak için bağlantıyı güvenli biçimde projeksiyona aktar. Bağlantı özel GitHub anahtarını içerir; herkese açık paylaşma.';
+      const note = 'Bu bağlantı iPhone\'da açılmaz. Projeksiyondaki FRIDAY Alıcı uygulamasının 2. adımına yapıştırmak için bağlantıyı güvenli biçimde projeksiyona aktar. Bağlantı özel GitHub anahtarını içerir; herkese açık paylaşma.';
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).then(() => {
           $('f-status').textContent = 'Alıcı kurulum bağlantısı kopyalandı. ' + note;
@@ -2276,9 +2276,9 @@ S.name = "AETHER";
     location.href = link;
   };
   $('f-push').onclick = async () => { $('f-status').textContent = 'Bildirimler açılıyor…'; try { $('f-status').textContent = await enablePush(); } catch (e) { $('f-status').textContent = 'Açılamadı: ' + (e.message || e); } };
-  // ── the computer panel: buttons straight to the computer's AETHER ───────
+  // ── the computer panel: buttons straight to the computer's FRIDAY ───────
   $('t-pc').onclick = () => {
-    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "AETHER\'ı her cihaza kur" de.';
+    const pc = findPc(''); $('pc-note').textContent = pc ? `${pc.name} — ${online(pc) ? 'açık' : 'kapalı görünüyor'}${healthText(pc) ? ' · ' + healthText(pc) : ''}` : 'Bağlı bilgisayar yok: bilgisayarda "FRIDAY\'ı her cihaza kur" de.';
     openSheet('s-pc');
   };
   document.querySelectorAll('#s-pc [data-q]').forEach(b => b.onclick = async () => {
@@ -2291,8 +2291,8 @@ S.name = "AETHER";
     e.preventDefault(); const t = $('pc-inp').value.trim(); if (!t) return; $('pc-inp').value = '';
     toast('Bilgisayara gönderildi…'); const r = await sendToPc('', t); sys('💻 ' + r); toast(r.slice(0, 120));
   });
-  // Shared from another app (Android "Paylaş → AETHER", manifest share_target):
-  // AETHER asks what to do with it — open on the TV, send to the computer …
+  // Shared from another app (Android "Paylaş → FRIDAY", manifest share_target):
+  // FRIDAY asks what to do with it — open on the TV, send to the computer …
   (function sharedIn() {
     const q = new URLSearchParams(location.search);
     const parts = ['share_title', 'share_text', 'share_url'].map(k => (q.get(k) || '').trim()).filter(Boolean);
@@ -2302,7 +2302,7 @@ S.name = "AETHER";
     closeTurns(); transcript.push({ role: 'user', text: '📎 ' + shared, open: false }); renderLog();
     claimHere();
     connect().then(() => { setState('thinking');
-      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu AETHER'a paylaştı: ${shared}\n` +
+      send({ realtimeInput: { text: `(Sistem notu) Kullanıcı başka bir uygulamadan bunu FRIDAY'a paylaştı: ${shared}\n` +
         'Ne olduğunu tek cümleyle söyle ve ne yapmak istediğini sor: bir cihazda açmak (TV, bilgisayar…), özetlemek, kaydetmek, yapılacaklara eklemek gibi.' } }); })
       .catch(() => toast('Paylaşılan alındı; bağlanınca soracağım.'));
   })();
@@ -2315,7 +2315,7 @@ S.name = "AETHER";
   checkVersion();
 
   // ── device modules: web/dev-*.js reach the app only through this object ──
-  window.AETHER = {
+  window.FRIDAY = {
     get kind() { return KIND; }, S, save, $, esc, toast, sys, openSheet, closeSheets, askUser,
     on(ev, fn) { (hooks[ev] = hooks[ev] || []).push(fn); if (ev === 'weather' && hudWeather) fn(hudWeather); },
     tool(decl, fn) { if (!TOOLS.some(t => t.name === decl.name)) TOOLS.push(decl); extraTools[decl.name] = fn; },

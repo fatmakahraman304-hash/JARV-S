@@ -1,12 +1,12 @@
-# AETHER kurulumu ve GÜNCELLE düğmesi
+# FRIDAY kurulumu ve GÜNCELLE düğmesi
 
 ## Windows’ta kaynak kurulumu
 
 PowerShell’de Python 3.13 ve Git ile yeni bir klasöre kurun. Mevcut kurulumunuzdaki kişisel dosyaları bu işlem için taşımanız gerekmez.
 
 ```powershell
-git clone --branch main https://github.com/fatmakahraman304-hash/JARV-S.git AETHER
-cd AETHER
+git clone --branch main https://github.com/fatmakahraman304-hash/JARV-S.git FRIDAY
+cd FRIDAY
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe setup.py
 .\.venv\Scripts\python.exe main.py
@@ -28,13 +28,13 @@ Bu sürümle başlatılan ZIP güncellemesi dosya yazarken kesilirse tekrar **G�
 
 Normal açılış, bekleyen ZIP uygulama/geri dönüş kaydı veya belirsiz işlem kilidi varsa Qt, ses, ayarlar ve hafıza yüklenmeden durur. Canlı güncelleyici kilidi tutuyorsa da açılış engellenir. Kontrol aşamasında kesilmiş bir işlem tek başına açılışı engellemez. Kayıtlar otomatik silinmez ve bu kontrol kurtarma yapıldığını iddia etmez. `pythonw` ile konsolsuz Windows açılışında hata yerel bir ileti kutusunda gösterilir.
 
-Bekleyen ZIP işlemi nedeniyle açılış durduysa AETHER kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa AETHER’ı normal şekilde açın.
+Bekleyen ZIP işlemi nedeniyle açılış durduysa FRIDAY kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa FRIDAY’ı normal şekilde açın.
 
 ```powershell
 .\.venv\Scripts\python.exe -m core.app_updater --recover
 ```
 
-Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya önceki sürümden kalan belirsiz bir kilit bildirilirse AETHER’ı kapatın. Kurulum klasörünü, gizli yedekleri ve kullanıcı verilerini ayrı bir konuma kopyalayın. Windows’ta kalıcı hafıza ve devamlılık kayıtları için `%LOCALAPPDATA%\AetherMurat` klasörünü de koruyun. Güncelleme kilidini tek başına kaldırmak yarım işlemi onarmaz.
+Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya önceki sürümden kalan belirsiz bir kilit bildirilirse FRIDAY’ı kapatın. Kurulum klasörünü, gizli yedekleri ve kullanıcı verilerini ayrı bir konuma kopyalayın. Windows’ta kalıcı hafıza ve devamlılık kayıtları için `%LOCALAPPDATA%\AetherMurat` klasörünü de koruyun. Güncelleme kilidini tek başına kaldırmak yarım işlemi onarmaz.
 
 - Git için `git status --short`, `git branch --list "aether-backup/*"`, `git stash list` ve `git rev-parse HEAD` ile durumu kaydedin. Önceki sürümü denemek için yedek dalı ayrı bir çalışma klasöründe açabilirsiniz.
 - ZIP için güncelleme günlüğündeki yedek konumunu ve `.aether-update.json` dosyasını saklayın. Yedek klasörü işlem öncesinde var olan dosyaları içerir. Yeni eklenmiş dosyalar veya yarıda kalmış işlem nedeniyle klasörün tek başına eksiksiz bir kurulum olduğu varsayılamaz. Bilinen çalışan sürümü ayrı klasörde açıp kişiselleştirme ve hafızayı doğrulayın.
@@ -43,9 +43,9 @@ Git güncellemesinin dosya uygulama aşamasında kesinti, geri almada hata veya 
 
 ## Dosyalar kurulduktan sonra HUD açılmıyorsa
 
-Normal yeniden başlatmada yardımcı süreç eski AETHER’ın çıkmasını bekler. Yeni pencere görünür olup Qt olay döngüsü çalıştığında açılış onayı üretir. Yardımcı araç, her kontrolde önce yeni sürecin hâlâ açık olduğunu denetler; onaydan sonra en az bir saniyelik ilk gözlem boyunca da süreç açık kalırsa sonucu `restart.log` dosyasına yazar. Böylece onay bırakıp hemen kapanan süreç başarılı sayılmaz. Bu kısa gözlem, mikrofon/model hazırlığını veya uzun süreli kararlılığı doğrulamaz. Süreç erken kapanırsa çıkış kodunu kaydeder. 90 saniyede doğrulama bitmezse günlükte açılışın doğrulanamadığı belirtilir. Bu durumda Görev Yöneticisi’nde AETHER’ın hâlâ açık olup olmadığını kontrol edin.
+Normal yeniden başlatmada yardımcı süreç eski FRIDAY’ın çıkmasını bekler. Yeni pencere görünür olup Qt olay döngüsü çalıştığında açılış onayı üretir. Yardımcı araç, her kontrolde önce yeni sürecin hâlâ açık olduğunu denetler; onaydan sonra en az bir saniyelik ilk gözlem boyunca da süreç açık kalırsa sonucu `restart.log` dosyasına yazar. Böylece onay bırakıp hemen kapanan süreç başarılı sayılmaz. Bu kısa gözlem, mikrofon/model hazırlığını veya uzun süreli kararlılığı doğrulamaz. Süreç erken kapanırsa çıkış kodunu kaydeder. 90 saniyede doğrulama bitmezse günlükte açılışın doğrulanamadığı belirtilir. Bu durumda Görev Yöneticisi’nde FRIDAY’ın hâlâ açık olup olmadığını kontrol edin.
 
-Yeni kod kurulmuş ancak çalışmıyorsa, AETHER kapalıyken bu sürümün güncellediği **ZIP kurulumunda** son güncellemeyi çevrimdışı geri almak için kurulum klasöründe çalıştırın.
+Yeni kod kurulmuş ancak çalışmıyorsa, FRIDAY kapalıyken bu sürümün güncellediği **ZIP kurulumunda** son güncellemeyi çevrimdışı geri almak için kurulum klasöründe çalıştırın.
 
 ```powershell
 .\.venv\Scripts\python.exe -m core.app_updater --rollback
@@ -56,18 +56,18 @@ Yeni kod kurulmuş ancak çalışmıyorsa, AETHER kapalıyken bu sürümün gün
 
 ## Konuşma ve görev geçmişini yedekleme
 
-AETHER çalışırken, kendi hesabınıza özel yerel bir NTFS klasöründe yeni bir yedek oluşturabilirsiniz. Her yedek için yeni bir dosya adı seçin.
+FRIDAY çalışırken, kendi hesabınıza özel yerel bir NTFS klasöründe yeni bir yedek oluşturabilirsiniz. Her yedek için yeni bir dosya adı seçin.
 
 ```powershell
-.\.venv\Scripts\python.exe -m memory.continuity --backup "$env:LOCALAPPDATA\AETHER-Yedek\gecmis-01.sqlite3"
+.\.venv\Scripts\python.exe -m memory.continuity --backup "$env:LOCALAPPDATA\FRIDAY-Yedek\gecmis-01.sqlite3"
 ```
 
 Yedek, SQLite’a kaydedilmiş konuşmaları, görevleri ve uygulama kayıtlarını içerir. Kişisel metinler içerdiği için erişimini sınırlayın. API anahtarları, persona ayarları ve diğer hafıza dosyaları ayrıca korunmalıdır.
 
-Yeni bir Windows kurulumu veya boş bir veri klasöründe, AETHER kapalıyken geri yükleyin. Komut mevcut geçmişi korur ve aynı adlı dosyanın üzerine yazmaz.
+Yeni bir Windows kurulumu veya boş bir veri klasöründe, FRIDAY kapalıyken geri yükleyin. Komut mevcut geçmişi korur ve aynı adlı dosyanın üzerine yazmaz.
 
 ```powershell
-.\.venv\Scripts\python.exe -m memory.continuity --restore "$env:LOCALAPPDATA\AETHER-Yedek\gecmis-01.sqlite3"
+.\.venv\Scripts\python.exe -m memory.continuity --restore "$env:LOCALAPPDATA\FRIDAY-Yedek\gecmis-01.sqlite3"
 ```
 
 

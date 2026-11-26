@@ -30,7 +30,7 @@ import org.json.JSONObject;
 
 /**
  * One screen, easy with a TV remote: status, the setup (one tap from the
- * AETHER page on this device, or a pasted setup link), and a button to the
+ * FRIDAY page on this device, or a pasted setup link), and a button to the
  * accessibility settings.
  */
 public class MainActivity extends Activity {
@@ -53,8 +53,8 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(12, 8, 5));
 
         TextView title = new TextView(this);
-        try { title.setText("AETHER ALICI · v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
-        catch (Exception ignored) { title.setText("AETHER ALICI"); }
+        try { title.setText("FRIDAY ALICI · v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+        catch (Exception ignored) { title.setText("FRIDAY ALICI"); }
         title.setTextColor(Color.rgb(255, 160, 60));
         title.setTextSize(30);
         root.addView(title);
@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
         a11y.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         root.addView(a11y);
 
-        Button appSettings = button("İzin tekrar kapanıyorsa: AETHER uygulama kısıtlamaları");
+        Button appSettings = button("İzin tekrar kapanıyorsa: FRIDAY uygulama kısıtlamaları");
         appSettings.setOnClickListener(v -> startActivity(
                 new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.parse("package:" + getPackageName()))));
@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
                 TextView hint = new TextView(this);
                 hint.setTextColor(Color.WHITE);
                 hint.setTextSize(15);
-                hint.setText("iPhone kamerasıyla QR kodu okut. Açılan sayfaya AETHER kurulum bağlantısını yapıştır.");
+                hint.setText("iPhone kamerasıyla QR kodu okut. Açılan sayfaya FRIDAY kurulum bağlantısını yapıştır.");
                 panel.addView(hint);
                 new AlertDialog.Builder(this)
                         .setTitle("iPhone ile bağla")
@@ -122,11 +122,11 @@ public class MainActivity extends Activity {
         lan.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("iPhone için yerel kumanda").setMessage(ReceiverService.lanAddress + "\n\nBu adresi iPhone Safari'de aç. Aynı Wi-Fi ağına bağlı olmalısın.").setPositiveButton("Tamam", null).show());
         root.addView(lan);
 
-        Button web = button("Projeksiyonda AETHER'ı aç");
+        Button web = button("Projeksiyonda FRIDAY'ı aç");
         web.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ReceiverService.WEB))));
         root.addView(web);
 
-        Button update = button("↻ AETHER Alıcı'yı güncelle");
+        Button update = button("↻ FRIDAY Alıcı'yı güncelle");
         update.setOnClickListener(v -> downloadUpdate());
         root.addView(update, 0);
 
@@ -155,7 +155,7 @@ public class MainActivity extends Activity {
         try {
             DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(APK_URL))
-                    .setTitle("AETHER Alıcı güncellemesi")
+                    .setTitle("FRIDAY Alıcı güncellemesi")
                     .setDescription("Yeni sürüm indiriliyor")
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "aether-alici-update.apk");
@@ -235,7 +235,7 @@ public class MainActivity extends Activity {
 
     private void setup(String text) {
         JSONObject j = Gist.parseSetup(text);
-        if (j == null) { status.setText("Bu bir AETHER kurulum bağlantısı değil."); return; }
+        if (j == null) { status.setText("Bu bir FRIDAY kurulum bağlantısı değil."); return; }
         SharedPreferences.Editor e = ReceiverService.prefs(this).edit();
         e.putString("tok", j.optString("t")).putString("gist", j.optString("i"));
         if (!j.optString("d").isEmpty()) e.putString("name", j.optString("d"));
@@ -283,7 +283,7 @@ public class MainActivity extends Activity {
         boolean a11yRunning = RemoteAccessibility.instance != null;
         String a11yStatus = a11yRunning ? "hizmet çalışıyor ✓"
                 : a11yPermission ? "izin AÇIK, ancak Android hizmeti durdurmuş"
-                : "Android izni KAPALI — Ayarlar → Erişilebilirlik → AETHER Alıcı";
+                : "Android izni KAPALI — Ayarlar → Erişilebilirlik → FRIDAY Alıcı";
         String lastEvent = p.getString(RemoteAccessibility.STATE_KEY, "Henüz bağlantı kaydı yok");
         long lastTime = p.getLong(RemoteAccessibility.TIME_KEY, 0);
         String when = lastTime > 0 ? new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
@@ -296,9 +296,9 @@ public class MainActivity extends Activity {
                 + "Erişilebilirlik: " + a11yStatus + "\n"
                 + "Son hizmet olayı: " + lastEvent + (when.isEmpty() ? "" : " (" + when + ")") + a11yHelp + "\n"
                 + "Dinleme: " + ReceiverService.status + "\n"
-                + "AETHER HTTPS köprüsü: " + RelayRemote.status + "\n"
+                + "FRIDAY HTTPS köprüsü: " + RelayRemote.status + "\n"
                 + "Wi-Fi kumanda: " + ReceiverService.lanAddress + "\n\n"
-                + "Hazır olunca telefondaki AETHER'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
+                + "Hazır olunca telefondaki FRIDAY'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
         ui.removeCallbacks(refreshTask);
         ui.postDelayed(refreshTask, 3000);
     }

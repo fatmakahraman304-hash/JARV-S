@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AETHER · Ekran</title>
+  <title>FRIDAY · Ekran</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --line: rgba(38,217,255,.18); --line2: rgba(38,217,255,.35); --blue: #26d9ff; --cyan: #a3efff;
-            --text: #f3ece5; --muted: #9b9087; --green: #3ddc97; --card: rgba(26,19,13,.6); }
+            --text: #e9f4ff; --muted: #7894ab; --green: #3ddc97; --card: rgba(26,19,13,.6); }
     html, body { height: 100%; overflow: hidden; }
     body { background: radial-gradient(90% 80% at 50% 45%, #082847 0%, #110904 45%, #030915 85%); color: var(--text);
            font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif; }
@@ -16,7 +16,7 @@
     /* pairing */
     #pair { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; }
     #pair h1 { font-size: 3vw; letter-spacing: 1.2vw; padding-left: 1.2vw; text-shadow: 0 0 2vw rgba(38,217,255,.7); }
-    #pair p { color: #d2c7bd; font-size: 1.6vw; margin-top: 1.2vw; line-height: 1.5; }
+    #pair p { color: #aec8db; font-size: 1.6vw; margin-top: 1.2vw; line-height: 1.5; }
     #code { font-size: 9vw; letter-spacing: 2.2vw; padding-left: 2.2vw; font-weight: 700; color: #fff; margin-top: 2vw;
             text-shadow: 0 0 3vw rgba(38,217,255,.8); font-variant-numeric: tabular-nums; }
     #pair small { display: block; margin-top: 2vw; color: var(--muted); font-size: 1.2vw; }
@@ -42,7 +42,7 @@
     #a { font-size: 1.5vw; line-height: 1.4; margin-top: .4vw; max-height: 4.4em; overflow: hidden; }
     .side { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 1.2vw; min-height: 0; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 1vw; padding: 1.1vw 1.2vw; }
-    .card h3 { font-size: .85vw; letter-spacing: .3vw; color: #d2c7bd; display: flex; justify-content: space-between; }
+    .card h3 { font-size: .85vw; letter-spacing: .3vw; color: #aec8db; display: flex; justify-content: space-between; }
     .card h3 i { font-style: normal; color: var(--cyan); }
     .rule { height: .15vw; margin: .6vw 0 .8vw; background: linear-gradient(90deg, var(--blue), transparent 60%); }
     .dev { display: flex; gap: .8vw; align-items: center; padding: .6vw 0; }
@@ -51,7 +51,7 @@
     .dev .dt { margin-left: auto; width: .6vw; height: .6vw; border-radius: 50%; background: var(--muted); }
     .dev .dt.on { background: var(--green); box-shadow: 0 0 .6vw var(--green); }
     #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: .5vw; }
-    #log div { font-size: .95vw; line-height: 1.35; color: #d2c7bd; } #log div b { color: var(--cyan); font-weight: 700; }
+    #log div { font-size: .95vw; line-height: 1.35; color: #aec8db; } #log div b { color: var(--cyan); font-weight: 700; }
     /* content shown from the phone */
     #stage { position: fixed; inset: 0; background: #000; display: grid; place-items: center; z-index: 5; }
     #stage iframe, #stage img { width: 100%; height: 100%; border: 0; object-fit: contain; }
@@ -64,8 +64,8 @@
 <body class="st-idle">
   <section id="pair" hidden>
     <div>
-      <h1>AETHER</h1>
-      <p>Telefonda AETHER'ı aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
+      <h1>FRIDAY</h1>
+      <p>Telefonda FRIDAY'ı aç → <b>Televizyon ekle</b> → bu kodu yaz</p>
       <div id="code">······</div>
       <small id="pair-note">Kod 5 dakika geçerli, sonra kendiliğinden yenilenir.</small>
     </div>
@@ -77,9 +77,9 @@
       <div id="date"></div>
       <div class="sys"><div class="ring"></div><div><b>SİSTEM DURUMU</b><span id="sys-st">Hazır</span></div></div>
     </div>
-    <div class="brand"><b>AETHER</b><small id="brand-dev">YAPAY ZEKÂ SİSTEMİ</small></div>
+    <div class="brand"><b>FRIDAY</b><small id="brand-dev">YAPAY ZEKÂ SİSTEMİ</small></div>
     <div class="center">
-      <div class="reactor" id="reactor"><canvas id="core" aria-label="AETHER çekirdeği"></canvas></div>
+      <div class="reactor" id="reactor"><canvas id="core" aria-label="FRIDAY çekirdeği"></canvas></div>
       <div id="st-title">Hazır</div>
       <div id="st-sub">Komut bekleniyor.</div>
       <canvas id="wave" width="800" height="90"></canvas>
@@ -93,7 +93,7 @@
     </aside>
   </section>
 
-  <button id="tv-update" type="button" style="position:fixed;left:2vw;bottom:2vw;z-index:4;background:rgba(26,19,13,.6);color:#d2c7bd;border:1px solid rgba(38,217,255,.25);border-radius:.6vw;padding:.5vw 1vw;font:inherit;font-size:.9vw;cursor:pointer">⬆ Güncelle</button>
+  <button id="tv-update" type="button" style="position:fixed;left:2vw;bottom:2vw;z-index:4;background:rgba(26,19,13,.6);color:#aec8db;border:1px solid rgba(38,217,255,.25);border-radius:.6vw;padding:.5vw 1vw;font:inherit;font-size:.9vw;cursor:pointer">⬆ Güncelle</button>
   <div id="stage" hidden></div>
   <div id="stage-title" hidden></div>
 
@@ -126,7 +126,7 @@
     setInterval(tick, 1000); tick();
 
     // reactor + wave
-    const core = AetherReactor($('core'));
+    const core = FridayReactor($('core'));
     const wave = $('wave'), wc = wave.getContext('2d');
     let level = 0, levelT = 0, levelAt = 0;
     function frame(t) {
@@ -231,14 +231,14 @@
           if (m.speaker === 'user') { $('q').textContent = '“' + m.text + '”'; $('a').textContent = ''; }
           else $('a').textContent = m.text;
           const row = document.createElement('div');
-          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'AETHER'}:</b> ${esc(m.text).slice(0, 160)}`;
+          row.innerHTML = `<b>${m.speaker === 'user' ? 'Sen' : 'FRIDAY'}:</b> ${esc(m.text).slice(0, 160)}`;
           $('log').appendChild(row);
           while ($('log').children.length > 12) $('log').firstChild.remove();
         }
       };
     }
     setInterval(() => { if (token && cur !== 'offline') devices(); }, 10000);
-    // a new AETHER version on the computer: the TV reloads by itself
+    // a new FRIDAY version on the computer: the TV reloads by itself
     let tvVersion = null;
     setInterval(async () => {
       try {

@@ -1,5 +1,5 @@
 """
-Heartbeats of AETHER's background watchers — so "kendini kontrol et" can tell a
+Heartbeats of FRIDAY's background watchers — so "kendini kontrol et" can tell a
 watcher that is alive from one that quietly stopped.
 
 Each watcher loop calls beat(name) once per pass; status() says how long ago

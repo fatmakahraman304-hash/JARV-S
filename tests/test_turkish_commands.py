@@ -1,4 +1,4 @@
-"""AETHER Türkçe komutları: ses, yazı ve GitHub kısa yolları."""
+"""FRIDAY Türkçe komutları: ses, yazı ve GitHub kısa yolları."""
 
 import unittest
 
@@ -10,24 +10,24 @@ from plugins.github_develop import local_command_mode
 
 class TurkishNormalization(unittest.TestCase):
     def test_turkish_case_accents_and_punctuation(self):
-        self.assertEqual(normalize_command("AETHER’I KAPAT!"), "aether i kapat")
-        self.assertEqual(normalize_command("Aether uygulamasından çık."), "aether uygulamasindan cik")
+        self.assertEqual(normalize_command("FRIDAY’I KAPAT!"), "friday i kapat")
+        self.assertEqual(normalize_command("FRIDAY uygulamasından çık."), "friday uygulamasindan cik")
         self.assertEqual(normalize_command("GITHUB TESTLERİNİ ÇALIŞTIR"), "github testlerini calistir")
 
 
 class ApplicationClose(unittest.TestCase):
     def test_clear_turkish_commands(self):
         for phrase in (
-            "AETHER uygulamasını kapat",
-            "AETHER, uygulamasından çık!",
-            "AETHER'ı kapat",
-            "AETHER’I KAPAT!",
-            "AETHER'ı kapatır mısın?",
-            "AETHER kendini kapat",
-            "AETHER programını kapat",
-            "Aether çıkış yap",
-            "lütfen AETHER uygulamasını kapat",
-            "close the aether app",
+            "FRIDAY uygulamasını kapat",
+            "FRIDAY, uygulamasından çık!",
+            "FRIDAY'ı kapat",
+            "FRIDAY’I KAPAT!",
+            "FRIDAY'ı kapatır mısın?",
+            "FRIDAY kendini kapat",
+            "FRIDAY programını kapat",
+            "FRIDAY çıkış yap",
+            "lütfen FRIDAY uygulamasını kapat",
+            "close the friday app",
         ):
             with self.subTest(phrase=phrase):
                 self.assertTrue(is_close_command(phrase))
@@ -36,11 +36,11 @@ class ApplicationClose(unittest.TestCase):
         for phrase in (
             "Bilgisayarı kapat",
             "Spotify uygulamasını kapat",
-            "AETHER uygulamasını kapattın mı?",
-            "AETHER nasıl kapatılır?",
-            "AETHER kamera görüntüsünü kapat",
-            "AETHER uygulamasını kapatma",
-            "Aether güncellemeyi kapat",
+            "FRIDAY uygulamasını kapattın mı?",
+            "FRIDAY nasıl kapatılır?",
+            "FRIDAY kamera görüntüsünü kapat",
+            "FRIDAY uygulamasını kapatma",
+            "FRIDAY güncellemeyi kapat",
         ):
             with self.subTest(phrase=phrase):
                 self.assertFalse(is_close_command(phrase))
@@ -49,16 +49,16 @@ class ApplicationClose(unittest.TestCase):
 class SleepCommands(unittest.TestCase):
     def test_turkish_sleep_synonyms(self):
         for phrase in (
-            "uyu", "AETHER uyu", "AETHER artık uyu",
-            "Aether uykuya geç", "AETHER uyku moduna geç",
-            "AETHER uyku modunu aç", "Aether, dinlemeyi bırak",
-            "AETHER DİNLEMEYİ DURDUR",
+            "uyu", "FRIDAY uyu", "FRIDAY artık uyu",
+            "FRIDAY uykuya geç", "FRIDAY uyku moduna geç",
+            "FRIDAY uyku modunu aç", "FRIDAY, dinlemeyi bırak",
+            "FRIDAY DİNLEMEYİ DURDUR",
         ):
             with self.subTest(phrase=phrase):
                 self.assertTrue(is_sleep_command(phrase))
 
     def test_not_an_unrelated_stop(self):
-        for phrase in ("müziği durdur", "dosyayı kapat", "AETHER güncellemeyi durdur"):
+        for phrase in ("müziği durdur", "dosyayı kapat", "FRIDAY güncellemeyi durdur"):
             with self.subTest(phrase=phrase):
                 self.assertFalse(is_sleep_command(phrase))
 
@@ -85,7 +85,7 @@ class GithubCommands(unittest.TestCase):
         for phrase, expected in (
             ("/git test", "test"),
             ("GITHUB TESTLERİNİ ÇALIŞTIR!", "test"),
-            ("Aether GitHub testlerini çalıştır", "test"),
+            ("FRIDAY GitHub testlerini çalıştır", "test"),
             ("GitHub geliştirme alanını ana dal ile eşitle", "sync"),
             ("GitHub geliştirme dalını güncelle.", "sync"),
             ("/git sync", "sync"),

@@ -1,8 +1,8 @@
 """
-core/webpush.py — notifications to the phone even when the AETHER page is closed.
+core/webpush.py — notifications to the phone even when the FRIDAY page is closed.
 
 Standard Web Push, sent straight from this computer to the phone's push
-service (Google's for Android/Chrome, Apple's for an iPhone with AETHER on the
+service (Google's for Android/Chrome, Apple's for an iPhone with FRIDAY on the
 home screen): VAPID (RFC 8292) to say who is sending and aes128gcm (RFC 8291)
 to encrypt the message so only that phone can read it. Built on the
 `cryptography` package already in requirements.txt — no push server, no

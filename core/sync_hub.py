@@ -1,8 +1,8 @@
 """
-core/sync_hub.py — one AETHER on every device: the shared memory and the
+core/sync_hub.py — one FRIDAY on every device: the shared memory and the
 mailbox, kept in a private GitHub gist.
 
-The web AETHER (web/, served from GitHub Pages over HTTPS) runs on the phone,
+The web FRIDAY (web/, served from GitHub Pages over HTTPS) runs on the phone,
 tablet, TV, projector or watch on its own — its brain is Gemini, reached
 directly from the device — so it keeps working when this computer is off. What
 the devices share lives in one secret gist of the user's own GitHub account:
@@ -49,7 +49,7 @@ CLAIM_SECONDS = 300.0                  # "I'm talking to THIS device" lasts this
 # microphone, typed into it), which wins for a few minutes.
 VOICE_PRIORITY = {"phone": 1, "pc": 2, "tablet": 3, "tv": 4, "projector": 4, "watch": 5}
 RECENT_MAX = 40
-REPLY_WAIT = 90.0                      # how long a command waits for AETHER's answer
+REPLY_WAIT = 90.0                      # how long a command waits for FRIDAY's answer
 
 _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": [],
           "etag": "", "last_memory": 0.0, "last_beat": 0.0, "turns": [], "lock": threading.Lock(),
@@ -121,7 +121,7 @@ def _req(method: str, path: str, token: str, body: dict | None = None,
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("X-GitHub-Api-Version", "2022-11-28")
-    req.add_header("User-Agent", "AETHER-sync")
+    req.add_header("User-Agent", "FRIDAY-sync")
     if data is not None:
         req.add_header("Content-Type", "application/json")
     if etag:
@@ -150,10 +150,10 @@ def _req(method: str, path: str, token: str, body: dict | None = None,
 
 def create_gist(token: str) -> tuple[str, str]:
     """A new secret gist for this user. Returns (gist_id, error)."""
-    body = {"description": "AETHER — ortak hafıza (gizli, silme)", "public": False,
+    body = {"description": "FRIDAY — ortak hafıza (gizli, silme)", "public": False,
             "files": {"memory.json": {"content": json.dumps(_empty_memory(), ensure_ascii=False)},
                       "recent.json": {"content": "[]"},
-                      "README.md": {"content": "AETHER'ın cihazlar arası ortak hafızası. Silme."}}}
+                      "README.md": {"content": "FRIDAY'ın cihazlar arası ortak hafızası. Silme."}}}
     st, js, _ = _req("POST", "/gists", token, body)
     if st == 201 and js and js.get("id"):
         return js["id"], ""
@@ -179,7 +179,7 @@ def read_gist(token: str, gist_id: str, etag: str = ""):
                 origin = urlsplit(url)
                 if origin.scheme != "https" or origin.netloc.lower() != "gist.githubusercontent.com":
                     raise ValueError("unexpected raw origin")
-                rq = urllib.request.Request(url, headers={"User-Agent": "AETHER-sync"})
+                rq = urllib.request.Request(url, headers={"User-Agent": "FRIDAY-sync"})
                 rq.add_unredirected_header("Authorization", f"Bearer {token}")
                 with urllib.request.urlopen(rq, timeout=15) as r:
                     files[name] = r.read().decode("utf-8")
@@ -294,7 +294,7 @@ def note_turn(role: str, text: str) -> None:
 
 
 def note_reply(text: str) -> None:
-    """AETHER just answered: the oldest waiting remote command gets this answer."""
+    """FRIDAY just answered: the oldest waiting remote command gets this answer."""
     if not text:
         return
     with _state["lock"]:
@@ -484,7 +484,7 @@ def send_to_device(name: str, cmd: dict) -> tuple[bool, str]:
     sync cycle (a few seconds)."""
     s = settings()
     if not (s.get("github_token") and s.get("gist_id")):
-        return False, "Cihazlar bağlı değil; önce 'AETHER'ı her cihaza kur' de."
+        return False, "Cihazlar bağlı değil; önce 'FRIDAY'ı her cihaza kur' de."
     d = find_device(name)
     if not d:
         names = ", ".join(x.get("name", "?") for x in devices()) or "yok"
@@ -519,7 +519,7 @@ def _deliver_out(files: dict, writes: dict) -> None:
 
 # ── this computer's projects, readable on every device ──────────────────────
 def projects_summary(limit: int = 8) -> list[dict]:
-    """Short status of the projects AETHER builds on this computer
+    """Short status of the projects FRIDAY builds on this computer
     (memory/continuity.py), for projects-<id>.json in the shared gist."""
     try:
         from memory import continuity
@@ -552,7 +552,7 @@ def recent_context(limit: int = 12, max_age_hours: float = 12.0) -> str:
     for t in _state.get("recent") or []:
         if str(t.get("device", "")) == me or _ts(str(t.get("ts", ""))) < cutoff:
             continue
-        who = "Kullanıcı" if t.get("role") == "user" else "AETHER"
+        who = "Kullanıcı" if t.get("role") == "user" else "FRIDAY"
         lines.append(f"[{t.get('device', '?')}] {who}: {str(t.get('text', ''))[:300]}")
     if not lines:
         return ""
@@ -607,7 +607,7 @@ def status_report() -> str:
     rem_lines = [f"- {datetime.fromtimestamp(r['due'] / 1000).strftime('%d.%m %H:%M')}: {r.get('text', '')}" for r in rem]
     linked = bool(settings().get("gist_id"))
     return ("CİHAZLAR:\n" + "\n".join(lines)
-            + ("" if linked else "\n(Diğer cihazlar bağlı değil: 'AETHER'ı her cihaza kur' denmeli.)")
+            + ("" if linked else "\n(Diğer cihazlar bağlı değil: 'FRIDAY'ı her cihaza kur' denmeli.)")
             + "\n\nSIRADAKİ ORTAK HATIRLATICILAR:\n" + ("\n".join(rem_lines) or "- yok"))
 
 
@@ -706,9 +706,9 @@ def _archive_id(token: str, files: dict | None = None, create: bool = True) -> s
         if not err and got:
             return _archive_id(token, got, create)
     if not aid and create:
-        st, js, _ = _req("POST", "/gists", token, {"description": "AETHER — konuşma arşivi (gizli, silme)",
+        st, js, _ = _req("POST", "/gists", token, {"description": "FRIDAY — konuşma arşivi (gizli, silme)",
                                                     "public": False,
-                                                    "files": {"README.md": {"content": "AETHER konuşma arşivi. Silme."}}})
+                                                    "files": {"README.md": {"content": "FRIDAY konuşma arşivi. Silme."}}})
         if st == 201 and js and js.get("id"):
             aid = js["id"]
             write_files(token, settings().get("gist_id", ""), {"archive.json": json.dumps({"gist": aid})})
@@ -781,11 +781,11 @@ def search_archive(query: str, days: float = 0) -> str:
     if not pick:
         return "Arşivde bununla ilgili bir konuşma bulamadım."
     lines = [f"{str(rows[j].get('ts', ''))[:16].replace('T', ' ')} [{rows[j].get('device', '?')}] "
-             f"{'Kullanıcı' if rows[j].get('role') == 'user' else 'AETHER'}: {rows[j].get('text', '')}" for j in pick]
+             f"{'Kullanıcı' if rows[j].get('role') == 'user' else 'FRIDAY'}: {rows[j].get('text', '')}" for j in pick]
     return f"Arşivden ({len(rows)} satır arandı):\n" + "\n".join(lines)[:6000]
 
 
-# ── notifications to devices whose AETHER page is closed (core/webpush) ─────
+# ── notifications to devices whose FRIDAY page is closed (core/webpush) ─────
 def _push_setup(files: dict, writes: dict) -> None:
     """The VAPID keys are shared in push.json (made by the first computer);
     each device that turned notifications on has push-sub-<id>.json."""
@@ -869,7 +869,7 @@ def _push_inboxes(files: dict, now: float) -> None:
         if fresh and not first:
             it = fresh[-1]
             alarm = it.get("kind") == "image" and "hareket" in str(it.get("title", "")).lower()
-            push_to(dev, ("🚨 " if alarm else "") + f"{it.get('from') or 'AETHER'} {_WHAT.get(it.get('kind'), 'bir şey gönderdi')}",
+            push_to(dev, ("🚨 " if alarm else "") + f"{it.get('from') or 'FRIDAY'} {_WHAT.get(it.get('kind'), 'bir şey gönderdi')}",
                     str(it.get("title") or it.get("text") or "Açınca görürsün.")[:300],
                     tag="alarm" if alarm else "inbox")
     _state["inbox_primed"] = True
@@ -883,7 +883,7 @@ def _push_due_reminders(merged: list[dict], now: float) -> None:
             continue
         if now * 1000 - 600_000 <= r["due"] <= now * 1000:
             pushed.add(r["id"])
-            title = "⚡ Protokol zamanı" if r.get("protocol") else "⏰ AETHER hatırlatıyor"
+            title = "⚡ Protokol zamanı" if r.get("protocol") else "⏰ FRIDAY hatırlatıyor"
             for dev in _offline_subscribers(now):
                 push_to(dev, title, str(r.get("text") or ""), tag=f"rem-{r['id']}")
 
@@ -1171,7 +1171,7 @@ def _reply(cid: str, text: str) -> None:
 def _received_dir() -> Path:
     for base in (Path.home() / "Documents", Path.home() / "Belgeler", Path.home() / "Desktop", Path.home()):
         if base.exists():
-            d = base / "AETHER" / "Gelenler"
+            d = base / "FRIDAY" / "Gelenler"
             try:
                 d.mkdir(parents=True, exist_ok=True)
                 return d
@@ -1277,7 +1277,7 @@ def _receive_image(cid: str, cmd: dict, sender: str) -> None:
         if cmd.get("data"):
             data = base64.b64decode(cmd["data"])
         elif str(cmd.get("url") or "").startswith("https://"):
-            req = urllib.request.Request(cmd["url"], headers={"User-Agent": "AETHER/1.0"})
+            req = urllib.request.Request(cmd["url"], headers={"User-Agent": "FRIDAY/1.0"})
             with urllib.request.urlopen(req, timeout=150) as r:
                 mime = (r.headers.get("Content-Type") or mime).split(";")[0]
                 data = r.read()
@@ -1303,7 +1303,7 @@ def _run_command(cid: str, text: str, sender: str) -> None:
         return
     if text.startswith("update:"):
         cb = _state.get("on_update")
-        reply = "Güncelleme başladı; AETHER kendini yeniden açacak." if cb else "Güncelleme burada başlatılamıyor."
+        reply = "Güncelleme başladı; FRIDAY kendini yeniden açacak." if cb else "Güncelleme burada başlatılamıyor."
         with _state["lock"]:
             _state["pending"].append({"id": cid, "at": time.time(), "reply": reply})
         if cb:
@@ -1356,7 +1356,7 @@ WEB_URL = "https://fatmakahraman304-hash.github.io/JARV-S/"
 
 
 def setup_link(gemini_key: str) -> str:
-    """The link that sets up the web AETHER on another device in one tap."""
+    """The link that sets up the web FRIDAY on another device in one tap."""
     import base64
     s = settings()
     payload = {"g": gemini_key or "", "t": s.get("github_token", ""), "i": s.get("gist_id", ""),
@@ -1368,6 +1368,6 @@ def setup_link(gemini_key: str) -> str:
 def _assistant_name() -> str:
     try:
         from memory.config_manager import get_assistant_name
-        return get_assistant_name() or "AETHER"
+        return get_assistant_name() or "FRIDAY"
     except Exception:
-        return "AETHER"
+        return "FRIDAY"

@@ -25,7 +25,7 @@ class ConfigSafety(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_legacy_assistant_name_becomes_friday(self):
-        for old in ("AETHER", "AETHER.", "Aether", "aether", "LegacyAssistant", "Custom"):
+        for old in ("FRIDAY", "FRIDAY.", "Aether", "aether", "LegacyAssistant", "Custom"):
             self.file.write_text(json.dumps({"assistant_name": old, "user_name": "Ada"}))
             self.assertEqual(cm.get_assistant_name(), "FRIDAY")
             self.assertEqual(cm.get_user_name(), "Ada")

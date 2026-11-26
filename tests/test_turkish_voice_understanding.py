@@ -9,25 +9,25 @@ from core.live_transcript import combined_text, merge_input_chunk
 class InputTranscriptTests(unittest.TestCase):
     def test_independent_segments_keep_utterance_in_order(self):
         parts = []
-        for new in ("AETHER", "bilgisayarın sesini", "kıs"):
+        for new in ("FRIDAY", "bilgisayarın sesini", "kıs"):
             parts = merge_input_chunk(parts, new)
-        self.assertEqual(combined_text(parts), "AETHER bilgisayarın sesini kıs")
+        self.assertEqual(combined_text(parts), "FRIDAY bilgisayarın sesini kıs")
 
     def test_cumulative_audio_transcription_does_not_duplicate(self):
         parts = []
-        for new in ("AETHER ışığı", "AETHER ışığı aç", "AETHER ışığı aç"):
+        for new in ("FRIDAY ışığı", "FRIDAY ışığı aç", "FRIDAY ışığı aç"):
             parts = merge_input_chunk(parts, new)
-        self.assertEqual(combined_text(parts), "AETHER ışığı aç")
+        self.assertEqual(combined_text(parts), "FRIDAY ışığı aç")
 
     def test_short_aether_partial_then_full_phrase(self):
-        parts = merge_input_chunk(["AETHER"], "AETHER sesi biraz kıs")
-        self.assertEqual(combined_text(parts), "AETHER sesi biraz kıs")
+        parts = merge_input_chunk(["FRIDAY"], "FRIDAY sesi biraz kıs")
+        self.assertEqual(combined_text(parts), "FRIDAY sesi biraz kıs")
 
     def test_word_boundary_overlap_only_once(self):
         parts = []
-        for new in ("AETHER Spotify'ı aç", "Spotify'ı aç sonra sesi kıs"):
+        for new in ("FRIDAY Spotify'ı aç", "Spotify'ı aç sonra sesi kıs"):
             parts = merge_input_chunk(parts, new)
-        self.assertEqual(combined_text(parts), "AETHER Spotify'ı aç sonra sesi kıs")
+        self.assertEqual(combined_text(parts), "FRIDAY Spotify'ı aç sonra sesi kıs")
 
     def test_legitimate_single_word_repetition_is_kept(self):
         self.assertEqual(combined_text(merge_input_chunk(["evet"], "evet")), "evet evet")
@@ -41,15 +41,15 @@ class InputTranscriptTests(unittest.TestCase):
         self.assertEqual(combined_text(parts), "Aether bilgisayarı kapatma")
 
     def test_empty_chunks_not_added_or_mutated(self):
-        previous = ["AETHER kamera aç"]
+        previous = ["FRIDAY kamera aç"]
         self.assertEqual(merge_input_chunk(previous, "  "), previous)
-        self.assertEqual(previous, ["AETHER kamera aç"])
+        self.assertEqual(previous, ["FRIDAY kamera aç"])
 
 
 class MisunderstandingFeedbackTests(unittest.TestCase):
     def test_user_corrections_are_feedback(self):
         for phrase in ("Beni yanlış anladın", "Öyle demedim", "Yanlış duydun",
-                       "Beni anlamıyorsun", "AETHER yanlış anlıyorsun"):
+                       "Beni anlamıyorsun", "FRIDAY yanlış anlıyorsun"):
             with self.subTest(phrase=phrase):
                 self.assertEqual(kind(phrase), "feedback")
                 self.assertTrue(should_act(phrase))

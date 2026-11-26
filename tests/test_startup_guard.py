@@ -30,8 +30,8 @@ class StartupGuardTests(unittest.TestCase):
                               errors="replace", timeout=15)
 
     def test_pending_transactions_block_before_application_imports(self):
-        for marker in (b"AETHER/2 zip\n{}", b"AETHER/2 rollback\n{}",
-                       b"AETHER/1 applying", b"unknown", b""):
+        for marker in (b"FRIDAY/2 zip\n{}", b"FRIDAY/2 rollback\n{}",
+                       b"FRIDAY/1 applying", b"unknown", b""):
             with self.subTest(marker=marker):
                 (self.root / ".aether-update.lock").write_bytes(marker)
                 result = self.launch()
@@ -46,9 +46,9 @@ class StartupGuardTests(unittest.TestCase):
         self.assertFalse((self.root / ".aether-update.guard").exists())
 
     def test_interrupted_read_only_check_does_not_block_startup(self):
-        (self.root / ".aether-update.lock").write_bytes(b"AETHER/1 checking")
+        (self.root / ".aether-update.lock").write_bytes(b"FRIDAY/1 checking")
         self.assertIn("APPLICATION_IMPORT_REACHED", self.launch().stderr)
-        self.assertEqual((self.root / ".aether-update.lock").read_bytes(), b"AETHER/1 checking")
+        self.assertEqual((self.root / ".aether-update.lock").read_bytes(), b"FRIDAY/1 checking")
 
     def test_active_updater_blocks_even_before_transaction_marker(self):
         from core.app_updater import _update_guard
@@ -66,7 +66,7 @@ from unittest.mock import patch
 from core import app_updater as u
 root = Path.cwd()
 marker = root / ".aether-update.lock"
-marker.write_bytes(b"AETHER/1 checking")
+marker.write_bytes(b"FRIDAY/1 checking")
 replace = u.os.replace
 def stop(src, dst):
     replace(src, dst)

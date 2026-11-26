@@ -1,11 +1,11 @@
-"""AETHER kodlama model kontrolü: NVIDIA Build → Gemini."""
+"""FRIDAY kodlama model kontrolü: NVIDIA Build → Gemini."""
 
 from core import coding_router
 
 PLUGIN = {
     "name": "coding_setup",
     "description": (
-        "AETHER kodlama modellerini Türkçe kontrol et. Öncelik NVIDIA Build'dir, "
+        "FRIDAY kodlama modellerini Türkçe kontrol et. Öncelik NVIDIA Build'dir, "
         "NVIDIA kullanılamazsa Gemini'ye geçilir. "
         "'Kodlama durumunu kontrol et', 'NVIDIA API durumunu kontrol et', "
         "'kodlama sırasını göster', 'NVIDIA modelini değiştir' komutları. "

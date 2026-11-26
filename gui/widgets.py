@@ -144,7 +144,7 @@ class LogWidget(QTextEdit):
         self._pos     = 0
         self._tag     = "sys"
         self._fmt     = QTextCharFormat()
-        self._ai_name_lc = "aether"   # updated when assistant name changes
+        self._ai_name_lc = "friday"   # updated when assistant name changes
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._sig.connect(self._enqueue)

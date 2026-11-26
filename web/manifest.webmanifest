@@ -1,7 +1,7 @@
 {
-  "name": "AETHER",
-  "short_name": "AETHER",
-  "description": "AETHER her cihazda — telefon, tablet, TV, projeksiyon, saat.",
+  "name": "FRIDAY",
+  "short_name": "FRIDAY",
+  "description": "FRIDAY her cihazda — telefon, tablet, TV, projeksiyon, saat.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

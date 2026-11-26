@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Callable
 
 MODEL_NAME = "vosk-model-small-en-us-0.15"
-# Vosk may transcribe the FRIDAY (EY-TIR) wake word as "either".
+# Recognize only the current assistant identity.
 KEYPHRASE = "hey friday"
-KEYPHRASES = ("hey friday", "hello friday", "hey either", "hey aether", "hey ether")
+KEYPHRASES = ("hey friday", "hello friday", "friday")
 DEFAULT_THRESHOLD = 0.8
 SAMPLE_RATE = 16000
 

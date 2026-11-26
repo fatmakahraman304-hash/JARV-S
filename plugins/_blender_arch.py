@@ -1,4 +1,4 @@
-"""AETHER's architecture engine — loaded inside Blender after _blender_kit.py
+"""FRIDAY's architecture engine — loaded inside Blender after _blender_kit.py
 (it uses box(), assign(), the materials …). The model describes a building as
 a plan (a dict); this file turns the plan into exact geometry, so walls meet,
 slabs sit on walls, windows and doors are real holes with frames and glass,

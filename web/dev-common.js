@@ -1,10 +1,10 @@
-/* AETHER — what every device module (dev-*.js) shares: a place for its own
+/* FRIDAY — what every device module (dev-*.js) shares: a place for its own
  * settings in ⚙, a style sheet, a vibration that never throws.
- * The modules reach the app only through window.AETHER (end of app.js).
+ * The modules reach the app only through window.FRIDAY (end of app.js).
  */
 (() => {
   'use strict';
-  const J = window.AETHER; if (!J) return;
+  const J = window.FRIDAY; if (!J) return;
 
   J.is = (...kinds) => kinds.includes(J.kind);
   J.idleMs = () => Date.now() - J.lastInteract;

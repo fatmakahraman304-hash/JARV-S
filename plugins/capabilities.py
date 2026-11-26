@@ -1,4 +1,4 @@
-"""'Neler yapabilirsin?' — everything AETHER can do, grouped, with things to say.
+"""'Neler yapabilirsin?' — everything FRIDAY can do, grouped, with things to say.
 
 Built from the tools that are really installed and enabled right now (so a new
 plugin shows up by itself), arranged in groups a person thinks in, each with a
@@ -11,8 +11,8 @@ from pathlib import Path
 PLUGIN = {
     "name": "capabilities",
     "description": (
-        "Everything AETHER can do, grouped (computer, files, messages and devices, media, 3D and design, planning, "
-        "coding, AETHER itself …) with example sentences — from the tools installed right now. Use for 'neler "
+        "Everything FRIDAY can do, grouped (computer, files, messages and devices, media, 3D and design, planning, "
+        "coding, FRIDAY itself …) with example sentences — from the tools installed right now. Use for 'neler "
         "yapabilirsin?', 'ne işe yararsın?', 'yardım', 'hangi komutları biliyorsun?', 'Blender'da neler yaparsın?' "
         "(topic=…)."
     ),
@@ -35,7 +35,7 @@ GROUPS = [
     ("Kod ve geliştirme", ["dev_agent", "code_helper", "github_develop", "coding_setup", "application_learning",
                            "voice_prototype"]),
     ("Oyun", ["chess", "game_updater"]),
-    ("AETHER'ın kendisi", ["self_check", "self_update", "work_status", "job_control", "status_report", "capabilities"]),
+    ("FRIDAY'ın kendisi", ["self_check", "self_update", "work_status", "job_control", "status_report", "capabilities"]),
 ]
 
 EXAMPLES = {
@@ -141,7 +141,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         text = overview(str((parameters or {}).get("topic") or ""))
         if player is not None and hasattr(player, "show_content"):
-            player.show_content("AETHER — neler yapabilirim", text)
+            player.show_content("FRIDAY — neler yapabilirim", text)
         return text + ("\n(Kullanıcıya kısaca söyle: ana grupları ve birkaç örnek; tam liste ekranda. Sonunda bir "
                        "tane denemesini öner.)")
     except Exception as exc:

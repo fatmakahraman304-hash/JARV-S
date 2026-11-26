@@ -1,8 +1,8 @@
-"""core/composio.py — AETHER's bridge to 1000+ apps through Composio.
+"""core/composio.py — FRIDAY's bridge to 1000+ apps through Composio.
 
 Composio's Tool Router gives one session per user that can search every app
 Composio supports, connect the user's account with Composio-managed login (no
-OAuth app of our own to register), and run the app's actions. AETHER uses it
+OAuth app of our own to register), and run the app's actions. FRIDAY uses it
 through four calls:
 
     search(use_case)       which tools fit a task, their inputs, and whether the

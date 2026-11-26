@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#030915">
-  <title>AETHER · AI OS</title>
+  <title>FRIDAY · AI OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --bg: #030915; --bg2: #0a1430; --line: rgba(25,205,255,0.16); --line2: rgba(25,205,255,0.32);
       --blue: #18cfff; --cyan: #8ceaff; --glow: rgba(17,200,255,0.55);
-      --text: #f3ece5; --muted: #9b9087; --green: #3ddc97; --red: #ff6b7a; --amber: #ffb648;
+      --text: #e9f4ff; --muted: #7894ab; --green: #3ddc97; --red: #ff6b7a; --amber: #ffb648;
       --card: rgba(26,19,13,0.6);
     }
     html, body { height: 100%; }
@@ -87,7 +87,7 @@
     /* devices */
     .sec { margin-top: 18px; }
     .sec-h { display: flex; justify-content: space-between; align-items: center; font-size: 12px; letter-spacing: 3px;
-             color: #d2c7bd; font-weight: 700; }
+             color: #aec8db; font-weight: 700; }
     .sec-h span.n { font-size: 11px; padding: 2px 8px; border: 1px solid var(--line2); border-radius: 8px; color: var(--cyan); letter-spacing: 1px; }
     .sec-h::after { content: none; }
     .rule { height: 2px; margin: 7px 0 10px; background: linear-gradient(90deg, var(--blue), transparent 60%); opacity: .7; }
@@ -104,7 +104,7 @@
     .chip { font-size: 11px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line2); color: var(--cyan); background: transparent; }
     .row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
     .ghost { flex: 1; min-width: 140px; padding: 11px; border-radius: 12px; border: 1px dashed var(--line2);
-             background: transparent; color: #d2c7bd; font-family: inherit; font-size: 13px; letter-spacing: .5px; cursor: pointer; }
+             background: transparent; color: #aec8db; font-family: inherit; font-size: 13px; letter-spacing: .5px; cursor: pointer; }
 
     /* drawer */
     .scrim { position: fixed; inset: 0; background: rgba(5,3,2,.65); opacity: 0; pointer-events: none; transition: .2s; z-index: 20; }
@@ -123,7 +123,7 @@
     .sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 78vh; background: #0b0806; border-top: 1px solid var(--line2);
              border-radius: 20px 20px 0 0; transform: translateY(102%); transition: .25s; z-index: 22; display: flex; flex-direction: column; }
     body.chat .sheet { transform: none; } body.chat .scrim { opacity: 1; pointer-events: auto; }
-    .sheet-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; font-size: 12px; letter-spacing: 3px; color: #d2c7bd; }
+    .sheet-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; font-size: 12px; letter-spacing: 3px; color: #aec8db; }
     main#feed { flex: 1; overflow-y: auto; padding: 6px 14px 18px; display: flex; flex-direction: column; gap: 9px; }
     .msg { max-width: 86%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.5; }
     .msg-j { align-self: flex-start; background: rgba(17,200,255,.13); border: 1px solid var(--line2); border-bottom-left-radius: 4px; }
@@ -147,7 +147,7 @@
     dialog.dlg::backdrop { background: rgba(5,3,2,.78); }
     .dlg-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .dlg-h h2 { font-size: 19px; letter-spacing: .5px; }
-    .dlg p { font-size: 14px; line-height: 1.5; color: #d2c7bd; }
+    .dlg p { font-size: 14px; line-height: 1.5; color: #aec8db; }
     .dlg form { display: grid; gap: 10px; margin-top: 8px; }
     .dlg input[type=text], .dlg input[type=url], .dlg select, .dlg textarea {
       width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line2); background: rgba(10,7,5,.85);
@@ -182,7 +182,7 @@
     <button type="button" id="fortune-open">☕ Kahve falı</button>
     <button type="button" id="m-tv">📺 Televizyona gönder</button>
     <button type="button" id="m-shot">🖼️ Ekran görüntüsü al</button>
-    <button type="button" id="wake">⚡ AETHER'ı uyandır</button>
+    <button type="button" id="wake">⚡ FRIDAY'ı uyandır</button>
     <button type="button" id="m-refresh">🔄 Cihazları yenile</button>
     <button type="button" id="m-update">⬆ Bilgisayarı güncelle</button>
     <div class="enc">Bağlantı: <b id="enc">…</b><br><span>__IP__:__PORT__</span></div>
@@ -191,14 +191,14 @@
   <div class="wrap">
     <header class="top">
       <button class="icon-btn" id="menu-btn" type="button" aria-label="Menü">☰</button>
-      <div class="brand"><b>AETHER</b><small>AI OS</small></div>
+      <div class="brand"><b>FRIDAY</b><small>AI OS</small></div>
       <div class="top-r">
         <button class="icon-btn off" id="spk" type="button" aria-label="Yanıtları telefonda seslendir">🔈</button>
         <div class="avatar" id="avatar" title="Kontrol edilen cihaz">J</div>
       </div>
     </header>
 
-    <div class="reactor" id="reactor"><canvas id="core" aria-label="AETHER çekirdeği"></canvas></div>
+    <div class="reactor" id="reactor"><canvas id="core" aria-label="FRIDAY çekirdeği"></canvas></div>
 
     <section class="status" aria-live="polite">
       <div id="st-title">Bağlanıyor…</div>
@@ -208,13 +208,13 @@
     </section>
 
     <div class="reply" id="reply" hidden>
-      <div class="lbl"><span>AETHER</span><a href="#" id="reply-all">TÜMÜ ›</a></div>
+      <div class="lbl"><span>FRIDAY</span><a href="#" id="reply-all">TÜMÜ ›</a></div>
       <div id="reply-text"></div>
     </div>
 
     <form class="ask" id="ask" autocomplete="off">
       <button class="round" id="mic-btn" type="button" title="Sesli komut">🎙️</button>
-      <input id="inp" placeholder="AETHER'a bir şey sor…" enterkeyhint="send">
+      <input id="inp" placeholder="FRIDAY'a bir şey sor…" enterkeyhint="send">
       <button class="round" id="send-btn" type="submit" title="Gönder">➤</button>
     </form>
     <input type="file" id="file-inp" multiple accept="*/*" hidden>
@@ -269,7 +269,7 @@
       <select id="tv-target"></select>
       <input type="text" id="tv-value" placeholder="Video adı ya da YouTube linki">
       <button class="btn btn-send" type="submit">Televizyonda aç</button>
-      <div class="tabs"><button class="btn" type="button" id="tv-home">🏠 AETHER ekranı</button>
+      <div class="tabs"><button class="btn" type="button" id="tv-home">🏠 FRIDAY ekranı</button>
         <button class="btn" type="button" id="tv-clear">✕ Kapat</button></div>
       <p id="tv-status" role="status"></p>
     </form>
@@ -282,7 +282,7 @@
 
   <dialog class="dlg" id="scan-dialog" aria-labelledby="scan-title">
     <div class="dlg-h"><h2 id="scan-title">Kamera Taraması</h2><button class="btn" type="button" id="scan-close">Kapat</button></div>
-    <p>Fotoğraf çek ya da seç; AETHER tarayıp sonucu bilgisayarda gösterir.</p>
+    <p>Fotoğraf çek ya da seç; FRIDAY tarayıp sonucu bilgisayarda gösterir.</p>
     <form id="scan-form">
       <button class="btn" type="button" id="scan-camera" hidden>Kamerayı aç</button>
       <video id="scan-video" hidden playsinline muted autoplay></video>
@@ -310,7 +310,7 @@
   <script>
     // ── Devices and auth ─────────────────────────────────────────────────────
     // The phone can command several computers: this one (same origin) and the
-    // other AETHER computers on the network, each with a token it issued.
+    // other FRIDAY computers on the network, each with a token it issued.
     let selfToken = sessionStorage.getItem('aether_token');
     const _sessionKey = sessionStorage.getItem('aether_key');
     if (!selfToken) location.replace('/login');
@@ -389,7 +389,7 @@
     function append(speaker, text) {
       const d = document.createElement('div');
       if (speaker === 'aether') {
-        d.className = 'msg msg-j'; d.innerHTML = `<div class="lbl">AETHER</div>${esc(text)}`;
+        d.className = 'msg msg-j'; d.innerHTML = `<div class="lbl">FRIDAY</div>${esc(text)}`;
         replyText.textContent = text; replyBox.hidden = false; replyBox.scrollTop = 0;
         speak(text);
       } else {
@@ -424,7 +424,7 @@
     }
 
     // ── Reactor and waveform ─────────────────────────────────────────────────
-    const core = AetherReactor(document.getElementById('core'));
+    const core = FridayReactor(document.getElementById('core'));
     const wave = document.getElementById('wave');
     const wctx = wave.getContext('2d');
     let level = 0, levelTarget = 0, lastLevelAt = 0;
@@ -509,7 +509,7 @@
       for (const p of devState.peers || []) {
         const paired = !!peers[p.id];
         if (paired && peers[p.id].url !== p.url) { peers[p.id].url = p.url; _savePeers(); }
-        rows.push({ key: p.id, name: p.name, sub: (p.os || 'AETHER') + (paired ? '' : ' · eşlenmedi'),
+        rows.push({ key: p.id, name: p.name, sub: (p.os || 'FRIDAY') + (paired ? '' : ' · eşlenmedi'),
                     kind: p.kind, online: p.online, type: 'pc', paired, url: p.url });
       }
       for (const id of Object.keys(peers)) {
@@ -577,7 +577,7 @@
         const p = (devState.peers || []).find(x => x.id === key);
         document.getElementById('pair-title').textContent = `${p ? p.name : 'Bilgisayar'} — eşle`;
         document.getElementById('pair-help').innerHTML =
-          `O bilgisayarda AETHER'ta <b>Uzaktan Kontrol</b>'e bas ve çıkan <b>8 haneli kodu</b> buraya yaz. Bir kez yeter.`;
+          `O bilgisayarda FRIDAY'ta <b>Uzaktan Kontrol</b>'e bas ve çıkan <b>8 haneli kodu</b> buraya yaz. Bir kez yeter.`;
         code.placeholder = 'KOD'; code.inputMode = 'text'; name.hidden = true;
       }
       pairDlg.showModal();
@@ -800,12 +800,12 @@
           scanStatus.textContent = data.error || 'Tarama tamamlanamadı.';
           return;
         }
-        scanStatus.textContent = 'Sonuç AETHER’a gönderildi.';
+        scanStatus.textContent = 'Sonuç FRIDAY’a gönderildi.';
         scanResult.textContent = [data.summary, ...data.details,
           ...(data.qr.length ? ['Okunan QR', ...data.qr] : []), data.notice]
           .filter(Boolean).join('\n\n');
       } catch {
-        if (session === scanSession) scanStatus.textContent = 'Bağlantı kesildi. AETHER açıkken tekrar dene.';
+        if (session === scanSession) scanStatus.textContent = 'Bağlantı kesildi. FRIDAY açıkken tekrar dene.';
       } finally {
         scanSending = false;
         scanCamera.disabled = scanInput.disabled = false;
@@ -869,7 +869,7 @@
         fortuneStatus.textContent = '';
         fortuneResult.textContent = result.reading;
       } catch {
-        fortuneStatus.textContent = 'Bağlantı kesildi. AETHER açıkken tekrar dene.';
+        fortuneStatus.textContent = 'Bağlantı kesildi. FRIDAY açıkken tekrar dene.';
       } finally {
         fortuneSubmit.disabled = false;
         fortunePhoto.disabled = false;
@@ -1000,7 +1000,7 @@
     // ── AES-256-GCM (Web Crypto) — commands to THIS computer ─────────────────
     // Same scheme as before: PBKDF2(200k) from the pairing key, a fresh nonce
     // per message. Only possible in a secure context (HTTPS).
-    const _AES_SALT = 'AETHER-DASHBOARD-v1';
+    const _AES_SALT = 'FRIDAY-DASHBOARD-v1';
     const _KDF_ROUNDS = 200000;
     let _aesKey = null, _encReady = false;
     async function _initCrypto(key) {
@@ -1154,7 +1154,7 @@
           src.connect(sp); sp.connect(ctx.destination); _audioNd = sp;
         }
         micBtn.textContent = '⏹'; micBtn.title = 'Durdurmak için dokun'; micBtn.classList.add('recording');
-        stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, AETHER seni duyuyor.';
+        stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, FRIDAY seni duyuyor.';
         toast('🎙️ Canlı');
       };
       ws2.onclose = () => { _stopVoice(); };

@@ -15,9 +15,9 @@ def ensure_safe_startup(root):
             return
         with marker.open("rb") as handle:
             raw = handle.read(64)
-        if raw == b"AETHER/1 checking":
+        if raw == b"FRIDAY/1 checking":
             return  # No application files were written during this phase.
-        if raw.startswith((b"AETHER/2 zip\n", b"AETHER/2 rollback\n")):
+        if raw.startswith((b"FRIDAY/2 zip\n", b"FRIDAY/2 rollback\n")):
             raise RuntimeError(
                 "Yarım kalan ZIP işlemi var. FRIDAY kapalıyken kurulum klasöründe "
                 "aynı Python ile `python -m core.app_updater --recover` çalıştırın. "

@@ -1,4 +1,4 @@
-"""Which house events AETHER says by itself: doors/windows opening, and alarms (smoke, gas, leak, CO).
+"""Which house events FRIDAY says by itself: doors/windows opening, and alarms (smoke, gas, leak, CO).
 
 The watching is core/home_watch.py (needs Home Assistant connected through smart_home).
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 PLUGIN = {
     "name": "home_alerts",
     "description": (
-        "House events AETHER announces by itself through Home Assistant: doors/windows/garage opening or closing "
+        "House events FRIDAY announces by itself through Home Assistant: doors/windows/garage opening or closing "
         "(doors) and alarms — smoke, gas, water leak, carbon monoxide (alarms; also sent to the phone, even in "
         "quiet mode), and presence — a welcome home when someone arrives, a phone note about lights left on "
         "when they leave (presence). 'kapı açılınca söyleme', 'eve gelince karşılama', 'ev uyarıları açık mı'. "

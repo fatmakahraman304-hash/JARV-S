@@ -332,7 +332,7 @@ class CustomizeOverlay(QWidget):
         lay.addWidget(_lbl("ADINIZ  (boşsa varsayılan hitap kullanılır)", 8,
                             color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
         self._user_input = QLineEdit(user_name)
-        self._user_input.setPlaceholderText("Örn. Murat  (otomatik için boş bırakın)")
+        self._user_input.setPlaceholderText("Hitap adınız  (otomatik için boş bırakın)")
         self._user_input.setFont(hud_font(10))
         self._user_input.setFixedHeight(32)
         self._user_input.setStyleSheet(_fs)

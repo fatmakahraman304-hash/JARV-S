@@ -1,4 +1,4 @@
-"""AETHER's self check: every check runs, problems come with a fix, a hung check cannot hold it up."""
+"""FRIDAY's self check: every check runs, problems come with a fix, a hung check cannot hold it up."""
 import time
 import unittest
 from unittest.mock import patch
@@ -66,7 +66,7 @@ class Logbook(unittest.TestCase):
                 sys.path.insert(0, {str(root)!r})
                 from core import logbook
                 logbook.install({d!r})
-                print("[AETHER] normal bir satır")
+                print("[FRIDAY] normal bir satır")
                 print("[Blender] Error: bağlantı koptu")
                 t = threading.Thread(target=lambda: 1 / 0, name="arka-is"); t.start(); t.join()
                 raise RuntimeError("ana iş çöktü")

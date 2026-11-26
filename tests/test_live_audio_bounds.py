@@ -8,7 +8,7 @@ from tests._main_import import load_main
 
 class LiveAudioBounds(unittest.IsolatedAsyncioTestCase):
     def make(self, size=2):
-        live = load_main().AetherLive
+        live = load_main().FridayLive
         fake = SimpleNamespace(out_queue=asyncio.Queue(maxsize=size),
                                audio_in_queue=asyncio.Queue(maxsize=size),
                                _awake=True, _interrupted=False, _playback_epoch=0)

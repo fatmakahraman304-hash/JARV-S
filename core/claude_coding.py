@@ -1,4 +1,4 @@
-"""Use the locally installed Claude Code CLI for AETHER coding prompts."""
+"""Use the locally installed Claude Code CLI for FRIDAY coding prompts."""
 
 import json
 import os
@@ -38,7 +38,7 @@ def generate_content(prompt: str):
                  "--disallowedTools", "mcp__*", "--setting-sources", "",
                  "--no-chrome", "--no-session-persistence",
                  "Return only the requested response using the supplied stdin as the task. "
-                 "AETHER applies changes and tests separately."],
+                 "FRIDAY applies changes and tests separately."],
                 input=prompt, cwd=folder, capture_output=True, encoding="utf-8", errors="replace",
                 timeout=300, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )

@@ -1,4 +1,4 @@
-"""AETHER's Blender brain: lessons, script checks, the fix-and-retry loop, and
+"""FRIDAY's Blender brain: lessons, script checks, the fix-and-retry loop, and
 (with a real Blender on PATH) scripts and self-study."""
 import os
 import shutil

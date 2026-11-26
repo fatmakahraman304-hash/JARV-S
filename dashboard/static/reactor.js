@@ -1,13 +1,13 @@
-/* AETHER reactor core — the same procedural cyan energy sphere as the desktop
+/* FRIDAY reactor core — the same procedural cyan energy sphere as the desktop
  * (gui/reactor.py), drawn on a <canvas> for the phone, tablet, TV and watch
  * pages. An ice-white core inside a geodesic wireframe sphere, 3-D light rays,
  * thick orbiting arcs and swirling particle bands, all projected through a
  * perspective camera. Spin speed follows the state; brightness follows the
  * real voice level.
  *
- *   const core = AetherReactor(canvas);
+ *   const core = FridayReactor(canvas);
  *   core.state = 'thinking';   // idle | thinking | speaking | sleeping | offline
- *   core.level = 0.6;          // 0..1, AETHER's voice
+ *   core.level = 0.6;          // 0..1, FRIDAY's voice
  */
 (function () {
   'use strict';
@@ -55,7 +55,7 @@
     return { V: V.map(p => [p[0] * MESH_R, p[1] * MESH_R, p[2] * MESH_R]), E: [...E].map(k => k.split('_').map(Number)) };
   }
 
-  window.AetherReactor = function (canvas, opts) {
+  window.FridayReactor = function (canvas, opts) {
     opts = opts || {};
     const small = opts.small || false;               // watches and slow devices
     const R = rng(57);

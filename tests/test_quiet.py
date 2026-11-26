@@ -1,4 +1,4 @@
-"""Quiet mode: AETHER volunteers nothing, reminders still come, held items told once it ends."""
+"""Quiet mode: FRIDAY volunteers nothing, reminders still come, held items told once it ends."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -82,7 +82,7 @@ class GuardTest(unittest.TestCase):
 
         async def go():
             async with asyncio.TaskGroup() as tg:
-                tg.create_task(main.AetherLive._guarded(object(), bad))
+                tg.create_task(main.FridayLive._guarded(object(), bad))
                 tg.create_task(good())
         asyncio.run(go())
         self.assertEqual(done, [True])

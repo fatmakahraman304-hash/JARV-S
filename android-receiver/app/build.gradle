@@ -9,8 +9,8 @@ android {
         applicationId 'com.aether.alici'
         minSdk 24
         targetSdk 30          // sideloaded on TV boxes / projectors (Android 11 on the HY320)
-        versionCode 12
-        versionName '2.2'
+        versionCode 13
+        versionName '2.3'
     }
     signingConfigs {
         // A fixed key in the repo so every build can update the installed app.

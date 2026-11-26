@@ -1,5 +1,5 @@
 """Sistem uyarıları: işlemci uzun süre %90'ın üstünde, bellek dolmak üzere ya
-da disk bitmek üzereyse AETHER kendiliğinden söyler (açılınca)."""
+da disk bitmek üzereyse FRIDAY kendiliğinden söyler (açılınca)."""
 from __future__ import annotations
 
 import threading

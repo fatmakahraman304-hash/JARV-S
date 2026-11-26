@@ -222,7 +222,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertFalse((self.root / 'main.py').exists())
 
     def test_interrupted_read_only_phase_retries(self):
-        (self.root / '.aether-update.lock').write_bytes(b'AETHER/1 checking')
+        (self.root / '.aether-update.lock').write_bytes(b'FRIDAY/1 checking')
         with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):
             self.assertTrue(u.update(self.root)[0])
         self.assertFalse((self.root / '.aether-update.lock').exists())
@@ -488,7 +488,7 @@ with patch.object(u.os, 'replace', side_effect=stop):
 
     def test_exception_after_replace_recovers_from_durable_journal(self):
         marker = self.root / ".aether-update.lock"
-        marker.write_bytes(b"AETHER/1 checking")
+        marker.write_bytes(b"FRIDAY/1 checking")
         new = dict(self.old, **{"main.py": b"new main"})
         replace = u._replace_bytes
         failed = False

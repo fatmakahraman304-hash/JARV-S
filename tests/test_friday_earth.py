@@ -16,7 +16,7 @@ class FridayEarth(unittest.TestCase):
     def test_voice_and_name_upgrade_preserves_secrets_and_user(self):
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / "api_keys.json"
-            data = {"assistant_name":"AETHER", "voice_name":"Charon", "user_name":"Murat",
+            data = {"assistant_name":"FRIDAY", "voice_name":"Charon", "user_name":"Murat",
                     "gemini_api_key":"local-test", "providers":{"mode":"pipeline"},
                     "whatsapp_assistant":{"messages_enabled":True,"secret":"saved-locally"}}
             file.write_text(json.dumps(data))
@@ -51,10 +51,11 @@ class FridayEarth(unittest.TestCase):
         self.assertNotIn("WhatsApp Business", settings)
         self.assertNotIn("Kişiselleştirme", settings)
 
-    def test_friday_wake_and_explicit_close_keep_legacy(self):
+    def test_friday_wake_and_explicit_close_use_current_identity(self):
         from core.wake_word import KEYPHRASES
         from core.voice_commands import is_close_command
         self.assertIn("hey friday", KEYPHRASES)
-        self.assertIn("hey aether", KEYPHRASES)
+        self.assertNotIn("hey aether", KEYPHRASES)
+        self.assertFalse(is_close_command("Aether uygulamasını kapat"))
         self.assertTrue(is_close_command("FRIDAY uygulamasını kapat"))
         self.assertFalse(is_close_command("FRIDAY bilgisayarı kapat"))

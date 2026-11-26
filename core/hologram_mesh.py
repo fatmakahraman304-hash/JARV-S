@@ -1,4 +1,4 @@
-"""Extend the feminine AETHER face with a smooth, rig-safe 3D shoulder base."""
+"""Extend the feminine FRIDAY face with a smooth, rig-safe 3D shoulder base."""
 import numpy as np
 from core.avatar_mesh import _vertex_normals, _unique_edges
 

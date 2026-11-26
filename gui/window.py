@@ -173,11 +173,11 @@ class MainWindow(QMainWindow):
         self.on_voice_change   = None   # callable: () -> None — rebuild session with new voice
         self.on_audio_device_change = None  # callable: () -> None — reopen audio streams
         self._confirm_overlay  = None   # live ConfirmBanner, if one is on screen
-        self.get_plugins       = None   # callable: () -> list[dict], set by AetherLive
-        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by AetherLive
+        self.get_plugins       = None   # callable: () -> list[dict], set by FridayLive
+        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by FridayLive
         self._wake_busy = False
         self._wake_feedback = ""
-        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by AetherLive
+        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by FridayLive
         self.on_wake_manual    = None   # callable: () -> None — manual sleep/wake
         self.on_push_to_talk   = None   # callable: (enable: bool) -> str scope
         self.ptt_hold          = None   # callable: (held: bool) -> None — windowed chord
@@ -3209,7 +3209,7 @@ class MainWindow(QMainWindow):
                         "awake": bool(s.get("awake"))}
             except Exception:
                 pass
-        # Before AetherLive has wired its callback (drawer built at startup).
+        # Before FridayLive has wired its callback (drawer built at startup).
         ready, enabled = False, False
         try:
             from core.wake_word import is_ready
