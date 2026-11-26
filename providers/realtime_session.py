@@ -24,14 +24,21 @@ TURN_SECONDS = 60
 
 
 class RealtimeSession:
-    def __init__(self, ws, voice="marin", guide_enabled=None):
+    def __init__(self, ws, voice="marin", guide_enabled=None, volume_enabled=None):
         self._ws = ws
         self._setup = rt.session_event(voice)
         self._guide_enabled = guide_enabled or (lambda: False)
+        self._volume_enabled = volume_enabled or (lambda: False)
         if self._guide_enabled():
             self._setup['session']['tools'] = [tools.declaration()]
             self._setup['session']['instructions'] += (
                 " You may read the static FRIDAY guide with assistant_help, but cannot execute actions.")
+        if self._volume_enabled():
+            self._setup["session"]["tools"].append(tools.volume_declaration())
+            self._setup["session"]["instructions"] += (
+                " On explicit request you may request a speaker volume change using request_volume. "
+                "It is only a request; the local HUD must approve. Never say it has been performed. "
+                "Other computer actions are unavailable.")
         self._ready = False
         self._closed = False
         self._busy = False
@@ -137,9 +144,13 @@ class RealtimeSession:
                     if has_calls:
                         if rounds >= tools.MAX_ROUNDS:
                             raise rt.RealtimeError("Realtime araç tur sınırı aşıldı.")
-                        output = tools.guide_output(
-                            response, enabled=lambda: bool(self._setup["session"]["tools"])
-                                and self._guide_enabled(), seen=seen)
+                        declared = {d["name"] for d in self._setup["session"]["tools"]}
+                        output = tools.tool_output(
+                            response,
+                            guide_enabled=lambda: "assistant_help" in declared and self._guide_enabled(),
+                            volume_enabled=lambda: "request_volume" in declared
+                                and not self._closed and self._volume_enabled(),
+                            seen=seen)
                         if output is None:
                             raise rt.RealtimeError("Realtime araç sonucu geçersiz.")
                         line = "".join(transcript).strip()
@@ -180,10 +191,10 @@ class RealtimeSession:
 
 
 @asynccontextmanager
-async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None):
+async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None, volume_enabled=None):
     """Explicit opt-in cloud connection; session history is not saved locally."""
     async with rt.open_realtime(api_key, model) as ws:
-        session = RealtimeSession(ws, voice, guide_enabled=guide_enabled)
+        session = RealtimeSession(ws, voice, guide_enabled=guide_enabled, volume_enabled=volume_enabled)
         try:
             await session.start()
             yield session

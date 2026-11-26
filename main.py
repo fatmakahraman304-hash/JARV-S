@@ -3712,9 +3712,16 @@ class FridayLive:
             cfg = validate_settings(get_provider_config(PROVIDER_ID))
             check_dependency()
             from memory.config_manager import get_plugin_enabled
+            from providers.realtime_settings import enabled
+            def volume_allowed():
+                current = get_provider_config(PROVIDER_ID)
+                return (cfg["volume_control"] and self._engine_mode() == "realtime"
+                        and enabled(current.get("cloud_consent"))
+                        and enabled(current.get("volume_control")))
             async with conversation(
                 cfg["api_key"], cfg["model"], cfg["voice"],
                 guide_enabled=lambda: get_plugin_enabled("assistant_help"),
+                volume_enabled=volume_allowed,
             ) as rt:
                 engine = RealtimeEngine(
                     rt, log=self.ui.write_log, explicit_only=True,
