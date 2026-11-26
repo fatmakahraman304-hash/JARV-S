@@ -56,6 +56,24 @@ class DownloadTests(unittest.TestCase):
             self.assertEqual(get.call_count, 1)
         self.assertTrue(error.fp.closed)
 
+    def test_download_progress_uses_bytes_or_advertised_size_and_limits_ui_events(self):
+        for total, expected in ((None, '1 KiB'), (4096, '%25')):
+            response = MagicMock()
+            body = response.__enter__.return_value
+            body.length = total
+            def chunks():
+                yield b'x' * 1024
+                yield b'y' * 3072
+                body.length = 0
+                yield b''
+            body.read1.side_effect = chunks()
+            messages = []
+            with patch.object(app_updater, 'urlopen', return_value=response), patch.object(
+                    app_updater.time, 'monotonic', return_value=1):
+                data = app_updater._get('https://github.com/example', progress=messages.append)
+            self.assertEqual(len(data), 4096)
+            self.assertEqual(messages, ['İndiriliyor · ' + expected])
+
     def test_slow_active_download_releases_response_at_deadline(self):
         response = MagicMock()
         response.__enter__.return_value.read1.return_value = b'x'

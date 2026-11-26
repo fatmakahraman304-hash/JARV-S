@@ -1606,7 +1606,7 @@ class MainWindow(QMainWindow):
 
     def _update_progress(self, message):
         if hasattr(self, "_update_btn"):
-            self._update_btn.setText("GÜNCELLENİYOR…")
+            self._update_btn.setText(message if message.startswith("İndiriliyor · ") else "GÜNCELLENİYOR…")
             self._update_btn.setToolTip(message)
         self._log.append_log(f"SYS: {message}")
 
