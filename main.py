@@ -1366,6 +1366,13 @@ class FridayLive:
             print(f"[Resume] {exc}")
 
     def _persist_turn(self, role, text):
+        if getattr(self, "_session_realtime", False):
+            try:
+                from memory.continuity import record_realtime
+                record_realtime(role, text)
+            except Exception:
+                self.ui.write_log("SYS: Realtime yerel geçmiş kaydı başarısız.")
+            return
         try:
             from core import sync_hub
             sync_hub.note_turn(role, text)
@@ -1383,6 +1390,19 @@ class FridayLive:
             self.ui.write_log(f"SYS: Hafıza kaydı başarısız: {exc}")
 
     def _on_text_command(self, text: str):
+        realtime_selected = self._engine_mode() == "realtime"
+        realtime_active = getattr(self, "_session_realtime", False)
+        raw = str(text).strip()
+        command, _, query = raw.partition(" ")
+        if command.casefold() == "/realtime-hafiza" or (
+                (realtime_selected or realtime_active)
+                and raw.casefold() in ("/hafiza", "nerede kaldık", "nerede kaldik")):
+            from memory.continuity import realtime_history
+            try:
+                self.ui.show_content("Realtime — Yerel konuşma geçmişi", realtime_history(query))
+            except Exception:
+                self.ui.write_log("SYS: Realtime geçmişi okunamadı.")
+            return
         if not str(text).startswith("["):
             try:                                   # typed here: this computer answers
                 from core import sync_hub
@@ -1391,7 +1411,7 @@ class FridayLive:
             except Exception:
                 pass
         from memory.continuity import record, resume_text
-        if not str(text).startswith("["):
+        if not (realtime_selected or realtime_active) and not str(text).startswith("["):
             try:
                 record("Kullanıcı", text)
             except Exception as exc:
@@ -1439,7 +1459,10 @@ class FridayLive:
             result = self._plugin_registry.run("github_develop", {"mode": mode}, player=self.ui)
             self.ui.write_log(f"SYS: {result}")
             return
-        if self._engine_mode() == "realtime":
+        if realtime_selected or realtime_active:
+            if not (realtime_selected and realtime_active):
+                self.ui.write_log("SYS: Motor değişiyor; komutu bağlantı kurulduktan sonra tekrar yazın.")
+                return
             # The shared input path also carries internal notes; never upload them.
             if str(text).startswith("["):
                 self.ui.write_log("SYS: Realtime önizlemesinde dahili içerik gönderilmedi.")
@@ -1450,6 +1473,8 @@ class FridayLive:
                 return
             if not self._awake:
                 self.wake(reason="yazılı komut")
+            self._persist_turn("Kullanıcı", text)
+            self._last_out_logged = ""
             asyncio.run_coroutine_threadsafe(
                 send(turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True),
                 self._loop)
@@ -3017,7 +3042,8 @@ class FridayLive:
                                 self.ui.write_log(f"You: {full_in}")
                                 from core import activity as _activity
                                 _activity.record("voice", f"FRIDAY'la konuştun: {full_in[:80]}", "info")
-                                self._session_log.append(f"User: {full_in}")
+                                if not getattr(self, "_session_realtime", False):
+                                    self._session_log.append(f"User: {full_in}")
                                 self._persist_turn("Kullanıcı", full_in)
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
@@ -3042,13 +3068,14 @@ class FridayLive:
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
                                 from core import activity as _activity
                                 _activity.record("voice", f"{self._asst_name} yanıtladı: {full_out[:80]}", "info")
-                                self._session_log.append(f"{self._asst_name}: {full_out}")
+                                if not getattr(self, "_session_realtime", False):
+                                    self._session_log.append(f"{self._asst_name}: {full_out}")
+                                    try:
+                                        from core import sync_hub
+                                        sync_hub.note_reply(full_out)
+                                    except Exception:
+                                        pass
                                 self._persist_turn("FRIDAY", full_out)
-                                try:
-                                    from core import sync_hub
-                                    sync_hub.note_reply(full_out)
-                                except Exception:
-                                    pass
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "aether",
@@ -3929,6 +3956,7 @@ class FridayLive:
                     if not realtime_mode:
                         session.send_client_content = _send_and_arm
 
+                    self._session_realtime = realtime_mode
                     self.session          = session
                     self.audio_in_queue   = asyncio.Queue(maxsize=128)
                     self.out_queue        = asyncio.Queue(maxsize=200)
@@ -4179,6 +4207,7 @@ class FridayLive:
                     self._conn_backoff = 3
             finally:
                 self.session = None
+                self._session_realtime = False
                 # Only save if there was a real conversation (≥3 turns)
                 if len(self._session_log) >= 3 and not locals().get("realtime_mode", False):
                     self._keep_task(asyncio.create_task(self._save_session_summary()))
