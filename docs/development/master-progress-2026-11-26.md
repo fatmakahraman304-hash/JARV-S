@@ -186,3 +186,30 @@ var. Altı durumlu işlev ve uçtan uca çalışabilirlik envanteri açık.
 Takipte Aşama 1 için [#208](https://github.com/fatmakahraman304-hash/JARV-S/pull/208)
 anahtar saklama çalışmasının birleşme durumunu kontrol et. İmzalı kanalın
 güven kökü dağıtımı, saha ses/cihaz testleri ve üstteki kabul açıkları sürüyor.
+
+## Aşama 1 devamı — yayıncı güveni, yeniden başlatma ve kaynak ömrü
+
+#208 ana dala alındı (`5abc33f2546a3160140aa4f04c75ad92a1d4656e`).
+SQLite düzeltmesi korundu. Windows DPAPI tercihe bağlıdır. #208'in dokuz CI
+akışı başarılı. Yeni güven ve güncelleme yolunun kullanım koşulları
+[source-signatures.md](source-signatures.md) dosyasındadır.
+
+- Geliştiriliyor — imza kontrolü, profilde seçildikten sonra her iki kurulum
+  kanalında zorunlu. Gerçek yayıncı parmak izi ve signed release bekleniyor.
+- Geliştiriliyor — arşiv yanıtı parçalar halinde okunur, süre ve boyut
+  kontrolü yapılır. Git arka planda kimlik bilgisi istemez. Yardımcı süreç
+  açılamadığında kullanıcı yeniden başlatmayı aynı düğmeden yeniden deneyebilir.
+- Tamamlandı — Blender kılavuzu HTTP hata gövdesi, geçici dosya tanıtıcısı ve
+  yarıda kalan indirme dosyası temizlenir. Eski kodda tracemalloc ile bir SSL
+  soketi tahsisi kılavuz indirme iş parçacığına kadar izlendi. Tüm uygulama
+  için sızıntısız uzun çalışma kabulü açıktır.
+- Kısmen tamamlandı — Python 3.13.5 ortamında ilk lisans envanteri 182 dağıtım
+  içerdi. 89'unda araç lisans dosyası toplayamadı. pip-audit izole ortamın
+  site-packages kapsamında cryptography 49.0.0 (2), Pillow 12.3.0 (42) ve
+  PyPDF2 3.0.1 (1) için bilinen güvenlik kayıtları döndürdü. Bunlar toplam
+  45 paket danışma kaydıdır. Platform ve lisans uyumluluğu ayrı doğrulanır.
+- Test bekliyor — yerel hedefli 106 testte 104 geçti, 2 Windows testi atlandı.
+  Üretim anahtarı, cihaz verileri ve gerçek hesaplar kullanılmadı.
+- Fiziksel cihaz bekliyor — Android rotasyonu ve önceki APK üzerinde yükseltme,
+  gerçek Windows kullanıcı profilinde anahtar taşıma ve panel takılmasının
+  kullanıcının cihazındaki sebebi. Aşama 2–8 için üstteki açık işler sürüyor.

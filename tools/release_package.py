@@ -150,6 +150,24 @@ def _verify_snapshot(payload, expected_commit=None, destination=None, *,
         if len(trusted_key) > 16384:
             raise ValueError('Oversized trusted public key')
         authenticated = verify_signature(payload, expected_commit, envelope, trusted_key)
+    manifest, files = verified_files(payload, expected_commit)
+    if destination is not None:
+        # Verification finishes before any filesystem write; no extractall/path
+        # traversal, overwriting an installation, or writing through symlinks.
+        destination.mkdir(parents=True, exist_ok=False)
+        for name, data in files.items():
+            path = destination / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open('xb') as file:
+                file.write(data)
+        (destination / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+    return {**manifest, 'publisher_signature_verified': authenticated}
+
+
+def verified_files(payload, expected_commit):
+    """Check the candidate manifest and return the exact bytes it describes."""
+    if len(payload) > MAX_TOTAL:
+        raise ValueError('Oversized source archive')
     files, seen = {}, set()
     with zipfile.ZipFile(io.BytesIO(payload)) as source:
         items = source.infolist()
@@ -177,17 +195,7 @@ def _verify_snapshot(payload, expected_commit=None, destination=None, *,
         if (declared[name] != {'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)}
                 or secret_kinds(data)):
             raise ValueError(f'Content verification failed: {name}; values withheld')
-    if destination is not None:
-        # Verification finishes before any filesystem write; no extractall/path
-        # traversal, overwriting an installation, or writing through symlinks.
-        destination.mkdir(parents=True, exist_ok=False)
-        for name, data in files.items():
-            path = destination / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open('xb') as file:
-                file.write(data)
-        (destination / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-    return {**manifest, 'publisher_signature_verified': authenticated}
+    return manifest, files
 
 
 def inventory(output: Path):

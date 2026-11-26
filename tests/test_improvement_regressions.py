@@ -37,7 +37,7 @@ class QtFixtureTests(unittest.TestCase):
 class DownloadTests(unittest.TestCase):
     def test_transient_dns_recovers(self):
         response = MagicMock()
-        response.__enter__.return_value.read.return_value = b'archive'
+        response.__enter__.return_value.read1.side_effect = [b'arch', b'ive', b'']
         with patch.object(app_updater, 'urlopen', side_effect=[URLError(socket.gaierror('dns')), response]) as get, patch.object(app_updater.time, 'sleep'):
             self.assertEqual(app_updater._get('https://github.com/example'), b'archive')
             self.assertEqual(get.call_count, 2)
@@ -54,7 +54,25 @@ class DownloadTests(unittest.TestCase):
             with self.assertRaises(HTTPError):
                 app_updater._get(error.url)
             self.assertEqual(get.call_count, 1)
-        error.close()
+        self.assertTrue(error.fp.closed)
+
+    def test_slow_active_download_releases_response_at_deadline(self):
+        response = MagicMock()
+        response.__enter__.return_value.read1.return_value = b'x'
+        with patch.object(app_updater, 'urlopen', return_value=response) as get, patch.object(
+                app_updater.time, 'monotonic', side_effect=[0, 0, 1, 30, 120]):
+            with self.assertRaisesRegex(RuntimeError, 'süresi doldu'):
+                app_updater._get('https://github.com/example')
+        response.__exit__.assert_called_once()
+        get.assert_called_once()
+
+    def test_oversize_stream_aborts_before_reading_more(self):
+        response = MagicMock()
+        response.__enter__.return_value.read1.side_effect = [b'123', b'4']
+        with patch.object(app_updater, 'urlopen', return_value=response):
+            with self.assertRaisesRegex(RuntimeError, 'sınırını'):
+                app_updater._get('https://github.com/example', limit=3)
+        self.assertEqual(response.__enter__.return_value.read1.call_args.args, (1,))
 
     def test_retry_same_zip_does_not_collide_with_backup(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(app_updater.time, 'strftime', return_value='fixed-time'):
