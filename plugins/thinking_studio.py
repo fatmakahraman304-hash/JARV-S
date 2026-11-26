@@ -61,7 +61,7 @@ def run(parameters, player=None, session_memory=None):
         if action == "list":
             first,last = _range(parameters,100)
             end = min(last,first+99)
-            rows = [f"{n}. {studio.FEATURES[n][0]} [{_kind(n)}]" for n in range(first,end+1)]
+            rows = [f"{n}. {studio.FEATURES[n][0]} [{_kind(n)} · {studio.implementation_kind(n)}]" for n in range(first,end+1)]
             prefix = f"Katalog: {first}–{end} / {studio.MAX_FEATURE}"
             if end<last or end<studio.MAX_FEATURE:
                 prefix += f" | Sonraki sayfa: first={end+1}"
@@ -78,7 +78,7 @@ def run(parameters, player=None, session_memory=None):
             prefix = f"{len(rows)} eşleşme, {len(shown)} gösteriliyor."
             if len(rows)>20:
                 prefix += f" Sonraki aralık: first={shown[-1][0]+1}, last={last}."
-            return prefix+"\n"+"\n".join(f"{n}. {title}: {guide} [{_kind(n)}; {status}]" for n,title,guide,status in shown)
+            return prefix+"\n"+"\n".join(f"{n}. {title}: {guide} [{_kind(n)}; {studio.implementation_kind(n)}; {status}]" for n,title,guide,status in shown)
         if action == "status":
             return studio.mode_prompt() or "Normal sohbet açık; yerleşik yetenekler otomatik kullanılır."
         if action == "guide":
@@ -88,7 +88,7 @@ def run(parameters, player=None, session_memory=None):
                 guidance = "Uygulama gereksinimi ve gerçek durumu: "+studio.feature_status(n)+". Uygulanmış olmayan işlemi yapılmış sayma."
             else:
                 guidance = studio.workflow_for(n)
-            return f"{n}. {title}: {guidance}\nTür: {_kind(n)}\nDurum: {studio.feature_status(n)}"
+            return f"{n}. {title}: {guidance}\nTür: {_kind(n)} · {studio.implementation_kind(n)}\nDurum: {studio.feature_status(n)}"
     except (TypeError, ValueError, KeyError) as exc:
         return "Geçersiz katalog isteği: "+str(exc)[:160]
     # Mutations are handled by main.py after checking the actual user utterance.
