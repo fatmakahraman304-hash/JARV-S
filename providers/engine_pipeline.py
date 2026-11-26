@@ -43,6 +43,7 @@ NO LANGUAGE LOGIC ANYWHERE IN THIS FILE
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import re
 import sys
@@ -101,6 +102,50 @@ _VAD_ABSOLUTE_MIN = 0.006  # ...and never below this, so a silent room's own
 # wandering, which is not harmful but is not converging either, so it is capped
 # and told to answer with what it has.
 _MAX_TOOL_ROUNDS = 4
+
+
+@asynccontextmanager
+async def _prefetched_chat(source):
+    """Read model events while the voice speaks, with bounded backpressure.
+
+    Only the consumer may emit transcripts, speech or tool calls. Cancelling
+    the generation also stops the reader and closes the provider stream.
+    """
+    queue = asyncio.Queue(maxsize=16)
+
+    async def produce():
+        try:
+            async for event in source:
+                await queue.put(("event", event))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await queue.put(("error", exc))
+        else:
+            await queue.put(("end", None))
+
+    async def consume():
+        while True:
+            kind, value = await queue.get()
+            if kind == "end":
+                return
+            if kind == "error":
+                raise value
+            yield value
+
+    reader = asyncio.create_task(produce(), name="friday-chat-read-ahead")
+    events = consume()
+    try:
+        yield events
+    finally:
+        reader.cancel()
+        try:
+            await asyncio.gather(reader, return_exceptions=True)
+        finally:
+            await events.aclose()
+            close = getattr(source, "aclose", None)
+            if close is not None:
+                await close()
 
 
 class PipelineEngine:
@@ -565,28 +610,29 @@ class PipelineEngine:
                                 "role": "system",
                                 "content": "[CURRENT WEB EVIDENCE]\n" + evidence,
                             })
-            async for ev in self._llm.chat(messages, self._tools):
-                if ev.get("text"):
-                    visible = thinking.feed(ev["text"])
-                    if visible and first_word is None:
-                        first_word = time.monotonic() - t0
-                    pending += visible
-                    # Emit and speak a SENTENCE at a time — never a fragment.
-                    #
-                    # main.py joins transcript pieces with a space, because
-                    # Gemini Live sends whole phrases. A chat API sends tokens,
-                    # so emitting them as they arrive produced
-                    # "Hel lo ! How c an I assis t y ou today?" in the activity
-                    # log. Sentences join back together correctly, and they are
-                    # also the unit the voice synthesises, so speech now starts
-                    # at the first full stop instead of at the end of the reply.
-                    ready, pending = _take_sentences(pending)
-                    for sentence in ready:
-                        said.append(sentence)
-                        await self._emit(Msg.said(sentence))
-                        await self._speak(sentence)
-                if ev.get("tool_calls"):
-                    calls.extend(ev["tool_calls"])
+            async with _prefetched_chat(self._llm.chat(messages, self._tools)) as events:
+                async for ev in events:
+                    if ev.get("text"):
+                        visible = thinking.feed(ev["text"])
+                        if visible and first_word is None:
+                            first_word = time.monotonic() - t0
+                        pending += visible
+                        # Emit and speak a SENTENCE at a time — never a fragment.
+                        #
+                        # main.py joins transcript pieces with a space, because
+                        # Gemini Live sends whole phrases. A chat API sends tokens,
+                        # so emitting them as they arrive produced
+                        # "Hel lo ! How c an I assis t y ou today?" in the activity
+                        # log. Sentences join back together correctly, and they are
+                        # also the unit the voice synthesises, so speech now starts
+                        # at the first full stop instead of at the end of the reply.
+                        ready, pending = _take_sentences(pending)
+                        for sentence in ready:
+                            said.append(sentence)
+                            await self._emit(Msg.said(sentence))
+                            await self._speak(sentence)
+                    if ev.get("tool_calls"):
+                        calls.extend(ev["tool_calls"])
 
             pending += thinking.flush()
             if pending.strip():
