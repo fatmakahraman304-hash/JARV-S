@@ -48,7 +48,7 @@ class PreparedUpdate(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'bağımlılıkları farklı'):
                         maintenance.apply(target)
                 self.assertEqual((target / 'main.py').read_text(), 'old')
-                with patch.object(app_updater, '_get', side_effect=[remote, archive(b'pip>=20\n')]):
+                with patch.object(app_updater, '_get', side_effect=[remote, archive(b'pip>=20\r\n')]):
                     self.assertTrue(maintenance.apply(target, progress=lambda _: None)[0])
             self.assertEqual((target / 'main.py').read_text(), 'new')
             self.assertEqual(local.read_bytes(), b'private sentinel')

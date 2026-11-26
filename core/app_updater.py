@@ -557,7 +557,7 @@ def _update_locked(root, progress, *, prepared_manifest=None):
             new_req = files['requirements.txt'].decode('utf-8')
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
-        if prepared_manifest is not None and prepared_manifest.strip() != new_req.strip():
+        if prepared_manifest is not None and prepared_manifest.strip() != new_req.replace('\r\n', '\n').strip():
             raise RuntimeError('Hazırlanan paket ile güncel sürümün bağımlılıkları farklı.')
         if prepared_manifest is None and _needs_dependency_install(old_req, new_req):
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. FRIDAY’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
