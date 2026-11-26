@@ -32,7 +32,19 @@ jobs:
           sudo apt-get install -y -q libxi6 libxkbcommon0 libsm6 libgl1 libegl1 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon-x11-0 libwayland-client0
       - name: Blender ${{ matrix.version }}
         run: |
-          curl -sSL --retry 4 --retry-all-errors -o blender.tar.xz "https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz"
+          archive="release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz"
+          downloaded=0
+          for host in download.blender.org mirror.blender.org; do
+            if curl -fSL --retry 4 --retry-all-errors -o blender.tar.xz "https://$host/$archive" && xz -t blender.tar.xz; then
+              downloaded=1
+              break
+            fi
+            rm -f blender.tar.xz
+          done
+          if [ "$downloaded" -ne 1 ]; then
+            echo "Blender archive could not be downloaded and verified" >&2
+            exit 1
+          fi
           mkdir -p "$HOME/blender" && tar -xf blender.tar.xz -C "$HOME/blender" --strip-components=1
           echo "$HOME/blender" >> "$GITHUB_PATH"
           "$HOME/blender/blender" --version | head -1

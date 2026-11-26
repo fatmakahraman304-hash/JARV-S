@@ -1,5 +1,6 @@
 """Task, question or chat? — the safety net under the voice model's tool calls."""
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from core import intent
@@ -63,7 +64,7 @@ class EveryTool(unittest.TestCase):
             self.assertEqual(intent.guard(name, args, "bitti mi?"), "", name)
 
     def test_main_uses_the_guard_for_every_tool(self):
-        src = open(__import__("pathlib").Path(__file__).resolve().parent.parent / "main.py", encoding="utf-8").read()
+        src = (Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
         self.assertIn("blocked = self._intent_guard(name, args)", src)
 
 
