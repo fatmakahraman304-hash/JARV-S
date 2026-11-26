@@ -1439,6 +1439,21 @@ class FridayLive:
             result = self._plugin_registry.run("github_develop", {"mode": mode}, player=self.ui)
             self.ui.write_log(f"SYS: {result}")
             return
+        if self._engine_mode() == "realtime":
+            # The shared input path also carries internal notes; never upload them.
+            if str(text).startswith("["):
+                self.ui.write_log("SYS: Realtime önizlemesinde dahili içerik gönderilmedi.")
+                return
+            send = getattr(self._engine, "send_user_content", None)
+            if not self._loop or not send:
+                self.ui.write_log("SYS: Realtime hazır değil; lütfen bağlantı kurulduktan sonra komutu tekrar yazın.")
+                return
+            if not self._awake:
+                self.wake(reason="yazılı komut")
+            asyncio.run_coroutine_threadsafe(
+                send(turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True),
+                self._loop)
+            return
         if not self._loop or not self.session:
             # Reconnecting or offline: keep it and send it the moment the session is back.
             self._outbox.append(text)
@@ -1501,6 +1516,12 @@ class FridayLive:
 
         self._ptt_enabled = bool(enabled)
         self._ptt_held = False
+        if getattr(self._engine, "send_user_content", None) and self._loop:
+            engine = self._engine
+            def reset_realtime_capture():
+                engine.discard_capture()
+                engine.auto_turn = not self._ptt_enabled
+            self._loop.call_soon_threadsafe(reset_realtime_capture)
         if not enabled:
             if self._ptt is not None:
                 self._ptt.stop()
@@ -2623,7 +2644,21 @@ class FridayLive:
 
     async def _send_realtime(self):
         while True:
-            msg = await self.out_queue.get()
+            engine = self._engine
+            if getattr(engine, "send_user_content", None):
+                # Re-check mute/sleep even when the capture callback stops sending.
+                if not engine._capture_allowed():
+                    engine.discard_capture()
+                    while not self.out_queue.empty():
+                        self.out_queue.get_nowait()
+                    await asyncio.sleep(0.05)
+                    continue
+                try:
+                    msg = await asyncio.wait_for(self.out_queue.get(), timeout=0.05)
+                except asyncio.TimeoutError:
+                    continue
+            else:
+                msg = await self.out_queue.get()
             if not self._awake:
                 continue
             # Gemini 3.x Live rejects the old realtime_input.media_chunks field
@@ -3607,6 +3642,9 @@ class FridayLive:
         the same ones the engine gets a moment later, and a misconfiguration is
         reported while there is still a Gemini session to fall back to.
         """
+        if self._engine_mode() == "realtime":
+            from providers.base import DEFAULT_CAPS
+            return dict(DEFAULT_CAPS, audio_out=True)
         if self._engine_mode() != "pipeline":
             return None
         try:
@@ -3666,6 +3704,30 @@ class FridayLive:
         Live branch is unchanged from what it has always been, down to the
         client being rebuilt on every reconnect.
         """
+        if self._engine_mode() == "realtime":
+            from memory.config_manager import get_provider_config
+            from providers.realtime_settings import PROVIDER_ID, validate_settings, check_dependency
+            from providers.realtime_session import conversation
+            from providers.engine_realtime import RealtimeEngine
+            cfg = validate_settings(get_provider_config(PROVIDER_ID))
+            check_dependency()
+            async with conversation(cfg["api_key"], cfg["model"], cfg["voice"]) as rt:
+                engine = RealtimeEngine(
+                    rt, log=self.ui.write_log, explicit_only=True,
+                    capture_allowed=lambda: cfg["microphone"] and self._awake
+                        and not self.ui.muted and not self._phone_active
+                        and not self._yield_voice and self._engine_mode() == "realtime",
+                    reconnect=lambda: self.request_reconnect(
+                        keep_context=False, reason="Realtime oturumu yenileniyor"),
+                )
+                engine.auto_turn = not self._ptt_enabled
+                self._engine = engine
+                try:
+                    yield engine
+                finally:
+                    self._engine = None
+                    await engine.close()
+            return
         if self._engine_caps is None:
             client = genai.Client(
                 api_key=_get_api_key(),
@@ -3793,6 +3855,9 @@ class FridayLive:
                 live_model = LIVE_MODEL
                 print(f"[FRIDAY] Live model: {live_model}")
 
+                realtime_mode = self._engine_mode() == "realtime"
+                if realtime_mode:
+                    self._resume_handle = None
                 _resumed_with = self._resume_handle is not None
 
                 # Decided BEFORE the config is built, because the tool
@@ -3814,7 +3879,7 @@ class FridayLive:
                     await asyncio.sleep(5)
                     continue
                 self._no_engine_said = False
-                config = self._build_config()
+                config = None if realtime_mode else self._build_config()
 
                 # The conversation itself. `_open_session` gives back a Gemini
                 # Live session or a local pipeline wearing the same interface —
@@ -3838,7 +3903,8 @@ class FridayLive:
                         self._arm_stall()
                         return result
 
-                    session.send_client_content = _send_and_arm
+                    if not realtime_mode:
+                        session.send_client_content = _send_and_arm
 
                     self.session          = session
                     self.audio_in_queue   = asyncio.Queue(maxsize=128)
@@ -3928,7 +3994,7 @@ class FridayLive:
                     self._reconnect_event.clear()  # ignore requests from before this session
                     tg.create_task(self._watch_reconnect())
                     tg.create_task(self._watch_stall())
-                    if self._outbox:
+                    if self._outbox and not realtime_mode:
                         tg.create_task(self._flush_outbox())
                     tg.create_task(self._guarded(self._watch_updates))
                     tg.create_task(self._guarded(self._watch_habits))
@@ -3946,7 +4012,7 @@ class FridayLive:
                         tg.create_task(self._run_background_monitor())
                         tg.create_task(self._run_proactive_mode())
                     tg.create_task(self._run_sleep_watch())
-                    if self._dashboard:
+                    if self._dashboard and not realtime_mode:
                         tg.create_task(self._relay_phone_audio())
 
                     # Bring a local engine's speech model up before anybody
@@ -4004,6 +4070,12 @@ class FridayLive:
                     self.ui.write_log("SYS: Could not restore the conversation — starting fresh.")
                     self._resume_handle = None
                     self._conn_backoff = 0
+                    continue
+
+                if self._engine_mode() == "realtime":
+                    self.ui.write_log(f"SYS: Realtime bağlantısı tamamlanmadı ({type(e).__name__}); Gemini'ye geçilmedi.")
+                    self.ui.set_state("SLEEPING")
+                    await asyncio.sleep(5)
                     continue
 
                 err_str = str(e)
@@ -4085,7 +4157,7 @@ class FridayLive:
             finally:
                 self.session = None
                 # Only save if there was a real conversation (≥3 turns)
-                if len(self._session_log) >= 3:
+                if len(self._session_log) >= 3 and not locals().get("realtime_mode", False):
                     self._keep_task(asyncio.create_task(self._save_session_summary()))
 
             self.set_speaking(False)
