@@ -3711,7 +3711,11 @@ class FridayLive:
             from providers.engine_realtime import RealtimeEngine
             cfg = validate_settings(get_provider_config(PROVIDER_ID))
             check_dependency()
-            async with conversation(cfg["api_key"], cfg["model"], cfg["voice"]) as rt:
+            from memory.config_manager import get_plugin_enabled
+            async with conversation(
+                cfg["api_key"], cfg["model"], cfg["voice"],
+                guide_enabled=lambda: get_plugin_enabled("assistant_help"),
+            ) as rt:
                 engine = RealtimeEngine(
                     rt, log=self.ui.write_log, explicit_only=True,
                     capture_allowed=lambda: cfg["microphone"] and self._awake
