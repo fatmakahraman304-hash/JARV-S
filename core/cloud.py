@@ -1185,7 +1185,7 @@ class ToolBox:
         try:
             fn = getattr(self, f"_t_{name}", None)
             if fn is not None:
-                return str(fn(args, ctx))
+                return outcome.result_text(name, fn(args, ctx))
             if name in self._borrowed:
                 if name == "file_processor":
                     if str(args.get("action") or "").lower() in ("run", "test"):
@@ -1194,7 +1194,7 @@ class ToolBox:
                         return outcome.failed(name, "file_path is required on the server")
                     args["file_path"] = str(_inside(self.workspace, args["file_path"]))
                 from core.action_loader import _call_handler
-                return str(_call_handler(self._borrowed[name]["handler"], args, {}) or "Done.")
+                return outcome.result_text(name, _call_handler(self._borrowed[name]["handler"], args, {}))
             return outcome.failed(name, "no such tool on the cloud body")
         except Exception as e:
             return outcome.failed(name, f"{type(e).__name__}: {e}")
@@ -1518,8 +1518,8 @@ def cloud_task_tools(workdir: Path, wanted, toolbox: ToolBox, extras=_TASK_EXTRA
                     return outcome.failed("file_processor", "that file is neither in this task's folder "
                                                             "nor in the server's workspace")
                 try:
-                    result = str(_call_handler(self._action("file_processor")["handler"],
-                                               dict(args, file_path=str(target)), {}) or "Done.")
+                    result = outcome.result_text("file_processor", _call_handler(self._action("file_processor")["handler"],
+                                               dict(args, file_path=str(target)), {}))
                 except Exception as e:
                     return outcome.failed("file_processor", f"{type(e).__name__}: {e}")
                 return result if "<<<UNTRUSTED" in result else outcome.untrusted("file", result)

@@ -64,6 +64,7 @@ WHY FACTS AND NOT SENTENCES
 from __future__ import annotations
 
 import re
+import json
 from typing import Any
 
 # The three words a tool may answer with, plus the one that asks. Kept
@@ -74,6 +75,26 @@ UNVERIFIED = "unverified"
 FAILED = "failed"
 ASK = "ask"
 STARTED = "started"
+
+
+def result_text(action: str, value: Any) -> str:
+    """Preserve a reported value; missing evidence never becomes success.
+
+    A callback may already have performed an irreversible action before
+    forgetting its return value. Report uncertainty and forbid blind replay.
+    False, zero and empty collections are valid data, not missing outcomes.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return unverified(action, 'the tool returned no outcome; it may already have executed. '
+                          'Inspect the resulting state before deciding whether to retry',
+                          verified=False, retry_automatically=False)
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError):
+        return unverified(action, 'the tool returned an unsupported result; inspect state before retrying',
+                          verified=False, retry_automatically=False)
 
 
 def _render(value: Any) -> str:

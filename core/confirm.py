@@ -35,6 +35,8 @@ WHAT BELONGS HERE AND WHAT DOES NOT
 
 from __future__ import annotations
 
+from core import outcome
+
 import threading
 import time
 import uuid
@@ -141,7 +143,7 @@ def resolve(accepted: bool, token: str) -> None:
 
     def _worker():
         try:
-            result = p.run() or "Done."
+            result = outcome.result_text(p.key, p.run())
             _log(f"SYS: Confirmed — {p.title}. {result}")
         except Exception as e:
             _log(f"ERR: {p.title} failed — {e}")

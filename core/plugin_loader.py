@@ -8,6 +8,8 @@ toggling a plugin does not require restarting the app or re-importing anything.
 """
 from __future__ import annotations
 
+from core import outcome
+
 import importlib.util
 import inspect
 import re
@@ -121,7 +123,7 @@ class PluginRegistry:
         if not get_plugin_enabled(name):
             return f"The '{name}' plugin is currently disabled."
         try:
-            return _call_run(rec.run, parameters, player, session_memory) or "Done."
+            return outcome.result_text(name, _call_run(rec.run, parameters, player, session_memory))
         except Exception as e:
             self._logger(f"Plugin '{name}' crashed during run(): {e}")
             self._notify(f"Plugin '{name}' failed — see the console for details.")

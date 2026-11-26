@@ -25,6 +25,8 @@ of discover_actions() and never abort the scan of the remaining files.
 """
 from __future__ import annotations
 
+from core import outcome
+
 import importlib.util
 import inspect
 import re
@@ -159,7 +161,7 @@ class ActionRegistry:
         if rec is None or not rec.valid:
             return f"Action '{name}' is not available."
         try:
-            return _call_handler(rec.handler, parameters, ctx or {}) or "Done."
+            return outcome.result_text(name, _call_handler(rec.handler, parameters, ctx or {}))
         except Exception as e:
             self._logger(f"Action '{name}' crashed during run(): {e}")
             traceback.print_exc()
