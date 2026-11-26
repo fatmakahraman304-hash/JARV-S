@@ -125,3 +125,64 @@ geçti. Windows/Linux Python 3.13 CI sonucu PR'ye kaydedilecek. Linux/macOS secr
 store, cihazdaki profil kurtarma kabulü ve tarihsel açık metin yedeklerinin
 kullanıcı denetimi açık. Bu, eklenti izinleri/izolasyon, CVE denetimi,
 güvenli mod ve zorunlu yayıncı imzasını tamamlamaz. Aşamalar 1–8 açık kalır.
+## Aşama 1 — ZIP güncellemesinde açık SQLite veritabanı
+
+Bu oturumun ana dal başlangıcı ve geri dönüş noktası
+`36970db90ba948bfcf2337a4a6810fce058b22e9` (#207).
+
+- ZIP güncelleyicisi .db, .sqlite ve .sqlite3 veritabanlarının günlük ve
+  paylaşılan bellek dosyalarını korur. Eski dosya listesinde yer almaları
+  bunların kaldırılmasına yol açmaz. Kaynak paketi oluşturulurken .sqlite3
+  yan dosyaları da paket dışında kalır.
+- Linux/Python 3.13 üzerinde iki regresyon testi düzeltmeden önce başarısız
+  oldu. Düzeltmeyle güncelleyici, sesli güncelleme eklentisi ve kaynak paketi
+  testlerinin 57'si geçti. Açık WAL bağlantısı sırasında yerel yan dosyaların
+  baytları korundu. Yeniden açılan veritabanı bütünlük denetimini geçti ve
+  kaydedilmiş satır okundu. Ağ yanıtları bu testte yerel örnektir.
+- Ürün sürümü ve Windows paketi yayımlanmadı. Yukarıdaki aşama tablosunda
+  açık kalan işler sürüyor. Bu değişiklik için Windows panelinden gerçek
+  yükseltme ve yeniden başlatma kabulü bekleniyor.
+
+Ek doğrulamada 392 Python dosyası Python 3.13 ile ayrıştırıldı. Başlangıç
+kurtarma, imza, Android imza politikası, araç sonucu ve hafıza kapsamında
+40 test, yetenek kataloğu ve düşünce stüdyosunda 26 test geçti. Genel yerel
+koşu 180 saniyelik süre sınırında tamamlanmadı. İlk Windows CI koşusunda
+sentetik eski manifest requirements.txt dosyasını içermediği için CRLF ile
+yazılan dosya haklı olarak çakışma sayıldı. Test artık mevcut dosyanın gerçek
+özetini kaydederek kurulu bir sürümü temsil eder. CI sonuçları PR #209'dadır.
+
+### #209 birleşme ve tekrar koşusu
+
+Güncelleyici düzeltmesi [#209](https://github.com/fatmakahraman304-hash/JARV-S/pull/209)
+ile ana dala alındı. Birleşen kod `32e513b2eb02d40ee1c422961512e5d6d3dbf420`.
+GitHub regresyonunda 1.047 testin Windows'ta 1.023'ü, Ubuntu'da 1.022'si
+geçti; sırasıyla 24 ve 25 test atlandı. İki sistemde güvenlik ve kurtarma,
+Windows kurulum, yeniden kurulum ve HUD kabulü ile kaynak paket adayı
+kontrolleri başarılı. Kaynak paketi adayı üretimi bir stabil sürüm yayını değildir.
+
+Yerel bağımlılık tanılamasında yalın Python'da httpx ve PyQt6 gibi modüller
+eksikti. Depodaki requirements.txt izole Python 3.13.5 ortamına kuruldu.
+Birleşen kodla ağaç içeriği aynı olan adayda tam koşu 267,380 saniyede bitti.
+1.044 test geçti, 3 test atlandı (iki Windows testi ve 250 MB Blender
+kılavuzunu indirme). Gerçek Blender modelleme, canlı bağlantı ve render
+testleri bu koşuya dahildi. Çıktıda SSL soketleri için ResourceWarning
+görüldü; kaynak yaşam döngüsü tanılaması açık kalıyor.
+15 izlenen JavaScript dosyası Node sözdizimi denetiminden geçti.
+
+Aynı Linux ortamında depo ölçüm aracıyla üçer ayrı süreçte, dönüşümlü,
+Qt offscreen ve render kapalıyken alınan medyanlar aşağıdadır.
+Eşzamanlı test yükü vardı. Sayılar HUD hazırlığının örnek ölçümüdür.
+
+| Ölçüm | Önce (#207) | Sonra (#209) |
+| --- | ---: | ---: |
+| HUD bağımlılıklarının yüklenmesi (ms) | 176,52 | 185,17 |
+| HUD bileşeninin oluşturulması (ms) | 39,77 | 49,66 |
+| Gizli HUD ile 1 saniyede süreç CPU zamanı (ms) | 19,99 | 11,41 |
+| Süreç belleği (MiB RSS) | 68,31 | 67,99 |
+
+Katalog sayımında 76 davranış ilkesi, 29 uygulama girdisi ve 895 konuşma
+yöntemi bulundu. Bu son grupta 18 yerel hesaplama/karşılaştırma bağlantısı
+var. Altı durumlu işlev ve uçtan uca çalışabilirlik envanteri açık.
+Takipte Aşama 1 için [#208](https://github.com/fatmakahraman304-hash/JARV-S/pull/208)
+anahtar saklama çalışmasının birleşme durumunu kontrol et. İmzalı kanalın
+güven kökü dağıtımı, saha ses/cihaz testleri ve üstteki kabul açıkları sürüyor.

@@ -10,18 +10,6 @@ from datetime import datetime
 from urllib.parse import quote_plus
 
 try:
-    import pyautogui
-    _PYAUTOGUI = True
-except ImportError:
-    _PYAUTOGUI = False
-
-try:
-    import numpy as np
-    _NUMPY = True
-except ImportError:
-    _NUMPY = False
-
-try:
     import requests
     _REQUESTS_OK = True
 except ImportError:
