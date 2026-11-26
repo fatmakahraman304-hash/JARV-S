@@ -418,7 +418,10 @@ def restore_history(source):
     target = data_dir() / "continuity.sqlite3"
     if any(Path(str(target) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
         raise FileExistsError("Önceki SQLite işlem dosyaları korunuyor. Boş bir veri klasörü kullanın.")
-    return _copy_database(source, target)
+    result = _copy_database(source, target)
+    with _setup_lock:
+        _ready.discard(str(target.resolve()))
+    return result
 
 
 if __name__ == "__main__":
