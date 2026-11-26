@@ -25,7 +25,8 @@ def validate_settings(cfg):
     return {"api_key": key, "model": model, "voice": voice,
             "microphone": enabled(cfg.get("microphone")),
             "volume_control": enabled(cfg.get("volume_control")),
-            "brightness_control": enabled(cfg.get("brightness_control"))}
+            "brightness_control": enabled(cfg.get("brightness_control")),
+            "media_control": enabled(cfg.get("media_control"))}
 
 
 def check_dependency():

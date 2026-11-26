@@ -1,4 +1,4 @@
-"""Limited Realtime tool bridge: static guide and HUD-confirmed volume/brightness.
+"""Limited Realtime tool bridge: static guide and HUD-confirmed volume/brightness/media.
 
 The model cannot select a Python module, file, command, or arbitrary plugin.
 Only strictly validated arguments to explicitly declared tools are accepted.
@@ -85,7 +85,26 @@ def brightness_declaration():
                 "required": ["percent"], "additionalProperties": False}}
 
 
-def tool_output(response, *, guide_enabled, volume_enabled, seen, brightness_enabled=None):
+MEDIA_ACTIONS = {
+    "play_pause": ("media_play_pause", "Medya oynat/duraklat"),
+    "next": ("media_next", "Sonraki parçaya geç"),
+    "previous": ("media_previous", "Önceki parçaya geç"),
+    "stop": ("media_stop", "Medya oynatmayı durdur"),
+}
+
+
+def media_declaration():
+    return {"type": "function", "name": "request_media",
+            "description": "Request one system media command on explicit user request. "
+                           "The HUD must approve. The active player and resulting state are not verified. "
+                           "play_pause is a toggle, not separate play or pause.",
+            "parameters": {"type": "object", "properties": {
+                "operation": {"type": "string", "enum": list(MEDIA_ACTIONS)}},
+                "required": ["operation"], "additionalProperties": False}}
+
+
+def tool_output(response, *, guide_enabled, volume_enabled, seen, brightness_enabled=None,
+                media_enabled=None):
     """Select only an allowed function; never dispatch arbitrary action names."""
     items = response.get("output", [])
     if not isinstance(items, list):
@@ -97,6 +116,8 @@ def tool_output(response, *, guide_enabled, volume_enabled, seen, brightness_ena
         raise RealtimeError("Realtime araç çağrısı izinli değil.")
     call = calls[0]
     name = call.get("name")
+    if name == "request_media":
+        return _media_output(call, allowed=media_enabled or (lambda: False), seen=seen)
     if name == "request_volume":
         allowed, minimum, action = volume_enabled, 0, "volume_set"
         key, label = "realtime_volume", "Hoparlör sesini"
@@ -139,5 +160,43 @@ def tool_output(response, *, guide_enabled, volume_enabled, seen, brightness_ena
         "type": "function_call_output", "call_id": cid,
         "output": json.dumps({"status": "pending_confirmation" if pending else "not_executed",
                               "percent": target,
+                              "message": "Not performed. Ask for HUD approval." if pending
+                                         else "Not performed; confirmation unavailable."})}}
+
+
+def _media_output(call, *, allowed, seen):
+    cid, raw = call.get("call_id"), call.get("arguments")
+    if (not allowed() or call.get("status") != "completed"
+            or not isinstance(cid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", cid)
+            or cid in seen or not isinstance(raw, str) or len(raw) > MAX_ARGUMENTS):
+        raise RealtimeError("Realtime medya kontrolü izinli değil.")
+    try:
+        args = json.loads(raw, object_pairs_hook=_unique_pairs)
+        if (not isinstance(args, dict) or set(args) != {"operation"}
+                or not isinstance(args["operation"], str) or args["operation"] not in MEDIA_ACTIONS):
+            raise ValueError("invalid operation")
+    except (ValueError, RecursionError):
+        raise RealtimeError("Realtime medya işlemi geçersiz.") from None
+    seen.add(cid)
+    operation = args["operation"]
+    action, title = MEDIA_ACTIONS[operation]
+    from core import confirm
+
+    def after_human_approval():
+        if not allowed():
+            return "NOT EXECUTED: Realtime izni veya oturumu sona erdi."
+        from actions.computer_settings import computer_settings
+        return computer_settings({"action": action})
+
+    result = confirm.request(
+        key="realtime_media", title=title,
+        detail="Sistem medya komutu bir kez gönderilecek. Hangi oynatıcının yanıt vereceği "
+               "ve oynatma durumu doğrulanmaz. Yalnızca ekran onayından sonra uygulanır.",
+        run=after_human_approval)
+    pending = result.startswith("[CONFIRMATION_PENDING]")
+    return {"type": "conversation.item.create", "item": {
+        "type": "function_call_output", "call_id": cid,
+        "output": json.dumps({"status": "pending_confirmation" if pending else "not_executed",
+                              "operation": operation,
                               "message": "Not performed. Ask for HUD approval." if pending
                                          else "Not performed; confirmation unavailable."})}}
