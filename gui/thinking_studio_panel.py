@@ -100,7 +100,7 @@ class ThinkingStudioDialog(QDialog):
             self.detail.setPlainText(core.turn_hint(tuple(-n for n in ids[:3])))
             return
         self.detail.setPlainText("\n\n".join(
-            f"{n}. {studio.FEATURES[n][0]}\n{studio.workflow_for(n)}\nDurum: {studio.feature_status(n)}"
+            f"{n}. {studio.FEATURES[n][0]}\n{studio.workflow_for(n)}\nDurum: {studio.implementation_kind(n)} · {studio.feature_status(n)}"
             for n in ids[:4]))
 
     def _send(self, command):

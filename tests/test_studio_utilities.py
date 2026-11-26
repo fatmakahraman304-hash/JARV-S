@@ -14,6 +14,15 @@ class UtilityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             u.portions([{"amount":1}],0,2)
 
+    def test_savings_plan_preserves_cents_and_validates_user_inputs(self):
+        result = u.run("savings_plan", {"target": "105", "saved": "5", "months": 3})
+        self.assertEqual(result["base_monthly"], "33.33")
+        self.assertEqual(result["months_with_one_extra_cent"], 1)
+        self.assertEqual(u.savings_plan(5, 6, 1)["remaining"], "0")
+        for args in [(5, -1, 1), ("1.001", 0, 4), (5, 0, True), (5, 0, 0)]:
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                u.savings_plan(*args)
+
     def test_cost_and_totals(self):
         result = u.split_cost("10.00",[1,1,1])
         self.assertEqual(result, ["3.34","3.33","3.33"])

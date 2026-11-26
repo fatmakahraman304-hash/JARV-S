@@ -54,6 +54,7 @@ PHRASES = {
     274: ("kodlarimi incele","kodumu incele","code review","kod incele"),
     393: ("haber dogrula","bu haber dogru mu","fact check news"),
     601: ("gelir gider hesapla","gelir gider tablosu"),
+    605: ("aylik ne kadar biriktirmeliyim", "aylik birikim hesapla", "birikim hedefimi hesapla"),
     612: ("butcemi hesapla","aylik butcemi","monthly budget"),
     821: ("toplamlari kontrol et","toplam dogru mu","verify totals"),
     824: ("yuzde farki","yuzdelik degisim","percentage change"),
