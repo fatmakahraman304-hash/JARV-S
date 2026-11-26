@@ -48,10 +48,10 @@ class ReadAheadTests(unittest.IsolatedAsyncioTestCase):
         class LLM:
             caps = {}
             async def chat(self, *args, **kwargs):
-                yield {"text": "Merhaba. "}
+                yield {"text": "Merhaba. Bugün nasılsın"}
                 await voice_entered.wait()
                 second_read.set()
-                yield {"text": "Nasılsın? "}
+                yield {"text": "? "}
 
         class Voice:
             async def speak(self, text):
@@ -71,7 +71,7 @@ class ReadAheadTests(unittest.IsolatedAsyncioTestCase):
                 messages.append(engine._queue.get_nowait())
             transcripts = [m.server_content.output_transcription.text for m in messages
                            if m.server_content and m.server_content.output_transcription]
-            self.assertEqual(transcripts, ["Merhaba.", "Nasılsın?"])
+            self.assertEqual(transcripts, ["Merhaba.", "Bugün nasılsın?"])
         finally:
             release_voice.set()
             await engine.close()
@@ -86,7 +86,7 @@ class ReadAheadTests(unittest.IsolatedAsyncioTestCase):
             caps = {}
             async def chat(self, *args, **kwargs):
                 try:
-                    yield {"text": "Merhaba. "}
+                    yield {"text": "Merhaba. Bugün nasılsın"}
                     await wait.wait()
                 finally:
                     reader_closed.set()
