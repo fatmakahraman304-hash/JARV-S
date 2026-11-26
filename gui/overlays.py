@@ -545,6 +545,7 @@ class PluginManagerOverlay(QWidget):
         self._grid.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setSpacing(10)
+        self._reserved_plugins = {p["name"] for p in plugins if not p.get("external")}
         self._cards = [self._build_row(p) for p in plugins]
         self._columns = 0
         self._scroll.setWidget(content)
@@ -555,6 +556,9 @@ class PluginManagerOverlay(QWidget):
         self._reflow()
 
         lay.addSpacing(4)
+        add_btn = QPushButton("+ PYTHON EKLENTİSİ ONAYLA")
+        add_btn.clicked.connect(self._approve_local_plugin)
+        lay.addWidget(add_btn)
         close_btn = QPushButton("KAPAT")
         close_btn.setFixedHeight(30)
         close_btn.setFont(hud_font(9))
@@ -569,6 +573,39 @@ class PluginManagerOverlay(QWidget):
         close_btn.clicked.connect(self.close)
         lay.addWidget(close_btn)
         QShortcut(QKeySequence("Escape"), self, activated=self.close)
+
+    def _approve_local_plugin(self):
+        from PyQt6.QtWidgets import QMessageBox
+        from core.user_plugin_approval import directory, inspect_bytes, read_source, approve
+
+        selected, _ = QFileDialog.getOpenFileName(self, "Python eklentisi seç", "", "Python (*.py)")
+        if not selected:
+            return
+        try:
+            raw = read_source(Path(selected))
+            name, digest = inspect_bytes(raw)
+            if name.casefold() in {n.casefold() for n in self._reserved_plugins}:
+                raise ValueError("Yerleşik eklenti adı.")
+            dialog = QMessageBox(self)
+            dialog.setIcon(QMessageBox.Icon.Warning)
+            dialog.setWindowTitle("Python eklentisi onayı")
+            dialog.setTextFormat(Qt.TextFormat.PlainText)
+            dialog.setText(
+                f"Eklenti: {name}\nSHA-256: {digest}\n\n"
+                "Bu Python kodu bilgisayarınızdaki izinlerle çalışabilir. "
+                "FRIDAY kodu sınırlandıramaz. Yalnızca kodunu okuyup güvendiğiniz "
+                "tek dosyalı eklentileri onaylayın. Bu onay aynı adlı eski "
+                "kullanıcı eklentisinin yerini alabilir. Yeni eklenti yeniden "
+                "başlatıldığında etkin olarak yüklenir; daha önce kapatılmışsa kapalı kalır."
+            )
+            dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            dialog.setDefaultButton(QMessageBox.StandardButton.No)
+            if dialog.exec() != int(QMessageBox.StandardButton.Yes):
+                return
+            approve(directory(), raw, digest, self._reserved_plugins)
+            QMessageBox.information(self, "Onay kaydedildi", "FRIDAY'i yeniden başlatın.")
+        except Exception as exc:
+            QMessageBox.warning(self, "Eklenti eklenemedi", f"Dosya onaylanmadı ({type(exc).__name__}).")
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Type.Resize:
@@ -602,7 +639,7 @@ class PluginManagerOverlay(QWidget):
         lbl = QLabel(label_text)
         lbl.setFont(hud_font(8))
         lbl.setStyleSheet(f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;")
-        lbl.setToolTip(p["description"] if p["valid"] else p["error"])
+        lbl.setToolTip((p["description"] + (" — yeniden başlatma/onay gerekli" if p.get("external") and not p.get("loaded") else "")) if p["valid"] else p["error"])
         lbl.setMinimumWidth(0)
         lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         lbl.setWordWrap(False)
