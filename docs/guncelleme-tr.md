@@ -77,3 +77,13 @@ Aşama 8'deki kaynak adayının commit/SHA-256 doğrulaması, temiz Windows kuru
 ve mevcut kurulumun üzerine yazmadan test adımları için
 [nihai kabul raporuna](nihai-kabul-2026-11-25.md) bakın. Bu aday imzalı EXE
 değildir; gerçek cihaz ve güvenli yayın kabulündeki açıklar raporda listelenir.
+
+## Git güncellemesi birleştirme sonunda kesilirse
+
+Güncelleme temiz çalışma ağacında başladıysa FRIDAY dalı, önceki ve yeni commit'i
+ve önceki commit'e işaret eden yedek dalı kaydeder. Sonraki açılış veya
+`python -m core.app_updater --recover` bunları çevrimdışı doğrular. HEAD hedefe
+ulaştıysa, izlenen dosyalar temizse ve devam eden Git işlemi görünmüyorsa
+kayıt kaldırılır. Açılış temiz süreçte devam eder. Yerel değişiklik, eksik
+yedek veya tamamlanmamış birleştirmede kayıt yerinde bırakılır. Stash
+gerektiren işlemler ve eski belirsiz kilitler için mevcut elle inceleme geçerlidir.

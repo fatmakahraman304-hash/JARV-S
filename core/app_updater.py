@@ -253,6 +253,7 @@ def _replace_bytes(path, data):
         os.replace(tmp, path)
 
 
+_GIT_MARKER = b'AETHER/3 git\n'
 _ZIP_MARKER = b'AETHER/2 zip\n'
 _ROLLBACK_MARKER = b'AETHER/2 rollback\n'
 
@@ -268,6 +269,27 @@ def _backup_directory(root, name):
     if backup.parent.is_symlink() or not backup.is_dir():
         raise _RecoveryRequired("ZIP yedek klasörü doğrulanamadı.")
     return backup
+
+
+def _recover_transaction(root, marker, raw, progress):
+    if not raw.startswith(_GIT_MARKER):
+        return _recover_zip(root, marker, raw, progress)
+    record = json.loads(raw[len(_GIT_MARKER):])
+    before, after, backup = record['before'], record['after'], record['backup']
+    if (not re.fullmatch('[0-9a-f]{40}', before) or not re.fullmatch('[0-9a-f]{40}', after)
+            or not re.fullmatch(r'aether-backup/[0-9]+', backup) or before == after):
+        raise _RecoveryRequired('Git işlem kaydı geçersiz.')
+    if (_git(root, 'symbolic-ref', '--short', 'HEAD') != record['branch']
+            or _git(root, 'rev-parse', 'refs/heads/' + backup) != before
+            or _git(root, 'rev-parse', 'HEAD') != after
+            or _git(root, 'status', '--porcelain', '--untracked-files=no')):
+        raise _RecoveryRequired('Git işlemi veya yerel dosyalar doğrulanamadı; işlem kaydı korunuyor.')
+    for state in ('index.lock', 'MERGE_HEAD', 'rebase-apply', 'rebase-merge', 'CHERRY_PICK_HEAD', 'REVERT_HEAD'):
+        if (root / _git(root, 'rev-parse', '--git-path', state)).exists():
+            raise _RecoveryRequired('Devam eden Git işlemi var; işlem kaydı korunuyor.')
+    progress('Kurulan Git sürümü ve geri dönüş noktası doğrulandı.')
+    marker.unlink()
+    return True, 'Kurulan Git sürümü doğrulandı. FRIDAY yeniden başlatılacak.'
 
 
 def _recover_zip(root, lock, raw, progress):
@@ -511,8 +533,8 @@ def _update_locked(root, progress):
             marker.write(checking)
     except FileExistsError:
         raw = lock.read_bytes()
-        if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
-            return _recover_zip(root, lock, raw, progress)
+        if raw.startswith((_GIT_MARKER, _ZIP_MARKER, _ROLLBACK_MARKER)):
+            return _recover_transaction(root, lock, raw, progress)
         if raw != checking:
             raise RuntimeError('Başka bir güncelleme veya yarım kalan kurulum var. '
                                'Güncelleme kilidi ve yedekler korunuyor. docs/guncelleme-tr.md dosyasına bakın.') from None
@@ -568,7 +590,13 @@ def _update_locked(root, progress):
                     or _git(root, 'rev-parse', 'HEAD') != current
                     or _local_changes(root) != (real_changes, eol_only)):
                 raise RuntimeError('Kontrol sırasında yerel kod değişti; güncelleme durduruldu.')
-            _git(root, 'branch', f'aether-backup/{time.time_ns()}', current)
+            backup = f'aether-backup/{time.time_ns()}'
+            _git(root, 'branch', backup, current)
+            clean_git = not real_changes and not eol_only
+            if clean_git:
+                record = {'branch': branch, 'before': current, 'after': sha, 'backup': backup}
+                _replace_bytes(lock, _GIT_MARKER + json.dumps(record).encode('utf-8'))
+                release_marker = False
             label = None
             if real_changes:
                 shown = ', '.join(real_changes[:5]) + (' …' if len(real_changes) > 5 else '')
@@ -582,12 +610,16 @@ def _update_locked(root, progress):
                     _git(root, 'restore', '--source=HEAD', '--staged', '--worktree', '--', '.')
                 _git(root, 'merge', '--ff-only', '--no-overwrite-ignore', sha)
             except RuntimeError:
+                if clean_git and _git(root, 'rev-parse', 'HEAD') == current and not _git(
+                        root, 'status', '--porcelain', '--untracked-files=no'):
+                    release_marker = True
                 if label:
                     _restore(root, label)
                 raise
             progress('Kurulan commit doğrulanıyor…')
             if _git(root, 'rev-parse', 'HEAD') != sha:
                 raise RuntimeError('Güncelleme sonucu doğrulanamadı.')
+            release_marker = True
             if label:
                 note = _restore(root, label)
         else:
@@ -630,7 +662,7 @@ if __name__ == "__main__":
     if sys.stdout is not None and not sys.stdout.isatty():
         sys.stdout.reconfigure(encoding="utf-8")
     import argparse
-    parser = argparse.ArgumentParser(description="Kesilen FRIDAY ZIP güncellemesini çevrimdışı kurtar.")
+    parser = argparse.ArgumentParser(description="Kesilen FRIDAY güncellemesini çevrimdışı kurtar.")
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--recover", action="store_true")
     action.add_argument("--rollback", action="store_true")
@@ -643,12 +675,12 @@ if __name__ == "__main__":
         with _update_guard(ROOT):
             marker = ROOT / ".aether-update.lock"
             raw = marker.read_bytes() if marker.exists() else b""
-            if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
-                _recover_zip(ROOT, marker, raw, print)
+            if raw.startswith((_GIT_MARKER, _ZIP_MARKER, _ROLLBACK_MARKER)):
+                _recover_transaction(ROOT, marker, raw, print)
                 print("Kurtarma doğrulandı. FRIDAY'ı açabilirsiniz.")
             elif marker.exists():
                 sys.exit("Bu kilit otomatik ZIP kurtarmasına uygun değil. Güncelleme kılavuzuna bakın.")
             else:
-                print("Bekleyen ZIP kurtarması yok.")
+                print("Bekleyen ZIP kurtarması yok. Bekleyen Git kurtarması yok.")
     except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
         sys.exit(f"Kurtarma tamamlanamadı: {exc}")

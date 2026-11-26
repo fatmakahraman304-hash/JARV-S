@@ -71,6 +71,57 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn('aether-backup/', git('branch', '--list'))
         self.assertEqual((self.root / 'main.py').read_bytes(), b'new')
 
+    def test_killed_clean_git_update_recovered_offline_without_reset(self):
+        import subprocess
+        import sys
+        from core.startup_guard import ensure_safe_startup
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(self.root), *args], text=True).strip()
+        git('init', '-b', 'main')
+        git('config', 'user.name', 'Recovery test')
+        git('config', 'user.email', 'test@example.invalid')
+        (self.root / 'main.py').write_bytes(b'old')
+        git('add', '.')
+        git('commit', '-m', 'old')
+        before = git('rev-parse', 'HEAD')
+        (self.root / 'main.py').write_bytes(b'new')
+        git('commit', '-am', 'new')
+        after = git('rev-parse', 'HEAD')
+        git('reset', '--hard', before)
+        script = """
+import os, sys
+from pathlib import Path
+from core import app_updater as u
+real = u._git
+def interrupted(root, *args):
+    if args[0] == 'fetch':
+        return real(root, 'fetch', str(root), sys.argv[2])
+    result = real(root, *args)
+    if args[0] == 'merge':
+        os._exit(79)
+    return result
+u._git = interrupted
+u.update(Path(sys.argv[1]))
+"""
+        process = subprocess.run([sys.executable, '-c', script, str(self.root), after],
+                                 cwd=u.ROOT, capture_output=True, timeout=30)
+        self.assertEqual(process.returncode, 79, process.stderr)
+        self.assertEqual(git('rev-parse', 'HEAD'), after)
+        marker = self.root / '.aether-update.lock'
+        raw = marker.read_bytes()
+        (self.root / 'main.py').write_bytes(b'local edit')
+        with self.assertRaises(RuntimeError):
+            ensure_safe_startup(self.root)
+        self.assertEqual(marker.read_bytes(), raw)
+        self.assertEqual((self.root / 'main.py').read_bytes(), b'local edit')
+        (self.root / 'main.py').write_bytes(b'new')
+        private = self.root / 'personal.txt'
+        private.write_bytes(b'keep')
+        self.assertTrue(ensure_safe_startup(self.root))
+        self.assertFalse(marker.exists())
+        self.assertEqual(private.read_bytes(), b'keep')
+        self.assertEqual(git('rev-parse', 'HEAD'), after)
+
     def test_personal_data_untouched(self):
         config = self.root / 'config/api_keys.json'
         config.parent.mkdir()

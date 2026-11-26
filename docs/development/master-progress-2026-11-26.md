@@ -213,3 +213,21 @@ akışı başarılı. Yeni güven ve güncelleme yolunun kullanım koşulları
 - Fiziksel cihaz bekliyor — Android rotasyonu ve önceki APK üzerinde yükseltme,
   gerçek Windows kullanıcı profilinde anahtar taşıma ve panel takılmasının
   kullanıcının cihazındaki sebebi. Aşama 2–8 için üstteki açık işler sürüyor.
+
+## Temiz Git kurulumunun kesinti sonrası açılışı
+
+Aşama 1, kısmen tamamlandı. Süreç git merge tamamlanır tamamlanmaz kapanırsa
+yeni işlem kaydıyla hedef commit ve yedek dal açılışta doğrulanır. Kişisel
+dosyalar ve izlenen yerel değişiklikler korunur. Subprocess birleştirmeden
+sonra gerçek os._exit ile durduruldu; yerel değişiklik varken açılış durdu,
+temiz içerikle kurtarma çevrimdışı tamamlandı. Linux/Python 3.13 üzerinde
+48 güncelleyici/açılış/HUD testi geçti. Stash'li veya kısmen yazılmış Git
+çalışma ağacında otomatik yıkıcı onarım uygulanmaz.
+
+#213 için ilk genel Linux koşusunda sağlayıcı öz sınaması 139 çıkış koduyla
+sonlandı. Ses kataloğu ön yüklemesi panel kapandıktan sonra tamamlanabiliyordu.
+İşçi iş parçacıkları artık yalnız Python olayını işaretler. Panel kendi Qt
+zamanlayıcısıyla sonucu alır; panel kapanınca zamanlayıcı da kapanır. NVIDIA
+sağlayıcı kurulumu hata verirse düğmeye sonuç dönmesini engelleyen tanımsız
+değişken düzeltildi. Yerel Python 3.13'te sağlayıcı kontrolleri üç ayrı
+süreçte 101/101 geçti. İlk çökmenin yerel çağrı yığını elde edilemedi.
