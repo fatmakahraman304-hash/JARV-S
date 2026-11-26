@@ -199,7 +199,7 @@ class ProvidersOverlay(_HudOverlay):
         outer.addLayout(cards)
         self._card_realtime = self._mode_card(
             "☁  OPENAI REALTIME (DENEYSEL)",
-            "Ayrı OpenAI anahtarı; metin ve isteğe bağlı mikrofon. Araçlar ve telefon sesi henüz yok.",
+            "Ayrı OpenAI anahtarı; metin, isteğe bağlı mikrofon ve onaylı hoparlör kontrolü.",
             "realtime")
         outer.addWidget(self._card_realtime)
 
