@@ -34,3 +34,8 @@ pip çalıştırmadan önce durur. Yeni sürümün kaynak paketini ayrı klasör
 açarak FRIDAY kapalıyken setup.py ile kurun. Eski kurulum ve kişisel
 veriler geri dönüş için korunmalıdır. Mevcut sanal ortamda yeniden pip
 kurulumu kullanımdan kalkan PyPDF2 paketini otomatik kaldırmaz.
+
+Windows kaynak ZIP'inde FRIDAY_BASLAT.cmd ilk çalıştırmada yerel .venv
+kurar, setup.py ve pip check sonucunu doğrular. Sonraki çift tıklamada
+pythonw ile FRIDAY açılır. --install-only CI ve kapalı uygulamayla yeniden
+kurulum için aynı yolu kullanır. Python 3.13 ve ilk kurulumda internet gerekir.
