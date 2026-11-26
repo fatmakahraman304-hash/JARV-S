@@ -1,6 +1,6 @@
 """Opt-in FRIDAY Engine adapter for a pre-opened RealtimeSession.
 
-Only explicit push-to-talk utterances and complete text turns are supported.
+Explicit push-to-talk is the default; local turn detection is opt-in.
 The future UI integration must gate microphone capture and obtain consent
 before opening the cloud connection. No tool, vision or background routing.
 """
@@ -10,6 +10,7 @@ import asyncio
 from contextlib import aclosing
 
 from .base import DEFAULT_CAPS, Msg
+from .realtime_local_turns import LocalTurns
 
 MAX_MIC_BYTES = 30 * 16000 * 2
 QUEUE_SIZE = 128
@@ -21,6 +22,8 @@ class RealtimeEngine:
         self._log = log or (lambda message: None)
         self.caps = dict(DEFAULT_CAPS, audio_out=True)
         self._mic = bytearray()
+        self.auto_turn = False
+        self._local_turns = LocalTurns()
         self._overflow = False
         self._queue = asyncio.Queue(maxsize=QUEUE_SIZE)
         self._gen = None
@@ -38,13 +41,32 @@ class RealtimeEngine:
         data = audio if isinstance(audio, bytes) else getattr(audio, "data", None)
         if not isinstance(data, bytes) or not data or len(data) % 2:
             return
+        if self.auto_turn:
+            if len(data) > MAX_MIC_BYTES:
+                self.discard_capture()
+                return
+            if self._gen is not None and not self._gen.done():
+                self.discard_capture()
+                return
+            for clip in self._local_turns.feed(data):
+                self._start(pcm=clip)
+            return
         if len(self._mic) + len(data) > MAX_MIC_BYTES:
             self._mic.clear()
             self._overflow = True
             return
         self._mic.extend(data)
 
+    def discard_capture(self):
+        """Discard unsubmitted audio when mute, sleep or capture mode changes."""
+        self._mic.clear()
+        self._overflow = False
+        self._local_turns.reset()
+
     async def flush_microphone(self, sample_rate=16000):
+        if self.auto_turn:
+            self.discard_capture()
+            return ""
         pcm = bytes(self._mic)
         self._mic.clear()
         overflow, self._overflow = self._overflow, False
@@ -120,6 +142,7 @@ class RealtimeEngine:
                 raise
 
     def _interrupt_on_loop(self):
+        self.discard_capture()
         if self._closed or self._gen is None or self._gen.done():
             return
         self._invalid = True
@@ -134,7 +157,7 @@ class RealtimeEngine:
         if self._closed:
             return
         self._closed = True
-        self._mic.clear()
+        self.discard_capture()
         task = self._gen
         if task is not None and not task.done():
             task.cancel()
