@@ -79,3 +79,41 @@ class ReleaseSignatures(unittest.TestCase):
             signatures.sign(self.payload, self.commit, encrypted, b'wrong-password')
         self.assertNotIn('wrong-password', str(error.exception))
         self.assertNotIn(password.decode(), str(error.exception))
+
+    def test_duplicate_or_coerced_metadata_is_rejected(self):
+        envelope = signatures.sign(self.payload, self.commit, self.private)
+        signed = json.loads(envelope)
+        for field, value in [('schema', True), ('schema', 1.0), ('bytes', float(len(self.payload)))]:
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                signatures.verify(self.payload, self.commit,
+                                  json.dumps({**signed, field: value}).encode(), self.public)
+        duplicate = b'{"schema":1,' + envelope[1:]
+        with self.assertRaises(ValueError):
+            signatures.verify(self.payload, self.commit, duplicate, self.public)
+
+    def test_signing_uses_the_same_archive_snapshot_that_was_validated(self):
+        from contextlib import redirect_stdout
+        import io
+        from unittest.mock import patch
+        fixture = test_release_package.ReleasePackage()
+        fixture.setUp()
+        try:
+            fixture.build()
+            payload = fixture.archive.read_bytes()
+            key = fixture.base / 'private.pem'
+            key.write_bytes(self.private)
+            envelope = fixture.base / 'signature.json'
+            real_verify = release._verify_snapshot
+            def concurrent_replace(data, *args, **kwargs):
+                result = real_verify(data, *args, **kwargs)
+                fixture.archive.write_bytes(b'concurrently replaced untrusted source')
+                return result
+            argv = ['release_package.py', 'sign', str(fixture.archive), '--commit', fixture.sha,
+                    '--key', str(key), '--out', str(envelope)]
+            with patch('sys.argv', argv), patch.object(release, '_verify_snapshot', side_effect=concurrent_replace), redirect_stdout(io.StringIO()):
+                release.main()
+            self.assertTrue(signatures.verify(payload, fixture.sha, envelope.read_bytes(), self.public))
+            with self.assertRaises(ValueError):
+                signatures.verify(fixture.archive.read_bytes(), fixture.sha, envelope.read_bytes(), self.public)
+        finally:
+            fixture.doCleanups()

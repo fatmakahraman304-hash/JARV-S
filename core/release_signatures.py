@@ -9,6 +9,15 @@ import re
 MAX_SIGNATURE = 4096
 
 
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate signature field')
+        result[key] = value
+    return result
+
+
 def _message(payload, commit):
     if not isinstance(commit, str) or not re.fullmatch('[0-9a-f]{40}', commit):
         raise ValueError('An exact trusted source commit is required')
@@ -41,11 +50,12 @@ def verify(payload, commit, envelope, trusted_public_key_pem):
         raise ValueError('Oversized release signature')
     metadata, message = _message(payload, commit)
     try:
-        signed = json.loads(envelope)
+        signed = json.loads(envelope, object_pairs_hook=_unique_object)
         if not isinstance(signed, dict) or set(signed) != set(metadata) | {'signature'}:
             raise ValueError('Unexpected signature fields')
         signature = base64.b64decode(signed.pop('signature'), validate=True)
-        if signed != metadata or len(signature) != 64:
+        if (json.dumps(signed, sort_keys=True, separators=(',', ':')) !=
+                json.dumps(metadata, sort_keys=True, separators=(',', ':')) or len(signature) != 64):
             raise ValueError('Signature metadata differs from this archive/commit')
         key = load_pem_public_key(trusted_public_key_pem)
         if not isinstance(key, Ed25519PublicKey):

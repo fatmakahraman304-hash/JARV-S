@@ -129,6 +129,12 @@ def verify(archive: Path, expected_commit=None, destination: Path | None = None,
     # The signed bytes are the same snapshot parsed and extracted below.
     with archive.open('rb') as handle:
         payload = handle.read(MAX_TOTAL + 1)
+    return _verify_snapshot(payload, expected_commit, destination, signature=signature,
+                            public_key=public_key, require_signature=require_signature)
+
+
+def _verify_snapshot(payload, expected_commit=None, destination=None, *,
+                     signature=None, public_key=None, require_signature=False):
     if len(payload) > MAX_TOTAL:
         raise ValueError('Oversized source archive')
     authenticated = False
@@ -246,11 +252,9 @@ def main():
         root = Path(__file__).resolve().parents[1]
         if args.key.resolve().is_relative_to(root):
             raise ValueError('Keep the private release key outside the checkout')
-        verify(args.archive, args.commit)
         with args.archive.open('rb') as handle:
             payload = handle.read(MAX_TOTAL + 1)
-        if len(payload) > MAX_TOTAL:
-            raise ValueError('Oversized source archive')
+        _verify_snapshot(payload, args.commit)
         sys.path.insert(0, str(root))
         from core.release_signatures import sign
         with args.key.open('rb') as handle:

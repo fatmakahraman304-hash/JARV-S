@@ -92,7 +92,8 @@ class UpdaterTests(unittest.TestCase):
         # Old update manifests must not turn previously copied keys into deletions.
         (self.root / '.aether-update.json').write_text(json.dumps({
             'sha': 'b' * 40, 'branch': 'main',
-            'files': {name: u._hash(b'private local sentinel') for name in names}}))
+            'files': {**{name: u._hash(b'private local sentinel') for name in names},
+                      'requirements.txt': u._hash((self.root / 'requirements.txt').read_bytes())}}))
         u._apply_zip(self.root, files, self.sha, 'main')
         for name in names:
             self.assertEqual((self.root / name).read_bytes(), b'private local sentinel')
