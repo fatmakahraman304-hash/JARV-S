@@ -51,7 +51,7 @@ def private_path(name):
     path = PurePosixPath(name.lower())
     if any(part in PRIVATE_DIRS for part in path.parts):
         return True
-    if path.suffix in PRIVATE_SUFFIXES or '.db-' in path.name or '.sqlite-' in path.name:
+    if path.suffix in PRIVATE_SUFFIXES or any(prefix in path.name for prefix in ('.db-', '.sqlite-', '.sqlite3-')):
         return True
     if path.name == '.env' or path.name.startswith('.env.'):
         return True

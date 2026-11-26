@@ -102,3 +102,29 @@ testi kaldırılmadı, atlanacak biçimde değiştirilmedi veya gizlenmedi. CI'd
 konuşma/arka plan/bulut ve gerçek onay callback'lerinde ortak sonuç dönüşümü
 kullanır. Yerel test ve açık sınırlar ilgili kayıttadır. CI ve birleşme durumu
 GitHub PR kaydından doğrulanmalıdır; eski kayıt yeni başarı kanıtı sayılmaz.
+
+## Aşama 1 — ZIP güncellemesinde açık SQLite veritabanı
+
+Bu oturumun ana dal başlangıcı ve geri dönüş noktası
+`36970db90ba948bfcf2337a4a6810fce058b22e9` (#207).
+
+- ZIP güncelleyicisi .db, .sqlite ve .sqlite3 veritabanlarının günlük ve
+  paylaşılan bellek dosyalarını korur. Eski dosya listesinde yer almaları
+  bunların kaldırılmasına yol açmaz. Kaynak paketi oluşturulurken .sqlite3
+  yan dosyaları da paket dışında kalır.
+- Linux/Python 3.13 üzerinde iki regresyon testi düzeltmeden önce başarısız
+  oldu. Düzeltmeyle güncelleyici, sesli güncelleme eklentisi ve kaynak paketi
+  testlerinin 57'si geçti. Açık WAL bağlantısı sırasında yerel yan dosyaların
+  baytları korundu. Yeniden açılan veritabanı bütünlük denetimini geçti ve
+  kaydedilmiş satır okundu. Ağ yanıtları bu testte yerel örnektir.
+- Ürün sürümü ve Windows paketi yayımlanmadı. Yukarıdaki aşama tablosunda
+  açık kalan işler sürüyor. Bu değişiklik için Windows panelinden gerçek
+  yükseltme ve yeniden başlatma kabulü bekleniyor.
+
+Ek doğrulamada 392 Python dosyası Python 3.13 ile ayrıştırıldı. Başlangıç
+kurtarma, imza, Android imza politikası, araç sonucu ve hafıza kapsamında
+40 test, yetenek kataloğu ve düşünce stüdyosunda 26 test geçti. Genel yerel
+koşu 180 saniyelik süre sınırında tamamlanmadı. İlk Windows CI koşusunda
+sentetik eski manifest requirements.txt dosyasını içermediği için CRLF ile
+yazılan dosya haklı olarak çakışma sayıldı. Test artık mevcut dosyanın gerçek
+özetini kaydederek kurulu bir sürümü temsil eder. CI sonuçları PR #209'dadır.

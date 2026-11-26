@@ -125,7 +125,8 @@ def _protected(name):
     return (any(part.startswith('.') for part in p.parts)
             or p.parts[0] in {'venv', 'env', 'ENV', 'logs', 'downloads', 'screenshots', '__pycache__', 'uploads', 'reports'}
             or (p.parts[0] == 'config' and name not in {'config/__init__.py', 'config/aether.ico'})
-            or p.suffix.lower() in {'.db', '.log', '.pyc', '.sqlite', '.sqlite3', '.sqlite3-wal', '.sqlite3-shm', '.sqlite3-journal',
+            or p.suffix.partition('-')[0] in {'.db', '.sqlite', '.sqlite3'}
+            or p.suffix in {'.log', '.pyc',
                                     '.jks', '.keystore', '.p12', '.pfx', '.key', '.pem'}
             or (p.parts[0] == 'memory' and (p.suffix != '.py' or p.parts[1:2] == ('tasks',)))
             or any(x in p.name.lower() for x in ('token', 'credential', 'client_secret')))
