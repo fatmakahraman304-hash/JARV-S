@@ -231,3 +231,44 @@ zamanlayıcısıyla sonucu alır; panel kapanınca zamanlayıcı da kapanır. NV
 sağlayıcı kurulumu hata verirse düğmeye sonuç dönmesini engelleyen tanımsız
 değişken düzeltildi. Yerel Python 3.13'te sağlayıcı kontrolleri üç ayrı
 süreçte 101/101 geçti. İlk çökmenin yerel çağrı yığını elde edilemedi.
+
+## Sonraki oturum için kabul durumu
+
+Başlangıçta ana dalın en son commit'ini ve aşağıdaki PR sonuçlarını kontrol edin.
+SQLite günlük dosyalarının korunması #209 (32e513b) ile ana daldadır.
+
+| Aşama | Durum | Doğrulanan kapsam ve açık kabul |
+| --- | --- | --- |
+| 1 — Kararlılık ve güvenlik | Geliştiriliyor | #210 imza denetimi, #213 kesintiden sonra temiz Git kurulumunun kurtarılması ve #211 Windows yerinde geçişi. Gerçek yayıncı parmak izi, Android sertifika geçişi, eklenti izolasyonu ve uzun süreli çalışma açık. |
+| 2 — Beyin | Kısmen tamamlandı | #212 ile 1.000 giriş sınıflandırıldı. 895 konuşma yönteminin 23'ü yerel işleme bağlı. 76 davranış ilkesi, 29 uygulama girdisi ve 30 alan envanterde. #214 açık izinli RouteLLM sohbeti ve arka plan görev bağlantısı. Gerçek hesap kotası, sağlayıcı geçişleri ve görev bütçeleri açık. |
+| 3 — Ses | Fiziksel cihaz bekliyor | Türkçe mikrofon, araya girme, sürekli dinleme ve ses gecikmesi için gerçek cihaz ölçümü açık. |
+| 4 — Hafıza | Kısmen tamamlandı | SQLite bütünlüğü ve güncelleme koruması doğrulandı. Anlamsal geri çağırma, belge kaynağı ve kişisel veri yaşam döngüsünün toplu kabulü açık. |
+| 5 — Araçlar ve cihazlar | Geliştiriliyor | Mevcut araç izinleri korunuyor. MCP, görev kurtarma, eklenti sınırları, kişisel hesap ve oda kısıtlarının uçtan uca kabulü açık. |
+| 6 — Görseller | Kısmen tamamlandı | Blender otomatik testleri mevcut. Kullanıcının GPU, kamera, Holo Masa ve ikinci ekran kabulü açık. |
+| 7 — Performans | Test bekliyor | Blender indirme kaynakları ve Qt kapanışı için hedefli kontroller var. Aynı donanımda bütün performans ölçümlerinin önce/sonra karşılaştırması açık. |
+| 8 — Nihai kabul | Kısmen tamamlandı | #211 Windows kaynak paketi temiz kurulum, yeniden kurulum, güncelleme ve geri dönüş testinden geçti. Üretim imzalı dağıtım, saha kabulü ve nihai rapor açık. |
+
+#213 ana dal commit'i 7ae34941bdfe23f5efcc3f047c1be4abe1f367ee.
+#211 ana dal commit'i f7ab275633758cd95cb04b917a168d6ef2c4a3ca.
+Windows paket kabulünde CRLF/LF farkı bulundu. Yeni karşılaştırma Windows satır
+sonlarını tanır. Bağımlılık satırı değiştiğinde dosyalara dokunmadan durur.
+[Windows paket kabulü](https://github.com/fatmakahraman304-hash/JARV-S/actions/runs/45873297505)
+ve [eski kurulumu taşıma komutları](dependency-audit-2026-11-26.md) kaydedildi.
+İmzalı yayın yapılandırılmış profilde gerçek yayıncı imzası gereklidir.
+
+GÜNCELLE panelinde ZIP aktarımı sırasında bilinen içerik boyutuyla yüzde,
+boyut bildirilmediğinde alınan KiB gösterilir. Gösterge indirme baytlarına
+dayanır. Bildirimler her bağlantı denemesinde en çok iki saniyede bir
+üretilir. Yedekleme ve dosya kurulumu kendi aşama mesajını gösterir.
+Linux/Python 3.13.5 üzerinde güncelleyici, imza, arayüz, bakım ve ilişkili
+regresyon kapsamındaki 76 hedefli test geçti. Kullanıcının Windows kurulumunda
+bildirilen takılmanın aynı nedenden kaynaklandığı henüz doğrulanmadı.
+
+## Ana dalda sonraki çalışmalar
+
+Bu kayıt güncellenirken ana dal 4833497e017a4cfca83759e8897701d7e90a8b77
+commit'indeydi. #214 ana dala alındı (3b279dc7ca3ad07407e6c1fc73e9392b5ebb5b11).
+#215–#225 arasında yardım, kullanıcı eklentilerinin incelenmesi ve onayı,
+ses sağlayıcıları ile gerçek zamanlı oturum altyapısında değişiklikler
+birleşti. Bu özelliklerin gerçek hesap ve cihaz kabulü ayrıca açıktır.
+İndirme göstergesi yeni ana dal üzerinde 76 hedefli testle tekrar doğrulandı.

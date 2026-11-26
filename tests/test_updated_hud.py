@@ -15,6 +15,17 @@ from core import app_updater
 
 
 class UpdatedHudTests(unittest.TestCase):
+    def test_download_counter_is_visible_until_installation_starts(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from gui.window import MainWindow
+        window = SimpleNamespace(_update_btn=Mock(), _log=Mock())
+        MainWindow._update_progress(window, "İndiriliyor · %25")
+        window._update_btn.setText.assert_called_with("İndiriliyor · %25")
+        MainWindow._update_progress(window, "Yedek alınıyor…")
+        window._update_btn.setText.assert_called_with("GÜNCELLENİYOR…")
+        window._update_btn.setToolTip.assert_called_with("Yedek alınıyor…")
+
     def test_restart_failure_enables_retry_without_reinstalling(self):
         from types import SimpleNamespace
         from unittest.mock import Mock

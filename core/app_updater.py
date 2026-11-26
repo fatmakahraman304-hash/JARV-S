@@ -85,7 +85,7 @@ def _restore(root, label):
                 'git stash listesinde saklı.')
 
 
-def _get(url, *, limit=LIMIT):
+def _get(url, *, limit=LIMIT, progress=None):
     req = Request(url, headers={'User-Agent': 'Friday-Updater', 'Accept': 'application/vnd.github+json'})
     deadline = time.monotonic() + DOWNLOAD_SECONDS
     for attempt in range(3):
@@ -95,6 +95,8 @@ def _get(url, *, limit=LIMIT):
         try:
             with urlopen(req, timeout=min(15, remaining)) as response:
                 data = bytearray()
+                total = response.length
+                next_report = 0.0
                 while time.monotonic() < deadline:
                     # read1 returns after at most one underlying read. read(n)
                     # can wait indefinitely if the peer keeps trickling bytes.
@@ -106,6 +108,15 @@ def _get(url, *, limit=LIMIT):
                     data.extend(chunk)
                     if len(data) > limit:
                         raise RuntimeError('Güncelleme indirme sınırını aşıyor.')
+                    if progress is not None:
+                        now = time.monotonic()
+                        if now >= next_report:
+                            if isinstance(total, int) and total > 0:
+                                size = f'%{min(100, len(data) * 100 // total)}'
+                            else:
+                                size = f'{len(data) / 1024:.0f} KiB'
+                            progress(f'İndiriliyor · {size}')
+                            next_report = now + 2
                 raise RuntimeError("Güncelleme indirme süresi doldu. Yeniden deneyin.")
         except HTTPError as exc:
             # Retry temporary server failures, leaving authentication and quota
@@ -142,7 +153,7 @@ def _publisher_files(sha, progress):
     progress('Yayıncı imzası kontrol ediliyor…')
     prefix = f'https://github.com/{REPOSITORY}/releases/download/friday-source-{sha}/friday-source'
     envelope = _get(prefix + '.sig.json', limit=MAX_SIGNATURE)
-    payload = _get(prefix + '.zip', limit=MAX_TOTAL)
+    payload = _get(prefix + '.zip', limit=MAX_TOTAL, progress=progress)
     verify(payload, sha, envelope, pem)
     _, contents = verified_files(payload, sha)
     if 'gui/window.py' not in contents:
@@ -575,7 +586,7 @@ def _update_locked(root, progress, *, prepared_manifest=None):
         else:
             progress('Yeni sürüm indiriliyor…')
             files = signed_files if signed_files is not None else _archive(
-                _get(f'https://codeload.github.com/{REPOSITORY}/zip/{sha}'))
+                _get(f'https://codeload.github.com/{REPOSITORY}/zip/{sha}', progress=progress))
             new_req = files['requirements.txt'].decode('utf-8')
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
