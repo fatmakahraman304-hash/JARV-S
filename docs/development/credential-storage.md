@@ -57,3 +57,9 @@ zararlı kodu izole etmez; bellekte kullanılan sırları veya tüm ayar dosyas�
 DPAPI kanıtı değildir. Windows Python 3.13 CI ayrıca gerçek DPAPI ile aynı
 profilde ikinci süreçten okumayı ve yanlış alan bağlamının reddini çalıştırır.
 Gerçek kullanıcı cihazı/profili kurtarma testi ayrıca açık kabul maddesidir.
+
+WinAPI sözleşmesi ve profil/entropy/bellek serbest bırakma davranışı için
+[CryptProtectData](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata)
+ve [CryptUnprotectData](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptunprotectdata)
+resmî belgeleri kontrol edildi. Uygulama, DPAPI sonucuna ek JSON şema/özet
+doğrulaması uygular; belirli bir Windows hata koduna güvenmez.
