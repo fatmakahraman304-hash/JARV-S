@@ -24,7 +24,8 @@ def validate_settings(cfg):
     session_event(voice)
     return {"api_key": key, "model": model, "voice": voice,
             "microphone": enabled(cfg.get("microphone")),
-            "volume_control": enabled(cfg.get("volume_control"))}
+            "volume_control": enabled(cfg.get("volume_control")),
+            "brightness_control": enabled(cfg.get("brightness_control"))}
 
 
 def check_dependency():

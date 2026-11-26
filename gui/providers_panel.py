@@ -655,7 +655,7 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(self._label(
             "Komutlar OpenAI bulutuna gönderilir ve ücret oluşabilir. Mikrofon kapalı "
             "başlar; isterseniz yerel konuşma algılama veya bas-konuş kullanılır. "
-            "Kılavuz ve isteğe bağlı onaylı ses seviyesi dışında araçlar, hafıza aktarımı ve telefon sesi desteklenmez. "
+            "Kılavuz ve isteğe bağlı onaylı ses seviyesi ve parlaklık dışında araçlar, hafıza aktarımı ve telefon sesi desteklenmez. "
             "Bağlantı için websockets>=15 gerekir.", 7, C.TEXT_DIM))
         fields = (
             Field("api_key", "Ayrı OpenAI API anahtarı", kind="secret"),
@@ -663,6 +663,7 @@ class ProvidersOverlay(_HudOverlay):
             Field("voice_id", "Ses", kind="choice", choices=VOICES, default=VOICES[0]),
             Field("microphone", "Mikrofon aktarımını aç", kind="bool", default=False),
             Field("volume_control", "Ekran onayıyla hoparlör ses kontrolü", kind="bool", default=False),
+            Field("brightness_control", "Ekran onayıyla parlaklık kontrolü (%10–100)", kind="bool", default=False),
         )
         self._edits[PROVIDER_ID] = {}
         self._hidden[PROVIDER_ID] = set()
@@ -1294,7 +1295,7 @@ class ProvidersOverlay(_HudOverlay):
             answer = QMessageBox.question(
                 self, "OpenAI Realtime",
                 "Yazılı komutlar ve (açtıysanız) mikrofon komutları OpenAI bulutuna "
-                "gönderilecektir. API ücretleri oluşabilir. Ses kontrolü açıksa her değişiklik ayrı ekran onayı ister. Bu deneysel modu açmak istiyor musunuz?",
+                "gönderilecektir. API ücretleri oluşabilir. Ses veya parlaklık kontrolü açıksa her değişiklik ayrı ekran onayı ister. Bu deneysel modu açmak istiyor musunuz?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No)
             if answer != QMessageBox.StandardButton.Yes:
