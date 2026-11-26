@@ -559,6 +559,14 @@ class PluginManagerOverlay(QWidget):
         add_btn = QPushButton("+ PYTHON EKLENTİSİ ONAYLA")
         add_btn.clicked.connect(self._approve_local_plugin)
         lay.addWidget(add_btn)
+        manage_row = QHBoxLayout()
+        revoke_btn = QPushButton("ONAYI GERİ ÇEK")
+        revoke_btn.clicked.connect(lambda: self._manage_local_plugin(False))
+        manage_row.addWidget(revoke_btn)
+        remove_btn = QPushButton("KULLANICI EKLENTİSİNİ KALDIR")
+        remove_btn.clicked.connect(lambda: self._manage_local_plugin(True))
+        manage_row.addWidget(remove_btn)
+        lay.addLayout(manage_row)
         close_btn = QPushButton("KAPAT")
         close_btn.setFixedHeight(30)
         close_btn.setFont(hud_font(9))
@@ -606,6 +614,46 @@ class PluginManagerOverlay(QWidget):
             QMessageBox.information(self, "Onay kaydedildi", "FRIDAY'i yeniden başlatın.")
         except Exception as exc:
             QMessageBox.warning(self, "Eklenti eklenemedi", f"Dosya onaylanmadı ({type(exc).__name__}).")
+
+    def _manage_local_plugin(self, delete_source: bool):
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+        from core.user_plugin_approval import directory, installed_names, remove, revoke
+
+        try:
+            root = directory()
+            names = installed_names(root)
+            if not names:
+                QMessageBox.information(self, "Kullanıcı eklentileri", "Yönetilecek kullanıcı eklentisi yok.")
+                return
+            name, accepted = QInputDialog.getItem(
+                self, "Kullanıcı eklentisi", "Eklenti seç:", names, 0, False
+            )
+            if not accepted:
+                return
+            verb = "kaldırmak" if delete_source else "onayını geri çekmek"
+            dialog = QMessageBox(self)
+            dialog.setIcon(QMessageBox.Icon.Warning)
+            dialog.setWindowTitle("Eklenti yönetimi")
+            dialog.setTextFormat(Qt.TextFormat.PlainText)
+            details = ("Yalnızca FRIDAY kullanıcı klasöründeki Python dosyası silinir; ayarlar korunur."
+                       if delete_source else "Python dosyası ve ayarları korunur.")
+            dialog.setText(
+                f"{name} eklentisini {verb} istiyor musunuz?\n\n{details}\n"
+                "Yeni araç çağrıları engellenir. Önceden başlatılan işlemler "
+                "ve import yan etkileri geri alınmaz; FRIDAY'i yeniden başlatın."
+            )
+            dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            dialog.setDefaultButton(QMessageBox.StandardButton.No)
+            if dialog.exec() != int(QMessageBox.StandardButton.Yes):
+                return
+            (remove if delete_source else revoke)(root, name)
+            QMessageBox.information(self, "İşlem tamamlandı", "FRIDAY'i yeniden başlatın.")
+            self.close()
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "Eklenti yönetimi", f"İşlem tamamlanamadı ({type(exc).__name__}). "
+                "Dosya durumu yeniden kontrol edilmeli."
+            )
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Type.Resize:

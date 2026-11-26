@@ -83,5 +83,44 @@ class UserPluginApprovalTests(unittest.TestCase):
         self.assertEqual(list(self.root.iterdir()), [])
 
 
+    def test_revoke_blocks_existing_registry_and_preserves_source(self):
+        self.approve()
+        registry = self.discover()
+        approvals.revoke(self.root, "demo")
+        self.assertEqual((self.root / "demo.py").read_bytes(), self.source)
+        self.assertEqual(approvals.installed_names(self.root), ["demo"])
+        with patch("core.plugin_loader.get_plugin_enabled", return_value=True):
+            self.assertEqual(registry.get_tool_declarations(), [])
+            self.assertIn("onaylanmam", registry.run("demo", {}))
+        self.assertFalse(self.discover().has("demo"))
+
+    def test_remove_leaves_other_files_and_settings_alone(self):
+        self.approve()
+        other = self.root / "notes.txt"
+        other.write_text("keep", encoding="utf-8")
+        approvals.remove(self.root, "demo")
+        approvals.remove(self.root, "demo")
+        self.assertFalse((self.root / "demo.py").exists())
+        self.assertFalse((self.root / "demo.approval.json").exists())
+        self.assertEqual(other.read_text(encoding="utf-8"), "keep")
+        self.assertEqual(approvals.installed_names(self.root), [])
+
+    def test_remove_rejects_traversal(self):
+        outside = self.root.parent / "outside.py"
+        outside.write_text("keep", encoding="utf-8")
+        for name in ("../outside", "..", "a/b", ""):
+            with self.assertRaises(ValueError):
+                approvals.remove(self.root, name)
+        self.assertTrue(outside.exists())
+
+    def test_failed_source_removal_still_revokes(self):
+        self.approve()
+        (self.root / "demo.py").unlink()
+        (self.root / "demo.py").mkdir()
+        with self.assertRaises(OSError):
+            approvals.remove(self.root, "demo")
+        self.assertFalse((self.root / "demo.approval.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
