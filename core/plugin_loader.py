@@ -11,6 +11,8 @@ from __future__ import annotations
 from core import outcome
 
 import importlib.util
+import hashlib
+import types
 import inspect
 import re
 import sys
@@ -71,6 +73,8 @@ class PluginRecord:
     #          is in force. Nothing is deleted: Gemini still gets the full text.
     tier: Optional[str] = None
     brief: Optional[str] = None
+    user_root: Optional[Path] = None
+    user_digest: str = ""
 
 
 class PluginRegistry:
@@ -85,11 +89,23 @@ class PluginRegistry:
         # which keeps every existing single-sink caller working unchanged.
         self._notify = notify or (lambda _msg: None)
 
+    def _approved_now(self, rec: PluginRecord) -> bool:
+        if rec.user_root is None:
+            return True
+        if rec.run is None:
+            return False  # enabled after startup: restart required
+        try:
+            from core.user_plugin_approval import approved_source
+            raw = approved_source(rec.user_root, rec.name)
+            return hashlib.sha256(raw).hexdigest() == rec.user_digest
+        except Exception:
+            return False
+
     # -- called by main.py at LiveConnectConfig build time --
     def get_tool_declarations(self) -> list[dict]:
         decls = []
         for name, rec in self._plugins.items():
-            if get_plugin_enabled(name):
+            if get_plugin_enabled(name) and self._approved_now(rec):
                 decl = {
                     "name": rec.name,
                     "description": rec.description,
@@ -122,6 +138,8 @@ class PluginRegistry:
             return f"Plugin '{name}' is not available."
         if not get_plugin_enabled(name):
             return f"The '{name}' plugin is currently disabled."
+        if not self._approved_now(rec):
+            return "Kullanıcı eklentisi onaylanmamış, değişmiş veya yeniden başlatma bekliyor."
         try:
             return outcome.result_text(name, _call_run(rec.run, parameters, player, session_memory))
         except Exception as e:
@@ -140,7 +158,7 @@ class PluginRegistry:
         seen: set[str] = set()
         out: list[dict] = []
         for name, rec in self._plugins.items():
-            if not rec.settings or not get_plugin_enabled(name):
+            if not rec.settings or not get_plugin_enabled(name) or not self._approved_now(rec):
                 continue
             ns = rec.settings.get("namespace") or rec.name
             if ns in seen:
@@ -167,6 +185,8 @@ class PluginRegistry:
                 "valid": rec.valid,
                 "error": rec.error,
                 "enabled": get_plugin_enabled(rec.name) if rec.valid else False,
+                "external": rec.user_root is not None,
+                "loaded": self._approved_now(rec) if rec.valid else False,
             })
         return out
 
@@ -289,7 +309,8 @@ def _load_error(path: Path, plugins_dir: Path, exc: Exception) -> str:
 
 def discover_plugins(plugins_dir: Path, core_tool_names: set[str],
                       logger: Callable[[str], None] = print,
-                      notify: Callable[[str], None] | None = None) -> PluginRegistry:
+                      notify: Callable[[str], None] | None = None,
+                      user_plugins_dir: Path | None = None) -> PluginRegistry:
     """
     Scans plugins_dir for *.py files (skips files starting with '_', e.g. __init__.py,
     _template.py, and any shared-helper modules an author prefixes with '_').
@@ -341,6 +362,14 @@ def discover_plugins(plugins_dir: Path, core_tool_names: set[str],
         else:
             logger(f"Plugin rejected: {path.name} — {rec.error}")
 
+    # Only the real bundled directory opts into the per-user store by default.
+    # Custom/test discovery remains isolated unless an explicit path is supplied.
+    if user_plugins_dir is None and plugins_dir.resolve() == Path(__file__).resolve().parent.parent / "plugins":
+        from core.user_plugin_approval import directory
+        user_plugins_dir = directory()
+    if user_plugins_dir is not None:
+        _discover_user_plugins(user_plugins_dir, core_tool_names, valid, all_records, logger)
+
     notify = notify or (lambda _msg: None)
     registry = PluginRegistry(valid, logger, notify)
     registry._all_records = all_records
@@ -353,3 +382,47 @@ def discover_plugins(plugins_dir: Path, core_tool_names: set[str],
     if rejected:
         notify(f"{rejected} plugin(s) could not be loaded — see the console.")
     return registry
+
+
+def _discover_user_plugins(root, core_names, valid, records, logger):
+    """Load only explicitly approved, enabled standalone user plugin bytes."""
+    from core.user_plugin_approval import approved_source
+    if root.is_symlink() or not root.is_dir():
+        return
+    reserved = {n.casefold() for n in core_names | set(valid)}
+    for path in sorted(root.glob("*.py")):
+        name = path.stem
+        rec = PluginRecord(name=name, file=path.name, user_root=root)
+        try:
+            if name.casefold() in reserved:
+                raise ValueError("Yerleşik araç veya eklenti adıyla çakışıyor.")
+            raw = approved_source(root, name)
+            digest = hashlib.sha256(raw).hexdigest()
+            if not get_plugin_enabled(name):
+                rec.valid = True
+                rec.description = "Kullanıcı eklentisi kapalı; etkinleştirdikten sonra yeniden başlatın."
+                rec.user_digest = digest
+            else:
+                # Compile the exact bytes checked above, not a second disk read
+                # or a potentially stale bytecode cache.
+                module_name = "_friday_user_plugin_" + name
+                module = types.ModuleType(module_name)
+                module.__file__ = str(path)
+                sys.modules[module_name] = module
+                try:
+                    exec(compile(raw, str(path), "exec"), module.__dict__)
+                    rec = _validate(module, path.name)
+                    if not rec.valid or rec.name != name:
+                        raise ValueError("Eklenti bildirimi onaylanan adla eşleşmiyor.")
+                except Exception:
+                    sys.modules.pop(module_name, None)
+                    raise
+                rec.user_root = root
+                rec.user_digest = digest
+            valid[name] = rec
+            reserved.add(name.casefold())
+        except Exception as exc:
+            rec = PluginRecord(name=name, file=path.name, user_root=root,
+                               error=f"Kullanıcı eklentisi yüklenmedi ({type(exc).__name__}); onayı kontrol edin.")
+        records.append(rec)
+        logger(f"User plugin: {path.name} — {'registered' if rec.valid else 'rejected'}")
