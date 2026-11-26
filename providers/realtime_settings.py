@@ -23,7 +23,8 @@ def validate_settings(cfg):
         raise ValueError("Desteklenen Realtime modeli gerekli.")
     session_event(voice)
     return {"api_key": key, "model": model, "voice": voice,
-            "microphone": enabled(cfg.get("microphone"))}
+            "microphone": enabled(cfg.get("microphone")),
+            "volume_control": enabled(cfg.get("volume_control"))}
 
 
 def check_dependency():
