@@ -412,6 +412,8 @@ def _aether_is_free_model(model_id: str) -> bool:
 class OpenAICompatLLM:
     """Speaks to anything that serves /v1/chat/completions."""
 
+    fixed_base = None  # A dedicated provider can pin its own service endpoint.
+
     def __init__(self, cfg: dict):
         from core.retired_providers import is_retired_provider
         if is_retired_provider(settings=cfg):
@@ -425,7 +427,7 @@ class OpenAICompatLLM:
             if not self.base:
                 raise ValueError("Cloudflare: geçerli hesap kimliği veya resmi API adresi gerekli.")
         else:
-            self.base = _normalise(cfg.get("base_url") or "")
+            self.base = self.fixed_base or _normalise(cfg.get("base_url") or "")
         self.model = aether_role_model(cfg, str(cfg.get("aether_role") or "conversation"))
         self.key = (cfg.get("api_key") or "").strip()
         self._aether = self.base.rstrip("/") == PRESETS["Aether API"]
