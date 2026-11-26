@@ -68,7 +68,8 @@ def _key() -> str:
         return gemini.api_key()
     except Exception:
         try:
-            return json.loads((BASE_DIR / "config" / "api_keys.json").read_text("utf-8")).get("gemini_api_key", "")
+            from memory.config_manager import read_config
+            return read_config(BASE_DIR / "config" / "api_keys.json").get("gemini_api_key", "")
         except Exception:
             return ""
 

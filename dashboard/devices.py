@@ -77,7 +77,8 @@ def _is_laptop() -> bool:
 def device_name() -> str:
     """The user's own name for this computer if set, else its host name."""
     try:
-        cfg = json.loads((BASE_DIR / "config" / "api_keys.json").read_text(encoding="utf-8"))
+        from memory.config_manager import read_config
+        cfg = read_config(BASE_DIR / "config" / "api_keys.json")
         name = str(cfg.get("device_name") or "").strip()
         if name:
             return name[:40]

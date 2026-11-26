@@ -360,8 +360,8 @@ def _render_prompt(template: str, values: dict) -> str:
 
 
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    from memory.config_manager import read_config
+    return read_config(API_CONFIG_PATH)["gemini_api_key"]
 
 
 def _gemini_usable() -> bool:
@@ -1612,7 +1612,8 @@ class FridayLive:
 
         # Load customization from config
         try:
-            _cfg = json.loads(open(API_CONFIG_PATH, encoding="utf-8").read())
+            from memory.config_manager import read_config
+            _cfg = read_config(API_CONFIG_PATH)
             self._asst_name = normalized_assistant_name(_cfg.get("assistant_name"))
             _user_name = (_cfg.get("user_name") or "").strip()
         except Exception:

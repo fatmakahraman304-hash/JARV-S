@@ -4,9 +4,10 @@ import os
 import sys
 import time
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from pathlib import Path
 from memory.process_lock import FileRLock
+from memory import secret_storage as _storage
 
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -55,7 +56,7 @@ def _backup_file() -> Path:
 def _from_backup() -> dict | None:
     """The last good settings (kept before every write) — keys and all."""
     try:
-        data = json.loads(_backup_file().read_text(encoding="utf-8"))
+        data = _storage.read_document(_backup_file())
         return data if isinstance(data, dict) else None
     except (OSError, ValueError):
         return None
@@ -65,11 +66,14 @@ def _from_backup() -> dict | None:
 def _staged_config(path, data):
     temporary = None
     try:
+        # Encryption finishes before any staging file is opened. Plaintext
+        # credentials must never be written to a protected mode's temp file.
+        stored = _storage.encode(data)
         # api_keys.json.* is already ignored by Git, including while staged.
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
                 dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False) as handle:
             temporary = Path(handle.name)
-            json.dump(data, handle, indent=4)
+            json.dump(stored, handle, indent=4)
             handle.flush()
             os.fsync(handle.fileno())
         yield temporary
@@ -99,16 +103,63 @@ def _atomic_config(path, data):
 def _write_config(data: dict) -> None:
     data = _purged_abacus_data(data)
     ensure_config_dir()
+    previous = None
+    if CONFIG_FILE.exists():
+        try:
+            previous = _storage.read_document(CONFIG_FILE)
+        except (OSError, ValueError):
+            pass  # A damaged primary must not replace a valid backup.
+    inherited_backup = _from_backup()
+    if (_storage.protected(data) or (previous is not None and _storage.protected(previous))
+            or (inherited_backup is not None and _storage.protected(inherited_backup))):
+        data = dict(data, **{_storage.MARKER: dict(_storage.POLICY)})
+        if previous is not None:
+            previous = dict(previous, **{_storage.MARKER: dict(_storage.POLICY)})
     with _staged_config(CONFIG_FILE, data) as temporary:
-        previous = None
-        if CONFIG_FILE.exists():
-            try:
-                previous = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                pass  # A damaged primary must not replace a valid backup.
         if isinstance(previous, dict):
             _atomic_config(_backup_file(), _purged_abacus_data(previous))
         _replace_config(temporary, CONFIG_FILE)
+
+
+def read_config(path=None) -> dict:
+    """Read-only settings/backup access for consumers, including protected fields."""
+    return _storage.read_settings(CONFIG_FILE if path is None else path)
+
+
+@_locked
+def configure_credential_storage(enabled: bool) -> bool:
+    """Explicit local opt-in/out. Preserve primary and backup values separately."""
+    if enabled and not _storage.available():
+        raise _storage.StorageError('Credential protection is available only on Windows')
+    primary = _storage.read_document(CONFIG_FILE)
+    backup_path = _backup_file()
+    backup = _storage.read_document(backup_path) if backup_path.exists() else dict(primary)
+    if (_storage.protected(primary) == enabled and _storage.protected(backup) == enabled
+            and backup_path.exists()):
+        return False
+    def changed(data):
+        result = dict(data)
+        if enabled:
+            result[_storage.MARKER] = dict(_storage.POLICY)
+        else:
+            result.pop(_storage.MARKER, None)
+        return result
+    # Stage both complete files first. No plaintext staging files when enabling.
+    with ExitStack() as stack:
+        staged_primary = stack.enter_context(_staged_config(CONFIG_FILE, changed(primary)))
+        staged_backup = stack.enter_context(_staged_config(backup_path, changed(backup)))
+        _replace_config(staged_backup, backup_path)
+        _replace_config(staged_primary, CONFIG_FILE)
+    return True
+
+
+def credential_storage_status() -> dict:
+    def state(path):
+        if not path.exists():
+            return 'missing'
+        return 'windows-dpapi' if _storage.protected(_storage.read_document(path)) else 'plaintext'
+    return {'primary': state(CONFIG_FILE), 'backup': state(_backup_file()),
+            'native_protection_available': _storage.available()}
 
 
 def _read_for_write() -> dict:
@@ -122,7 +173,7 @@ def _read_for_write() -> dict:
     last = None
     for _ in range(3):
         try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            data = _storage.read_document(CONFIG_FILE)
             if not isinstance(data, dict):
                 raise ValueError("Settings file must contain a JSON object")
             return data
@@ -168,10 +219,12 @@ def load_api_keys() -> dict:
         return _normalize_identity(_from_backup())
     for attempt in range(3):
         try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            data = _storage.read_document(CONFIG_FILE)
             if not isinstance(data, dict):
                 raise ValueError("Settings file must contain a JSON object")
             return _normalize_identity(data)
+        except _storage.StorageError:
+            raise  # Never turn a locked/unreadable vault into fresh empty settings.
         except Exception as e:
             if attempt == 2:
                 # Plain text: an emoji here raised UnicodeEncodeError on a
@@ -654,7 +707,7 @@ def purge_deepseek_settings() -> bool:
     backup = _backup_file()
     if backup.exists():
         try:
-            original = json.loads(backup.read_text(encoding="utf-8"))
+            original = _storage.read_document(backup)
             if isinstance(original, dict):
                 safe = _purged_deepseek_data(original)
                 if safe != original:
@@ -721,7 +774,7 @@ def purge_abacus_settings() -> bool:
     backup = _backup_file()
     if backup.exists():
         try:
-            original = json.loads(backup.read_text(encoding="utf-8"))
+            original = _storage.read_document(backup)
             if isinstance(original, dict):
                 clean = _purged_abacus_data(original)
                 if clean != original:

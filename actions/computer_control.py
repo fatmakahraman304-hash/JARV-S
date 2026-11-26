@@ -48,7 +48,8 @@ _MEMORY_PATH  = _BASE / "memory" / "long_term.json"
 
 def _load_config() -> dict:
     try:
-        return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+        from memory.config_manager import read_config
+        return read_config(_CONFIG_PATH)
     except Exception:
         return {}
 

@@ -54,7 +54,8 @@ def get_llm_provider() -> str:
 
 def _load_config() -> dict:
     try:
-        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        from memory.config_manager import read_config
+        return read_config(CONFIG_PATH)
     except Exception:
         return {}
 

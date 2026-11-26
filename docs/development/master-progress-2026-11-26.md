@@ -102,3 +102,26 @@ testi kaldırılmadı, atlanacak biçimde değiştirilmedi veya gizlenmedi. CI'd
 konuşma/arka plan/bulut ve gerçek onay callback'lerinde ortak sonuç dönüşümü
 kullanır. Yerel test ve açık sınırlar ilgili kayıttadır. CI ve birleşme durumu
 GitHub PR kaydından doğrulanmalıdır; eski kayıt yeni başarı kanıtı sayılmaz.
+
+## Aşama 1 — isteğe bağlı Windows kimlik bilgisi koruması
+
+Başlangıç güvenilir main: `36970db90ba948bfcf2337a4a6810fce058b22e9`
+(PR #207; iki işletim sisteminde Python 3.13 regresyonu ve provider kontrolleri
+başarılı). [Kullanım ve geri dönüş](credential-storage.md).
+
+Native Windows DPAPI için açık etkinleştirme/devre dışı bırakma komutu,
+primary/backup ayrı değerlerini koruyan geçiş ve merkezi şifre çözücü eklendi.
+Eski doğrudan JSON tüketicileri ortak okuyucuya bağlandı; normal ayar yazması
+koruma tercihini kaybetmez. Yanlış profil, bozuk ciphertext ve yarım yayın
+testleri yeni dosyalardadır. Gerçek kullanıcı verisi/anahtarı okunmadı,
+taşınmadı veya otomatik şifrelenmedi; tasarım ve kadın sesi değiştirilmedi.
+
+Yerel ilgili regresyon: Python 3.12'de 63 test, 61 başarılı ve yalnız
+2 gerçek Windows DPAPI testi platform nedeniyle atlandı. Açılış/hafıza/onay/
+araç sonucu entegrasyonlarında 91 test ve sağlayıcı kontrollerinde 99/99 geçti.
+İlk açılış koşusu yeni modül henüz Git indeksine eklenmediğinden izole kaynak
+kopyasında bulamadı; dosya izlemeye alındıktan sonra aynı 91 test değişmeden
+geçti. Windows/Linux Python 3.13 CI sonucu PR'ye kaydedilecek. Linux/macOS secret
+store, cihazdaki profil kurtarma kabulü ve tarihsel açık metin yedeklerinin
+kullanıcı denetimi açık. Bu, eklenti izinleri/izolasyon, CVE denetimi,
+güvenli mod ve zorunlu yayıncı imzasını tamamlamaz. Aşamalar 1–8 açık kalır.
