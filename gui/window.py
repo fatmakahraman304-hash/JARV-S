@@ -1580,6 +1580,9 @@ class MainWindow(QMainWindow):
         return self._update_btn
 
     def _start_update(self):
+        if getattr(self, "_retry_update_restart", False):
+            self._restart_after_update()
+            return
         if getattr(self, "_updating", False):
             return
         self._updating = True
@@ -1632,13 +1635,17 @@ class MainWindow(QMainWindow):
         try:
             from core.restart_manager import schedule_restart
             project = Path(__file__).resolve().parents[1]
+            self._retry_update_restart = False
             schedule_restart(project, os.getpid(), executable=sys.executable)
             self._restart_requested = True
             QApplication.instance().quit()
         except Exception as exc:
             self._restart_requested = False
             if hasattr(self, "_update_btn"):
-                self._update_btn.setText("ELLE YENİDEN AÇ")
+                self._retry_update_restart = True
+                self._update_btn.setEnabled(True)
+                self._update_btn.setText("YENİDEN AÇ")
+                self._update_btn.setToolTip("Güncelleme kuruldu. Yeniden başlatmayı tekrar dene.")
             self._log.append_log(
                 f"SYS: Otomatik yeniden başlatma başarısız: {exc}. "
                 "FRIDAY'ı kapatıp tekrar açın."

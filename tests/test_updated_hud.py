@@ -15,6 +15,21 @@ from core import app_updater
 
 
 class UpdatedHudTests(unittest.TestCase):
+    def test_restart_failure_enables_retry_without_reinstalling(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from gui.window import MainWindow
+        window = SimpleNamespace(_update_btn=Mock(), _log=Mock())
+        window._restart_after_update = lambda: MainWindow._restart_after_update(window)
+        with patch('core.restart_manager.schedule_restart', side_effect=[OSError('busy'), None]) as restart, patch(
+                'PyQt6.QtWidgets.QMessageBox.warning'), patch('PyQt6.QtWidgets.QApplication.instance') as app:
+            window._restart_after_update()
+            window._update_btn.setEnabled.assert_called_with(True)
+            MainWindow._start_update(window)
+            self.assertEqual(restart.call_count, 2)
+            app.return_value.quit.assert_called_once()
+            self.assertFalse(window._retry_update_restart)
+
     def test_zip_rollback_then_update_reopens_personalized_hud(self):
         # Read only tracked/manifested Python sources. A release installation
         # has no Git metadata, and must not accidentally use a parent checkout

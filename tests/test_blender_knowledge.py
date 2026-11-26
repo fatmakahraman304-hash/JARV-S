@@ -47,6 +47,21 @@ class Offline(unittest.TestCase):
         know._cache.clear()
         self.tmp.cleanup()
 
+    def test_failed_download_closes_http_body_descriptor_and_removes_partial_file(self):
+        import io
+        from urllib.error import HTTPError
+        url = 'https://docs.blender.org/example.zip'
+        error = HTTPError(url, 403, 'refused', {}, io.BytesIO())
+        fd, name = tempfile.mkstemp(dir=self.tmp.name)
+        with patch.object(know.tempfile, 'mkstemp', return_value=(fd, name)), patch(
+                'urllib.request.urlopen', side_effect=error):
+            with self.assertRaises(HTTPError):
+                know._download(url, lambda _: None)
+        self.assertTrue(error.fp.closed)
+        with self.assertRaises(OSError):
+            os.fstat(fd)
+        self.assertFalse(Path(name).exists())
+
     def test_manual_page_becomes_clean_sections(self):
         chunks = know._chunks("x.html", PAGE)
         self.assertEqual(chunks[0]["title"], "Bevel Modifier")

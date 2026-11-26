@@ -1,6 +1,8 @@
 """Real Ed25519 signatures, tampering and extraction boundaries; ephemeral keys only."""
 import base64
 import json
+import hashlib
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
@@ -68,6 +70,87 @@ class ReleaseSignatures(unittest.TestCase):
             self.assertFalse(json.loads((target / release.MANIFEST).read_text())['publisher_signature_verified'])
         finally:
             fixture.doCleanups()
+
+    def test_enrolled_updater_installs_only_authenticated_bytes_and_can_rollback(self):
+        from core import update_trust, app_updater
+
+        fixture = test_release_package.ReleasePackage()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        (fixture.root / 'gui').mkdir()
+        (fixture.root / 'gui/window.py').write_bytes(b'# new GUI')
+        fixture.commit()
+        fixture.sha = fixture.git('rev-parse', 'HEAD').strip()
+        fixture.build()
+        payload = fixture.archive.read_bytes()
+        envelope = signatures.sign(payload, fixture.sha, self.private)
+        key = fixture.base / 'public.pem'
+        key.write_bytes(self.public)
+        profile_pin = fixture.base / 'profile/publisher.pem'
+        install = fixture.base / 'installed'
+        install.mkdir()
+        (install / 'main.py').write_bytes(b'# previous FRIDAY')
+        (install / 'requirements.txt').write_bytes((fixture.root / 'requirements.txt').read_bytes())
+        (install / 'update_channel.json').write_text('{"branch":"main"}')
+        commit_info = json.dumps({'sha': fixture.sha}).encode()
+        with patch.object(update_trust, 'pin_path', return_value=profile_pin):
+            with self.assertRaises(ValueError):
+                update_trust.enroll(key, '0' * 64)
+            self.assertFalse(profile_pin.exists())
+            update_trust.enroll(key, hashlib.sha256(self.public).hexdigest())
+            with self.assertRaises(FileExistsError):
+                update_trust.enroll(key, hashlib.sha256(self.public).hexdigest())
+            for responses, error in (([commit_info, b'{}', payload], ValueError),
+                                     ([commit_info, envelope, payload + b'x'], ValueError),
+                                     ([commit_info, OSError('missing release')], OSError)):
+                with self.subTest(error=error), patch.object(app_updater, '_get', side_effect=responses):
+                    with self.assertRaises(error):
+                        app_updater.update(install)
+                    self.assertEqual((install / 'main.py').read_bytes(), b'# previous FRIDAY')
+                    self.assertFalse((install / '.aether-backups').exists())
+            with patch.object(app_updater, '_get', side_effect=[commit_info, envelope, payload]) as fetch:
+                self.assertTrue(app_updater.update(install)[0])
+                self.assertIn('friday-source-' + fixture.sha, fetch.call_args_list[-1].args[0])
+            self.assertEqual((install / 'gui/window.py').read_bytes(), b'# new GUI')
+            app_updater.rollback_zip(install, progress=lambda _: None)
+            self.assertEqual((install / 'main.py').read_bytes(), b'# previous FRIDAY')
+            profile_pin.write_bytes(b'broken public key')
+            with patch.object(app_updater, '_get', side_effect=[commit_info]) as fetch:
+                with self.assertRaises(ValueError):
+                    app_updater.update(install)
+                fetch.assert_called_once()
+
+    def test_git_advance_requires_signed_commit_even_after_successful_fetch(self):
+        from core import app_updater, update_trust
+
+        fixture = test_release_package.ReleasePackage()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        old = fixture.sha
+        (fixture.root / 'gui').mkdir()
+        (fixture.root / 'gui/window.py').write_bytes(b'# new GUI')
+        fixture.commit()
+        new = fixture.git('rev-parse', 'HEAD').strip()
+        fixture.build()
+        payload = fixture.archive.read_bytes()
+        fixture.git('reset', '--hard', old)
+        git = app_updater._git
+        def local_git(root, *args):
+            if args[0] == 'fetch':
+                return git(root, 'fetch', str(root), new)
+            return git(root, *args)
+        with patch.object(update_trust, 'trusted_key', return_value=self.public), patch.object(
+                app_updater, '_git', side_effect=local_git):
+            for signed_commit in (old, new):
+                signature = signatures.sign(payload, signed_commit, self.private)
+                with patch.object(app_updater, '_get', side_effect=[signature, payload]):
+                    if signed_commit == old:
+                        with self.assertRaises(ValueError):
+                            app_updater.update(fixture.root)
+                        self.assertEqual(fixture.git('rev-parse', 'HEAD').strip(), old)
+                    else:
+                        self.assertTrue(app_updater.update(fixture.root)[0])
+                        self.assertEqual(fixture.git('rev-parse', 'HEAD').strip(), new)
 
     def test_encrypted_key_password_is_not_in_errors(self):
         password = b'synthetic-private-password'
