@@ -132,7 +132,8 @@ class UpdaterTests(unittest.TestCase):
             sidecars = ["history.db-wal", "history.db-shm"]
             original = {name: (self.root / name).read_bytes() for name in sidecars}
             manifest = {"sha": "b" * 40, "branch": "main", "files": {
-                name: u._hash(data) for name, data in original.items()
+                **{name: u._hash(data) for name, data in original.items()},
+                "requirements.txt": u._hash((self.root / "requirements.txt").read_bytes()),
             }}
             (self.root / ".aether-update.json").write_text(json.dumps(manifest))
             # The incoming ZIP collides with one sidecar and omits the other.
