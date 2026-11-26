@@ -26,8 +26,10 @@ _GUIDE = {
     "startup": ("Başlatma", "Windows'ta Python 3.13 ile kaynak ZIP'i yazılabilir bir klasöre çıkar; "
         "FRIDAY_BASLAT.cmd dosyasını çalıştır. İlk açılış yerel Python ortamını hazırlar. "
         "Sonraki açılışlarda aynı ortam kullanılır.", "readme.md"),
-    "providers": ("Motor ve sağlayıcılar", "Motor ve sağlayıcılar panelinden Gemini Live veya "
-        "pipeline seçilebilir. Pipeline dinleme, düşünme ve konuşma bileşenlerini ayrı kullanır. "
+    "providers": ("Motor ve sağlayıcılar", "Motor ve sağlayıcılar panelinden Gemini Live, "
+        "pipeline veya deneysel OpenAI Realtime seçilebilir. Realtime ayrı API anahtarı ve açık "
+        "bulut aktarımı onayı ister; mikrofon isteğe bağlıdır, bilgisayar araçları henüz desteklenmez. "
+        "Pipeline dinleme, düşünme ve konuşma bileşenlerini ayrı kullanır. "
         "Mevcut seçenekleri panelden seçip bağlantı testini çalıştır; sağlayıcının gerekli anahtarı "
         "veya yerel sunucusu gerekebilir. Anahtarını sohbete yazma. Bu kılavuz bağlantıyı test etmez.",
         "gui/providers_panel.py; providers/registry.py"),

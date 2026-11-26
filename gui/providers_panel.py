@@ -181,6 +181,7 @@ class ProvidersOverlay(_HudOverlay):
         # decision on the panel that changes everything below it, and both
         # answers deserve to be readable at the same time.
         self._mode = get_provider_mode()
+        self._realtime_draft = dict(get_provider_config("openai_realtime"))
         cards = QHBoxLayout(); cards.setSpacing(10)
         self._card_gemini = self._mode_card(
             "☁  GEMINI LIVE",
@@ -196,6 +197,11 @@ class ProvidersOverlay(_HudOverlay):
         cards.addWidget(self._card_gemini)
         cards.addWidget(self._card_local)
         outer.addLayout(cards)
+        self._card_realtime = self._mode_card(
+            "☁  OPENAI REALTIME (DENEYSEL)",
+            "Ayrı OpenAI anahtarı; metin ve isteğe bağlı mikrofon. Araçlar ve telefon sesi henüz yok.",
+            "realtime")
+        outer.addWidget(self._card_realtime)
 
         # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
@@ -282,7 +288,7 @@ class ProvidersOverlay(_HudOverlay):
         return b
 
     def _refresh_cards(self) -> None:
-        for card in (self._card_gemini, self._card_local):
+        for card in (self._card_gemini, self._card_local, self._card_realtime):
             on = card.property("modeValue") == self._mode
             card.setChecked(on)
             card.setStyleSheet(f"""
@@ -624,6 +630,8 @@ class ProvidersOverlay(_HudOverlay):
         if self._mode == "pipeline":
             for slot, num, name, what in self._SLOTS:
                 self._body_lay.addWidget(self._slot_box(slot, num, name, what))
+        elif self._mode == "realtime":
+            self._body_lay.addWidget(self._realtime_box())
         else:
             w, lay = self._box([])
             lay.addWidget(self._label(
@@ -639,6 +647,32 @@ class ProvidersOverlay(_HudOverlay):
         self._body_lay.addWidget(self._coding_box_widget())
         self._body_lay.addStretch(1)
         self._update_footer()
+
+    def _realtime_box(self):
+        from providers.base import Field
+        from providers.realtime_settings import PROVIDER_ID, MODELS, VOICES
+        w, lay = self._box([self._label("OPENAI REALTIME — DENEYSEL", 9, C.PRI, bold=True)])
+        lay.addWidget(self._label(
+            "Komutlar OpenAI bulutuna gönderilir ve ücret oluşabilir. Mikrofon kapalı "
+            "başlar; isterseniz yerel konuşma algılama veya bas-konuş kullanılır. "
+            "Otomatik bildirimler, hafıza aktarımı, araçlar ve telefon sesi desteklenmez. "
+            "Bağlantı için websockets>=15 gerekir.", 7, C.TEXT_DIM))
+        fields = (
+            Field("api_key", "Ayrı OpenAI API anahtarı", kind="secret"),
+            Field("model", "Model", kind="choice", choices=MODELS, default=MODELS[0]),
+            Field("voice_id", "Ses", kind="choice", choices=VOICES, default=VOICES[0]),
+            Field("microphone", "Mikrofon aktarımını aç", kind="bool", default=False),
+        )
+        self._edits[PROVIDER_ID] = {}
+        self._hidden[PROVIDER_ID] = set()
+        for field in fields:
+            lay.addWidget(self._label(field.label, 8, C.TEXT_DIM))
+            widget = self._make_widget(PROVIDER_ID, field, self._realtime_draft.get(field.key, field.default))
+            if isinstance(widget, QComboBox):
+                widget.setEditable(False)
+            lay.addWidget(widget)
+            self._edits[PROVIDER_ID][field.key] = (widget, field)
+        return w
 
     def _slot_box(self, slot: str, num: str, name: str, what: str) -> QWidget:
         head = self._label(f"{num}  {name}", 9, C.PRI, bold=True)
@@ -1006,6 +1040,9 @@ class ProvidersOverlay(_HudOverlay):
         QTimer.singleShot(0, self._rebuild_body)
 
     def _update_footer(self) -> None:
+        if self._mode == "realtime":
+            self._footer.setText("Deneysel Realtime: bağlantı ve mikrofon için açık onay gerekir; hata durumunda Gemini’ye otomatik geçilmez.")
+            return
         if self._mode != "pipeline":
             self._footer.setText(
                 "Gemini Live kullanılıyor. Buradaki ayarlar sohbeti değiştirmez.")
@@ -1083,6 +1120,9 @@ class ProvidersOverlay(_HudOverlay):
         just entered into the box above."""
         from memory.config_manager import save_provider_config
         for pid in list(self._edits):
+            if pid == "openai_realtime":
+                self._realtime_draft.update(self._values(pid))
+                continue
             try:
                 save_provider_config(pid, self._values(pid))
             except Exception:
@@ -1238,7 +1278,27 @@ class ProvidersOverlay(_HudOverlay):
         from memory.config_manager import save_providers
 
         # ONE write, not five. See save_providers for what the five cost.
-        creds = {sid: self._values(sid) for sid in list(self._edits)}
+        creds = {sid: self._values(sid) for sid in list(self._edits) if sid != "openai_realtime"}
+        if self._mode == "realtime":
+            from PyQt6.QtWidgets import QMessageBox
+            from providers.realtime_settings import PROVIDER_ID, validate_settings, check_dependency
+            cfg = dict(self._realtime_draft, **self._values(PROVIDER_ID))
+            cfg["cloud_consent"] = True
+            try:
+                validate_settings(cfg)
+                check_dependency()
+            except (ValueError, RuntimeError) as exc:
+                QMessageBox.warning(self, "Realtime ayarı", str(exc))
+                return
+            answer = QMessageBox.question(
+                self, "OpenAI Realtime",
+                "Yazılı komutlar ve (açtıysanız) mikrofon komutları OpenAI bulutuna "
+                "gönderilecektir. API ücretleri oluşabilir. Bu deneysel modu açmak istiyor musunuz?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            creds[PROVIDER_ID] = cfg
 
         save_providers(
             mode=self._mode,
@@ -1282,6 +1342,8 @@ class ProvidersOverlay(_HudOverlay):
         mode, pipe = get_provider_mode(), dict(get_pipeline())
         used = {sid: get_provider_config(sid) for sid in pipe.values() if sid} \
             if mode == "pipeline" else {}
+        if mode == "realtime":
+            used = {"openai_realtime": get_provider_config("openai_realtime")}
         return json.dumps([mode, pipe, used], sort_keys=True, default=str)
 
 
