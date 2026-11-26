@@ -17,6 +17,8 @@ html body {
   font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+/* Let narrow grid tracks shrink while phone tool rows scroll internally. */
+body .app > * { min-width: 0; }
 body:not(.watch) .app { padding-top: max(20px, env(safe-area-inset-top)); gap: 16px; }
 body .top { padding: 12px 0 16px; border-bottom: 1px solid var(--line); }
 body .brand b { color: var(--hot); font-weight: 650; letter-spacing: .3em; text-shadow: 0 0 24px var(--glow); }

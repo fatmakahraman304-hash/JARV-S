@@ -72,7 +72,7 @@ def verify(output, executable=None, engines=('chromium', 'firefox')):
                         assert page.evaluate('window.FRIDAY.kind') == kind
                         assert not errors, errors
                         assert not OLD_BRAND.search(page.locator('body').inner_text()), 'Old visible identity'
-                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'Horizontal overflow'
+                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), f'Horizontal overflow: {engine}/{profile} at {width}x{height}'
                         mic = page.locator('#mic').bounding_box()
                         assert mic and mic['x'] >= 0 and mic['y'] >= 0 and mic['x'] + mic['width'] <= width + 1 and mic['y'] + mic['height'] <= height + 1, mic
                         if kind != 'watch':

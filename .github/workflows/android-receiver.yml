@@ -67,4 +67,4 @@ jobs:
           gh release edit alici --title "FRIDAY Alıcı"
           # Already-installed receivers keep their stable update URL.
           cp out/friday-receiver.apk out/aether-alici.apk
-          gh release upload alici out/friday-receiver.apk out/aether-alici.apk --clobber
+          gh release upload alici out/aether-alici.apk out/friday-receiver.apk --clobber
