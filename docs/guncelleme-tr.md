@@ -26,7 +26,7 @@ Bu sürümle başlayan bir güncelleme, kontrol veya indirme sırasında kesildi
 
 Bu sürümle başlatılan ZIP güncellemesi dosya yazarken kesilirse tekrar **GÜNCELLE** düğmesine basın. Kurtarma çevrimdışı çalışır. Sürüm kaydı henüz yazılmamışsa önceki sürüm geri yüklenir. Kayıt tamamlanmışsa yeni sürümün dosyaları doğrulanır. Kesintiden sonra sizin düzenlediğiniz bir dosya veya bozuk yedek tespit edilirse kurtarma durur ve yedekler saklanır.
 
-Normal açılış, bekleyen ZIP uygulama/geri dönüş kaydı veya belirsiz işlem kilidi varsa Qt, ses, ayarlar ve hafıza yüklenmeden durur. Canlı güncelleyici kilidi tutuyorsa da açılış engellenir. Kontrol aşamasında kesilmiş bir işlem tek başına açılışı engellemez. Kayıtlar otomatik silinmez ve bu kontrol kurtarma yapıldığını iddia etmez. `pythonw` ile konsolsuz Windows açılışında hata yerel bir ileti kutusunda gösterilir.
+Normal açılış, bekleyen ZIP uygulama/geri dönüş kaydını Qt, ses, ayarlar ve hafıza yüklenmeden çevrimdışı kurtarmayı dener. Bütün dosya/yedek özetleri eşleşirse işlem tamamlanır ve Python temiz süreçte yeniden açılır. Doğrulanmamış yerel değişiklik, bozuk yedek, korunan anahtar dosyası, belirsiz işlem veya canlı güncelleyici varsa açılış durur; kayıt ve yedekler korunur. Kontrol aşamasında kesilmiş işlem tek başına açılışı engellemez. `pythonw` ile konsolsuz Windows açılışında hata yerel ileti kutusunda gösterilir.
 
 Bekleyen ZIP işlemi nedeniyle açılış durduysa FRIDAY kapalıyken kurulum klasöründe şu komutu çalıştırın. Kurtarma başarılı olursa FRIDAY’ı normal şekilde açın.
 

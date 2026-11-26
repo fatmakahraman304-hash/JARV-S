@@ -80,7 +80,7 @@ class FridayIdentity(unittest.TestCase):
         self.assertEqual(PRESETS['Aether API'], 'https://api.aetherapi.dev/v1')
         self.assertTrue(any(item['label'] == 'Aether API' for item in CATALOG))
 
-    def test_android_identity_and_signing_bytes_are_not_changed(self):
+    def test_android_identity_remains_and_release_signing_is_separate(self):
         import xml.etree.ElementTree as ET
         gradle = (ROOT / 'android-receiver/app/build.gradle').read_text(encoding='utf-8')
         self.assertIn("applicationId 'com.aether.alici'", gradle)
@@ -90,13 +90,11 @@ class FridayIdentity(unittest.TestCase):
         manifest = (ROOT / 'android-receiver/app/src/main/AndroidManifest.xml').read_text(encoding='utf-8')
         self.assertIn('android:scheme="aetheralici"', manifest)
         self.assertIn('@style/Theme.Friday', manifest)
-        key = ROOT / 'android-receiver/app/aether-alici.jks'
-        if key.exists():
-            import hashlib
-            self.assertEqual(hashlib.sha256(key.read_bytes()).hexdigest(), '1eef72853679e57202f55f7b63dce9d538f02444c46c6c4b0115f8e63a2b6118')
-
-        else:
-            self.assertTrue((ROOT / 'friday-release.json').is_file(), 'Signing key must not be deleted from the repository')
+        self.assertNotIn('aether-alici.jks', gradle)
+        self.assertNotIn('storePassword', gradle)
+        self.assertNotIn('keyPassword', gradle)
+        self.assertNotIn('signingConfigs.alici', gradle)
+        self.assertIn("applicationIdSuffix '.debug'", gradle)
 
     def test_old_reverse_rebrand_cannot_run(self):
         self.assertFalse((ROOT / 'tools/aether_migrate.py').exists())

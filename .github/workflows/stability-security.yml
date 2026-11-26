@@ -1,0 +1,35 @@
+name: FRIDAY startup recovery and release security
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["core/startup_guard.py", "core/app_updater.py", "core/release_signatures.py", "tools/release_package.py", "tools/android_signing.py", "tests/test_startup_guard.py", "tests/test_app_updater.py", "tests/test_release_signatures.py", "tests/test_android_signing.py", ".github/workflows/stability-security.yml"]
+permissions:
+  contents: read
+jobs:
+  security:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install existing crypto dependency
+        run: python -m pip install "cryptography>=42,<50"
+      - name: Real restart recovery, private file preservation and cryptographic rejection
+        run: python -m unittest -v tests.test_startup_guard tests.test_app_updater tests.test_release_package tests.test_release_signatures tests.test_android_signing
+      - name: Verify source tree has no tracked keystores
+        shell: python
+        run: |
+          from pathlib import PurePosixPath
+          import subprocess
+          files = subprocess.check_output(['git', 'ls-files', '-z'], text=True).split('\0')
+          assert not any(PurePosixPath(name).suffix.lower() in {'.jks', '.keystore', '.p12', '.pfx', '.key'} for name in files if name)

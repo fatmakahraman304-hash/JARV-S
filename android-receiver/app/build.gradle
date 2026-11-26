@@ -9,22 +9,14 @@ android {
         applicationId 'com.aether.alici'
         minSdk 24
         targetSdk 30          // sideloaded on TV boxes / projectors (Android 11 on the HY320)
-        versionCode 13
-        versionName '2.3'
-    }
-    signingConfigs {
-        // A fixed key in the repo so every build can update the installed app.
-        // Personal sideloaded app; not a Play Store key.
-        alici {
-            storeFile file('aether-alici.jks')
-            storePassword new String('6a6172766973616c696369'.decodeHex(), 'UTF-8')
-            keyAlias 'alici'
-            keyPassword new String('6a6172766973616c696369'.decodeHex(), 'UTF-8')
-        }
+        versionCode 14
+        versionName '2.4'
     }
     buildTypes {
-        release { minifyEnabled false; signingConfig signingConfigs.alici }
-        debug { signingConfig signingConfigs.alici }
+        // Release candidates are unsigned; protected CI signing is separate.
+        release { minifyEnabled false }
+        // Development installs cannot replace the user's release application.
+        debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     lint { abortOnError false; checkReleaseBuilds false }

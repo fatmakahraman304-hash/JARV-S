@@ -1,8 +1,9 @@
 """Build/verify a committed-source candidate; never copy the user's working tree.
 
-Checksums detect corruption, not publisher authenticity. No final-ready assertion
-is made: physical acceptance, exposed Android signing and license review remain
-separate release gates. Uses only Python's standard library and Git.
+Checksums detect corruption; optional Ed25519 authentication uses an independently
+trusted public key. Physical acceptance, Android rotation and license review remain
+separate release gates. Unsigned inspection uses only stdlib and Git; signatures
+use the application's existing, lazily imported cryptography dependency.
 """
 from __future__ import annotations
 
@@ -11,10 +12,12 @@ import hashlib
 import importlib.metadata
 import io
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
+import sys
 import zipfile
 
 MANIFEST = 'friday-release.json'
@@ -120,9 +123,29 @@ def build(root: Path, output: Path, ref='HEAD'):
     return manifest
 
 
-def verify(archive: Path, expected_commit=None, destination: Path | None = None):
+def verify(archive: Path, expected_commit=None, destination: Path | None = None,
+           *, signature: Path | None = None, public_key: Path | None = None,
+           require_signature=False):
+    # The signed bytes are the same snapshot parsed and extracted below.
+    with archive.open('rb') as handle:
+        payload = handle.read(MAX_TOTAL + 1)
+    if len(payload) > MAX_TOTAL:
+        raise ValueError('Oversized source archive')
+    authenticated = False
+    if signature is not None or public_key is not None or require_signature:
+        if signature is None or public_key is None:
+            raise ValueError('A detached signature and trusted public key are both required')
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from core.release_signatures import verify as verify_signature, MAX_SIGNATURE
+        with signature.open('rb') as handle:
+            envelope = handle.read(MAX_SIGNATURE + 1)
+        with public_key.open('rb') as handle:
+            trusted_key = handle.read(16385)
+        if len(trusted_key) > 16384:
+            raise ValueError('Oversized trusted public key')
+        authenticated = verify_signature(payload, expected_commit, envelope, trusted_key)
     files, seen = {}, set()
-    with zipfile.ZipFile(archive) as source:
+    with zipfile.ZipFile(io.BytesIO(payload)) as source:
         items = source.infolist()
         if len(items) > 2000 or sum(item.file_size for item in items) > MAX_TOTAL:
             raise ValueError('Oversized source archive')
@@ -158,7 +181,7 @@ def verify(archive: Path, expected_commit=None, destination: Path | None = None)
             with path.open('xb') as file:
                 file.write(data)
         (destination / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-    return manifest
+    return {**manifest, 'publisher_signature_verified': authenticated}
 
 
 def inventory(output: Path):
@@ -204,16 +227,54 @@ def main():
     check.add_argument('archive', type=Path)
     check.add_argument('--commit', required=True)
     check.add_argument('--extract', type=Path)
+    check.add_argument('--signature', type=Path)
+    check.add_argument('--public-key', type=Path)
+    check.add_argument('--require-signature', action='store_true')
+    signing = commands.add_parser('sign')
+    signing.add_argument('archive', type=Path)
+    signing.add_argument('--commit', required=True)
+    signing.add_argument('--key', type=Path, required=True)
+    signing.add_argument('--out', type=Path, required=True)
+    signing.add_argument('--password-env', help='Name of an environment variable for encrypted PEM; never a password value')
     license_parser = commands.add_parser('inventory')
     license_parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     if args.command == 'inventory':
         print(json.dumps({'distributions': inventory(args.out), 'compliance': 'UNVERIFIED'}))
+    elif args.command == 'sign':
+        # Never load release private keys from a source checkout or its folders.
+        root = Path(__file__).resolve().parents[1]
+        if args.key.resolve().is_relative_to(root):
+            raise ValueError('Keep the private release key outside the checkout')
+        verify(args.archive, args.commit)
+        with args.archive.open('rb') as handle:
+            payload = handle.read(MAX_TOTAL + 1)
+        if len(payload) > MAX_TOTAL:
+            raise ValueError('Oversized source archive')
+        sys.path.insert(0, str(root))
+        from core.release_signatures import sign
+        with args.key.open('rb') as handle:
+            key = handle.read(16385)
+        if len(key) > 16384:
+            raise ValueError('Oversized private release key')
+        password = None
+        if args.password_env:
+            value = os.environ.get(args.password_env)
+            if not value:
+                raise ValueError('Signing password environment variable is missing')
+            password = value.encode('utf-8')
+        envelope = sign(payload, args.commit, key, password=password)
+        with args.out.open('xb') as handle:
+            handle.write(envelope)
+        print(json.dumps({'signature': str(args.out), 'published': False}))
     else:
         result = (build(args.root, args.out, args.ref) if args.command == 'build'
-                  else verify(args.archive, args.commit, args.extract))
+                  else verify(args.archive, args.commit, args.extract,
+                              signature=args.signature, public_key=args.public_key,
+                              require_signature=args.require_signature))
         print(json.dumps({'source_commit': result['source_commit'], 'files': len(result['files']),
-                          'kind': 'source-candidate', 'full_product_ready': False}))
+                          'kind': 'source-candidate', 'full_product_ready': False,
+                          'publisher_signature_verified': result['publisher_signature_verified']}))
 
 
 if __name__ == '__main__':

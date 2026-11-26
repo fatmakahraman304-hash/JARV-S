@@ -32,10 +32,14 @@ class AliciTest(unittest.TestCase):
                 {"id": "w-p", "name": "Projeksiyon", "kind": "projector", "seen": sync_hub._now()}]
         self.assertEqual(sync_hub.find_device("projeksiyon", devs)["id"], "w-p")
 
-    def test_build_is_published(self):
+    def test_build_is_an_unsigned_candidate_and_signing_is_protected(self):
         wf = (ROOT / ".github" / "workflows" / "android-receiver.yml").read_text(encoding="utf-8")
-        self.assertIn("gh release upload alici out/aether-alici.apk", wf)
-        self.assertTrue((ROOT / "android-receiver" / "app" / "aether-alici.jks").is_file())
+        self.assertIn('app-release-unsigned.apk', wf)
+        self.assertIn('assembleRelease assembleDebug', wf)
+        self.assertIn('environment: android-release', wf)
+        self.assertIn('inputs.sign_candidate', wf)
+        self.assertNotIn('gh release upload', wf)
+        self.assertNotIn('contents: write', wf)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # FRIDAY
 
+[26 Kasım ana geliştirme kaydı ve doğrulanmamış işler](docs/development/master-progress-2026-11-26.md)
+
 [Ortak FRIDAY tasarımı, cihaz görünümleri ve uyumluluk notları](docs/friday-tasarim-kimlik.md)
 
 A real-time voice AI that can hear, see, speak, and control your computer — on any OS. Supports Windows, macOS, and Linux. Built on the Gemini Live API for native audio streaming, delivering zero subscriptions and total digital autonomy.

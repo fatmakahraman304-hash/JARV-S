@@ -1,26 +1,21 @@
 name: FRIDAY Alıcı (Android APK)
-
 on:
   push:
     branches: [main]
-    paths: ["android-receiver/**", ".github/workflows/android-receiver.yml"]
+    paths: ["android-receiver/**", "tools/android_signing.py", ".github/workflows/android-receiver.yml"]
   pull_request:
-    paths: ["android-receiver/**", ".github/workflows/android-receiver.yml"]
+    paths: ["android-receiver/**", "tools/android_signing.py", ".github/workflows/android-receiver.yml"]
   workflow_dispatch:
     inputs:
-      publish:
-        description: Publish with the existing legacy certificate (rotation remains open)
+      sign_candidate:
+        description: Sign a candidate in the protected android-release environment
         type: boolean
         default: false
-
-# Only the newest APK build may publish the stable download asset.
-concurrency:
-  group: aether-alici-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
-
+concurrency:
+  group: friday-android-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,36 +30,41 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Build the APK
+      - name: Build without release credentials
         working-directory: android-receiver
-        run: gradle assembleRelease --no-daemon --stacktrace
-      - name: Name it
+        run: gradle assembleRelease assembleDebug --no-daemon --stacktrace
+      - name: Collect explicitly labelled candidates
         run: |
           mkdir -p out
-          cp android-receiver/app/build/outputs/apk/release/app-release.apk out/friday-receiver.apk
-          ls -la out
+          cp android-receiver/app/build/outputs/apk/release/app-release-unsigned.apk out/friday-receiver-unsigned.apk
+          cp android-receiver/app/build/outputs/apk/debug/app-debug.apk out/friday-receiver-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: friday-receiver-candidate
-          path: out/friday-receiver.apk
-  publish:
+          name: friday-receiver-unsigned-candidate
+          path: out/
+  sign:
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.sign_candidate && github.ref == 'refs/heads/main'
+    environment: android-release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: friday-receiver-candidate
+          name: friday-receiver-unsigned-candidate
           path: out
-      - name: Publish explicitly requested legacy-compatible APK
+      - name: Sign and verify with external release key
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: fatmakahraman304-hash/JARV-S
-        run: |
-          gh release view alici >/dev/null 2>&1 || gh release create alici --title "FRIDAY Alıcı" --notes "FRIDAY Android/TV alıcısı." --latest=false
-          gh release edit alici --title "FRIDAY Alıcı"
-          # Already-installed receivers keep their stable update URL.
-          cp out/friday-receiver.apk out/aether-alici.apk
-          gh release upload alici out/aether-alici.apk out/friday-receiver.apk --clobber
+          FRIDAY_ANDROID_KEYSTORE_BASE64: ${{ secrets.FRIDAY_ANDROID_KEYSTORE_BASE64 }}
+          FRIDAY_ANDROID_STORE_PASSWORD: ${{ secrets.FRIDAY_ANDROID_STORE_PASSWORD }}
+          FRIDAY_ANDROID_KEY_ALIAS: ${{ secrets.FRIDAY_ANDROID_KEY_ALIAS }}
+          FRIDAY_ANDROID_KEY_PASSWORD: ${{ secrets.FRIDAY_ANDROID_KEY_PASSWORD }}
+          FRIDAY_ANDROID_CERT_SHA256: ${{ vars.FRIDAY_ANDROID_CERT_SHA256 }}
+        run: python tools/android_signing.py out/friday-receiver-unsigned.apk out/friday-receiver-signed-candidate.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: friday-receiver-signed-candidate
+          path: out/friday-receiver-signed-candidate.apk
+      # No stable release upload until installed-client key rotation is verified.

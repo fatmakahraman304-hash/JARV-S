@@ -80,6 +80,25 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(config.read_text(), 'private')
         self.assertNotIn('memory/long_term.json', files)
 
+    def test_signing_material_is_never_imported_overwritten_or_removed(self):
+        names = ['android/release.jks', 'android/RELEASE.KEYSTORE', 'auth/cert.p12',
+                 'auth/key.PFX', 'auth/private.key', 'auth/private.PEM']
+        for name in names:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'private local sentinel')
+        files = u._archive(self.archive({name: b'untrusted key' for name in names}))
+        self.assertTrue(set(names).isdisjoint(files))
+        # Old update manifests must not turn previously copied keys into deletions.
+        (self.root / '.aether-update.json').write_text(json.dumps({
+            'sha': 'b' * 40, 'branch': 'main',
+            'files': {name: u._hash(b'private local sentinel') for name in names}}))
+        u._apply_zip(self.root, files, self.sha, 'main')
+        for name in names:
+            self.assertEqual((self.root / name).read_bytes(), b'private local sentinel')
+        with self.assertRaises(RuntimeError):
+            u._apply_zip(self.root, {'android/release.jks': b'not permitted'}, self.sha, 'main')
+
     def test_zip_updates_gitignore_but_leaves_runtime_files(self):
         runtime = {'uploads/photo.jpg': b'photo', 'reports/report.md': b'report',
                    'memory/tasks/scratch.py': b'local script'}
