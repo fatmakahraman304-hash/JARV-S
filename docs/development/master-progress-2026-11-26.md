@@ -292,3 +292,8 @@ sürecini kullanan LiveLink testinin tek başına çalıştırılmasında yenide
 üretildi. Test kapatılırken süreç çıktısı artık toplanır ve süreç beklenir.
 Üç hedefli test grubu 17 testte ResourceWarning uyarısı vermeden geçti.
 Bu bulgu tüm uygulamanın uzun süreli kaynak kullanımını doğrulamaz.
+
+Kodlama ajanında iki süreç akışının açık kaldığı ayrıca gerçek alt süreçle
+yeniden üretildi. #236 (88a89f56e313d6b427259c10bb2b6beda11b78ec) bu
+akışları kapatır. Kodlama ajanı testleri 36/36 geçti. Blender test matrisi,
+bozuk indirmeleri reddedip resmî aynayı da deneyerek sürdürülür.
