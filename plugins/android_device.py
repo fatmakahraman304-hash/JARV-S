@@ -2,7 +2,7 @@
 Projeksiyon / Android TV kontrolü (Magcubic HY320 ve her Android TV kutusu):
 uygulama aç, web sayfası aç, YouTube/Google'da ara, odaklı kutuya yazı yaz,
 kumanda tuşları, ses, internete (Wi-Fi) bağla, ekranına bak (görüntü + Gemini
-ne olduğunu anlatır), AETHER web uygulamasını üzerinde aç ve cihazı tanı.
+ne olduğunu anlatır), FRIDAY web uygulamasını üzerinde aç ve cihazı tanı.
 Bağlantı Wi-Fi üzerinden ADB ile (core/adb_control.py).
 """
 
@@ -20,7 +20,7 @@ PLUGIN = {
         "app (app: youtube, netflix, chrome, spotify, ayarlar …) | url (url) | search (query, where: youtube|google) | "
         "type (text: odaklı kutuya yazar; enter true ise gönderir) | key (key: home, back, up, down, left, right, ok, "
         "volume_up, volume_down, mute, play_pause, power …; times) | wifi (ssid, password: internete bağlar) | "
-        "look (ekranına bakar ve ne olduğunu söyler; question) | aether (AETHER'ı projeksiyonda açar: orada da dinler, "
+        "look (ekranına bakar ve ne olduğunu söyler; question) | aether (FRIDAY'ı projeksiyonda açar: orada da dinler, "
         "konuşur, araştırır) | apps (yüklü uygulamalar). device: cihazın adı (boşsa son kullanılan)."
     ),
     "parameters": {
@@ -44,7 +44,7 @@ PLUGIN = {
 def _log(player, text):
     if player:
         try:
-            player.write_log(f"AETHER: {text}")
+            player.write_log(f"FRIDAY: {text}")
         except Exception:
             pass
 
@@ -100,7 +100,7 @@ def _look(device, question, player):
             if text and hasattr(player, "request_say"):
                 player.request_say(f"[PROJECTOR SCREEN] {text} | Tell the user this in one or two Turkish sentences.")
             else:
-                player.write_log(f"AETHER: {text or 'Ekran görüntüsü ekranda.'}")
+                player.write_log(f"FRIDAY: {text or 'Ekran görüntüsü ekranda.'}")
         except Exception:
             pass
 
@@ -158,7 +158,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 pass
             link = sync_hub.setup_link(key)
             ok, msg = A.open_url(link, dev)
-            return ("AETHER projeksiyonda açılıyor: orada da konuşur, araştırır, resim çizer; bilgisayara iş de verebilir. "
+            return ("FRIDAY projeksiyonda açılıyor: orada da konuşur, araştırır, resim çizer; bilgisayara iş de verebilir. "
                     "İlk açılışta mikrofon izni sorarsa kumandayla izin ver." if ok else msg)
         return "Bilinmeyen işlem."
     except Exception as exc:

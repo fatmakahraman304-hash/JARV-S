@@ -1,5 +1,5 @@
 """
-AETHER — Dependency auto-installer.
+FRIDAY — Dependency auto-installer.
 
 Called automatically on first launch and after engine reconfiguration.
 Installs only the packages that are actually missing, then exits cleanly.
@@ -169,8 +169,8 @@ def install_for_config(config: dict, log: Callable | None = None) -> bool:
 
 
 # ── Missing packages found while working ──────────────────────────────────
-# A tool that fails because a library is missing says "pip install X". AETHER
-# offers to install it — but only a package AETHER itself depends on (the lists
+# A tool that fails because a library is missing says "pip install X". FRIDAY
+# offers to install it — but only a package FRIDAY itself depends on (the lists
 # above or requirements.txt): a tool result is text, and text must never be able
 # to make the assistant install an arbitrary package.
 
@@ -198,7 +198,7 @@ def _base(pkg: str) -> str:
 
 
 def missing_package(text: str) -> str:
-    """The package a tool result asks for ('pip install pyautogui'), if AETHER may install it; else ''."""
+    """The package a tool result asks for ('pip install pyautogui'), if FRIDAY may install it; else ''."""
     import re
     m = re.search(r"pip install ([A-Za-z0-9_.\-\[\]<>=]+)", str(text or ""))
     if not m:
@@ -209,7 +209,7 @@ def missing_package(text: str) -> str:
 
 def install(pkg: str, log: Callable | None = None) -> tuple[bool, str]:
     if _base(pkg) not in known_packages():
-        return False, f"'{pkg}' AETHER'ın kendi paketlerinden değil; güvenlik için kurmuyorum."
+        return False, f"'{pkg}' FRIDAY'ın kendi paketlerinden değil; güvenlik için kurmuyorum."
     ok = _pip(pkg, log)
     importlib.invalidate_caches()
     return ok, (f"'{pkg}' kuruldu." if ok else f"'{pkg}' kurulamadı (pip hata verdi).")

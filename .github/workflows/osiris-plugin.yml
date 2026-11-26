@@ -1,4 +1,4 @@
-name: AETHER regression tests
+name: FRIDAY regression tests
 on:
   push:
     branches: [main, feature/osiris-world-command]

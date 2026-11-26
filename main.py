@@ -83,7 +83,7 @@ from core.lazyimport import LazyModule
 
 genai = LazyModule("google.genai")
 types = LazyModule("google.genai.types")
-from ui import AetherUI
+from ui import FridayUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     save_session_summary, pop_last_session,
@@ -413,7 +413,7 @@ TOOL_DECLARATIONS = [
     # handling is woven into live-session state — vision capture/injection,
     # camera stream, memory writes, the monitor engine, and shutdown. All other
     # tools live in their own action file and are auto-discovered by
-    # core.action_loader (see AetherLive.__init__).
+    # core.action_loader (see FridayLive.__init__).
     {
         "name": "system_status",
         "description": (
@@ -508,7 +508,7 @@ TOOL_DECLARATIONS = [
                     )
                 },
                 "key":   {"type": "STRING", "description": "Short snake_case key (e.g. name, favorite_food, sister_name)"},
-                "value": {"type": "STRING", "description": "Concise value in English (e.g. Murat, pizza, older sister)"},
+                "value": {"type": "STRING", "description": "Concise value in English (e.g. Kullanıcı, pizza, older sister)"},
                 "remove": {"type": "BOOLEAN", "description": "true = forget this key (e.g. the user takes back an "
                                                              "instruction: 'you can call me sir again')"},
             },
@@ -607,8 +607,8 @@ def _keep_context_of(exc: BaseException) -> bool:
     return True
 
 
-class AetherLive:
-    def __init__(self, ui: AetherUI):
+class FridayLive:
+    def __init__(self, ui: FridayUI):
         # Platform limits are announced once per run, not once per
         # reconnect: a dropped connection is not news about Wayland.
         self._platform_notes_shown = False
@@ -1427,8 +1427,8 @@ class AetherLive:
             return
 
         command, _, instruction = text.strip().partition(" ")
-        if command.casefold() in ("/aether-gelistir", "/aether-yayinla"):
-            mode = "self_release" if command.casefold() == "/aether-yayinla" else "self_edit"
+        if command.casefold() in ("/friday-gelistir", "/friday-yayinla", "/aether-gelistir", "/aether-yayinla"):
+            mode = "self_release" if command.casefold().endswith("-yayinla") else "self_edit"
             result = self._plugin_registry.run(
                 "github_develop", {"mode": mode, "instruction": instruction}, player=self.ui
             )
@@ -1739,7 +1739,7 @@ class AetherLive:
             "[TURKISH SPEECH UNDERSTANDING]\n"
             "This is a Turkish-first voice conversation. Recognize everyday "
             "Turkish pronunciation and inflected commands, including FRIDAY, "
-            "FRIDAY, and 'Aether' as the assistant's name. "
+            "as the assistant's name. "
             "Keep Turkish as the response language unless the user clearly "
             "and intentionally requests another language or has an unmistakable "
             "conversation in that language. A single unclear sound, accidental "
@@ -2530,7 +2530,7 @@ class AetherLive:
                 #
                 # Decided HERE, not left to the model. Told plainly in the tool
                 # description, it still answered "create a quiz plugin" with
-                # mode='build' — a brand-new project in Desktop/AetherProjects,
+                # mode='build' — a brand-new project in Desktop/FridayProjects,
                 # nowhere near the folder the user had just handed it. Somebody
                 # who loads a folder and asks for something means "in this
                 # folder", so every coding request goes there; clearing the
@@ -4125,10 +4125,10 @@ def main():
         print(f"[FRIDAY] Günlük: {logbook.install()}")
     except Exception as exc:
         print(f"[FRIDAY] Günlük dosyası açılamadı: {exc}")
-    ui = AetherUI("face.png")
+    ui = FridayUI("face.png")
     # Observe very short-lived Qt dialogs and native console windows. This
     # never opens its own window, and makes otherwise invisible flickers
-    # identifiable in MAYK's activity log and the local window_flash.log.
+    # identifiable in FRIDAY's activity log and the local window_flash.log.
     try:
         from core.window_flash import start as start_flash_diagnostics
         start_flash_diagnostics(ui._app, ui._win, notify=ui.write_log)
@@ -4149,7 +4149,7 @@ def main():
 
     def runner():
         ui.wait_for_api_key()
-        aether = AetherLive(ui)
+        aether = FridayLive(ui)
         holder["aether"] = aether
         try:
             asyncio.run(aether.run())
@@ -4175,7 +4175,11 @@ def main():
     _exit_process(75 if getattr(ui._win, "_restart_requested", False) else 0)
 
 # Compatibility with existing integrations.
-AetherLive = AetherLive
+def __getattr__(name):
+    from core.identity import LEGACY_LIVE_CLASS
+    if name == LEGACY_LIVE_CLASS:
+        return FridayLive
+    raise AttributeError(name)
 
 if __name__ == "__main__":
     main()

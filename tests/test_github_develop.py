@@ -67,10 +67,10 @@ class TestOutput(unittest.TestCase):
 
 
 class LocalDevelopmentCommands(unittest.TestCase):
-    def test_workspace_prefers_murat_and_keeps_a_matching_existing_checkout(self):
+    def test_workspace_prefers_friday_and_keeps_a_matching_existing_checkout(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            self.assertEqual(g._development_workspace(root), root / "Murat")
+            self.assertEqual(g._development_workspace(root), root / "FRIDAY")
             existing = root / "ExistingCheckout"
             (existing / ".git").mkdir(parents=True)
             (existing / "update_channel.json").write_text(json.dumps({"repository": g.REPO}))
@@ -78,8 +78,11 @@ class LocalDevelopmentCommands(unittest.TestCase):
             (unrelated / ".git").mkdir(parents=True)
             (unrelated / "update_channel.json").write_text(json.dumps({"repository": "test/other"}))
             self.assertEqual(g._development_workspace(root), existing)
-            (root / "Murat").mkdir()
-            self.assertEqual(g._development_workspace(root), root / "Murat")
+            (root / "FRIDAY").mkdir()
+            self.assertEqual(g._development_workspace(root), root / "FRIDAY")
+            from core.identity import LEGACY_WORKSPACE
+            (root / LEGACY_WORKSPACE).mkdir()
+            self.assertEqual(g._development_workspace(root), root / LEGACY_WORKSPACE)
 
     def test_explicit_commands_work_with_turkish_caps_and_punctuation(self):
         self.assertEqual(g.local_command_mode("  GİTHUB geliştirme alanını main ile eşitle. "), "sync")

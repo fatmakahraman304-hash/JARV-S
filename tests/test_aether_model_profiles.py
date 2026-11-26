@@ -1,4 +1,4 @@
-"""AETHER free-role model profiles: offline and credential-safe.
+"""FRIDAY free-role model profiles: offline and credential-safe.
 
 The tests use only fake API keys; no real model calls or credits.
 """

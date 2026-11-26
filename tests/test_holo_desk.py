@@ -182,10 +182,10 @@ class SpatialUI(unittest.TestCase):
             self.assertIn("duraklatıldı" if paused else "parmaklarını ayır",spoken)
 
     def test_notes_survive_close_and_invalid_obj_keeps_working_scene(self):
-        self.desk.notes.setPlainText("Murat — proje notu")
-        self.desk.hide();self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["notes"],"Murat — proje notu")
+        self.desk.notes.setPlainText("Deniz — proje notu")
+        self.desk.hide();self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["notes"],"Deniz — proje notu")
         other=HoloDesk(notes_path=self.path)
-        self.assertEqual(other.notes.toPlainText(),"Murat — proje notu");other.close()
+        self.assertEqual(other.notes.toPlainText(),"Deniz — proje notu");other.close()
         obj=Path(self.tmp.name)/"bad.obj";obj.write_text("bad")
         vertices=self.desk.canvas.vertices.copy()
         self.desk._load_obj(obj)

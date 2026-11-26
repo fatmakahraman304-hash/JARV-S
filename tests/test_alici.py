@@ -1,4 +1,4 @@
-"""AETHER Alıcı (android-receiver/): the files it shares with the other
+"""FRIDAY Alıcı (android-receiver/): the files it shares with the other
 devices must match what web/app.js and core/sync_hub.py use."""
 import re
 import unittest

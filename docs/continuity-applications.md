@@ -20,7 +20,7 @@ Bilgisayar kapanırsa iş 'yarıda kaldı' olur; dış uygulama eylemleri tekrar
 Uygulamaların sunduğu işlemler ve gereken izinler değişir. Kod testleri,
 gerçek Windows uygulamasında yapılan denemenin yerini tutmaz.
 
-Windows kabul denemesi: kısa bir konuşma yap, AETHER'ı kapatıp yeniden aç;
+Windows kabul denemesi: kısa bir konuşma yap, FRIDAY'ı kapatıp yeniden aç;
 Nerede kaldık panelini ve hafıza sorgusunu kontrol et. Güncellemeden sonra
 aynı kayıtların kaldığını kontrol et. Uygulamalar'da gerçek bir uygulama seç,
 önce otomatik yayını kapatarak araştırma ve geliştirme sonuçlarını incele.

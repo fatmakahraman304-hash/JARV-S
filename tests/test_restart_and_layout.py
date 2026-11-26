@@ -1,4 +1,4 @@
-"""No-GUI restart scheduling tests. Never launch a real AETHER process."""
+"""No-GUI restart scheduling tests. Never launch a real FRIDAY process."""
 import os
 from pathlib import Path
 import sys
@@ -13,7 +13,7 @@ class RestartManagerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "AETHER"
+        self.root = Path(self.tmp.name) / "FRIDAY"
         self.root.mkdir()
         (self.root / "tools").mkdir()
         self.helper = self.root / "tools" / "restart_app.py"
@@ -38,7 +38,7 @@ class RestartManagerTests(unittest.TestCase):
         self.assertEqual(args[0][2], "1234")
         self.assertTrue(Path(args[0][3]).samefile(self.root))
         self.assertTrue(Path(kwargs["cwd"]).samefile(self.root))
-        self.assertTrue((Path(self.tmp.name) / "Aether/logs/restart.log").is_file())
+        self.assertTrue((Path(self.tmp.name) / "Friday/logs/restart.log").is_file())
 
     def test_supervised_restart_does_not_launch_second_process(self):
         os.environ["AETHER_MANAGED_RESTART"] = "1"

@@ -1,4 +1,4 @@
-"""Windows'ta AETHER kod ajanı çalıştırma çıktısı UTF-8 ve gerçek çıkış kodu."""
+"""Windows'ta FRIDAY kod ajanı çalıştırma çıktısı UTF-8 ve gerçek çıkış kodu."""
 import os
 import sys
 import tempfile

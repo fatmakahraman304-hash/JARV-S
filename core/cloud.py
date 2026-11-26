@@ -215,7 +215,7 @@ def generate_cert(cert_path: Path, key_path: Path, host: str) -> None:
         subprocess.run(
             ["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt",
              "ec_paramgen_curve:prime256v1", "-nodes", "-days", "3650",
-             "-keyout", str(key_path), "-out", str(cert_path), "-subj", "/CN=AETHER Cloud",
+             "-keyout", str(key_path), "-out", str(cert_path), "-subj", "/CN=FRIDAY Cloud",
              "-addext", f"subjectAltName=DNS:localhost,{san}",
              "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
              "-addext", "keyUsage=critical,digitalSignature,keyCertSign"],
@@ -236,7 +236,7 @@ def _cert_with_cryptography(cert_path: Path, key_path: Path, host: str) -> None:
     from cryptography.x509.oid import NameOID
 
     key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AETHER Cloud")])
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "FRIDAY Cloud")])
     alt: list = [x509.DNSName("localhost")]
     try:
         alt.append(x509.IPAddress(ipaddress.ip_address(host)))
@@ -911,7 +911,7 @@ def build_system_prompt(decls: list) -> str:
     from memory.memory_manager import format_memory_for_prompt, load_memory
 
     cfg = load_api_keys()
-    name = (cfg.get("assistant_name") or "AETHER").strip() or "AETHER"
+    name = (cfg.get("assistant_name") or "FRIDAY").strip() or "FRIDAY"
     user = (cfg.get("user_name") or "").strip()
     try:
         template = (BASE_DIR / "core" / "prompt.txt").read_text(encoding="utf-8")
@@ -1933,7 +1933,7 @@ def _assistant_name() -> str:
         from memory.config_manager import get_assistant_name
         return get_assistant_name()
     except Exception:
-        return "AETHER"
+        return "FRIDAY"
 
 
 def _ids(raw) -> set:
@@ -2061,7 +2061,7 @@ class Runtime:
                 self.queue_event(chat, "[EVENT] You sent a wake signal seven minutes ago and the "
                                  "computer has not checked in. Tell the user briefly, in their "
                                  "language: the usual causes are the wake signal not reaching it, "
-                                 "or AETHER not set to auto-start and connect to the cloud on launch.")
+                                 "or FRIDAY not set to auto-start and connect to the cloud on launch.")
             finally:
                 self._waking.discard(chat or 0)
         threading.Thread(target=wait, daemon=True, name="cloud-wake-watch").start()
@@ -2707,7 +2707,7 @@ def init_link(state: CloudState, host: str = "", port: int = 0, rotate: bool = F
 # ═════════════════════════════════════════════════════════════════════════════
 
 _UNIT = """[Unit]
-Description=AETHER cloud body
+Description=FRIDAY cloud body
 After=network-online.target
 Wants=network-online.target
 
@@ -2869,7 +2869,7 @@ def deploy(target: str, port: int, host: str, ssh_port: int, key: str = "") -> N
         target = f"root@{target}"
     missing = [rel for rel in MANIFEST if not (BASE_DIR / rel).is_file()]
     if missing:
-        raise SystemExit("These files are missing from this AETHER folder, so nothing was uploaded:\n  "
+        raise SystemExit("These files are missing from this FRIDAY folder, so nothing was uploaded:\n  "
                          + "\n  ".join(missing))
     with tempfile.TemporaryDirectory() as tmp:
         bundle = Path(tmp) / "aether-cloud.tgz"
@@ -2918,13 +2918,13 @@ def main() -> None:
     state = CloudState()
     doc, cert, key = init_link(state, args.host, args.port, rotate=args.rotate)
     if args.init or args.pair_code or args.rotate:
-        _say("\nPairing code — paste it into AETHER on your computer:\n"
+        _say("\nPairing code — paste it into FRIDAY on your computer:\n"
              "  ⚙ → PLUGIN SETTINGS → CLOUD AGENT → Pairing code\n\n"
              f"  {make_pair_code(doc['host'], doc['port'], doc['secret'], doc['fingerprint'])}\n\n"
              "Treat it like a password: anyone holding it can talk to this server.")
         if args.rotate:
             _say("The running service accepts the new code at once and refuses the old one — "
-                 "no restart needed. Paste the new code into AETHER and press TEST & SYNC.")
+                 "no restart needed. Paste the new code into FRIDAY and press TEST & SYNC.")
         return
     Runtime().run(doc["port"], cert, key)
 

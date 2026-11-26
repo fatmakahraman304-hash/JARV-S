@@ -16,7 +16,7 @@ def restart(pid, project):
     except psutil.NoSuchProcess:
         pass
     except psutil.TimeoutExpired:
-        print('Restart cancelled: original AETHER did not exit.', flush=True)
+        print('Restart cancelled: original FRIDAY did not exit.', flush=True)
         return 1
     with tempfile.TemporaryDirectory(prefix="aether-restart-") as directory:
         receipt = Path(directory) / "hud-ready"
@@ -25,7 +25,7 @@ def restart(pid, project):
                                      env=dict(os.environ, AETHER_RESTART_RECEIPT=str(receipt)),
                                      stdout=sys.stdout, stderr=sys.stderr)
         except OSError as exc:
-            print(f"AETHER başlatılamadı: {exc}", flush=True)
+            print(f"FRIDAY başlatılamadı: {exc}", flush=True)
             return 1
         deadline = time.monotonic() + 90
         ready_since = None
@@ -40,13 +40,13 @@ def restart(pid, project):
                 if ready_since is None:
                     ready_since = now
                 if now - ready_since >= _READY_GRACE:
-                    print("Yeni AETHER penceresinin Qt olay döngüsü açıldı; süreç ilk açılış kontrolünde açık kaldı.",
+                    print("Yeni FRIDAY penceresinin Qt olay döngüsü açıldı; süreç ilk açılış kontrolünde açık kaldı.",
                           flush=True)
                     return 0
             else:
                 ready_since = None
             time.sleep(0.1)
-        print("AETHER penceresinin açılışı 90 saniyede doğrulanamadı. Süreç çalışmaya devam edebilir.", flush=True)
+        print("FRIDAY penceresinin açılışı 90 saniyede doğrulanamadı. Süreç çalışmaya devam edebilir.", flush=True)
         return 2
 
 

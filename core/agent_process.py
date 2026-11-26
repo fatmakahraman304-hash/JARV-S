@@ -1,4 +1,4 @@
-"""Bounded, cancellable command execution for AETHER's coding agent.
+"""Bounded, cancellable command execution for FRIDAY's coding agent.
 
 A shell=False call alone cannot stop a running test when the user presses
 Durdur. Start each test in its own process group, poll cancellation, and kill

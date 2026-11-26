@@ -1,4 +1,4 @@
-/* AETHER web — app shell cache. Network first, so an update reaches every
+/* FRIDAY web — app shell cache. Network first, so an update reaches every
  * device on its next open; the cache only answers when offline. */
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'development';
 const PREFIX = 'aether-web:' + self.registration.scope + ':';
@@ -7,7 +7,7 @@ const SCRIPTS = ['reactor', 'chess', 'devkit', 'relay', 'app', 'dev-common', 'de
                  'dev-tablet', 'dev-tv', 'dev-projector', 'dev-watch'];
 const suffix = BUILD === 'development' ? '' : '?v=' + BUILD;
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
-               'icon-512.png', ...SCRIPTS.map(name => name + '.js' + suffix)];
+               'icon-512.png', 'friday-theme.css' + suffix, ...SCRIPTS.map(name => name + '.js' + suffix)];
 const urls = new Set(SHELL.map(path => new URL(path, self.registration.scope).href));
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -41,7 +41,7 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'AETHER', {
+  e.waitUntil(self.registration.showNotification(d.title || 'FRIDAY', {
     body: d.body || '', tag: d.tag || 'aether', renotify: true, icon: 'icon-192.png', badge: 'icon-192.png',
     vibrate: d.tag === 'alarm' ? [500, 200, 500, 200, 500] : [200, 100, 200], data: { url: './' } }));
 });

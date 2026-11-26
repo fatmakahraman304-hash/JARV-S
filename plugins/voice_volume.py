@@ -1,13 +1,13 @@
-"""AETHER's own voice level: 'sesini biraz kıs', 'daha yüksek konuş', 'gece sessiz konuş', 'gece kısma'.
+"""FRIDAY's own voice level: 'sesini biraz kıs', 'daha yüksek konuş', 'gece sessiz konuş', 'gece kısma'.
 
-Only AETHER's speech gets louder or softer; the computer's volume (computer_settings) is untouched.
+Only FRIDAY's speech gets louder or softer; the computer's volume (computer_settings) is untouched.
 """
 from __future__ import annotations
 
 PLUGIN = {
     "name": "voice_volume",
     "description": (
-        "Loudness of AETHER's OWN voice only (not the computer's volume, not music): 'sesini kıs', 'biraz daha "
+        "Loudness of FRIDAY's OWN voice only (not the computer's volume, not music): 'sesini kıs', 'biraz daha "
         "yüksek konuş', 'sesin çok yüksek', 'gece daha sessiz konuş', 'gece sesini kısma'. action: set | louder | "
         "softer | night_on | night_off | status. level: for set, 10–150 (percent). night_level: for set, the night "
         "level. The computer's master volume is computer_settings, not this."
@@ -48,6 +48,6 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         night = (f"softer at night ({cur['night_level']}% from {cur['night_from']:02d}:00 to "
                  f"{cur['night_to']:02d}:00)" if cur["night"] else "the same at night")
         now = int(round(voice_level.gain() * 100))
-        return f"AETHER's voice: {cur['level']}%, {night}; right now {now}%. Reply at the new level in a few words."
+        return f"FRIDAY's voice: {cur['level']}%, {night}; right now {now}%. Reply at the new level in a few words."
     except Exception as exc:
         return f"Could not change the voice level: {exc}"

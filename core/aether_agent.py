@@ -1,4 +1,4 @@
-"""AETHER'ın kodlama ajanı: NVIDIA Build → Gemini.
+"""FRIDAY'ın kodlama ajanı: NVIDIA Build → Gemini.
 
 Dosyaları analiz eder, düzenler ve test eder. Kod değişiklikleri proje klasöründe
 kalır; API anahtarları günlük dosyalarına veya model istemine verilmez.
@@ -49,7 +49,7 @@ _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "env", "__pycache__", "di
               ".idea", ".vscode", ".mypy_cache", ".pytest_cache", ".aether_backup"}
 
 SYSTEM = (
-    "Sen AETHER'ın kodlama ajanısın. Yalnızca verilen proje klasöründe çalışırsın. "
+    "Sen FRIDAY'ın kodlama ajanısın. Yalnızca verilen proje klasöründe çalışırsın. "
     "Deneyimli bir yazılım mühendisi gibi eksiksiz ve doğrulanmış çözüm üret. "
     "Kullanıcı Türkçe konuşuyorsa yanıtların, günlük açıklamaların ve özetlerin Türkçe olsun.\n"
     "1. Önce incele: list_files, search ve read_file ile mevcut yapıyı anla; tekrar kullanılabilecek kodu bul.\n"
@@ -418,7 +418,7 @@ class Workspace:
     def _resolve_python(self, executable: str) -> str:
         if executable not in {"python", "python.exe", "python3", "py", "py.exe"}:
             return executable
-        # An installed Windows AETHER.exe is not the Python interpreter.
+        # An installed Windows FRIDAY.exe is not the Python interpreter.
         for name in (".venv", "venv", "env"):
             for rel in ("Scripts/python.exe", "bin/python"):
                 exe = self.root / name / rel
@@ -445,7 +445,7 @@ class Workspace:
         outputs = []
         checked = False
         # Do not give model-authentication secrets to subprocesses; project
-        # tests should use fixture keys, not AETHER's live API credentials.
+        # tests should use fixture keys, not FRIDAY's live API credentials.
         private = re.compile(
             r"(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD|"
             r"CREDENTIALS|PRIVATE_KEY|ACCESS_KEY|AUTH|COOKIE)(?:_|$)|"
@@ -516,7 +516,7 @@ class Workspace:
                     raise ValueError("Yerel ağa veya HTTP adresine yönlendirme reddedildi.")
                 return super().redirect_request(req, fp, code, msg, headers, newurl)
 
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 AETHER"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 FRIDAY"})
         opener = urllib.request.build_opener(PublicRedirect())
         with opener.open(req, timeout=20) as r:
             raw = r.read(600_000).decode("utf-8", errors="replace")
@@ -845,10 +845,10 @@ def run(folder: Path, task: str, log=print, brain_list: list | None = None, max_
     ws = Workspace(folder, log)
     pool = list(brain_list if brain_list is not None else brains())
     if not pool:
-        raise RuntimeError("AETHER kod ajanı için etkin bir model ve API anahtarı gerekiyor.")
+        raise RuntimeError("FRIDAY kod ajanı için etkin bir model ve API anahtarı gerekiyor.")
     history: list[dict] = [{"role": "user", "text": task}]
     brain = pool.pop(0)
-    log(f"  AETHER ajanı: {brain.name}")
+    log(f"  FRIDAY ajanı: {brain.name}")
     idle = 0
     short_retries = 0
     last_error = ""

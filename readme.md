@@ -1,4 +1,6 @@
-# Murat — FRIDAY.
+# FRIDAY
+
+[Ortak FRIDAY tasarımı, cihaz görünümleri ve uyumluluk notları](docs/friday-tasarim-kimlik.md)
 
 A real-time voice AI that can hear, see, speak, and control your computer — on any OS. Supports Windows, macOS, and Linux. Built on the Gemini Live API for native audio streaming, delivering zero subscriptions and total digital autonomy.
 
@@ -218,17 +220,17 @@ It's not just an assistant — it's an extension of your digital life.
 | 🎚️ Push-to-Talk | Hold **Ctrl+Space** and the mic opens — closed the rest of the time. Truly global on Windows, window-scoped elsewhere |
 | 🔇 Self-Echo Guard | Never answers its own last sentence: the tail of its own voice is recognised and dropped without muting you |
 | 🪪 Runtime Self-Knowledge | Name, OS, abilities **and limits** are generated from the live system each session — rename it or add a plugin and it knows |
-| 🎙️ Wake Word | Local **"Hey AETHER"** detection — sleeps until called, auto-sleeps after 2 min of silence, and never streams audio while asleep |
+| 🎙️ Wake Word | Local **"Hey FRIDAY"** detection — sleeps until called, auto-sleeps after 2 min of silence, and never streams audio while asleep |
 | ⚡ Instant Acknowledgment | Speaks a short, context-aware reply in **your language** the instant a longer task starts — no more silent waiting |
 | 🚀 Faster Live Engine | Runs on **Gemini 3.1 Flash Live** — roughly 2× faster time-to-first-word than the previous model |
 | 🧩 Self-Describing Skills | Every bundled skill declares its own `TOOL` dict + handler and is auto-discovered at launch — adding one is a single file |
 | 🧠 Recallable Memory | No size limit and nothing silently forgotten — the prompt carries what fits, the rest is looked up on demand from a local search |
-| 👁️ Memory Panel | See every fact AETHER has stored about you, when it learned it, and delete any of it in one click |
+| 👁️ Memory Panel | See every fact FRIDAY has stored about you, when it learned it, and delete any of it in one click |
 | ↩️ Undo | Take back what the assistant did — files it moved, renamed, created or wrote, and settings it changed |
 | ⚠️ Real Confirmation | Shutdown, restart and WiFi wait for a button **you** press — the model cannot confirm its own irreversible actions |
 | 🎧 Audio Device Picker | Choose the microphone and speakers by name, filtered to the short list your OS shows — and measured, so every entry actually works |
 | 🔗 Session Continuity | A dropped connection, a voice change or a device change no longer wipes the conversation |
-| 🧩 Plugin System | Drop a single `.py` file into `plugins/` — AETHER learns a new skill on next launch |
+| 🧩 Plugin System | Drop a single `.py` file into `plugins/` — FRIDAY learns a new skill on next launch |
 | 📺 Video on the HUD | Plays YouTube, a local file or any video URL **where the avatar sits** — starts muted, sound on request |
 | 🪜 Model Ladder | Every Gemini model the key can reach, in one measured order — a quota, a timeout, an outage or a retired model steps to the next rung instead of failing |
 | 🔌 Choose Your Engine | Gemini Live, or your own STT + LLM + TTS — picked in the UI, no file editing |
@@ -240,7 +242,7 @@ It's not just an assistant — it's an extension of your digital life.
 | 🧮 Tool Budget | A small model is given the tools that matter instead of all 45 — core-first, by count and by size |
 | 🎙️ Real-time Voice | Ultra-low latency conversation in any language via Gemini Live API |
 | 🎨 Live Theming | Recolour the entire HUD from a hue wheel or hex — the avatar retints with it |
-| 〰️ Reactive HUD | Waveform pulses to real audio — your mic while listening, AETHER while speaking |
+| 〰️ Reactive HUD | Waveform pulses to real audio — your mic while listening, FRIDAY while speaking |
 | 🎙️ Voice Picker | Choose from 5 native Gemini voices and switch live from the UI — no restart |
 | ♾️ Unlimited Sessions | Sliding-window context compression — one conversation can last for hours |
 | 🖥️ System Control | Launch apps, adjust volume/brightness, WiFi, shortcuts, power — all by voice |
@@ -368,7 +370,7 @@ when it next happens, a switch to turn each one off.
 
 `ui.py` was a single 6,484-line file. It is now the `gui/` package — theme, metrics,
 HUD, widgets, overlays, providers panel, window, style and reactor — and `ui.py`
-keeps `AetherUI` and **re-exports every name it ever defined**, so every plugin
+keeps `FridayUI` and **re-exports every name it ever defined**, so every plugin
 written against an earlier version still imports what it imported.
 
 The reactor core is a real 3-D projection — sphere, gyro rings, orbit and platform,
@@ -395,7 +397,7 @@ reach them.
 * The check-in's three subjects were written into the code. They are the routine's list now.
 * The content panel could stay hidden after a quiz had been on screen.
 * `&` in *ENGINE & PROVIDERS* and *SAVE & APPLY* was drawn as an underscore — Qt reads a single ampersand as a keyboard-mnemonic marker.
-* `AetherUI.glance()` called an avatar attribute that no longer existed, so every "look at this" from a plugin silently did nothing.
+* `FridayUI.glance()` called an avatar attribute that no longer existed, so every "look at this" from a plugin silently did nothing.
 
 #### 🎚️ Controls that take the number you said
 
@@ -426,7 +428,7 @@ model access, limits and capabilities can change. A valid key is required.
 
 In **⚙ → ENGINE & PROVIDERS → Aether API**, keep **En uygun ücretsiz modeli
 otomatik seç** on to use these workload-specific choices. It is on for new
-Aether settings and for existing installations still using the old default
+Friday settings and for existing installations still using the old default
 `gpt-oss-120b-free`. If you have explicitly chosen a different model, your
 existing selection is preserved unless you enable automatic selection.
 Switch this setting off to force the exact manually selected **Model** ID.
@@ -441,7 +443,7 @@ The live model catalogue and **your own key's route-specific access/capabilities
 remain authoritative. `-free` naming is a conservative local safety
 filter, not an immutable pricing guarantee; a `tool_calling: unknown`
 capability must not be treated as verified tool-call support. Do not assume
-a recommended model will operate every AETHER tool. Live testing may count
+a recommended model will operate every FRIDAY tool. Live testing may count
 against API quotas, and prices must be checked in the provider dashboard.
 Keys stay in the locally ignored `config/api_keys.json`.
 
@@ -452,13 +454,13 @@ Capability guide: https://aetherapi.dev/docs/agents/models
 
 ## 🔑 Aether API gateway (optional)
 
-AETHER the desktop assistant and **Aether API** the third-party model gateway
+FRIDAY the desktop assistant and **Aether API** the third-party model gateway
 are separate products. The gateway uses the documented OpenAI-compatible
 `https://api.aetherapi.dev/v1` endpoint.
 
-1. Open **⚙ → ENGINE & PROVIDERS**. To keep Gemini Live voice and use Aether
+1. Open **⚙ → ENGINE & PROVIDERS**. To keep Gemini Live voice and use Friday
    for documents/background requests, choose **ARKA PLAN İSTEKLERİ → Aether API**.
-   To use Aether for the main language model instead, choose
+   To use Friday for the main language model instead, choose
    **KENDİ KURULUMUM → ② DÜŞÜNME → Aether API** and configure listening and
    speaking separately. The coding provider selector can use it too.
 2. Paste your Aether API key **locally** into the masked **API anahtarı** field.
@@ -472,7 +474,7 @@ are separate products. The gateway uses the documented OpenAI-compatible
    requests. Switch the option to **evet** only if you agree to credit charges;
    refresh the list after changing the option.
 
-**Billing safety:** the `-free` suffix reflects Aether's published model
+**Billing safety:** the `-free` suffix reflects Friday's published model
 labelling, **not a guarantee that prices can never change**. Check the live
 provider dashboard before use and set a strict per-key spending limit there.
 A saved key does not mean all models are free. Discovery and local tests do
@@ -640,7 +642,7 @@ The evidence is real work, not a longer sentence. Opening an application watches
 
 > The shape came from `whatsapp_call.py` and `whatsapp_guard.py`, which reached it by hand after a real message was reported as sent when nothing had gone. The comment there is the whole argument: *"A tool that reports only its successes is an invitation to invent the rest."*
 
-### 🚪 "Close the app" closed AETHER
+### 🚪 "Close the app" closed FRIDAY
 
 The old close was two lines with no target:
 
@@ -685,13 +687,13 @@ They are gone, and what replaced them is better than a translation: the rules no
 
 Wayland — the default session on Ubuntu 22.04 and later, on Fedora, and on current GNOME and KDE — does not let one program type, click, capture the screen or raise another program's window. That was the security hole it was designed to close. macOS refuses the same things until Accessibility and Screen Recording are granted. And on both, **the calls report success and have no effect**, which is the worst possible failure: the assistant says it clicked, and nothing moved.
 
-None of that is fixable from inside the app. What was fixable is the silence. The session is detected at startup, the user is told once in the activity log, and — the half that matters — the **model is told**, so AETHER says "this session does not permit me to drive the screen" instead of narrating a click that never happened. Voice, memory, files, the web and opening applications are unaffected, and are not mentioned.
+None of that is fixable from inside the app. What was fixable is the silence. The session is detected at startup, the user is told once in the activity log, and — the half that matters — the **model is told**, so FRIDAY says "this session does not permit me to drive the screen" instead of narrating a click that never happened. Voice, memory, files, the web and opening applications are unaffected, and are not mentioned.
 
 ### 🎧 The audio panel can prove it hears you
 
 Every automated probe in `core/audio_devices.py` runs on silence, which is what lets it run at startup without anyone noticing. It also means a muted microphone, a level slider at zero and a privacy shutter all pass every test and deliver a flat line. Only a person speaking can settle that.
 
-⚙ → **🎧 AUDIO DEVICES** now has a **TEST** button beside each device: the microphone shows a live meter while you speak and reports the peak it heard, the speakers play a tone. It replaces a loose `ses_testi.py` in the project root that nobody would ever have found — the moment somebody needs this is the moment they have already opened this panel wondering why AETHER cannot hear them.
+⚙ → **🎧 AUDIO DEVICES** now has a **TEST** button beside each device: the microphone shows a live meter while you speak and reports the peak it heard, the speakers play a tone. It replaces a loose `ses_testi.py` in the project root that nobody would ever have found — the moment somebody needs this is the moment they have already opened this panel wondering why FRIDAY cannot hear them.
 
 There is also an **output volume slider**, and it belongs to the device chosen two lines above it rather than to the system default. Somebody puts the assistant on their speakers and keeps everything else in their headphones; a slider labelled with one device that moves the other is worse than no slider.
 
@@ -730,7 +732,7 @@ door stayed:
   the page says `NO ENC` on its own badge rather than pretending otherwise.
 
 **And Windows was blocking it, per executable, invisibly.** This produced the
-strangest report of the release: the dashboard worked when AETHER was started
+strangest report of the release: the dashboard worked when FRIDAY was started
 from an editor and did not work when started from its own desktop shortcut —
 same machine, same network, same code.
 
@@ -815,9 +817,9 @@ One new dependency for the whole release — `yt-dlp`, and only to turn a YouTub
 #### 📺 Video where the face is
 The HUD already had a surface that takes the centre of the screen and gives it back: the camera. Video shares that same stack, so the avatar, the live camera and a video can never be on screen at once — and a video always lands exactly where you are already looking.
 
-It accepts **a local file, a direct media URL, a YouTube link, or just a description** ("play the new Dune trailer") and searches for it. It **starts muted every time**, because a soundtrack talking over the assistant is the one way this feature could make AETHER worse rather than better. You turn the sound on by asking, or from the button in the video header.
+It accepts **a local file, a direct media URL, a YouTube link, or just a description** ("play the new Dune trailer") and searches for it. It **starts muted every time**, because a soundtrack talking over the assistant is the one way this feature could make FRIDAY worse rather than better. You turn the sound on by asking, or from the button in the video header.
 
-**It answers before it opens.** Resolving what to play takes seconds nothing can remove — measured at 2.0s for a link and 3.3s for a spoken phrase, plus buffering. Restricting yt-dlp to a lighter client was tried and made it worse: the fast clients came back with zero usable formats. So the seconds stay, and what changed is where you spend them — listening to AETHER say it is coming, instead of watching nothing happen. Say "stop" during those seconds and the video is cancelled before it ever reaches the screen.
+**It answers before it opens.** Resolving what to play takes seconds nothing can remove — measured at 2.0s for a link and 3.3s for a spoken phrase, plus buffering. Restricting yt-dlp to a lighter client was tried and made it worse: the fast clients came back with zero usable formats. So the seconds stay, and what changed is where you spend them — listening to FRIDAY say it is coming, instead of watching nothing happen. Say "stop" during those seconds and the video is cancelled before it ever reaches the screen.
 
 #### 🔀 Two streams, one picture
 The first version asked YouTube for a format carrying both picture and sound and got *"Requested format is not available"*. That was not a bad selector; it was a wrong assumption. Checked against three videos — including the oldest upload on the site — **every one offered zero combined formats.** Picture and sound are separate streams now.
@@ -825,7 +827,7 @@ The first version asked YouTube for a format carrying both picture and sound and
 So there are two players running together, with a timer that corrects any drift over 300 ms. And the audio track is chosen on **language first, bitrate second** — because YouTube auto-dubs a great many videos and ships every dub at the *same* bitrate as the original: measured on one video, English at 129.483 and Arabic, Bangla, German, Spanish, French, Hindi and Indonesian all at 129.482. Sorting on bitrate alone came down to a thousandth of a kilobit, so the same video would play in Arabic one time and English the next for no reason you could see. It now reads YouTube's own original-track marker first.
 
 #### 🔇 It stopped hearing the film
-The microphone is open while a video plays, so the moment you turn the sound on, AETHER starts answering the film. The mic now mutes itself when the video's sound goes on and unmutes when it goes off — and it says so in the activity log rather than going deaf silently.
+The microphone is open while a video plays, so the moment you turn the sound on, FRIDAY starts answering the film. The mic now mutes itself when the video's sound goes on and unmutes when it goes off — and it says so in the activity log rather than going deaf silently.
 
 #### 🎛 Two drawers instead of one
 ⚙ **SETUP** holds the things you set once — remote control, desktop shortcut, auto-start and customisation. 🎛 **CONTROLS** holds the switches you flick daily — fullscreen, morning brief, wake word, sleep, push-to-talk, HUD style. Only one is open at a time, and each sits under its own header button.
@@ -879,12 +881,12 @@ This is not only tidiness. Every bundled skill is declared to the model on **eve
 * Videos played in a **random language**, because YouTube's auto-dubs carry the same bitrate as the original track.
 * The settings drawer **stuttered on first open** — a 2.1-second `openwakeword` import on the UI thread, not the button count it looked like.
 * The settings drawer opened **underneath the video**, because `QVideoWidget` creates a native window.
-* AETHER **answered the video's soundtrack.** The microphone now follows the video's sound.
+* FRIDAY **answered the video's soundtrack.** The microphone now follows the video's sound.
 * Qt's multimedia backend printed an ffmpeg banner to the console on every play, containing the **signed streaming URL with the viewer's IP address in it**. Silenced at startup.
 * **Every launch paid 201 ms for a plugin nobody had asked to use.** Discovery executes every file in `plugins/`, and `youtube_video` imported `requests` and `youtube_transcript_api` at module scope. Deferring one of them would have saved nothing — the transcript library imports `requests` itself. Both are now checked with `find_spec`, which answers "is it installed?" without executing anything, and loaded on first use: **plugin discovery 211 ms → 39 ms**.
-* A plugin that needed a file from a **newer AETHER version** was rejected with *"pip install core"*. The loader could not tell this project's own packages from a third-party one, so it told people to install a same-named stranger from an index — wrong, and a supply-chain hazard dressed up as a fix. First-party names now say the app is behind the plugin and that there is nothing to install.
+* A plugin that needed a file from a **newer FRIDAY version** was rejected with *"pip install core"*. The loader could not tell this project's own packages from a third-party one, so it told people to install a same-named stranger from an index — wrong, and a supply-chain hazard dressed up as a fix. First-party names now say the app is behind the plugin and that there is nothing to install.
 
-> Established AETHER features: the **🧑‍🎤 Holographic Avatar**, **👄 Lip-Sync**, **🎚️ Push-to-Talk**, **🔇 Self-Echo Guard**, **🧩 Plugin System**, **♾️ Unlimited Sessions**, **🎨 Live Theming** and **🎙️ Wake Word** are all still here.
+> Established FRIDAY features: the **🧑‍🎤 Holographic Avatar**, **👄 Lip-Sync**, **🎚️ Push-to-Talk**, **🔇 Self-Echo Guard**, **🧩 Plugin System**, **♾️ Unlimited Sessions**, **🎨 Live Theming** and **🎙️ Wake Word** are all still here.
 
 ---
 
@@ -910,7 +912,7 @@ The part that is easy to get wrong: **a model cannot look something up if it doe
 
 ### ↩️ Undo — it can take back what it did
 
-AETHER moves files, renames them, writes to them and changes your settings. None of that had a way back; if it misheard you, the only remedy was to fix it by hand.
+FRIDAY moves files, renames them, writes to them and changes your settings. None of that had a way back; if it misheard you, the only remedy was to fix it by hand.
 
 Say **"undo"** — in any language — and it reverses its own last action:
 
@@ -940,13 +942,13 @@ if action in _DANGEROUS_ACTIONS:            # {"restart", "shutdown"}
 
 `confirmed` is a **tool parameter, which means the model fills it in.** Nothing stopped it sending `confirmed=yes` on the first call and nothing checked that a human was ever involved. It was a convention, not a gate. And its coverage was two actions — so `toggle_wifi`, which cuts the assistant's own connection to the Live API and therefore *cannot be asked to undo itself*, went through with no gate at all.
 
-The token is now issued by the interface. Shutdown, restart and WiFi put a banner on the HUD and **return immediately**; the action runs only if you press CONFIRM. Nothing blocks — AETHER keeps talking while the banner is up — so this is **cheaper than the old gate**, which burned two tool round trips on every power command.
+The token is now issued by the interface. Shutdown, restart and WiFi put a banner on the HUD and **return immediately**; the action runs only if you press CONFIRM. Nothing blocks — FRIDAY keeps talking while the banner is up — so this is **cheaper than the old gate**, which burned two tool round trips on every power command.
 
 > The split between the two mechanisms is about reversibility, not about how alarming a word sounds. Anything undoable is done at once; only the genuinely irreversible asks. An assistant that checks with you before turning the volume down is one you stop talking to.
 
 ### 🎧 It finally asks which microphone
 
-Both audio streams opened with no device argument at all, so they always took whatever the OS called "default" — and on Windows that *moves on its own* the moment you plug a headset in. "AETHER can't hear me" almost always meant "AETHER is listening to the webcam".
+Both audio streams opened with no device argument at all, so they always took whatever the OS called "default" — and on Windows that *moves on its own* the moment you plug a headset in. "FRIDAY can't hear me" almost always meant "FRIDAY is listening to the webcam".
 
 ⚙ → **🎧 AUDIO DEVICES** lets you pick the microphone and the speakers by name. Two things matter more than the dropdown:
 
@@ -1006,8 +1008,8 @@ It is held in memory only, deliberately: writing it to disk would make a fresh l
 ## ⚡ Quick Start
 
 ```bash
-git clone https://github.com/fatmakahraman304-hash/JARV-S.git Murat
-cd Murat
+git clone https://github.com/fatmakahraman304-hash/JARV-S.git Kullanıcı
+cd Kullanıcı
 python setup.py        # installs deps for YOUR OS + the browser automation engine
 python main.py
 ```
@@ -1023,10 +1025,10 @@ python main.py
 | Requirement | Details |
 | --- | --- |
 | **OS** | Windows 10/11, macOS, or Linux |
-| **Linux display server** | Everything works on **X11**. On **Wayland** — the default on Ubuntu 22.04+, Fedora and current GNOME/KDE — the system does not permit any program to type, click, capture the screen or raise another window, so those features are unavailable and AETHER says so at startup instead of pretending. Voice, memory, files, the web and opening applications are unaffected. Log out and pick an Xorg session to get the rest |
+| **Linux display server** | Everything works on **X11**. On **Wayland** — the default on Ubuntu 22.04+, Fedora and current GNOME/KDE — the system does not permit any program to type, click, capture the screen or raise another window, so those features are unavailable and FRIDAY says so at startup instead of pretending. Voice, memory, files, the web and opening applications are unaffected. Log out and pick an Xorg session to get the rest |
 | **macOS permissions** | Accessibility (to type and click) and Screen Recording (to see the screen), both under System Settings → Privacy & Security. Until granted, those actions silently do nothing — the OS reports success either way |
 | **Python** | 3.11, 3.12 or 3.13 |
-| **Microphone** | Required for voice interaction (and for the "Hey AETHER" wake word) |
+| **Microphone** | Required for voice interaction (and for the "Hey FRIDAY" wake word) |
 | **Speakers** | Required for voice replies |
 | **API Key** | Free Gemini API key (entered on first launch → `config/api_keys.json`). Only for the Gemini engine — a fully local setup needs no key and no account |
 | **GPU** | **Not required, anywhere.** The avatar and HUD video are rendered in software; local speech recognition and the neural voice both run on the CPU by default |
@@ -1041,9 +1043,9 @@ python main.py
 ## 🗂️ Project Structure
 
 ```
-Murat/
+Kullanıcı/
 ├── main.py                   # Core loop — Gemini Live session, audio I/O, viseme extraction, tool dispatch
-├── ui.py                     # AetherUI — what main.py builds and plugins receive as `player`;
+├── ui.py                     # FridayUI — what main.py builds and plugins receive as `player`;
 │                             #   re-exports every name the old single-file ui.py defined
 ├── gui/                      # The HUD itself
 │   ├── theme.py              # Palette, config, constants, version
@@ -1084,7 +1086,7 @@ Murat/
 │   │                         #   the loader skips it, and the skills beside it import it.
 │   ├── whatsapp_call.py      # Place and end WhatsApp voice / video calls
 │   ├── whatsapp_guard.py     # Answer, decline or auto-reply to INCOMING WhatsApp calls
-│   ├── telegram_remote.py    # Drive AETHER from anywhere over Telegram
+│   ├── telegram_remote.py    # Drive FRIDAY from anywhere over Telegram
 │   ├── chat_takeover.py      # Reads an on-screen chat and replies in it
 │   ├── screen_agent.py       # Looks at the screen and works it, step by step
 │   ├── gmail_control.py      # Read, search, send and draft email
@@ -1173,7 +1175,7 @@ Murat/
 │   ├── audio_devices.py      # Microphone / speaker list — filtered, measured, resolved by name
 │   ├── plugin_loader.py      # Plugin engine — discovery, validation, crash isolation
 │   ├── action_loader.py      # Bundled-action engine — the built-in twin of plugin_loader
-│   └── wake_word.py          # Local "Hey AETHER" detector — own thread, offline, opt-in
+│   └── wake_word.py          # Local "Hey FRIDAY" detector — own thread, offline, opt-in
 └── config/
     ├── api_keys.json         # API key, name, voice, colour, toggles — created on first launch (git-ignored)
     └── certs/                # Self-signed TLS pair for the phone dashboard — generated locally (git-ignored)
@@ -1191,7 +1193,7 @@ Murat/
 
 ## 🔒 Your Data
 
-Everything stays on your machine. There is no AETHER server, no telemetry and no account.
+Everything stays on your machine. There is no FRIDAY server, no telemetry and no account.
 
 | What | Where | Notes |
 |---|---|---|
@@ -1219,4 +1221,4 @@ Licensed under **[Creative Commons BY-NC 4.0](https://creativecommons.org/licens
 
 ## Lisans
 
-Murat uyarlamasına ilişkin lisans ve özgün eser bildirimi [LICENSE](LICENSE) dosyasındadır.
+Kullanıcı uyarlamasına ilişkin lisans ve özgün eser bildirimi [LICENSE](LICENSE) dosyasındadır.

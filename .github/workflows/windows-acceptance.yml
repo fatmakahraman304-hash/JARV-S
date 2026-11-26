@@ -1,4 +1,4 @@
-name: AETHER Windows installation and HUD acceptance
+name: FRIDAY Windows installation and HUD acceptance
 on:
   workflow_dispatch:
   pull_request:
@@ -79,7 +79,7 @@ jobs:
             do {
               Start-Sleep -Milliseconds 250
               $process.Refresh()
-              if ($process.HasExited) { throw "AETHER exited before displaying a window ($($process.ExitCode))" }
+              if ($process.HasExited) { throw "FRIDAY exited before displaying a window ($($process.ExitCode))" }
               # A Windows venv launcher can host the interpreter in a child.
               $processIds = @($process.Id) + @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | Select-Object -ExpandProperty ProcessId)
               $windowOwner = Get-Process -Id $processIds -ErrorAction SilentlyContinue |
@@ -87,9 +87,9 @@ jobs:
                 Select-Object -First 1
             } until ($windowOwner -or [DateTime]::UtcNow -gt $deadline)
             if (-not $windowOwner) { throw "No native desktop window" }
-            if (-not $windowOwner.CloseMainWindow()) { throw "AETHER did not accept a window close" }
-            if (-not $process.WaitForExit(30000)) { throw "AETHER remained alive after window close" }
-            if ($process.ExitCode -ne 0) { throw "AETHER exited with $($process.ExitCode)" }
+            if (-not $windowOwner.CloseMainWindow()) { throw "FRIDAY did not accept a window close" }
+            if (-not $process.WaitForExit(30000)) { throw "FRIDAY remained alive after window close" }
+            if ($process.ExitCode -ne 0) { throw "FRIDAY exited with $($process.ExitCode)" }
           } finally {
             if (-not $process.HasExited) { $process.Kill($true) }
             Get-Content "$env:RUNNER_TEMP/aether-error.log" -Tail 30
@@ -104,8 +104,8 @@ jobs:
               for engine in (browser_api.chromium, browser_api.firefox):
                   browser = engine.launch()
                   page = browser.new_page()
-                  page.set_content("<title>AETHER acceptance</title>")
-                  assert page.title() == "AETHER acceptance"
+                  page.set_content("<title>FRIDAY acceptance</title>")
+                  assert page.title() == "FRIDAY acceptance"
                   browser.close()
           '''
           subprocess.run([r".venv\Scripts\python.exe", "-c", script], check=True)

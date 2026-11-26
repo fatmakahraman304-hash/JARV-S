@@ -1,4 +1,4 @@
-/* AETHER on the TV (and every big screen: the projector uses this too).
+/* FRIDAY on the TV (and every big screen: the projector uses this too).
  *
  *  1. The remote's arrows move between buttons (spatial navigation, like Android TV).
  *  2. Back key (Tizen, webOS, Android TV, Esc/Backspace) closes whatever is open.
@@ -7,15 +7,15 @@
  *     move around so nothing burns into the panel.
  *  5. Overscan: ⚙ → screen edge margin, for TVs that crop the picture.
  *  6. A big, bright focus ring you can see from the sofa.
- *  7. A video sent to the TV ("bunu televizyonda aç") plays right in AETHER —
+ *  7. A video sent to the TV ("bunu televizyonda aç") plays right in FRIDAY —
  *     TV browsers block pop-up windows.
  *  8. Quick commands you can pick with the remote: hava, ajanda, haberler, durum.
- *  9. Large live captions of what AETHER says.
+ *  9. Large live captions of what FRIDAY says.
  * 10. Refreshes itself at 04:00 when nobody is using it (TV browsers leak memory).
  */
 (() => {
   'use strict';
-  const J = window.AETHER, K = window.AetherKit; if (!J || !K) return;
+  const J = window.FRIDAY, K = window.FridayKit; if (!J || !K) return;
   if (!J.is('tv', 'projector')) return;
   const $ = J.$, S = J.S;
 
@@ -56,7 +56,7 @@
   document.querySelector('.tools').after(qbar);
   qbar.querySelectorAll('button').forEach(b => b.onclick = () => J.say(QUICK[+b.dataset.i][1]));
 
-  // 7 ── videos play inside AETHER ──────────────────────────────────────────
+  // 7 ── videos play inside FRIDAY ──────────────────────────────────────────
   const player = document.createElement('div'); player.id = 'tvplayer'; player.hidden = true;
   player.innerHTML = '<button class="btn pri" type="button">✕ Kapat (Geri)</button><iframe allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>';
   document.body.appendChild(player);

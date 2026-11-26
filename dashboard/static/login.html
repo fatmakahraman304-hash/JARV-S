@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AETHER</title>
+  <title>FRIDAY</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -131,13 +131,14 @@
       margin-bottom: 16px;
     }
   </style>
+  <link rel="stylesheet" href="/assets/friday-theme.css">
 </head>
 <body>
   <div class="card" id="card">
-    <div class="logo"><em>J</em>ARVIS</div>
+    <div class="logo"><em>F</em>RIDAY</div>
     <div class="sub">Uzaktan Erişim</div>
-    <p id="reconnecting">Reconnecting…</p>
-    <p class="hint">QR kod veya oturum anahtarı almak için masaüstündeki AETHER uygulamasında <strong style="color:var(--text)">Uzaktan Kontrol</strong> bölümünü açın.</p>
+    <p id="reconnecting">Bağlantı denetleniyor…</p>
+    <p class="hint">QR kod veya oturum anahtarı almak için masaüstündeki FRIDAY uygulamasında <strong style="color:var(--text)">Uzaktan Kontrol</strong> bölümünü açın.</p>
     <div class="key-wrap">
       <input class="key-input" id="key" type="text" maxlength="6"
              autocomplete="off" autocorrect="off" spellcheck="false"
@@ -145,11 +146,7 @@
     </div>
     <div class="err" id="err"></div>
     <button class="btn" onclick="doLogin()">BAĞLAN</button>
-    <p class="voice-note">
-      🎤 <strong style="color:var(--text)">Voice commands:</strong> open
-      <code>chrome://flags</code> on your phone, search
-      <code>Insecure origins treated as secure</code>, add your AETHER URL, tap Relaunch.
-    </p>
+    <p class="voice-note">🎤 Ses ve kamera özellikleri için güvenli HTTPS bağlantısı kullanın. Masaüstündeki Uzaktan Kontrol bölümünden bağlantı bilgilerini alabilirsiniz.</p>
   </div>
 
   <script>
@@ -208,7 +205,7 @@
       } else {
         inp.value = '';
         inp.focus();
-        document.getElementById('err').textContent = 'Invalid or expired key';
+        document.getElementById('err').textContent = 'Anahtar geçersiz veya süresi dolmuş';
         shake();
       }
     }

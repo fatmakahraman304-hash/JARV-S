@@ -23,7 +23,7 @@ class DiscoveryTest(unittest.TestCase):
         self.assertIsNone(devices.decode_announce(b"hello", "1.2.3.4"))
         self.assertIsNone(devices.decode_announce(b'{"m":"other","id":"x","url":"http://a:1"}', "1.2.3.4"))
         self.assertIsNone(devices.decode_announce(
-            b'{"m":"AETHER-DEVICE-1","id":"x","url":"ftp://a:1"}', "1.2.3.4"))
+            b'{"m":"FRIDAY-DEVICE-1","id":"x","url":"ftp://a:1"}', "1.2.3.4"))
 
     def test_peers_list_and_timeout(self):
         d = devices.Discovery(lambda: {})

@@ -18,7 +18,8 @@ def get_base_dir():
 
 BASE_DIR         = get_base_dir()
 API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
-PROJECTS_DIR     = Path.home() / "Desktop" / "AetherProjects"
+from core.identity import projects_home
+PROJECTS_DIR     = projects_home()
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
 from core import gemini
@@ -701,14 +702,14 @@ def _build_project(
 #     mistake that is not cheap to undo, so the plan cannot ask for it.
 #   * Run the project. A folder somebody hands over may be a server, a GUI or a
 #     script that sends email. What IS run, in a separate process: changed
-#     modules are imported, and in a AETHER project each changed plugin is
+#     modules are imported, and in a FRIDAY project each changed plugin is
 #     called the way the app calls it — unless its code can act on the world
 #     (send, delete, launch), in which case it is only loaded and validated.
 #     See core/code_checks.py.
 #
 # WHAT IT READS FIRST
 #   The project's own rules (AGENTS.md, CLAUDE.md or CONTRIBUTING.md) and, for
-#   AETHER itself, the thread-safe `player` methods read out of ui.py. Without
+#   FRIDAY itself, the thread-safe `player` methods read out of ui.py. Without
 #   them a model writes code that is valid and wrong for this app — widgets
 #   built off the Qt thread, a separate window instead of the quiz board.
 #
@@ -855,7 +856,7 @@ def _agent_progress(player, message: str) -> None:
     Selection isn't proof of a response. Report attempts and successful
     replies separately, including NVIDIA -> Gemini failover, without keys.
     """
-    started = "  AETHER ajanı: "
+    started = "  FRIDAY ajanı: "
     switched = "  Yedek kodlama modeline geçildi: "
     answered = "  Kodlama modeli yanıt verdi: "
     if message.startswith(started):
@@ -1840,7 +1841,7 @@ def _with_agents(agents: list[str], job, player):
     return None
 
 
-_AGENT_ROUNDS = 2           # agent → AETHER checks → agent fixes what failed
+_AGENT_ROUNDS = 2           # agent → FRIDAY checks → agent fixes what failed
 
 
 def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
@@ -1854,7 +1855,7 @@ def _text_files(folder: Path, rels: list[str]) -> dict[str, str]:
 
 def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                   originals: dict[str, str], baseline: dict | None, player) -> dict[str, str]:
-    """AETHER's own verdict on what the agent wrote: syntax, safe imports,
+    """FRIDAY's own verdict on what the agent wrote: syntax, safe imports,
     project rules, and the project's tests against how they stood before."""
     try:
         from core.code_checks import (detect_stack, run_tests, runtime_problems,
@@ -1868,7 +1869,7 @@ def _agent_checks(folder: Path, written: dict[str, str], stack: dict | None,
                                    log=lambda m: _log(player, m)).items():
         problems[rel] = (problems.get(rel, "") + " " + p).strip()
     if stack.get("test_cmd") and not problems:
-        _log(player, f"AETHER projenin testlerini çalıştırıyor ({stack['test_name']})…")
+        _log(player, f"FRIDAY projenin testlerini çalıştırıyor ({stack['test_name']})…")
         after = run_tests(folder, stack)
         broke = ("The project test command could not start." if after is None
                  else test_regressions(baseline, after))
@@ -1884,7 +1885,7 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
                         open_editor: bool) -> str:
     from core import agent_coding
     from core.code_checks import Protection
-    who = "AETHER kod ajanı"
+    who = "FRIDAY kod ajanı"
     _update("writing")
     _log(player, f"{who} proje klasöründe kod ajanı olarak çalışıyor: okuyor, düzenliyor, test ediyor…")
     before = agent_coding.snapshot(folder)
@@ -1940,15 +1941,15 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         if not (changed or created or deleted):
             break
         _update("testing")
-        _log(player, "Ajanın çalışması AETHER testleriyle doğrulanıyor…")
+        _log(player, "Ajanın çalışması FRIDAY testleriyle doğrulanıyor…")
         problems = _agent_checks(folder, written, stack, texts, baseline, player)
         if not problems:
-            _log(player, "AETHER kontrollerinde yeni hata bulunmadı.")
+            _log(player, "FRIDAY kontrollerinde yeni hata bulunmadı.")
             break
         for rel, p in problems.items():
             _log(player, f"Problem — {rel}: {p[:220]}")
         if round_no + 1 < _AGENT_ROUNDS:
-            extra = ("AETHER checked your previous round and these still fail. Fix them, "
+            extra = ("FRIDAY checked your previous round and these still fail. Fix them, "
                      "then run the tests again:\n" + "\n".join(f"- {r}: {p[:1500]}" for r, p in problems.items()))
             _update("writing")
 
@@ -1997,9 +1998,9 @@ def _improve_with_agent(folder: Path, instruction: str, guide: str, stack, basel
         msg += (" Şu kontroller hâlâ başarısız: "
                 + "; ".join(f"{r} — {p[:160]}" for r, p in problems.items()) + ".")
     elif stack and stack.get("test_cmd"):
-        msg += " AETHER dosya ve proje testi kontrollerinde yeni hata bulmadı."
+        msg += " FRIDAY dosya ve proje testi kontrollerinde yeni hata bulmadı."
     else:
-        msg += (" AETHER dosya kontrollerinde yeni hata bulmadı; "
+        msg += (" FRIDAY dosya kontrollerinde yeni hata bulmadı; "
                 "projenin otomatik test komutu algılanmadı.")
     msg += " Değişiklikleri geri almak için 'geri al' komutunu kullanın."
     _log(player, msg)
@@ -2010,7 +2011,7 @@ def _build_with_agent(description: str, language: str, project_name: str, provid
                       player) -> str:
     """A new project, written, run and tested by the agent in its own folder."""
     from core import agent_coding
-    who = "AETHER kod ajanı"
+    who = "FRIDAY kod ajanı"
     base = project_name or re.sub(r"[^\w]+", "_", description.lower())[:40].strip("_") or "aether_project"
     name = re.sub(r"[^\w\-]", "_", base)
     project_dir = PROJECTS_DIR / name

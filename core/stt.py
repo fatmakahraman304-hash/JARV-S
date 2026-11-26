@@ -1,5 +1,5 @@
 """
-Speech-to-Text engines for AETHER.
+Speech-to-Text engines for FRIDAY.
 
 Whisper  – offline transcription via faster-whisper (VAD-buffered)
 Vosk     – offline streaming transcription (lighter)

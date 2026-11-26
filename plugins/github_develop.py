@@ -38,7 +38,9 @@ def find_github_cli() -> str | None:
 
 
 def _development_workspace(parent):
-    preferred = parent / "Murat"
+    from core.identity import LEGACY_WORKSPACE
+    legacy = parent / LEGACY_WORKSPACE
+    preferred = legacy if legacy.is_dir() else parent / "FRIDAY"
     if preferred.exists() or not parent.is_dir():
         return preferred
     existing = []
@@ -54,10 +56,11 @@ def _development_workspace(parent):
     return existing[0] if len(existing) == 1 else preferred
 
 
-WORK = _development_workspace(Path.home() / "AetherDevelopment")
+from core.identity import workspace_parent, DEV_BRANCH_PREFIX, is_development_branch
+WORK = _development_workspace(workspace_parent())
 _LOCK = threading.Lock()
 PLUGIN = {'name':'github_develop','description':
-    'AETHER GitHub development workflow. prepare clones the user AETHER repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. self_edit is the entry point when the user asks AETHER to change itself or add an extension: prepares the isolated repository if needed, then hands off to the code agent. Never use self_edit on other repositories. self_release prepares a benign AETHER feature or evidenced bug fix, tests it, waits for GitHub checks, merges and updates. Use only for a concrete user request explicitly asking for code and automatic publication. Never use it for a missing third-party app, network error, security exploit, or offensive automation. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside AETHER. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',
+    'FRIDAY GitHub development workflow. prepare clones the user FRIDAY repo into a separate workspace and creates a development branch; inspect reports its state. develop uses the coding agent to write/fix code there. self_edit is the entry point when the user asks FRIDAY to change itself or add an extension: prepares the isolated repository if needed, then hands off to the code agent. Never use self_edit on other repositories. self_release prepares a benign FRIDAY feature or evidenced bug fix, tests it, waits for GitHub checks, merges and updates. Use only for a concrete user request explicitly asking for code and automatic publication. Never use it for a missing third-party app, network error, security exploit, or offensive automation. sync updates a clean development branch from main by fast-forward only. test runs the Python tests and shows failures inside FRIDAY. publish commits ONLY the explicitly selected files, pushes a branch, creates a PR and merges into main ONLY after GitHub checks succeed. Use publish only when the user asks to publish/merge. main then becomes available through the existing GÜNCELLE button; this tool never updates running source. Requires local Git and authenticated GitHub CLI for publication. Existing dev_agent builds other projects.',
     'parameters':{'type':'OBJECT','properties':{
         'mode':{'type':'STRING','enum':['prepare','inspect','develop','self_edit','self_release','sync','test','publish','merge']},
         'instruction':{'type':'STRING'},
@@ -71,18 +74,26 @@ _LOCAL_COMMANDS = {
     "github geliştirme alanını ana dal ile eşitle": "sync",
     "github geliştirme alanını güncelle": "sync",
     "github geliştirme dalını güncelle": "sync",
-    "aether github geliştirme dalını eşitle": "sync",
+    "friday github geliştirme dalını eşitle": "sync",
     "github geliştirme alanındaki testleri çalıştır": "test",
     "github geliştirme alanındaki testleri çalıştır ve sonucu göster": "test",
     "github testlerini çalıştır": "test",
     "github testlerini çalıştır ve sonucu göster": "test",
-    "aether github testlerini çalıştır": "test",
+    "friday github testlerini çalıştır": "test",
 }
 from core.voice_commands import normalize_command
 
 _NORMALIZED_LOCAL_COMMANDS = {
     normalize_command(text): mode for text, mode in _LOCAL_COMMANDS.items()
 }
+
+
+# Accept old explicit invocations without presenting an old assistant identity.
+from core.identity import LEGACY_SPOKEN_NAME
+_NORMALIZED_LOCAL_COMMANDS.update({
+    key.replace('friday', LEGACY_SPOKEN_NAME, 1): value
+    for key, value in tuple(_NORMALIZED_LOCAL_COMMANDS.items()) if key.startswith('friday ')
+})
 
 
 def local_command_mode(text: str) -> str | None:
@@ -214,7 +225,7 @@ def _commit_selected(changed, scope, instruction):
     staged = _paths(["git", "diff", "--cached", "--name-only", "-z", "--no-renames"])
     if not staged or staged - scope:
         raise ValueError("Commit kapsamındaki dosyalar doğrulanamadı.")
-    command(["git", *identity, "commit", "-m", instruction or "AETHER geliştirmesi"])
+    command(["git", *identity, "commit", "-m", instruction or "FRIDAY geliştirmesi"])
 
 
 def _paths(args):
@@ -244,7 +255,7 @@ def workflow(mode, instruction, files):
             raise ValueError('Geliştirme klasörü zaten var. İncele veya geliştir komutunu kullanın.')
         WORK.parent.mkdir(parents=True,exist_ok=True)
         command(['git','clone','https://github.com/'+REPO+'.git',str(WORK)],cwd=WORK.parent)
-        command(['git','switch','-c','aether-dev/'+str(int(time.time()))])
+        command(['git','switch','-c',DEV_BRANCH_PREFIX+str(int(time.time()))])
         return 'Ayrı geliştirme alanı hazır: '+str(WORK)
     if not (WORK/'.git').exists():
         raise ValueError('Önce geliştirme alanını hazırla komutunu verin.')
@@ -253,8 +264,8 @@ def workflow(mode, instruction, files):
     if mode == "sync":
         from actions import dev_agent
         branch = command(["git", "branch", "--show-current"])
-        if not branch.startswith("aether-dev/") or command(["git", "status", "--porcelain"]):
-            raise ValueError("Eşitlemek için temiz bir AETHER geliştirme dalı gerekli.")
+        if not is_development_branch(branch) or command(["git", "status", "--porcelain"]):
+            raise ValueError("Eşitlemek için temiz bir FRIDAY geliştirme dalı gerekli.")
         if dev_agent._job_lock.locked():
             raise ValueError("Kod geliştirme işi tamamlanınca tekrar deneyin.")
         command(["git", "fetch", "https://github.com/" + REPO + ".git", "refs/heads/main"])
@@ -264,14 +275,14 @@ def workflow(mode, instruction, files):
         return tests()
     if mode=='merge':
         branch=command(['git','branch','--show-current'])
-        if not branch.startswith('aether-dev/') or command(['git','status','--porcelain']):
+        if not is_development_branch(branch) or command(['git','status','--porcelain']):
             raise ValueError('Temiz geliştirme dalı gerekli.')
         return _merge_checked(branch, command(["git", "rev-parse", "HEAD"]))
     if mode=='publish':
         files = list(dict.fromkeys(Path(file).as_posix() for file in selected_files(files)))
         scope = set(files)
         branch=command(['git','branch','--show-current'])
-        if not branch.startswith('aether-dev/'):
+        if not is_development_branch(branch):
             raise ValueError('Yayın yalnızca ayrı geliştirme dalından yapılır.')
         from actions import dev_agent
         if dev_agent._job_lock.locked():
@@ -300,7 +311,7 @@ def workflow(mode, instruction, files):
         command([*_GH_GIT, 'push', remote, f"{head}:refs/heads/{branch}"])
         prs=json.loads(command(['gh','pr','list','--repo',REPO,'--head',branch,'--base','main','--json','number']))
         if not prs:
-            command(['gh','pr','create','--repo',REPO,'--base','main','--head',branch,'--title',instruction[:120] or 'AETHER geliştirmesi','--body','AETHER geliştirme alanında hazırlanmış değişiklikler. Python testleri yerel olarak çalıştırıldı; GitHub kontrolleri birleştirmeden önce zorunludur.'])
+            command(['gh','pr','create','--repo',REPO,'--base','main','--head',branch,'--title',instruction[:120] or 'FRIDAY geliştirmesi','--body','FRIDAY geliştirme alanında hazırlanmış değişiklikler. Python testleri yerel olarak çalıştırıldı; GitHub kontrolleri birleştirmeden önce zorunludur.'])
         return _merge_checked(branch, head)
     raise ValueError('Geçersiz işlem.')
 
@@ -311,21 +322,21 @@ def self_release(instruction, player):
     from core.code_checks import Protection
 
     command(["gh", "auth", "status"], cwd=Path.home())
-    with tempfile.TemporaryDirectory(prefix="aether-release-") as temp:
+    with tempfile.TemporaryDirectory(prefix="friday-release-") as temp:
         folder = Path(temp) / "source"
         remote = f"https://github.com/{REPO}.git"
         command(["git", "clone", "--branch", "main", "--single-branch", remote, str(folder)],
                 cwd=Path(temp))
-        branch = f"aether-dev/release-{time.time_ns()}"
+        branch = f"{DEV_BRANCH_PREFIX}release-{time.time_ns()}"
         command(["git", "switch", "-c", branch], cwd=folder)
 
         if not dev_agent._job_lock.acquire(False):
             raise RuntimeError("Başka bir kod geliştirme işi sürüyor.")
         try:
-            dev_agent._new_job(folder, "AETHER", instruction, player, kind="improve")
+            dev_agent._new_job(folder, "FRIDAY", instruction, player, kind="improve")
             result = dev_agent._improve_folder(
                 folder,
-                instruction + "\n\nModify only AETHER source for the benign user request. "
+                instruction + "\n\nModify only FRIDAY source for the benign user request. "
                 "Follow AGENTS.md. Keep the release workflow, updater, secrets and CI gates intact. "
                 "Do not add offensive automation, exploits, or arbitrary command execution.",
                 player,
@@ -356,11 +367,11 @@ def self_release(instruction, player):
         command(["git", "diff", "--check"], cwd=folder)
         player.write_log("GELİŞTİRME: " + tests(folder))
         command(["git", "--literal-pathspecs", "add", "--", *files], cwd=folder)
-        command(["git", "commit", "-m", "AETHER: kullanıcı geliştirme isteği"], cwd=folder)
+        command(["git", "commit", "-m", "FRIDAY: kullanıcı geliştirme isteği"], cwd=folder)
         head = command(["git", "rev-parse", "HEAD"], cwd=folder)
         command([*_GH_GIT, "push", remote, branch], cwd=folder)
         pr = command(["gh", "pr", "create", "--repo", REPO, "--base", "main",
-                      "--head", branch, "--title", "AETHER geliştirmesi",
+                      "--head", branch, "--title", "FRIDAY geliştirmesi",
                       "--body", "Kullanıcı isteğiyle oluşturuldu. Yerel Python testleri geçti."],
                      cwd=folder)
         player.write_log("GELİŞTİRME: GitHub kontrolleri bekleniyor. " + pr)
@@ -379,7 +390,7 @@ def self_release(instruction, player):
                                     cwd=folder))
         if merged.get("state") != "MERGED":
             raise RuntimeError("Birleştirme henüz doğrulanamadı.")
-        player.write_log("GELİŞTİRME: Main’e alındı, AETHER güncelleniyor. " + pr)
+        player.write_log("GELİŞTİRME: Main’e alındı, FRIDAY güncelleniyor. " + pr)
         player.request_app_update()
         return "GitHub birleştirmesi doğrulandı ve güncelleme isteği gönderildi."
 
@@ -407,9 +418,9 @@ def _start(parameters, player):
     instruction=str(parameters.get('instruction','')).strip()
     if mode == "self_edit":
         if not instruction:
-            return "AETHER’ta yapılacak kod değişikliğini tarif et."
+            return "FRIDAY’ta yapılacak kod değişikliğini tarif et."
         if not player:
-            return "Geliştirme ilerlemesi için AETHER arayüzü gerekli."
+            return "Geliştirme ilerlemesi için FRIDAY arayüzü gerekli."
         if not _LOCK.acquire(False):
             return "Bir GitHub işlemi zaten çalışıyor."
 
@@ -420,15 +431,15 @@ def _start(parameters, player):
                 if dev_agent._job_lock.locked():
                     raise ValueError("Kod geliştirme işi tamamlanınca tekrar deneyin.")
                 if WORK.resolve() == Path(__file__).resolve().parents[1]:
-                    raise ValueError("AETHER’ı normal kurulumdan aç; bu klasör geliştirme kopyası.")
+                    raise ValueError("FRIDAY’ı normal kurulumdan aç; bu klasör geliştirme kopyası.")
                 if not (WORK / ".git").exists():
                     workflow("prepare", "", [])
                 branch = command(["git", "branch", "--show-current"])
-                if not branch.startswith("aether-dev/"):
-                    raise ValueError("AETHER değişiklikleri geliştirme dalında hazırlanır.")
+                if not is_development_branch(branch):
+                    raise ValueError("FRIDAY değişiklikleri geliştirme dalında hazırlanır.")
                 notes = (
                     "\n\nWork only in this development checkout. Follow AGENTS.md. "
-                    "For a new AETHER tool, use the existing Python plugin contract; "
+                    "For a new FRIDAY tool, use the existing Python plugin contract; "
                     "add a JavaScript helper only if needed and use an explicit, narrow "
                     "Python entry point. Preserve user settings. Add focused tests for "
                     "new behavior. Do not publish or change the running installation."
@@ -448,18 +459,18 @@ def _start(parameters, player):
         except Exception:
             _LOCK.release()
             raise
-        return "AETHER kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
+        return "FRIDAY kod değişikliği için ayrı geliştirme alanı hazırlanıyor."
 
     if mode=='develop':
         if _LOCK.locked(): return 'GitHub işlemi bitene kadar kod düzenleme beklemeli.'
         if not (WORK/'.git').exists(): return 'Önce geliştirme alanını hazırlayın.'
         from actions.dev_agent import dev_agent
         return dev_agent({'mode':'improve','folder':str(WORK),'description':instruction},player=player)
-    if not player: return 'Geliştirme ilerlemesi için AETHER arayüzü gerekli.'
+    if not player: return 'Geliştirme ilerlemesi için FRIDAY arayüzü gerekli.'
     if mode == "self_release" and (
         not instruction or not callable(getattr(player, "request_app_update", None))
     ):
-        return "Kod değişikliğini açıkça belirt ve AETHER masaüstü arayüzünü kullan."
+        return "Kod değişikliğini açıkça belirt ve FRIDAY masaüstü arayüzünü kullan."
 
     if not _LOCK.acquire(False): return 'Bir GitHub işlemi zaten çalışıyor.'
     def work():

@@ -1,4 +1,4 @@
-"""AETHER kodlama sırası: NVIDIA Build → Gemini.
+"""FRIDAY kodlama sırası: NVIDIA Build → Gemini.
 
 Eski Claude Code ve Codex CLI kodlama rotasında bulunmaz.
 Kota veya bağlantı hatasında sıradaki model devralır; dinlenme süreleri
@@ -21,7 +21,7 @@ DOWN_REST = 15 * 60            # signed out / not installed / would not start
 GEMINI = ""                    # the Gemini ladder (never rests)
 
 AGENTS = (aether_agent.PROVIDER_ID,)
-NAMES = {aether_agent.PROVIDER_ID: "AETHER kod ajanı (NVIDIA → Gemini)",
+NAMES = {aether_agent.PROVIDER_ID: "FRIDAY kod ajanı (NVIDIA → Gemini)",
          GEMINI: "Gemini"}
 
 _lock = threading.Lock()
@@ -94,7 +94,7 @@ def rest(provider: str, err) -> float:
 
 
 def ladder(chosen: str = "", installed=None) -> list[str]:
-    """NVIDIA destekli AETHER kod ajanı ilk sırada; eski CLI ajanları yok."""
+    """NVIDIA destekli FRIDAY kod ajanı ilk sırada; eski CLI ajanları yok."""
     if installed is None:
         from core import agent_coding
         installed = agent_coding.available

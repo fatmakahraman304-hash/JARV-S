@@ -1,4 +1,4 @@
-"""AETHER NVIDIA Build API: anahtar gizliliği, model seçimi ve otomatik yedekler."""
+"""FRIDAY NVIDIA Build API: anahtar gizliliği, model seçimi ve otomatik yedekler."""
 import json
 import unittest
 import urllib.error

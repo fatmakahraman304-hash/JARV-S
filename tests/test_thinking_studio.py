@@ -15,7 +15,7 @@ class ThinkingStudioTests(unittest.TestCase):
 
     def test_commands_and_reset(self):
         self.assertEqual(studio.parse("FRIDAY, karşı ben."), (13,))
-        self.assertEqual(studio.parse("Jarvis, düşüncemi geri sar."), (12,))
+        self.assertEqual(studio.parse("FRIDAY, düşüncemi geri sar."), (12,))
         self.assertEqual(studio.parse("FRIDAY mod 11 ve 16"), (11, 16))
         self.assertEqual(studio.parse("FRIDAY kısa mod"), (-1,))
         self.assertEqual(studio.parse("FRIDAY fikrin DNA’sını çıkar"), (54,))

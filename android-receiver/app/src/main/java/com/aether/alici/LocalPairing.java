@@ -79,7 +79,7 @@ final class LocalPairing {
             String[] request = lines[0].split(" ");
             if (request.length < 2 || !request[1].equals("/" + nonce)) { respond(s, 404, "Bulunamadı"); return; }
             if ("GET".equals(request[0])) {
-                respond(s, 200, "<!doctype html><html lang='tr'><meta name='viewport' content='width=device-width,initial-scale=1'><meta charset='utf-8'><title>AETHER Alıcı</title><body style='font:18px sans-serif;padding:24px'><h2>AETHER Alıcı eşleştirme</h2><p>Telefonda AETHER ayarlarından Alıcıyı bağla ile kopyaladığın bağlantıyı aşağıya yapıştır.</p><form method='POST'><textarea name='setup' rows='5' style='width:100%' required></textarea><p><button style='font-size:20px'>Projeksiyona bağla</button></p></form><p>Yalnızca kendi Wi-Fi ağında kullan.</p></body></html>");
+                respond(s, 200, "<!doctype html><html lang='tr'><meta name='viewport' content='width=device-width,initial-scale=1'><meta charset='utf-8'><title>FRIDAY Alıcı</title><body style='font:18px sans-serif;padding:24px'><h2>FRIDAY Alıcı eşleştirme</h2><p>Telefonda FRIDAY ayarlarından Alıcıyı bağla ile kopyaladığın bağlantıyı aşağıya yapıştır.</p><form method='POST'><textarea name='setup' rows='5' style='width:100%' required></textarea><p><button style='font-size:20px'>Projeksiyona bağla</button></p></form><p>Yalnızca kendi Wi-Fi ağında kullan.</p></body></html>");
                 return;
             }
             if (!"POST".equals(request[0]) || used) { respond(s, 405, "İşlem kullanılamıyor"); return; }
@@ -96,9 +96,9 @@ final class LocalPairing {
             for (String pair : encoded.split("&")) {
                 if (pair.startsWith("setup=")) { value = java.net.URLDecoder.decode(pair.substring(6), "UTF-8"); break; }
             }
-            if (value == null || Gist.parseSetup(value) == null) { respond(s, 400, "Geçersiz AETHER bağlantısı"); return; }
+            if (value == null || Gist.parseSetup(value) == null) { respond(s, 400, "Geçersiz FRIDAY bağlantısı"); return; }
             used = true;
-            respond(s, 200, "<!doctype html><html lang='tr'><meta charset='utf-8'><body><h2>Bağlantı projeksiyona gönderildi.</h2><p>AETHER Alıcı ekranını kontrol et.</p></body></html>");
+            respond(s, 200, "<!doctype html><html lang='tr'><meta charset='utf-8'><body><h2>Bağlantı projeksiyona gönderildi.</h2><p>FRIDAY Alıcı ekranını kontrol et.</p></body></html>");
             final String setup = value;
             main.post(() -> callback.onSetup(setup));
             close();

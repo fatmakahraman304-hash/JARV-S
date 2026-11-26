@@ -1,6 +1,6 @@
-/* AETHER HTTPS projector control — encrypted relay, no new page or GitHub API.
+/* FRIDAY HTTPS projector control — encrypted relay, no new page or GitHub API.
  *
- * Android AETHER Alıcı subscribes to an opaque topic on ntfy.sh; this HTTPS
+ * Android FRIDAY Alıcı subscribes to an opaque topic on ntfy.sh; this HTTPS
  * page publishes AES-256-GCM encrypted commands and receives encrypted replies.
  * The existing local pairing secret is held only in browser localStorage and
  * on the projector; it is never sent to the relay.
@@ -113,7 +113,7 @@
       const result = new Promise(resolve => {
         const timer = setTimeout(() => {
           state.pending.delete(id);
-          resolve('Projeksiyon HTTPS komutuna yanıt vermedi. AETHER Alıcı içindeki HTTPS köprü durumunu kontrol et.');
+          resolve('Projeksiyon HTTPS komutuna yanıt vermedi. FRIDAY Alıcı içindeki HTTPS köprü durumunu kontrol et.');
         }, 16000);
         state.pending.set(id, { resolve, timer });
       });
@@ -134,5 +134,5 @@
     }
   }
 
-  window.AETHERRelay = { send, configure, get status() { return state.status; }, reset };
+  window.FridayRelay = { send, configure, get status() { return state.status; }, reset };
 })();

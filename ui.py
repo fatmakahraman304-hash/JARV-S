@@ -1,7 +1,7 @@
 """ui.py — the entry point to the HUD.
 
 The implementation lives in the gui/ package. This file keeps
-AetherUI — the object main.py builds and every plugin receives as `player` —
+FridayUI — the object main.py builds and every plugin receives as `player` —
 and re-exports every name ui.py has ever defined, so `from ui import X`
 written against an older version still finds X here.
 """
@@ -98,7 +98,7 @@ def _apply_ui_scale() -> None:
         os.environ["QT_SCALE_FACTOR"] = f"{scale:.2f}"
 
 
-class AetherUI:
+class FridayUI:
     def __init__(self, face_path: str, size=None):
         # Kullanıcının isteğiyle kaldırılan DeepSeek anahtarı ve eski seçimi
         # yerel config dosyasından temizlenir; NVIDIA/Gemini ayarları korunur.
@@ -277,7 +277,7 @@ class AetherUI:
 
     def push_visemes(self, frames, hop: float, at: float) -> None:
         """Thread-safe: post a schedule of (level, openness, width) mouth frames
-        for AETHER's own speech. `at` is the wall-clock time the batch begins to
+        for FRIDAY's own speech. `at` is the wall-clock time the batch begins to
         sound, not the time of the call. See HudCanvas.push_visemes()."""
         try:
             self._win.hud.push_visemes(frames, hop, at)
@@ -334,7 +334,7 @@ class AetherUI:
         self._win._chess_sig.emit(bool(opened))
 
     def show_control_center(self, opened: bool = True) -> None:
-        """Thread-safe: open (or close) the Control Centre — AETHER's network
+        """Thread-safe: open (or close) the Control Centre — FRIDAY's network
         of capabilities and the live activity feed."""
         self._win._control_center_sig.emit(bool(opened))
 
@@ -378,7 +378,7 @@ class AetherUI:
 
         `grade(question, given)` decides each answer — the plugin supplies it so
         the marking rules live with the questions rather than being duplicated
-        here. Returning None from it means "AETHER should judge this one", which
+        here. Returning None from it means "FRIDAY should judge this one", which
         is how open answers and near-miss gap-fills are handled.
 
         Returns immediately: the user answers at their own pace and the finished
@@ -419,7 +419,7 @@ class AetherUI:
         together and kept in step.
 
         Muted by default, and that is a decision rather than a default: a
-        soundtrack talking over AETHER is the one way this could make the
+        soundtrack talking over FRIDAY is the one way this could make the
         assistant worse. The user turns sound on from the header button or by
         asking, and closes it the same two ways.
         """
@@ -442,7 +442,7 @@ class AetherUI:
 
         `generate_image` has been calling this method by name since it was
         written, against the possibility that it would one day exist. It does
-        now, so a picture AETHER draws appears on the HUD instead of only in a
+        now, so a picture FRIDAY draws appears on the HUD instead of only in a
         folder.
         """
         self._win._image_open_sig.emit(str(path or ""), str(title or ""))
@@ -495,4 +495,8 @@ class AetherUI:
 
 
 # Compatibility with installed third-party plugins.
-AetherUI = AetherUI
+def __getattr__(name):
+    from core.identity import LEGACY_UI_CLASS
+    if name == LEGACY_UI_CLASS:
+        return FridayUI
+    raise AttributeError(name)

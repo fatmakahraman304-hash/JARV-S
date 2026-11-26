@@ -1,13 +1,13 @@
 {
-  "name": "AETHER",
-  "short_name": "AETHER",
-  "description": "AETHER her cihazda — telefon, tablet, TV, projeksiyon, saat.",
+  "name": "FRIDAY",
+  "short_name": "FRIDAY",
+  "description": "FRIDAY her cihazda — telefon, tablet, TV, projeksiyon, saat.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#030915",
-  "theme_color": "#030915",
+  "background_color": "#060b16",
+  "theme_color": "#060b16",
   "icons": [
     {
       "src": "icon-192.png",

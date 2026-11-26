@@ -16,14 +16,14 @@ class FridayEarth(unittest.TestCase):
     def test_voice_and_name_upgrade_preserves_secrets_and_user(self):
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / "api_keys.json"
-            data = {"assistant_name":"AETHER", "voice_name":"Charon", "user_name":"Murat",
+            data = {"assistant_name":"FRIDAY", "voice_name":"Charon", "user_name":"Deniz",
                     "gemini_api_key":"local-test", "providers":{"mode":"pipeline"},
                     "whatsapp_assistant":{"messages_enabled":True,"secret":"saved-locally"}}
             file.write_text(json.dumps(data))
             with patch.object(cfg, "CONFIG_FILE", file):
                 self.assertEqual(cfg.get_assistant_name(), "FRIDAY")
                 self.assertEqual(cfg.get_voice(), "Aoede")
-                self.assertEqual(cfg.get_user_name(), "Murat")
+                self.assertEqual(cfg.get_user_name(), "Deniz")
                 self.assertEqual(cfg.get_gemini_key(), "local-test")
                 self.assertEqual(cfg.get_provider_mode(), "pipeline")
             self.assertEqual(json.loads(file.read_text(encoding="utf-8")), data)

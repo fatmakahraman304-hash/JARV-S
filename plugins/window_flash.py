@@ -1,11 +1,11 @@
-"""Explain briefly appearing Windows/MAYK popups from local diagnostics."""
+"""Explain briefly appearing Windows/FRIDAY popups from local diagnostics."""
 from __future__ import annotations
 
 PLUGIN = {
     "name": "window_flash",
     "description": (
-        "MAYK ekranında bir pencere aniden açılıp kaybolduğunda hangi "
-        "program veya MAYK paneli olduğunu yerel pencere izinden bul. "
+        "FRIDAY ekranında bir pencere aniden açılıp kaybolduğunda hangi "
+        "program veya FRIDAY paneli olduğunu yerel pencere izinden bul. "
         "Kullanıcı 'ne açılıp kapanıyor', 'anlık pencereyi bul', "
         "'son açılan pencere ne' derse bunu kullan. Yalnızca yerel "
         "tanılama geçmişi; ekran görüntüsü ya da özel içerik toplamaz."
@@ -26,11 +26,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         items = recent(n)
         if not items:
             return ("Henüz kısa süreli açılıp kapanan bir pencere yakalanmadı. "
-                    "Windows üzerinde MAYK'ı açık tut; olay yakalanırsa "
+                    "Windows üzerinde FRIDAY'ı açık tut; olay yakalanırsa "
                     "son anlık pencereleri bu araçla gösterebilirim.")
-        return ("Windows/MAYK anlık pencere kayıtları (eski → yeni):\n" +
+        return ("Windows/FRIDAY anlık pencere kayıtları (eski → yeni):\n" +
                 "\n".join(items) +
                 "\nNot: Harici bir Windows konsolu tespit edilmesi, onun "
-                "MAYK tarafından açıldığını tek başına kanıtlamaz.")
+                "FRIDAY tarafından açıldığını tek başına kanıtlamaz.")
     except (OSError, ValueError, TypeError) as exc:
         return "Pencere tanılama kaydı okunamadı: " + type(exc).__name__

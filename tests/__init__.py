@@ -1,1 +1,1 @@
-"""AETHER test suite."""
+"""FRIDAY test suite."""

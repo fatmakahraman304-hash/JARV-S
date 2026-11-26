@@ -2,7 +2,7 @@
 Protokoller — Iron Man'deki gibi tek komutla birçok iş: "çalışma protokolü",
 "film modu", "uyku protokolü", "günaydın".
 
-Bir protokol, sırayla yapılacak adımların listesidir. Çalıştırınca AETHER
+Bir protokol, sırayla yapılacak adımların listesidir. Çalıştırınca FRIDAY
 adımları kendi araçlarıyla tek tek yapar: uygulama açar, sesi ayarlar, TV'ye ya
 da telefona gönderir (send_to_device), hatırlatıcı kurar, listeyi okur…
 Protokoller ortak hafızada (preferences / "protokol: <ad>") durur, yani
@@ -132,7 +132,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         key, steps = hit
         if player:
             try:
-                player.write_log(f"AETHER: {key.upper()} PROTOKOLÜ başladı")
+                player.write_log(f"FRIDAY: {key.upper()} PROTOKOLÜ başladı")
             except Exception:
                 pass
         numbered = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1))

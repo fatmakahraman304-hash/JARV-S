@@ -32,7 +32,7 @@ class LivePublicSearchTests(unittest.TestCase):
 
     def test_local_commands_and_static_history_stay_fast(self):
         for text in (
-            "Merhaba AETHER",
+            "Merhaba FRIDAY",
             "Chrome'u aç",
             "Sesi yükselt",
             "Fenerbahçe nasıl kuruldu?",

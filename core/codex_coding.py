@@ -21,7 +21,7 @@ def _command() -> list[str]:
             script = Path(shim).parent / "node_modules" / "@openai" / "codex" / "bin" / "codex.js"
             if script.is_file():
                 return [node, str(script)]
-    raise RuntimeError("Codex CLI bulunamadı. Kurduktan sonra AETHER’ı yeniden aç.")
+    raise RuntimeError("Codex CLI bulunamadı. Kurduktan sonra FRIDAY’ı yeniden aç.")
 
 
 def generate_content(prompt: str):
@@ -34,7 +34,7 @@ def generate_content(prompt: str):
                  "--ignore-user-config", "--ignore-rules", "--ephemeral",
                  "--output-last-message", str(reply), "-"],
                 input=("Respond with the requested text only. Use only the supplied context; "
-                       "AETHER applies edits and runs tests separately.\n\n" + prompt),
+                       "FRIDAY applies edits and runs tests separately.\n\n" + prompt),
                 cwd=folder, capture_output=True, encoding="utf-8", errors="replace",
                 timeout=300, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
@@ -48,7 +48,7 @@ def generate_content(prompt: str):
             if any(word in diagnostics for word in ("not logged in", "401 unauthorized", "invalid_grant", "refresh token", "authentication required")):
                 raise RuntimeError("Codex oturumu doğrulanamadı. PowerShell’de codex login çalıştır ve tarayıcıdaki girişi tamamla.")
             if "unexpected argument" in diagnostics or "unrecognized option" in diagnostics:
-                raise RuntimeError("Codex CLI sürümü AETHER’ın kullandığı komutu desteklemiyor. Codex CLI’ı güncelle.")
+                raise RuntimeError("Codex CLI sürümü FRIDAY’ın kullandığı komutu desteklemiyor. Codex CLI’ı güncelle.")
             if "sandbox" in diagnostics and any(word in diagnostics for word in ("failed", "setup", "denied")):
                 raise RuntimeError("Codex çalışma ortamı başlatılamadı. PowerShell’de codex komutunu açıp Windows kurulumunu tamamla.")
             if any(word in diagnostics for word in ("usage limit", "rate limit", "429 too many requests")):
