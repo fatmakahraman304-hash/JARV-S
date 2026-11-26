@@ -503,7 +503,7 @@ def update(root=ROOT, progress=lambda message: None):
         return _update_locked(root, progress)
 
 
-def _update_locked(root, progress):
+def _update_locked(root, progress, *, prepared_manifest=None):
     lock = root / '.aether-update.lock'
     checking = b'AETHER/1 checking'
     try:
@@ -557,7 +557,9 @@ def _update_locked(root, progress):
             new_req = files['requirements.txt'].decode('utf-8')
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
-        if _needs_dependency_install(old_req, new_req):
+        if prepared_manifest is not None and prepared_manifest.strip() != new_req.strip():
+            raise RuntimeError('Hazırlanan paket ile güncel sürümün bağımlılıkları farklı.')
+        if prepared_manifest is None and _needs_dependency_install(old_req, new_req):
             raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. FRIDAY’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
         if is_git:
             _replace_bytes(lock, b'AETHER/1 applying')

@@ -39,3 +39,26 @@ Windows kaynak ZIP'inde FRIDAY_BASLAT.cmd ilk çalıştırmada yerel .venv
 kurar, setup.py ve pip check sonucunu doğrular. Sonraki çift tıklamada
 pythonw ile FRIDAY açılır. --install-only CI ve kapalı uygulamayla yeniden
 kurulum için aynı yolu kullanır. Python 3.13 ve ilk kurulumda internet gerekir.
+
+### Mevcut verilerle yerinde geçiş
+
+Eski istemcide GÜNCELLE bağımlılık değişikliği bildirirse FRIDAY'i kapatın.
+Aşağıdaki PowerShell örneğinde komutları doğrulanmış yeni paketin açıldığı
+klasörden çalıştırın. Hedef klasör adı kendi mevcut kurulumunuza ait olmalı.
+Önceki Python ortamına dönebilmek için kapalıyken .venv yedeğini alın.
+Kullanıcı ayarlarını veya hafızayı yeni klasöre kopyalamak gerekmez.
+
+```powershell
+$fridayDir = 'C:\FRIDAY'
+$fridayPython = Join-Path $fridayDir '.venv\Scripts\python.exe'
+& $fridayPython .\setup.py
+if ($LASTEXITCODE -ne 0) { throw 'Bağımlılık kurulumu durdu.' }
+& $fridayPython -m tools.update_prepared_install $fridayDir
+if ($LASTEXITCODE -ne 0) { throw 'Güncelleme tamamlanmadı.' }
+```
+
+Bakım komutu hedefin kendi .venv ortamını, gerçek pip çözücüsünün kuracak
+paket bulmadığını ve pip check sonucunu doğrular. Ardından mevcut kurulumda
+aynı Git/ZIP yedek, imza ve güncelleme yollarını kullanır. Gelen bağımlılıklar
+hazırlanan sürümle uyuşmazsa dosya yazılmaz. Uygulamayı mevcut konumundan
+yeniden açın. Depoda .venv kullanmayan özel kurulumlar bu komuta dahil değildir.
