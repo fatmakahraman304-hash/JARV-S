@@ -1,8 +1,8 @@
-# AETHER ile Blender
+# FRIDAY ile Blender
 
-Masaüstü AETHER'ı Blender kurulu bilgisayarda başlat. Eklenti Blender'ı PATH'te,
+Masaüstü FRIDAY'ı Blender kurulu bilgisayarda başlat. Eklenti Blender'ı PATH'te,
 Windows'ta standart Blender Foundation klasöründe veya macOS'ta Applications
-altında arar. Sahne planlama ve soru yanıtlama AETHER'ın ayarlı modelini kullanır.
+altında arar. Sahne planlama ve soru yanıtlama FRIDAY'ın ayarlı modelini kullanır.
 
 | Örnek komut | Sonuç |
 | --- | --- |
@@ -14,9 +14,9 @@ altında arar. Sahne planlama ve soru yanıtlama AETHER'ın ayarlı modelini kul
 | “Blender'da UV unwrap nasıl yapılır?” | Kurulu Blender'ın operatör bilgilerini kullanarak adımları açıklar. |
 | “Blender işleminin durumu ne?” | Sonucu veya devam eden işlemin durumunu bildirir. |
 
-Kendi dosyanı düzenlemek için önce Blender'da kaydet ve AETHER'a tam
+Kendi dosyanı düzenlemek için önce Blender'da kaydet ve FRIDAY'a tam
 `.blend` yolunu ver. İşlemler ayrı bir Blender sürecinde yürür. Yeni sürümler
-kullanıcı klasöründeki `AETHER/Blender` altında oluşur. “Son proje” en son
+kullanıcı klasöründeki `FRIDAY/Blender` altında oluşur. “Son proje” en son
 başarıyla kaydedilip yeniden açılarak doğrulanan sahnedir. Render, sahnenin
 geçerli karesini PNG olarak kaydeder.
 
@@ -47,11 +47,11 @@ Karmaşık tariflerde planlayıcı işi 2–8 aşamaya ayırabilir. Her aşama b
 tamamlanamazsa son başarılı proje seçili kalır. “Zaman çizelgesini animasyon
 olarak render al” komutu her kareyi ayrı bir PNG olarak kaydeder.
 
-Windows'ta AETHER, çalışan Blender veya Blender Launcher işleminin klasöründeki
+Windows'ta FRIDAY, çalışan Blender veya Blender Launcher işleminin klasöründeki
 `blender.exe` dosyasını da bulabilir. Özel bir kurulumu elle seçmek için
-`AETHER_BLENDER_EXE` ortam değişkenine dosyanın tam yolunu verip AETHER'ı yeniden
+`AETHER_BLENDER_EXE` ortam değişkenine dosyanın tam yolunu verip FRIDAY'ı yeniden
 başlatabilirsin. “Mahalleyi oluştur, projeyi ve renderi aç” isteği kaydedilen
-projeyi Blender'da açar ve PNG çıktısını AETHER'ta gösterir.
+projeyi Blender'da açar ve PNG çıktısını FRIDAY'ta gösterir.
 
 Yazılı sahne isteğini doğrudan Blender aracına göndermek için örneğin
 “Gazimağusa esintili, 11 binalı ve bir parklı sahil mahallesi oluştur. Projeyi ve renderi aç”

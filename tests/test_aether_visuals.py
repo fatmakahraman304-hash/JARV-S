@@ -1,4 +1,4 @@
-"""AETHER is procedural cyan 3D, with a selectable feminine hologram."""
+"""FRIDAY is procedural cyan 3D, with a selectable feminine hologram."""
 import os
 import unittest
 from pathlib import Path
@@ -30,7 +30,7 @@ class AetherVisuals(unittest.TestCase):
             reactor.step(.06, speaking=True, thinking=False, muted=False)
             reactor.paint(painter, 160, 140, 62,
                           QColor("#26d9ff"), QColor("#a3efff"),
-                          QColor("#e9f9ff"), .5, True, "AETHER")
+                          QColor("#e9f9ff"), .5, True, "FRIDAY")
         finally:
             painter.end()
         self.assertNotEqual(img.pixelColor(160, 140), QColor("#030915"))
@@ -40,7 +40,7 @@ class AetherVisuals(unittest.TestCase):
         web = (ROOT / "web/reactor.js").read_text(encoding="utf8")
         self.assertEqual(web, desktop)
         for part in ("icosphere(", "const rays = []", "const arcs = []",
-                     "const shell = []", "AetherReactor"):
+                     "const shell = []", "FridayReactor"):
             self.assertIn(part, web)
         self.assertNotIn("new Image(", web)
         self.assertNotIn("aether-core.webp", web)

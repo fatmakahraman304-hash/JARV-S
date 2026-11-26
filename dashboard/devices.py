@@ -1,8 +1,8 @@
 """
 dashboard/devices.py — who is on the network: this computer, the other
-computers running AETHER, and the screens (TVs) paired to it.
+computers running FRIDAY, and the screens (TVs) paired to it.
 
-Every AETHER announces itself on the local network once every few seconds with
+Every FRIDAY announces itself on the local network once every few seconds with
 a small UDP broadcast, and listens for the others. That is all the phone needs
 to show one "BAĞLI CİHAZLAR" list and command the laptop as easily as the
 desktop: it talks to each computer's own dashboard directly, with a token that
@@ -38,7 +38,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DISCOVERY_PORT = 8002          # UDP, beside the dashboard's 8000/8001
 ANNOUNCE_EVERY = 4.0           # seconds between announcements
 PEER_TIMEOUT = 15.0            # a computer not heard for this long is offline
-_MAGIC = "AETHER-DEVICE-1"
+from core.identity import LEGACY_DISCOVERY_MAGIC
+_MAGIC = LEGACY_DISCOVERY_MAGIC
 
 
 # ── this computer ─────────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ def decode_announce(data: bytes, sender_ip: str = "") -> dict | None:
         msg = json.loads(data.decode("utf-8"))
     except Exception:
         return None
-    if not isinstance(msg, dict) or msg.get("m") != _MAGIC:
+    if not isinstance(msg, dict) or msg.get("m") not in (_MAGIC, "FRIDAY-DEVICE-1"):
         return None
     did = str(msg.get("id") or "")[:32]
     url = str(msg.get("url") or "")
@@ -134,7 +135,7 @@ def decode_announce(data: bytes, sender_ip: str = "") -> dict | None:
             return None
         url = f"{scheme}://{sender_ip}:{port}"
     kind = msg.get("kind") if msg.get("kind") in ("desktop", "laptop") else "desktop"
-    return {"id": did, "name": str(msg.get("name") or "AETHER")[:40],
+    return {"id": did, "name": str(msg.get("name") or "FRIDAY")[:40],
             "os": str(msg.get("os") or "")[:40], "kind": kind, "url": url}
 
 
@@ -210,7 +211,7 @@ class Discovery:
 # ── paired screens (TVs) ──────────────────────────────────────────────────────
 
 class ScreenRegistry:
-    """TVs and other big screens that show the AETHER screen page.
+    """TVs and other big screens that show the FRIDAY screen page.
 
     A TV cannot scan a QR code and typing on a TV remote is miserable, so the
     pairing goes the other way round, as with streaming apps: the TV page asks

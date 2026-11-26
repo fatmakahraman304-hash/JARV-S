@@ -29,7 +29,7 @@ _state = {"on": False}
 
 NAMES = {"chrome": "Chrome", "msedge": "Edge", "firefox": "Firefox", "code": "VS Code", "explorer": "Dosya Gezgini",
          "winword": "Word", "excel": "Excel", "powerpnt": "PowerPoint", "spotify": "Spotify", "discord": "Discord",
-         "whatsapp": "WhatsApp", "steam": "Steam", "python": "AETHER", "pythonw": "AETHER", "blender": "Blender",
+         "whatsapp": "WhatsApp", "steam": "Steam", "python": "FRIDAY", "pythonw": "FRIDAY", "blender": "Blender",
          "obs64": "OBS", "vlc": "VLC", "teams": "Teams", "ms-teams": "Teams", "notepad": "Not Defteri"}
 
 

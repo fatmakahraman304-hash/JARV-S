@@ -12,7 +12,7 @@ class SecondBrainTests(unittest.TestCase):
         self.enterContext(patch.object(continuity, "data_dir", return_value=root))
 
     def test_failures_are_collected_once_and_dismissal_is_preserved(self):
-        pid = continuity.project_start("improve", "AETHER", "/code", "test")
+        pid = continuity.project_start("improve", "FRIDAY", "/code", "test")
         continuity.project_update(pid, status="başarısız", note="test failed")
         brain.scan()
         brain.scan()
@@ -54,7 +54,7 @@ class SecondBrainTests(unittest.TestCase):
         brain.add("Eski geliştirme")
         item = brain.items()[0]
         brain.update(item["id"], state="running")
-        pid = continuity.project_start("improve", "AETHER", "/code", f"[SECOND_BRAIN:{item['id']}]")
+        pid = continuity.project_start("improve", "FRIDAY", "/code", f"[SECOND_BRAIN:{item['id']}]")
         continuity.project_update(pid, status="bitti", note="Proje testleri geçti.")
         with continuity.connect() as db:
             db.executemany("INSERT INTO projects(title,status,instruction) VALUES(?,?,?)",

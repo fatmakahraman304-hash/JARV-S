@@ -1,21 +1,26 @@
-/* AETHER on the smart watch.
+/* FRIDAY on the smart watch.
  *
  *  1. Round screens: everything stays inside the circle (detected, or ⚙ → Yuvarlak ekran).
  *  2. Tap anywhere on the face to talk — no small button to aim for.
  *  3. Glance: the time, the next reminder and the battery under the core.
- *  4. Short answers: on the watch AETHER answers in a sentence or two.
+ *  4. Short answers: on the watch FRIDAY answers in a sentence or two.
  *  5. Haptics: a tap when it listens, a double tap when it answers, a long buzz for reminders.
  *  6. Saves the battery: the core draws at 15 fps and stops when nobody looks.
  *  7. Swipe left/right (or turn the crown / bezel) between screens: core · agenda · devices · actions.
  *  8. Actions screen: find my phone, 5-min timer, hush, my to-dos.
- *  9. One question, one answer: the mic closes itself a few seconds after AETHER answers.
+ *  9. One question, one answer: the mic closes itself a few seconds after FRIDAY answers.
  * 10. Always-on dim: after 30 s the face goes dark for the OLED; a touch wakes it.
  */
 (() => {
   'use strict';
-  const J = window.AETHER, K = window.AetherKit; if (!J || !K) return;
+  const J = window.FRIDAY, K = window.FridayKit; if (!J || !K) return;
   if (!J.is('watch')) return;
   const $ = J.$, S = J.S;
+  const wordmark = document.createElement('div');
+  wordmark.id = 'friday-watch-mark';
+  wordmark.textContent = 'FRIDAY';
+  wordmark.setAttribute('aria-label', 'FRIDAY');
+  document.body.appendChild(wordmark);
 
   J.css(`
     body.watch.round .app { padding: 13vw; }
@@ -25,13 +30,13 @@
     #w-glance b { color: var(--text); font-size: 9vw; display: block; font-weight: 600; letter-spacing: -.2vw; }
     #w-glance .nx { color: var(--acc); }
     body.watch.replying #w-glance { display: none; }
-    #w-screens { position: fixed; inset: 0; z-index: 15; background: radial-gradient(circle at 50% 40%, #1d1007, #050403 75%); display: flex; flex-direction: column; justify-content: center; padding: 14vw 12vw; }
+    #w-screens { position: fixed; inset: 0; z-index: 15; background: radial-gradient(circle at 50% 40%, #10213a, #060b16 75%); display: flex; flex-direction: column; justify-content: center; padding: 14vw 12vw; }
     body.watch.round #w-screens { padding: 18vw 15vw; }
     #w-screens h3 { font-size: 4vw; letter-spacing: 1vw; color: var(--dim); text-align: center; margin-bottom: 3vw; }
     #w-screens .li { font-size: 5vw; padding: 2vw 0; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #w-screens .li small { color: var(--dim); }
     #w-screens .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 3vw; }
-    #w-screens .acts button { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--line2); background: rgba(255,138,28,.12); color: var(--text); font-size: 4vw; font-family: inherit; }
+    #w-screens .acts button { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--line2); background: rgba(103,222,250,.12); color: var(--text); font-size: 4vw; font-family: inherit; }
     #w-screens .acts button span { display: block; font-size: 9vw; }
     #w-dots { position: fixed; bottom: 4vw; left: 50%; transform: translateX(-50%); display: flex; gap: 2vw; z-index: 16; }
     body.watch.round #w-dots { bottom: 7vw; }

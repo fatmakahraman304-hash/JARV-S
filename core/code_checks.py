@@ -32,7 +32,7 @@ WHY THIS EXISTS
                   changed plugin called the way the app calls it.
 
     PROFILES  Knowledge about one kind of project that cannot be read from
-              files alone. There is one, for AETHER itself, because people
+              files alone. There is one, for FRIDAY itself, because people
               improve the assistant with the assistant; adding another means
               adding a class to _PROFILES.
 """
@@ -638,7 +638,7 @@ class _AetherProfile:
             return ""
         lines = []
         for node in tree.body:
-            if not (isinstance(node, ast.ClassDef) and node.name == "AetherUI"):
+            if not (isinstance(node, ast.ClassDef) and node.name == "FridayUI"):
                 continue
             for f in node.body:
                 if not isinstance(f, ast.FunctionDef) or f.name.startswith("_"):

@@ -56,7 +56,7 @@ def _show(g: dict, player) -> None:
     except Exception as exc:
         if player:
             try:
-                player.write_log(f"AETHER: Galerideki resim açılamadı: {exc}")
+                player.write_log(f"FRIDAY: Galerideki resim açılamadı: {exc}")
             except Exception:
                 pass
 

@@ -1,4 +1,4 @@
-"""A tool that fails for a missing library: AETHER may offer to install it — only its own dependencies."""
+"""A tool that fails for a missing library: FRIDAY may offer to install it — only its own dependencies."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch

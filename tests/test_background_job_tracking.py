@@ -1,4 +1,4 @@
-"""AETHER arka plan kodlama görevleri: canlı durum, geçmiş, başlatma doğrulaması."""
+"""FRIDAY arka plan kodlama görevleri: canlı durum, geçmiş, başlatma doğrulaması."""
 import tempfile
 import threading
 import time
@@ -81,7 +81,7 @@ class BackgroundJobTrackingTests(unittest.TestCase):
 
     def test_panel_shows_actual_brain_not_just_initial_choice(self):
         self._new()
-        dev_agent._agent_progress(None, "  AETHER ajanı: NVIDIA (coding-model)")
+        dev_agent._agent_progress(None, "  FRIDAY ajanı: NVIDIA (coding-model)")
         attempted = dev_agent._job_snapshot()
         self.assertEqual(attempted["model_attempt"], "NVIDIA (coding-model)")
         self.assertIsNone(attempted.get("model_used"))

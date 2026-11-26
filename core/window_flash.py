@@ -1,9 +1,9 @@
-"""Diagnose windows that flash briefly while MAYK is running.
+"""Diagnose windows that flash briefly while FRIDAY is running.
 
 Windows only. This does not open an extra GUI or capture screen contents.
 Qt widgets are observed on the Qt thread; native console windows are observed
-via SetWinEventHook in a daemon thread. We record only MAYK windows, MAYK child
-process windows, or a brief Windows console seen while MAYK is on screen.
+via SetWinEventHook in a daemon thread. We record only FRIDAY windows, FRIDAY child
+process windows, or a brief Windows console seen while FRIDAY is on screen.
 
 No clipboard content, passwords, full process command lines or unrelated
 window titles are ever recorded. Diagnostics are local and size capped.
@@ -122,7 +122,7 @@ def start(app, window, notify=None):
                 if kind not in (QEvent.Type.Show, QEvent.Type.Hide):
                     return False
                 widget_type = type(obj).__name__
-                # Track top-level popups and MAYK overlays, never ordinary
+                # Track top-level popups and FRIDAY overlays, never ordinary
                 # labels or controls that repaint on each frame.
                 if not (obj.isWindow() or any(
                         word in widget_type.lower()
@@ -130,7 +130,7 @@ def start(app, window, notify=None):
                     return False
                 if not window.isVisible() or window.isMinimized():
                     return False
-                label = "MAYK paneli: " + widget_type
+                label = "FRIDAY paneli: " + widget_type
                 key = ("qt", id(obj))
                 if kind == QEvent.Type.Show:
                     recorder.show(key, label)
@@ -148,7 +148,7 @@ def start(app, window, notify=None):
         try:
             _start_native(recorder, int(window.winId()))
         except Exception as exc:
-            # Missing Windows APIs must never prevent MAYK from opening.
+            # Missing Windows APIs must never prevent FRIDAY from opening.
             from core import logbook
             logbook.write("PENCERE İZİ: Windows izleyici açılamadı: " +
                           type(exc).__name__)
@@ -227,7 +227,7 @@ def _start_native(recorder: FlashRecorder, main_hwnd: int) -> None:
                         name, from_mayk = f"PID {pid}", False
                     if not (is_console or from_mayk):
                         return
-                    source = ("MAYK alt işlemi" if from_mayk else
+                    source = ("FRIDAY alt işlemi" if from_mayk else
                               "Windows konsolu (kaynağı kesin değil)")
                     label = f"{source}: {name} [{class_name}]"
                     pending[key] = label

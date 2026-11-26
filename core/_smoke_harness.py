@@ -1,7 +1,7 @@
 """
 Loads a project's changed Python code in a throwaway process, under the
 project's own interpreter, and prints one JSON report. Works for any project;
-the AETHER profile adds running changed plugins the way the app runs them.
+the FRIDAY profile adds running changed plugins the way the app runs them.
 Started by core/code_checks.py — never imported by the app.
 
     python _smoke_harness.py <project folder> <json: {"imports": [...], "plugins": [...]}>
@@ -88,7 +88,7 @@ def _sample(schema: dict) -> dict:
 
 
 class Player:
-    """Stands in for AetherUI. Records every call; every method is safe to call
+    """Stands in for FridayUI. Records every call; every method is safe to call
     from any thread, as the real ones are."""
 
     def __init__(self):
@@ -114,7 +114,7 @@ class Player:
 
 
 def main() -> None:
-    # The AETHER profile recreates the app's arrangement: one QApplication on
+    # The FRIDAY profile recreates the app's arrangement: one QApplication on
     # this thread, model calls stubbed. Any other project gets neither — its
     # own `core` package, if it has one, is not ours to import.
     app = None

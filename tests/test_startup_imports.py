@@ -32,7 +32,7 @@ sys.modules['sounddevice'] = types.ModuleType('sounddevice')
 import main
 assert not any(n == 'google.genai' or n.startswith('google.genai.') for n in sys.modules)
 assert main._pcm_level(main.np.zeros(160, dtype=main.np.int16)) == 0.
-assert main.AetherLive._build_config.__annotations__['return'] == 'types.LiveConnectConfig'
+assert main.FridayLive._build_config.__annotations__['return'] == 'types.LiveConnectConfig'
 ''')
 
     def test_first_type_access_loads_real_sdk_and_preserves_response_shape(self):
@@ -65,7 +65,7 @@ class NoSDK(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, NoSDK())
 sys.modules['sounddevice'] = types.ModuleType('sounddevice')
 import main
-ui = main.AetherUI('')
+ui = main.FridayUI('')
 ui._app.processEvents()
 assert ui._win.isVisible()
 assert 'google.genai' not in sys.modules

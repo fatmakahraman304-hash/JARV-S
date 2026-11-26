@@ -242,7 +242,7 @@ class SettingsPage(QDialog):
                 app_state.setText(f'Kayıt okunamadı: {exc}')
         def learn_app():
             from plugins.application_learning import run
-            # Route output through the existing thread-safe AetherUI bridge.
+            # Route output through the existing thread-safe FridayUI bridge.
             player = getattr(owner, '_application_player', None)
             if player is None:
                 app_state.setText('FRIDAY başlatılınca tekrar dene.')

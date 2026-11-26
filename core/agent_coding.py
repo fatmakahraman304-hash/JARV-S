@@ -1,4 +1,4 @@
-"""AETHER kodlama ajanı: NVIDIA öncelikli yerleşik kod ajanı.
+"""FRIDAY kodlama ajanı: NVIDIA öncelikli yerleşik kod ajanı.
 
 Eski Claude Code ve Codex CLI kodlama ajanı olarak seçilemez veya çalıştırılamaz.
 Dosya yedeği, değişiklik denetimi ve geri alma işlemleri korunur.
@@ -56,7 +56,7 @@ def available(provider: str) -> bool:
 
 def _brief(instruction: str, guide: str, extra: str) -> str:
     return (
-        "You are the coding agent of AETHER, working directly in this project folder. Work like a "
+        "You are the coding agent of FRIDAY, working directly in this project folder. Work like a "
         "senior engineer who owns the result: the user asked by voice and will not review your diff, "
         "so what you hand back must simply work.\n\n"
         f"TASK (from the user, often in Turkish):\n{instruction}\n\n"

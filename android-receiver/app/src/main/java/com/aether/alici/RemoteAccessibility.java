@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
  * What only an accessibility service may do on Android: press the remote's
  * keys for the user, write into the box that has focus (Turkish letters too)
  * and take a picture of the screen. Turned on once by the user in Settings →
- * Accessibility → AETHER Alıcı.
+ * Accessibility → FRIDAY Alıcı.
  */
 public class RemoteAccessibility extends AccessibilityService {
     static volatile RemoteAccessibility instance;
-    private static final String TAG = "AETHER-Accessibility";
+    private static final String TAG = "FRIDAY-Accessibility";
     static final String STATE_KEY = "a11y_last_event";
     static final String TIME_KEY = "a11y_last_event_time";
 

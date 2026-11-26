@@ -13,7 +13,7 @@ from providers import llm_openai, registry
 
 class RemovedAbacus(unittest.TestCase):
     def sample(self):
-        return {"assistant_name":"FRIDAY", "voice_name":"Aoede", "user_name":"Murat",
+        return {"assistant_name":"FRIDAY", "voice_name":"Aoede", "user_name":"Deniz",
                 "gemini_api_key":"synthetic-gemini", "abacus_api_key":"synthetic-removed",
                 "plugin_config":{"abacus":{"api_key":"synthetic-removed"}, "other":{"keep":True}},
                 "providers":{"mode":"pipeline", "sidecar":"openai_compat@abacus", "coding":"openai_compat@abacus",
@@ -83,7 +83,7 @@ class RemovedAbacus(unittest.TestCase):
     def test_unrelated_settings_are_exactly_unchanged(self):
         for data in ({"providers":{"mode":"pipeline"},"other":[1,2]},
                      {"providers":{"creds":{"x":{"base_url":"http://localhost:8000/v1"}},"pipeline":{"llm":"x"}}},
-                     {"user_name":"Murat","notes":{"project":"Abacus study"}}):
+                     {"user_name":"Deniz","notes":{"project":"Abacus study"}}):
             self.assertEqual(cfg._purged_abacus_data(data), data)
 
     def test_purge_and_all_writers_scrub_primary_and_backup(self):

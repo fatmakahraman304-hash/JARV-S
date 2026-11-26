@@ -1,4 +1,4 @@
-"""Small, testable rules AETHER uses to notice that something stopped working and fix it itself."""
+"""Small, testable rules FRIDAY uses to notice that something stopped working and fix it itself."""
 from __future__ import annotations
 
 import time

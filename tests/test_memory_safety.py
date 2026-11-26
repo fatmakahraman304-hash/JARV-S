@@ -1,4 +1,4 @@
-"""AETHER never loses what it knows: a broken memory file comes back from the last good copy,
+"""FRIDAY never loses what it knows: a broken memory file comes back from the last good copy,
 and a full memory archives (not deletes) its oldest facts, which recall still finds."""
 import json
 import tempfile
@@ -145,14 +145,14 @@ class MemorySafety(unittest.TestCase):
             self.assertEqual(restored[field], value)
 
     def test_broken_file_comes_back_from_the_last_good_copy(self):
-        mm.update_memory({"identity": {"name": {"value": "Murat"}}})
+        mm.update_memory({"identity": {"name": {"value": "Deniz"}}})
         mm.update_memory({"preferences": {"drink": {"value": "çay"}}})       # second write: first is now the backup
         mm.MEMORY_PATH.write_text('{"identity": {"name": ', encoding="utf-8")  # power cut mid-write
         data = mm.load_memory()
-        self.assertEqual(data["identity"]["name"]["value"], "Murat")
+        self.assertEqual(data["identity"]["name"]["value"], "Deniz")
         self.assertTrue(list(Path(self.tmp.name).glob("long_term.corrupt-*.json")))   # the broken file was kept
-        mm.update_memory({"notes": {"x": {"value": "y"}}})                   # and the next save keeps Murat
-        self.assertEqual(json.loads(mm.MEMORY_PATH.read_text(encoding="utf-8"))["identity"]["name"]["value"], "Murat")
+        mm.update_memory({"notes": {"x": {"value": "y"}}})                   # and the next save keeps Deniz
+        self.assertEqual(json.loads(mm.MEMORY_PATH.read_text(encoding="utf-8"))["identity"]["name"]["value"], "Deniz")
 
     def test_damaged_current_backup_cannot_reimport_stale_legacy_facts(self):
         legacy = Path(self.tmp.name) / "legacy.json"
@@ -193,7 +193,7 @@ class MemorySafety(unittest.TestCase):
         self.assertFalse(any("synthetic-private-content" in message for message in messages))
 
     def test_a_broken_file_never_becomes_the_backup(self):
-        mm.update_memory({"identity": {"name": {"value": "Murat"}}})
+        mm.update_memory({"identity": {"name": {"value": "Deniz"}}})
         mm.update_memory({"identity": {"city": {"value": "Lefkoşa"}}})
         good_backup = mm.BACKUP_PATH.read_text(encoding="utf-8")
         mm.MEMORY_PATH.write_text("garbage", encoding="utf-8")
@@ -304,7 +304,7 @@ class MemorySafety(unittest.TestCase):
 
     def test_full_memory_archives_and_recall_still_finds_it(self):
         with patch.object(mm, "MEMORY_MAX_CHARS", 400):
-            mm.update_memory({"notes": {"old_car": {"value": "Murat'ın eski arabası mavi bir Fiat Doblo", "updated": "2020-01-01"}}})
+            mm.update_memory({"notes": {"old_car": {"value": "Deniz'ın eski arabası mavi bir Fiat Doblo", "updated": "2020-01-01"}}})
             for i in range(8):
                 mm.update_memory({"notes": {f"fact{i}": {"value": f"yeni bilgi numarası {i} " * 2, "updated": f"2026-01-0{i + 1}"}}})
         self.assertNotIn("old_car", mm.load_memory()["notes"])

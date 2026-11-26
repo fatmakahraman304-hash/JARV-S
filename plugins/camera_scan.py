@@ -5,7 +5,7 @@ PLUGIN = {
     "description": (
         "Use when the user explicitly says 'verileri aktar ve yansıt', "
         "'kamerayı tara', or asks to scan a physical object or QR code with "
-        "the desktop camera and show the result on AETHER. Captures one frame."
+        "the desktop camera and show the result on FRIDAY. Captures one frame."
     ),
     "parameters": {"type": "OBJECT", "properties": {}},
 }
@@ -14,7 +14,7 @@ PLUGIN = {
 def run(parameters, player=None, session_memory=None):
     request = getattr(player, "scan_camera", None)
     if not callable(request):
-        return "Kamera taraması için AETHER masaüstü arayüzü gerekli."
+        return "Kamera taraması için FRIDAY masaüstü arayüzü gerekli."
     from core import confirm
 
     def capture():

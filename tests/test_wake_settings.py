@@ -13,7 +13,7 @@ class WakeSettings(unittest.TestCase):
         live = Mock()
         live._ensure_wake_detector.return_value = False
         with patch.object(main, "wake_is_ready", return_value=True), patch.object(main, "save_wake_word_enabled") as save:
-            self.assertEqual(main.AetherLive._ui_wake_toggle(live, True), "failed")
+            self.assertEqual(main.FridayLive._ui_wake_toggle(live, True), "failed")
         self.assertFalse(live._wake_enabled)
         save.assert_called_once_with(False)
         live.sleep.assert_not_called()

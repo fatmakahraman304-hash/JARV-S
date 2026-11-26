@@ -1,4 +1,4 @@
-"""AETHER's own voice level, softer at night."""
+"""FRIDAY's own voice level, softer at night."""
 import unittest
 from datetime import datetime
 from unittest import mock

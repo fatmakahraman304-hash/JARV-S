@@ -84,7 +84,7 @@ def _restore(root, label):
 
 
 def _get(url):
-    req = Request(url, headers={'User-Agent': 'Aether-Updater', 'Accept': 'application/vnd.github+json'})
+    req = Request(url, headers={'User-Agent': 'Friday-Updater', 'Accept': 'application/vnd.github+json'})
     for attempt in range(3):
         try:
             with urlopen(req, timeout=45) as response:
@@ -186,7 +186,7 @@ def _archive(data):
             files[name] = archive.read(info)
     _validate_names(names)
     if not {'main.py', 'requirements.txt', 'gui/window.py'} <= files.keys():
-        raise RuntimeError('Eksik AETHER arşivi.')
+        raise RuntimeError('Eksik FRIDAY arşivi.')
     return files
 
 
@@ -298,8 +298,8 @@ def _recover_zip(root, lock, raw, progress):
         if _file_digest(state_path) != journal["old_manifest"]:
             raise _RecoveryRequired("Önceki sürüm kaydı geri yüklenemedi.")
     lock.unlink()
-    return (True, "Kurulan ZIP sürümü doğrulandı. AETHER yeniden başlatılacak." if committed
-            else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. AETHER yeniden başlatılacak.")
+    return (True, "Kurulan ZIP sürümü doğrulandı. FRIDAY yeniden başlatılacak." if committed
+            else "Kesilen ZIP güncellemesi geri alındı. Önceki sürüm doğrulandı. FRIDAY yeniden başlatılacak.")
 
 
 def rollback_zip(root=ROOT, progress=print):
@@ -323,7 +323,7 @@ def rollback_zip(root=ROOT, progress=print):
                 or journal["old_manifest"] != state.get("old_manifest")):
             raise _RecoveryRequired("Geri dönüş dosya listesi kurulu sürümle eşleşmiyor.")
         if "main.py" not in journal["before"]:
-            raise _RecoveryRequired("Yedekte önceki AETHER başlangıç dosyası yok.")
+            raise _RecoveryRequired("Yedekte önceki FRIDAY başlangıç dosyası yok.")
         for rel in journal["before"].keys() | journal["after"].keys():
             if _file_digest(_target(root, rel)) != journal["after"].get(rel):
                 raise _RecoveryRequired(f"Yerel değişiklik korunuyor: {rel}")
@@ -508,7 +508,7 @@ def _update_locked(root, progress):
         if not re.fullmatch('[0-9a-f]{40}', sha):
             raise RuntimeError('Geçersiz GitHub sürüm kimliği.')
         if current == sha:
-            return False, f'AETHER güncel · {sha[:8]}'
+            return False, f'FRIDAY güncel · {sha[:8]}'
 
         if is_git:
             if int(_git(root, 'rev-list', '--count', f'{sha}..{current}')):
@@ -521,7 +521,7 @@ def _update_locked(root, progress):
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')
         if _needs_dependency_install(old_req, new_req):
-            raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. AETHER’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
+            raise RuntimeError('Bu sürüm yeni bağımlılıklar gerektiriyor. FRIDAY’ı kapatıp yeni sürümün setup.py kurulumunu çalıştırın. Mevcut sürüm korunuyor.')
         if is_git:
             _replace_bytes(lock, b'AETHER/1 applying')
         progress('Yedek alınıyor…')
@@ -555,7 +555,7 @@ def _update_locked(root, progress):
                 note = _restore(root, label)
         else:
             _apply_zip(root, files, sha, branch, progress, marker=lock)
-        return True, f'Güncellendi · {sha[:8]}. AETHER otomatik yeniden başlatılıyor.{note}'
+        return True, f'Güncellendi · {sha[:8]}. FRIDAY otomatik yeniden başlatılıyor.{note}'
     except _RecoveryRequired:
         release_marker = False
         raise
@@ -565,7 +565,7 @@ def _update_locked(root, progress):
 
 
 def check(root=ROOT) -> dict:
-    """Read-only: is there a newer AETHER on GitHub, and what changed?
+    """Read-only: is there a newer FRIDAY on GitHub, and what changed?
     {"newer": bool, "sha": str, "current": str, "changes": [first lines of the new commits]}"""
     root = Path(root)
     if (root / '.git').exists():
@@ -593,7 +593,7 @@ if __name__ == "__main__":
     if sys.stdout is not None and not sys.stdout.isatty():
         sys.stdout.reconfigure(encoding="utf-8")
     import argparse
-    parser = argparse.ArgumentParser(description="Kesilen AETHER ZIP güncellemesini çevrimdışı kurtar.")
+    parser = argparse.ArgumentParser(description="Kesilen FRIDAY ZIP güncellemesini çevrimdışı kurtar.")
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--recover", action="store_true")
     action.add_argument("--rollback", action="store_true")
@@ -608,7 +608,7 @@ if __name__ == "__main__":
             raw = marker.read_bytes() if marker.exists() else b""
             if raw.startswith((_ZIP_MARKER, _ROLLBACK_MARKER)):
                 _recover_zip(ROOT, marker, raw, print)
-                print("Kurtarma doğrulandı. AETHER'ı açabilirsiniz.")
+                print("Kurtarma doğrulandı. FRIDAY'ı açabilirsiniz.")
             elif marker.exists():
                 sys.exit("Bu kilit otomatik ZIP kurtarmasına uygun değil. Güncelleme kılavuzuna bakın.")
             else:

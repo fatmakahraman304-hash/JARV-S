@@ -13,6 +13,8 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -30,7 +32,7 @@ import org.json.JSONObject;
 
 /**
  * One screen, easy with a TV remote: status, the setup (one tap from the
- * AETHER page on this device, or a pasted setup link), and a button to the
+ * FRIDAY page on this device, or a pasted setup link), and a button to the
  * accessibility settings.
  */
 public class MainActivity extends Activity {
@@ -49,27 +51,41 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(60, 50, 60, 50);
-        root.setBackgroundColor(Color.rgb(12, 8, 5));
+        root.setPadding(dp(24), dp(28), dp(24), dp(28));
+        root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(8, 18, 34), Color.rgb(6, 11, 22)}));
 
         TextView title = new TextView(this);
-        try { title.setText("AETHER ALICI · v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
-        catch (Exception ignored) { title.setText("AETHER ALICI"); }
-        title.setTextColor(Color.rgb(255, 160, 60));
-        title.setTextSize(30);
+        try { title.setText("FRIDAY ALICI · v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+        catch (Exception ignored) { title.setText("FRIDAY ALICI"); }
+        title.setTextColor(Color.rgb(103, 222, 250));
+        title.setLetterSpacing(.12f);
+        title.setPadding(0, 0, 0, dp(12));
+        title.setTextSize(getResources().getConfiguration().smallestScreenWidthDp >= 600 ? 36 : 28);
         root.addView(title);
 
         status = new TextView(this);
         status.setTextColor(Color.WHITE);
-        status.setTextSize(18);
-        status.setPadding(0, 20, 0, 20);
+        status.setTextSize(16);
+        status.setPadding(dp(18), dp(16), dp(18), dp(16));
+        GradientDrawable statusCard = new GradientDrawable();
+        statusCard.setColor(Color.rgb(13, 28, 49));
+        statusCard.setCornerRadius(dp(18));
+        statusCard.setStroke(dp(1), Color.rgb(37, 61, 87));
+        status.setBackground(statusCard);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("CİHAZ BAĞLANTISI  /  GÜVENLİ KUMANDA");
+        subtitle.setTextColor(Color.rgb(147, 170, 197));
+        subtitle.setTextSize(12);
+        subtitle.setPadding(0, 0, 0, dp(20));
+        root.addView(subtitle);
         root.addView(status);
 
         Button a11y = button("1) Erişilebilirlik iznini aç (kumanda tuşları, yazı, ekran görüntüsü)");
         a11y.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         root.addView(a11y);
 
-        Button appSettings = button("İzin tekrar kapanıyorsa: AETHER uygulama kısıtlamaları");
+        Button appSettings = button("İzin tekrar kapanıyorsa: FRIDAY uygulama kısıtlamaları");
         appSettings.setOnClickListener(v -> startActivity(
                 new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.parse("package:" + getPackageName()))));
@@ -106,7 +122,7 @@ public class MainActivity extends Activity {
                 TextView hint = new TextView(this);
                 hint.setTextColor(Color.WHITE);
                 hint.setTextSize(15);
-                hint.setText("iPhone kamerasıyla QR kodu okut. Açılan sayfaya AETHER kurulum bağlantısını yapıştır.");
+                hint.setText("iPhone kamerasıyla QR kodu okut. Açılan sayfaya FRIDAY kurulum bağlantısını yapıştır.");
                 panel.addView(hint);
                 new AlertDialog.Builder(this)
                         .setTitle("iPhone ile bağla")
@@ -122,13 +138,13 @@ public class MainActivity extends Activity {
         lan.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("iPhone için yerel kumanda").setMessage(ReceiverService.lanAddress + "\n\nBu adresi iPhone Safari'de aç. Aynı Wi-Fi ağına bağlı olmalısın.").setPositiveButton("Tamam", null).show());
         root.addView(lan);
 
-        Button web = button("Projeksiyonda AETHER'ı aç");
+        Button web = button("Projeksiyonda FRIDAY'ı aç");
         web.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ReceiverService.WEB))));
         root.addView(web);
 
-        Button update = button("↻ AETHER Alıcı'yı güncelle");
+        Button update = button("↻ FRIDAY Alıcı'yı güncelle");
         update.setOnClickListener(v -> downloadUpdate());
-        root.addView(update, 0);
+        root.addView(update);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -155,10 +171,10 @@ public class MainActivity extends Activity {
         try {
             DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(APK_URL))
-                    .setTitle("AETHER Alıcı güncellemesi")
+                    .setTitle("FRIDAY Alıcı güncellemesi")
                     .setDescription("Yeni sürüm indiriliyor")
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "aether-alici-update.apk");
+                    .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "friday-receiver-update.apk");
             updateDownloadId = manager.enqueue(request);
             updateInstallLaunched = false;
             new AlertDialog.Builder(this).setMessage("Güncelleme indiriliyor. İndirme bitince Android kurulum onayı açılacak.")
@@ -211,9 +227,33 @@ public class MainActivity extends Activity {
         Button bt = new Button(this);
         bt.setText(text);
         bt.setAllCaps(false);
-        bt.setTextSize(17);
+        bt.setTextSize(getResources().getConfiguration().smallestScreenWidthDp >= 600 ? 20 : 16);
+        bt.setTextColor(Color.rgb(232, 242, 255));
         bt.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        bt.setMinHeight(dp(56));
+        bt.setPadding(dp(18), dp(12), dp(18), dp(12));
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_focused}, buttonSurface(true));
+        states.addState(new int[]{android.R.attr.state_pressed}, buttonSurface(true));
+        states.addState(new int[]{}, buttonSurface(false));
+        bt.setBackground(states);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(12);
+        bt.setLayoutParams(params);
         return bt;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private GradientDrawable buttonSurface(boolean focused) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setCornerRadius(dp(14));
+        shape.setColor(focused ? Color.rgb(22, 63, 85) : Color.rgb(15, 31, 52));
+        shape.setStroke(dp(focused ? 2 : 1), focused ? Color.rgb(103, 222, 250) : Color.rgb(37, 61, 87));
+        return shape;
     }
 
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); handle(i); }
@@ -235,7 +275,7 @@ public class MainActivity extends Activity {
 
     private void setup(String text) {
         JSONObject j = Gist.parseSetup(text);
-        if (j == null) { status.setText("Bu bir AETHER kurulum bağlantısı değil."); return; }
+        if (j == null) { status.setText("Bu bir FRIDAY kurulum bağlantısı değil."); return; }
         SharedPreferences.Editor e = ReceiverService.prefs(this).edit();
         e.putString("tok", j.optString("t")).putString("gist", j.optString("i"));
         if (!j.optString("d").isEmpty()) e.putString("name", j.optString("d"));
@@ -283,7 +323,7 @@ public class MainActivity extends Activity {
         boolean a11yRunning = RemoteAccessibility.instance != null;
         String a11yStatus = a11yRunning ? "hizmet çalışıyor ✓"
                 : a11yPermission ? "izin AÇIK, ancak Android hizmeti durdurmuş"
-                : "Android izni KAPALI — Ayarlar → Erişilebilirlik → AETHER Alıcı";
+                : "Android izni KAPALI — Ayarlar → Erişilebilirlik → FRIDAY Alıcı";
         String lastEvent = p.getString(RemoteAccessibility.STATE_KEY, "Henüz bağlantı kaydı yok");
         long lastTime = p.getLong(RemoteAccessibility.TIME_KEY, 0);
         String when = lastTime > 0 ? new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
@@ -296,9 +336,9 @@ public class MainActivity extends Activity {
                 + "Erişilebilirlik: " + a11yStatus + "\n"
                 + "Son hizmet olayı: " + lastEvent + (when.isEmpty() ? "" : " (" + when + ")") + a11yHelp + "\n"
                 + "Dinleme: " + ReceiverService.status + "\n"
-                + "AETHER HTTPS köprüsü: " + RelayRemote.status + "\n"
+                + "FRIDAY HTTPS köprüsü: " + RelayRemote.status + "\n"
                 + "Wi-Fi kumanda: " + ReceiverService.lanAddress + "\n\n"
-                + "Hazır olunca telefondaki AETHER'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
+                + "Hazır olunca telefondaki FRIDAY'a: \"projeksiyonda YouTube aç\", \"sesi kıs\", \"projeksiyonda ne var?\"");
         ui.removeCallbacks(refreshTask);
         ui.postDelayed(refreshTask, 3000);
     }

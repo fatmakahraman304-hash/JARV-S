@@ -1,4 +1,4 @@
-name: AETHER Alıcı (Android APK)
+name: FRIDAY Alıcı (Android APK)
 
 on:
   push:
@@ -7,6 +7,11 @@ on:
   pull_request:
     paths: ["android-receiver/**", ".github/workflows/android-receiver.yml"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish with the existing legacy certificate (rotation remains open)
+        type: boolean
+        default: false
 
 # Only the newest APK build may publish the stable download asset.
 concurrency:
@@ -14,13 +19,15 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -34,17 +41,30 @@ jobs:
       - name: Name it
         run: |
           mkdir -p out
-          cp android-receiver/app/build/outputs/apk/release/app-release.apk out/aether-alici.apk
+          cp android-receiver/app/build/outputs/apk/release/app-release.apk out/friday-receiver.apk
           ls -la out
       - uses: actions/upload-artifact@v4
         with:
-          name: aether-alici
-          path: out/aether-alici.apk
-      - name: Publish (download link that stays the same)
-        if: github.event_name != 'pull_request'
+          name: friday-receiver-candidate
+          path: out/friday-receiver.apk
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: friday-receiver-candidate
+          path: out
+      - name: Publish explicitly requested legacy-compatible APK
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: fatmakahraman304-hash/JARV-S
         run: |
-          gh release view alici >/dev/null 2>&1 || gh release create alici --title "AETHER Alıcı" \
-            --notes "Projeksiyon/Android TV için AETHER Alıcı. Projeksiyonun tarayıcısında bu sayfadaki aether-alici.apk'yı indirip kur." --latest=false
-          gh release upload alici out/aether-alici.apk --clobber
+          gh release view alici >/dev/null 2>&1 || gh release create alici --title "FRIDAY Alıcı" --notes "FRIDAY Android/TV alıcısı." --latest=false
+          gh release edit alici --title "FRIDAY Alıcı"
+          # Already-installed receivers keep their stable update URL.
+          cp out/friday-receiver.apk out/aether-alici.apk
+          gh release upload alici out/aether-alici.apk out/friday-receiver.apk --clobber

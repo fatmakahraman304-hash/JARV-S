@@ -1,4 +1,4 @@
-"""AETHER learns from its own mistakes with any tool.
+"""FRIDAY learns from its own mistakes with any tool.
 
 A tool call fails; a few minutes later the same tool succeeds with different
 arguments (the app's real name, the right folder, another platform). That pair
@@ -20,9 +20,12 @@ _lock = threading.Lock()
 _last_fail: dict[str, dict] = {}
 
 
+from core.identity import data_home
+
+
 def _path() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "AetherMurat" / "tool_lessons.json"
+    return data_home() / "tool_lessons.json"
 
 
 PATH = _path()

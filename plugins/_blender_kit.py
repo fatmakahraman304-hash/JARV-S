@@ -1,4 +1,4 @@
-"""AETHER's Blender toolkit — loaded inside Blender before every script AETHER
+"""FRIDAY's Blender toolkit — loaded inside Blender before every script FRIDAY
 writes, so a script can say `wood("Ceviz")` or `place_on(leg, floor)` instead of
 fighting node trees and bounding boxes. Everything here uses real metres.
 

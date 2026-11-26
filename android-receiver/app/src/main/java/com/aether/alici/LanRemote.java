@@ -72,7 +72,7 @@ final class LanRemote {
                     Socket socket = server.accept();
                     new Thread(() -> handle(socket), "lan-client").start();
                 } catch (Exception e) {
-                    if (running) android.util.Log.w("AETHER-LAN", "accept", e);
+                    if (running) android.util.Log.w("FRIDAY-LAN", "accept", e);
                 }
             }
         }, "aether-lan").start();
@@ -152,16 +152,16 @@ final class LanRemote {
                 return;
             }
             respond(s, 200, "<meta charset='utf-8'><meta name='viewport' content='width=device-width'><body style='background:#111;color:white;font:20px sans-serif;padding:20px'><p>" + escape(reply) + "</p><a style='color:orange' href='/" + secret + "'>Kumandaya dön</a></body>");
-        } catch (Exception e) { android.util.Log.w("AETHER-LAN", "request", e); }
+        } catch (Exception e) { android.util.Log.w("FRIDAY-LAN", "request", e); }
     }
 
     private String page() throws Exception {
-        StringBuilder h = new StringBuilder("<!doctype html><html lang='tr'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>AETHER Yerel Kumanda</title><style>body{background:#100d0a;color:#fff;font:18px sans-serif;padding:15px}button{background:#29221b;color:#fff;border:1px solid #ae783f;border-radius:12px;padding:16px;margin:5px;font-size:19px}input{padding:14px;font-size:18px;max-width:85%}h2{color:#ffa64b}</style><h2>AETHER · Wi-Fi Kumanda</h2><p>GitHub olmadan doğrudan projeksiyonu kontrol et. Sürüm 1.9</p><p id='result' role='status' aria-live='polite' style='color:#ffb86b;font-weight:bold'></p>");
-        // One-tap private handoff into the HTTPS AETHER frontend.
+        StringBuilder h = new StringBuilder("<!doctype html><html lang='tr'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>FRIDAY Yerel Kumanda</title><style>body{background:#100d0a;color:#fff;font:18px sans-serif;padding:15px}button{background:#29221b;color:#fff;border:1px solid #ae783f;border-radius:12px;padding:16px;margin:5px;font-size:19px}input{padding:14px;font-size:18px;max-width:85%}h2{color:#ffa64b}</style><h2>FRIDAY · Wi-Fi Kumanda</h2><p>GitHub olmadan doğrudan projeksiyonu kontrol et. Sürüm 1.9</p><p id='result' role='status' aria-live='polite' style='color:#ffb86b;font-weight:bold'></p>");
+        // One-tap private handoff into the HTTPS FRIDAY frontend.
         // The URL is a fragment, so it is not sent to GitHub Pages servers.
         String handoff = ReceiverService.WEB + "#lan=" + URLEncoder.encode(address, "UTF-8");
         h.append("<p><a style='display:inline-block;padding:14px;border-radius:10px;background:#a55e18;color:white;font-weight:bold;text-decoration:none' href='")
-                .append(handoff).append("'>🔗 Bu kumandayı AETHER'a bağla</a></p>");
+                .append(handoff).append("'>🔗 Bu kumandayı FRIDAY'a bağla</a></p>");
         String[][] keys = {{"Ses +","volume_up"},{"Ses −","volume_down"},{"Sessiz","mute"},{"Ana ekran","home"},{"Geri","back"},{"Yukarı","up"},{"Aşağı","down"},{"Sol","left"},{"Sağ","right"},{"OK","enter"},{"Oynat / durdur","play_pause"}};
         for (String[] k : keys) h.append(form("key", k[1], k[0]));
         h.append("<h3>Uygulamalar</h3>").append(form("app","youtube","YouTube")).append(form("app","netflix","Netflix")).append(form("app","settings","Ayarlar"));

@@ -53,7 +53,7 @@ class UpdatedHudTests(unittest.TestCase):
             (root / "update_channel.json").write_text('{"branch":"main"}')
             cfg = root / "config/api_keys.json"
             cfg.parent.mkdir()
-            cfg.write_text('{"assistant_name":"AETHER test"}')
+            cfg.write_text('{"assistant_name":"FRIDAY test"}')
             def update(version):
                 sha = str(version) * 40
                 with patch.object(app_updater, "_get", side_effect=[
@@ -63,7 +63,7 @@ class UpdatedHudTests(unittest.TestCase):
             def launch(version):
                 script = (
                     "from acceptance_version import version\n"
-                    "from ui import AetherUI\n"
+                    "from ui import FridayUI\n"
                     "import os\n"
                     "from pathlib import Path\n"
                     "receipt = Path('hud-ready')\n"
@@ -71,7 +71,7 @@ class UpdatedHudTests(unittest.TestCase):
                     "from PyQt6.QtCore import QTimer\n"
                     "from PyQt6.QtWidgets import QTextEdit\n"
                     "from core import confirm\n"
-                    "ui = AetherUI('')\n"
+                    "ui = FridayUI('')\n"
                     "assert ui._win._assistant_name == 'FRIDAY'\n"
                     "confirm.bind(ui.show_confirm, ui.hide_confirm)\n"
                     "detail = '<b>literal</b>' * 60\n"
@@ -136,4 +136,4 @@ class UpdatedHudTests(unittest.TestCase):
             app_updater.rollback_zip(root)
             launch(1)
             self.assertEqual(json.loads((root / ".aether-update.json").read_text())["sha"], "1" * 40)
-            self.assertEqual(json.loads(cfg.read_text())["assistant_name"], "AETHER test")
+            self.assertEqual(json.loads(cfg.read_text())["assistant_name"], "FRIDAY test")

@@ -66,26 +66,26 @@ if __name__ == "__main__":
 
 class PresenceTest(unittest.TestCase):
     def person(self, state):
-        return {"entity_id": "person.murat", "state": state, "attributes": {"friendly_name": "Murat"}}
+        return {"entity_id": "person.murat", "state": state, "attributes": {"friendly_name": "Deniz"}}
 
     def test_arrive_and_leave(self):
         w = hw.HomeWatch()
         cfg = {"doors": True, "alarms": True, "presence": True}
         w.tick([self.person("not_home")], cfg)
         notes = w.tick([self.person("home")], cfg)
-        self.assertEqual(notes, [("arrive", "Murat arrived home.")])
+        self.assertEqual(notes, [("arrive", "Deniz arrived home.")])
         self.assertTrue(hw.instruction(notes).startswith("[WELCOME_HOME]"))
-        self.assertEqual(w.tick([self.person("Work")], cfg), [("leave", "Murat left home.")])
+        self.assertEqual(w.tick([self.person("Work")], cfg), [("leave", "Deniz left home.")])
         self.assertEqual(w.tick([self.person("not_home")], cfg), [])       # work → elsewhere: not leaving home
 
     def test_lights_left_on(self):
         states = [{"entity_id": "light.salon", "state": "on", "attributes": {"friendly_name": "Salon"}},
                   {"entity_id": "light.mutfak", "state": "off", "attributes": {"friendly_name": "Mutfak"}}]
         self.assertEqual(hw.lights_left_on(states), ["Salon"])
-        title, body = hw.leaving_note(["Murat"], ["Salon"])
+        title, body = hw.leaving_note(["Deniz"], ["Salon"])
         self.assertIn("evden çıktınız", title)
         self.assertIn("Salon", body)
-        self.assertIsNone(hw.leaving_note(["Murat"], []))
+        self.assertIsNone(hw.leaving_note(["Deniz"], []))
 
 
 class RainTest(unittest.TestCase):
@@ -97,6 +97,6 @@ class RainTest(unittest.TestCase):
         self.assertIsNone(open_data.rain_in(js, 2, 50, now_iso="2026-11-20T08:00"))
 
     def test_leaving_note_with_rain_only(self):
-        title, body = hw.leaving_note(["Murat"], [], {"prob": 70, "at": "10:00"})
+        title, body = hw.leaving_note(["Deniz"], [], {"prob": 70, "at": "10:00"})
         self.assertIn("şemsiye", body)
         self.assertNotIn("ışıklar", body)

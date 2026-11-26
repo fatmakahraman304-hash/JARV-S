@@ -155,10 +155,10 @@ class MainWindow(QMainWindow):
         _ui_color = (_cfg.get("ui_color") or "").strip()
         # "#28e0ff" was the old cyan default; a saved copy of it is not a
         # choice the user made, so it no longer overrides the FRIDAY cyan theme.
-        if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#28e0ff", "#ff8a1c"):
+        if _ui_color and _ui_color.lower() not in (DEFAULT_UI_COLOR, "#26d9ff", "#28e0ff", "#ff8a1c"):
             apply_ui_accent(_ui_color)
 
-        self.setWindowTitle(f"{self._wordmark(_display)} — {APP_VERSION}")
+        self.setWindowTitle(self._wordmark(_display))
         self.setMinimumSize(_MIN_W, _MIN_H)
         # Fit 1080p work areas and scaled Windows desktops.
         screen = self.screen().availableGeometry()
@@ -173,11 +173,11 @@ class MainWindow(QMainWindow):
         self.on_voice_change   = None   # callable: () -> None — rebuild session with new voice
         self.on_audio_device_change = None  # callable: () -> None — reopen audio streams
         self._confirm_overlay  = None   # live ConfirmBanner, if one is on screen
-        self.get_plugins       = None   # callable: () -> list[dict], set by AetherLive
-        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by AetherLive
+        self.get_plugins       = None   # callable: () -> list[dict], set by FridayLive
+        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by FridayLive
         self._wake_busy = False
         self._wake_feedback = ""
-        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by AetherLive
+        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by FridayLive
         self.on_wake_manual    = None   # callable: () -> None — manual sleep/wake
         self.on_push_to_talk   = None   # callable: (enable: bool) -> str scope
         self.ptt_hold          = None   # callable: (held: bool) -> None — windowed chord
@@ -1068,7 +1068,7 @@ class MainWindow(QMainWindow):
     # Icon generation — arc-reactor style, rendered with Pillow
     # ------------------------------------------------------------------
     @staticmethod
-    def _build_aether_icon(out_path: Path) -> bool:
+    def _build_friday_icon(out_path: Path) -> bool:
         """
         Render a FRIDAY arc-reactor icon at 4× resolution and downsample
         for crisp results at all sizes. Saves a multi-res .ico to out_path.
@@ -1312,7 +1312,7 @@ class MainWindow(QMainWindow):
         # Arc-reactor icon (.ico — also exported as .png for Linux/macOS)
         ico_path = Path(__file__).resolve().parent.parent / "config" / "aether.ico"
         if not ico_path.exists():
-            self._build_aether_icon(ico_path)
+            self._build_friday_icon(ico_path)
 
         try:
             _os = platform.system()
@@ -1520,7 +1520,7 @@ class MainWindow(QMainWindow):
         self._title_lbl.setFont(px_font(20, QFont.Weight.Light, spacing=7))
         self._title_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         name_col.addWidget(self._title_lbl)
-        sub = QLabel(f"{self._subtitle(display).upper()}  ·  {APP_VERSION}")
+        sub = QLabel(self._subtitle(display).upper())
         sub.setFont(px_font(9, QFont.Weight.DemiBold, spacing=2.2))
         sub.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
         name_col.addWidget(sub)
@@ -1659,7 +1659,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _wordmark(display: str) -> str:
-        return "FRIDAY" if display == "FRIDAY" else display
+        return "FRIDAY"
 
     @staticmethod
     def _subtitle(display: str) -> str:
@@ -3209,7 +3209,7 @@ class MainWindow(QMainWindow):
                         "awake": bool(s.get("awake"))}
             except Exception:
                 pass
-        # Before AetherLive has wired its callback (drawer built at startup).
+        # Before FridayLive has wired its callback (drawer built at startup).
         ready, enabled = False, False
         try:
             from core.wake_word import is_ready
@@ -3437,7 +3437,7 @@ class MainWindow(QMainWindow):
         from memory.config_manager import normalized_assistant_name
         self._assistant_name = normalized_assistant_name(name)
         display = self._assistant_name.upper()
-        self.setWindowTitle(f"{self._wordmark(display)} — {APP_VERSION}")
+        self.setWindowTitle(self._wordmark(display))
         self._title_lbl.setText(self._wordmark(display))
         self._title_lbl.setToolTip(self._subtitle(display))
         self._log._ai_name_lc = self._assistant_name.lower()

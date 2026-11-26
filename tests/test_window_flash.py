@@ -34,28 +34,28 @@ class FlashRecorderTest(unittest.TestCase):
         self.assertEqual(self.rec.hide(("win", 123)), None)
 
     def test_normal_long_lived_windows_are_not_noise(self):
-        self.rec.show("dialog", "MAYK paneli: SetupOverlay")
+        self.rec.show("dialog", "FRIDAY paneli: SetupOverlay")
         self.time_now[0] += 5
         self.assertIsNone(self.rec.hide("dialog"))
         self.assertEqual(self.events, [])
         self.assertFalse(self.log.exists())
 
     def test_same_popup_is_rate_limited(self):
-        self.rec.show(1, "MAYK paneli: QDialog")
+        self.rec.show(1, "FRIDAY paneli: QDialog")
         self.time_now[0] += .2
         self.assertIsNotNone(self.rec.hide(1))
-        self.rec.show(2, "MAYK paneli: QDialog")
+        self.rec.show(2, "FRIDAY paneli: QDialog")
         self.time_now[0] += .2
         self.assertIsNone(self.rec.hide(2))
         self.time_now[0] += 13
-        self.rec.show(3, "MAYK paneli: QDialog")
+        self.rec.show(3, "FRIDAY paneli: QDialog")
         self.time_now[0] += .3
         self.assertIsNotNone(self.rec.hide(3))
         self.assertEqual(len(self.events), 2)
 
     def test_log_size_capped_and_recent_returns_last_events(self):
         self.log.write_text("old log\n" * 16000, encoding="utf-8")
-        self.rec.show(1, "MAYK paneli: SettingsOverlay")
+        self.rec.show(1, "FRIDAY paneli: SettingsOverlay")
         self.time_now[0] += .2
         self.rec.hide(1)
         self.assertLess(self.log.stat().st_size, window_flash._MAX_BYTES)
@@ -72,7 +72,7 @@ class FlashRecorderTest(unittest.TestCase):
         with mock.patch.object(window_flash, "trace_path", return_value=self.log):
             result = plugin.run({"limit": 1})
         self.assertIn("conhost.exe", result)
-        self.assertIn("MAYK tarafından", result)
+        self.assertIn("FRIDAY tarafından", result)
 
     def test_non_windows_platform_never_imports_gui_or_starts_hook(self):
         if sys.platform != "win32":

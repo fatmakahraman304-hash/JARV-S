@@ -170,7 +170,7 @@ class FakeTTS:
 
 class Cfg:
     """Stands in for the LiveConnectConfig main.py builds."""
-    system_instruction = "You are AETHER."
+    system_instruction = "You are FRIDAY."
     tools = [{"function_declarations": [
         {"name": "open_app", "description": "Opens an application.",
          "parameters": {"type": "OBJECT",

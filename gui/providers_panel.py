@@ -765,7 +765,7 @@ class ProvidersOverlay(_HudOverlay):
                 "hızlı istek Qwen 35B A3B, araştırma Qwen 27B, kodlama MiniMax M3. "
                 "Otomatik seçim açıkken MODEL kutusundaki manuel seçim yerine "
                 "göreve uygun model kullanılır. Manuel model için otomatiği kapatın. "
-                "Ücretli modellere izin kapalıdır; fiyatları Aether panelinden kontrol edin.",
+                "Ücretli modellere izin kapalıdır; fiyatları Friday panelinden kontrol edin.",
                 7, C.TEXT_DIM))
 
         for _key, (w, f) in shown.items():

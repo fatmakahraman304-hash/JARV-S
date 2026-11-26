@@ -1,4 +1,4 @@
-"""AETHER's logbook: everything printed, every traceback and every crash, kept on disk.
+"""FRIDAY's logbook: everything printed, every traceback and every crash, kept on disk.
 
 Before this the console was the only record — closed with the window, so "why did
 it stop yesterday?" had no answer. `install()` (called first thing at startup)
@@ -23,9 +23,12 @@ _file = None
 _path: Path | None = None
 
 
+from core.identity import data_home
+
+
 def log_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME")
-    return (Path(base) if base else Path.home() / ".local" / "share") / "AetherMurat" / "logs"
+    return data_home() / "logs"
 
 
 def path() -> Path:
@@ -105,7 +108,7 @@ def install(directory: Path | None = None) -> Path:
     _path = d / "aether.log"
     _file = open(_path, "a", encoding="utf-8", errors="replace")
     _installed = True
-    write(f"──────── AETHER başladı (Python {sys.version.split()[0]}, {sys.platform}) ────────")
+    write(f"──────── FRIDAY başladı (Python {sys.version.split()[0]}, {sys.platform}) ────────")
     sys.stdout = _Tee(sys.stdout)
     sys.stderr = _Tee(sys.stderr)
     old_hook = sys.excepthook

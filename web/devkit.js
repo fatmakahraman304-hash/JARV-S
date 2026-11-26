@@ -1,7 +1,7 @@
-/* AETHER device kit — small pure helpers the device modules (dev-*.js) share.
+/* FRIDAY device kit — small pure helpers the device modules (dev-*.js) share.
  *
  * Nothing here touches the page, so tests/test_web_devices.py runs every
- * function under Node. In the browser it is window.AetherKit.
+ * function under Node. In the browser it is window.FridayKit.
  */
 (function (root) {
   'use strict';
@@ -126,5 +126,5 @@
     return `${min < 60 ? min + ' dk' : K.fmtMinutes(min)} sonra: ${r.text}`;
   };
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = K; else root.AetherKit = K;
+  if (typeof module !== 'undefined' && module.exports) module.exports = K; else root.FridayKit = K;
 })(typeof self !== 'undefined' ? self : this);

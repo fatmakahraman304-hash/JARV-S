@@ -42,7 +42,7 @@ from PyQt6.QtGui import (
 # Video playback for the HUD. Part of PyQt6, so it costs no new dependency —
 # but the multimedia plugins are a separate piece of the Qt install and can be
 # absent on a stripped-down system, so a failure here disables one feature
-# rather than stopping AETHER from starting.
+# rather than stopping FRIDAY from starting.
 try:
     from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
     from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
@@ -86,7 +86,7 @@ def _read_full_config() -> dict:
 
 # Single source of truth for the release name — the window title, the header
 # badge and the readme must never disagree again.
-APP_VERSION  = "MURAT"
+APP_VERSION  = "FRIDAY"
 APP_PROTOCOL = APP_VERSION
 
 _DEFAULT_W, _DEFAULT_H = 1760, 960
@@ -98,29 +98,29 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    # AETHER reactor palette: deep-space navy, high-energy cyan.
+    # FRIDAY reactor palette: deep-space navy, high-energy cyan.
     # these exact hex strings so the live accent picker can still re-tint them.
-    BG        = "#030915"
-    PANEL     = "#071322"
-    PANEL2    = "#0a2033"
-    BORDER    = "#17435c"
-    BORDER_B  = "#136c96"
-    BORDER_A  = "#0d3c59"
-    PRI       = "#26d9ff"
-    PRI_DIM   = "#50b5d8"
-    PRI_GHO   = "#061c30"
-    ACC       = "#a3efff"
-    ACC2      = "#effcff"
+    BG        = "#060b16"
+    PANEL     = "#0b1628"
+    PANEL2    = "#10213a"
+    BORDER    = "#253d57"
+    BORDER_B  = "#376481"
+    BORDER_A  = "#1b3951"
+    PRI       = "#67defa"
+    PRI_DIM   = "#54a9c6"
+    PRI_GHO   = "#0c2035"
+    ACC       = "#b5a7ff"
+    ACC2      = "#e7f5ff"
     GREEN     = "#5ef0a8"
     GREEN_D   = "#3d8c68"
     RED       = "#ff5f5f"
     MUTED_C   = "#ff6f86"
-    TEXT      = "#f3ece5"
-    TEXT_DIM  = "#9b9087"
-    TEXT_MED  = "#d2c7bd"
+    TEXT      = "#e8f2ff"
+    TEXT_DIM  = "#93aac5"
+    TEXT_MED  = "#bccfe5"
     WHITE     = "#e9f9ff"
-    DARK      = "#030d19"
-    BAR_BG    = "#06192b"
+    DARK      = "#080f1e"
+    BAR_BG    = "#0c1b30"
 
 
 # Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed

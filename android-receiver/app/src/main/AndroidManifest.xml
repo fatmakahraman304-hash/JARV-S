@@ -15,18 +15,18 @@
 
     <application
         android:label="@string/app_name"
-        android:icon="@android:drawable/ic_menu_view"
-        android:banner="@android:drawable/ic_menu_view"
+        android:icon="@drawable/friday_logo"
+        android:banner="@drawable/friday_banner"
         android:usesCleartextTraffic="false">
 
         <activity android:name=".MainActivity" android:exported="true"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            android:theme="@style/Theme.Friday">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-            <!-- the AETHER page on this device hands over the setup with one tap -->
+            <!-- the FRIDAY page on this device hands over the setup with one tap -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

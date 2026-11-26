@@ -21,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Encrypted HTTPS bridge for the HTTPS AETHER web UI.
+ * Encrypted HTTPS bridge for the HTTPS FRIDAY web UI.
  *
  * ntfy.sh only relays opaque AES-256-GCM messages under unguessable topics.
  * The receiver's existing private LAN capability token is never uploaded.
@@ -138,13 +138,13 @@ final class RelayRemote {
                         String eventId = event.optString("id", "");
                         if (!eventId.isEmpty()) lastEventId = eventId;
                         try { process(event.optString("message", "")); }
-                        catch (Exception bad) { Log.w("AETHER-Relay", "Rejected invalid relay event", bad); }
+                        catch (Exception bad) { Log.w("FRIDAY-Relay", "Rejected invalid relay event", bad); }
                     }
                 } finally { con.disconnect(); current = null; }
             } catch (Exception error) {
                 if (!running) break;
                 status = "HTTPS bağlantı hatası: " + String.valueOf(error.getMessage());
-                Log.w("AETHER-Relay", "Reconnecting", error);
+                Log.w("FRIDAY-Relay", "Reconnecting", error);
                 backoff = Math.min(backoff * 2, 60000);
             }
             if (!running) break;

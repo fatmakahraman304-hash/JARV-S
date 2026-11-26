@@ -239,7 +239,7 @@ def save_voice(voice_name: str) -> None:
 
 
 def get_wake_word_enabled() -> bool:
-    """Whether local wake-word gating is on (assistant sleeps until 'Hey AETHER')."""
+    """Whether local wake-word gating is on (assistant sleeps until 'Hey FRIDAY')."""
     return load_api_keys().get("wake_word_enabled", False)
 
 
@@ -639,7 +639,7 @@ def _purged_deepseek_data(data: dict) -> dict:
 
 @_locked
 def purge_deepseek_settings() -> bool:
-    """AETHER'ın kaldırılan DeepSeek ayarlarını bir kez yerel dosyadan temizle.
+    """FRIDAY'ın kaldırılan DeepSeek ayarlarını bir kez yerel dosyadan temizle.
 
     Başka modellerin anahtarlarına veya uygulama ayarlarına dokunmaz.
     Kullanıcının eski yedek dosyasında da kaldırılan anahtar kalmamasını sağlar.
@@ -825,14 +825,14 @@ def save_sidecar_provider(provider_id: str) -> None:
 def get_coding_provider() -> str:
     """Explicit coding choice; otherwise reuse an active Aether API sidecar.
 
-    Aether's role-aware free model selection lets coding use MiniMax M3 Free
+    Friday's role-aware free model selection lets coding use MiniMax M3 Free
     without a second key. Never override an explicitly configured provider or
-    enable Aether when it is not actually selected and configured locally.
+    enable Friday when it is not actually selected and configured locally.
     """
     chosen = str(get_providers().get("coding", "") or "").strip()
     if chosen:
         return chosen
-    # AETHER may be using the gateway for background requests OR as the
+    # FRIDAY may be using the gateway for background requests OR as the
     # primary language model in the STT -> LLM -> TTS pipeline.
     if (get_sidecar_provider() != "openai_compat@aether" and
             get_pipeline().get("llm") != "openai_compat@aether"):

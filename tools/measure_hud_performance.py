@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 
-def measure(root: Path, out: Path, no_render=False):
+def measure(root: Path, out: Path, no_render=False, reference_palette=False):
     started = time.perf_counter()
     sys.path.insert(0, str(root.resolve()))
     from PyQt6.QtWidgets import QApplication
@@ -43,7 +43,11 @@ def measure(root: Path, out: Path, no_render=False):
               "hidden_timer_callbacks": len(callbacks), "hidden_animation_steps": widget._tick,
               "hidden_cpu_ms": hidden_cpu_ms, "physical_user_hardware_verified": False,
               "render_verified": False}
+    result['canonical_palette'] = bool(reference_palette)
     if not no_render:
+        background = '#030915' if reference_palette else C.BG
+        primary = '#26d9ff' if reference_palette else C.PRI
+        accent = '#a3efff' if reference_palette else C.ACC
         avatar = widget._avatar
         image = QImage(560, 560, QImage.Format.Format_ARGB32_Premultiplied)
         def frame(index):
@@ -51,10 +55,10 @@ def measure(root: Path, out: Path, no_render=False):
             avatar._pitch = avatar._blink = avatar._glow = 0.0
             avatar._mouth = .5 + .5 * math.sin(index)
             avatar._gaze = [0., 0.]
-            image.fill(qcol(C.BG))
+            image.fill(qcol(background))
             painter = QPainter(image)
             try:
-                avatar.paint(painter, 280, 560 * .43, 168, qcol(C.PRI), qcol(C.ACC), qcol(C.BG))
+                avatar.paint(painter, 280, 560 * .43, 168, qcol(primary), qcol(accent), qcol(background))
             finally:
                 painter.end()
             if avatar.style != "holographic" or avatar._gl is None or not avatar._gl.ok:
@@ -115,11 +119,12 @@ if __name__ == "__main__":
     parser.add_argument("--root", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--no-render", action="store_true")
+    parser.add_argument("--reference-palette", action="store_true", help="Compare geometry/performance in one fixed palette, independently of UI theme changes")
     parser.add_argument("--compare", nargs=2, type=Path, metavar=("BASE_RESULTS", "CANDIDATE_RESULTS"))
     args = parser.parse_args()
     if args.compare:
         compare(*args.compare, args.out)
     elif args.root:
-        measure(args.root, args.out, args.no_render)
+        measure(args.root, args.out, args.no_render, args.reference_palette)
     else:
         parser.error("--root or --compare is required")

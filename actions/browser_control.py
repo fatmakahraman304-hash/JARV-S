@@ -781,7 +781,7 @@ class _BrowserSession:
             try:
                 self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
             except Exception as e:
-                print(f"[Browser] Firefox real profile failed ({e}), using AETHER profile")
+                print(f"[Browser] Firefox real profile failed ({e}), using FRIDAY profile")
                 aether = str(Path.home() / ".aether_profiles" / "firefox_aether")
                 Path(aether).mkdir(parents=True, exist_ok=True)
                 self._context = await engine_obj.launch_persistent_context(aether, **kwargs)
@@ -864,17 +864,17 @@ class _BrowserSession:
 
         # The real profile could not be opened (browser already open / locked
         # profile / newer Chrome versions block the real profile under
-        # automation). Fall back to a persistent AETHER automation profile —
+        # automation). Fall back to a persistent FRIDAY automation profile —
         # accounts logged in here once stay logged in on later sessions too.
         aether_profile = str(Path.home() / ".aether_profiles" / self.browser_name)
         Path(aether_profile).mkdir(parents=True, exist_ok=True)
-        print(f"[Browser] Retrying with AETHER profile: {aether_profile}")
+        print(f"[Browser] Retrying with FRIDAY profile: {aether_profile}")
 
         try:
             self._context = await engine_obj.launch_persistent_context(aether_profile, **kwargs)
             self._page = await self._adopt_page()
             self.profile_kind = "separate"
-            print(f"[Browser] ✅ Launched [{label}] with AETHER profile "
+            print(f"[Browser] ✅ Launched [{label}] with FRIDAY profile "
                   f"(sign-ins persist across sessions)")
         except Exception as e2:
             raise RuntimeError(f"Could not launch {self.browser_name}: {e2}") from e2

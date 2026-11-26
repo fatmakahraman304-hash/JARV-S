@@ -1,8 +1,8 @@
-# AETHER yazılım geliştirme
+# FRIDAY yazılım geliştirme
 
 Mevcut `dev_agent` yeni proje oluşturur, yerel projeleri geliştirir ve hata
-kontrolleri yapar. `github_develop` Murat uyarlamasının GitHub deposunu ayrı
-`~/AetherDevelopment/Murat` klasörüne alır.
+kontrolleri yapar. `github_develop` Kullanıcı uyarlamasının GitHub deposunu ayrı
+`~/FridayDevelopment/FRIDAY` klasörüne alır.
 
 Komut akışı: geliştirme alanını hazırla → incele → istenen değişikliği geliştir
 → test et → seçilen kaynak dosyalarını yayınla → kontroller bittiyse main'e al.

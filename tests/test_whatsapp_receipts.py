@@ -17,7 +17,7 @@ class ReceiptTests(unittest.TestCase):
             )
 
         pane = element("", "Pane", "ConversationPanel", 0, 700, 1, (
-            element("Murat (Siz)", "Button", "", 25, 50, 2),
+            element("Deniz (Siz)", "Button", "", 25, 50, 2),
             element("Merhaba", "Text", "", 250, 270, 3),
             element("", "Edit", "InputBox", 640, 690, 4),
         ))
@@ -26,7 +26,7 @@ class ReceiptTests(unittest.TestCase):
     def test_reads_a_timestamp_and_receipt_in_one_accessible_label(self):
         nodes = [
             wa.Node("", "Pane", "main", -1, 0, 700),
-            wa.Node("Murat (Siz)", "Button", "", 0, 30, 55),
+            wa.Node("Deniz (Siz)", "Button", "", 0, 30, 55),
             wa.Node("Siz: Merhaba 20:24, Teslim edildi", "ListItem", "", 0, 180, 220),
             wa.Node("Mesaj yazın…", "Document", "", 0, 650, 690),
         ]
@@ -36,7 +36,7 @@ class ReceiptTests(unittest.TestCase):
     def test_matches_only_the_chat_and_deduplicates_accessible_message_text(self):
         nodes = [
             wa.Node("", "Pane", "main", -1, 0, 700),
-            wa.Node("Murat (Siz)", "Button", "", 0, 30, 55),
+            wa.Node("Deniz (Siz)", "Button", "", 0, 30, 55),
             wa.Node("Siz: Merhaba!", "ListItem", "", 0, 180, 220),
             wa.Node("Merhaba!", "Text", "", 2, 181, 201),
             wa.Node("Teslim edildi", "Image", "", 2, 201, 220),
@@ -56,7 +56,7 @@ class ReceiptTests(unittest.TestCase):
         with patch.object(wa, "foreground_window", return_value=10), patch.object(
             wa, "read_conversation", return_value=wa.Conversation(True, {(2,): "read"})
         ), patch.object(wa.time, "monotonic", side_effect=[0, 0, 10]), patch.object(wa.time, "sleep"):
-            self.assertEqual(wa.wait_for_receipt(10, "Murat", "Merhaba", before), "")
+            self.assertEqual(wa.wait_for_receipt(10, "Deniz", "Merhaba", before), "")
 
     def test_tracks_a_new_outgoing_message_from_pending_to_delivered(self):
         before = wa.Conversation(True, {(1,): "sent"})
@@ -65,14 +65,14 @@ class ReceiptTests(unittest.TestCase):
         with patch.object(wa, "foreground_window", return_value=10), patch.object(
             wa, "read_conversation", side_effect=states
         ), patch.object(wa.time, "sleep"):
-            self.assertEqual(wa.wait_for_receipt(10, "Murat", "Merhaba", before), "delivered")
+            self.assertEqual(wa.wait_for_receipt(10, "Deniz", "Merhaba", before), "delivered")
 
     def test_status_from_another_conversation_is_ignored(self):
         before = wa.Conversation(True, {})
         with patch.object(wa, "foreground_window", return_value=10), patch.object(
             wa, "read_conversation", return_value=wa.Conversation(False, {(1,): "delivered"})
         ), patch.object(wa.time, "monotonic", side_effect=[0, 0, 10]), patch.object(wa.time, "sleep"):
-            self.assertEqual(wa.wait_for_receipt(10, "Murat", "Merhaba", before), "")
+            self.assertEqual(wa.wait_for_receipt(10, "Deniz", "Merhaba", before), "")
 
     def test_success_is_reported_and_a_readback_failure_does_not_retry(self):
         player = Mock()
@@ -86,14 +86,14 @@ class ReceiptTests(unittest.TestCase):
         ), patch.object(wa, "wait_for_receipt", side_effect=["delivered", RuntimeError("unreadable")]), patch.object(
             send_message.time, "sleep"
         ):
-            send_message._send_and_report(player, "whatsapp", "Murat", "Merhaba")
+            send_message._send_and_report(player, "whatsapp", "Deniz", "Merhaba")
             self.assertIn("Teslim edildi", player.write_log.call_args.args[0])
             self.assertIn("receipt=delivered", player.request_say.call_args.args[0])
             paste.assert_called_once_with("Merhaba")
             self.assertEqual(gui.press.call_count, 2)  # open chat, then send
             gui.reset_mock()
             paste.reset_mock()
-            send_message._send_and_report(player, "whatsapp", "Murat", "Bir daha")
+            send_message._send_and_report(player, "whatsapp", "Deniz", "Bir daha")
             self.assertIn("doğrulanamadı", player.write_log.call_args.args[0])
             paste.assert_called_once_with("Bir daha")
             self.assertEqual(gui.press.call_count, 2)

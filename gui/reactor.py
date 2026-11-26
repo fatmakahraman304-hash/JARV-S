@@ -1,4 +1,4 @@
-"""gui/reactor.py — the reactor core: the AETHER cyan orbital energy sphere.
+"""gui/reactor.py — the reactor core: the FRIDAY cyan orbital energy sphere.
 
 A small white-hot core sits inside a geodesic wireframe sphere. Straight light
 rays shoot out of the core in three dimensions, a handful of thick arc

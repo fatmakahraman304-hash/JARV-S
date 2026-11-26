@@ -1,4 +1,4 @@
-"""AETHER checks itself: "kendini kontrol et", "bir sorun var mı?", "neden çalışmıyor?".
+"""FRIDAY checks itself: "kendini kontrol et", "bir sorun var mı?", "neden çalışmıyor?".
 
 Every check really tries the thing (reaches the model, opens the network, finds
 the microphone …), each within a few seconds, all at once; the report says what
@@ -21,13 +21,13 @@ ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = {
     "name": "self_check",
     "description": (
-        "AETHER checks itself end to end: the AI model and API key, internet, microphone and speakers, disk space, "
+        "FRIDAY checks itself end to end: the AI model and API key, internet, microphone and speakers, disk space, "
         "memory file, plugins, Blender and its live link, key packages, recent errors, background watchers, smart home — each really tested, with a fix for "
         "every problem. Use for 'kendini kontrol et', 'sistem kontrolü', 'bir sorun var mı?', 'neden çalışmıyor?'; "
         "action=errors for 'son hataları göster', 'neden kapandı?', 'dün ne hata oldu?'."
     ),
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "description": "check (default) | errors — the last problems from AETHER's logbook "
+        "action": {"type": "STRING", "description": "check (default) | errors — the last problems from FRIDAY's logbook "
                                                     "('son hataları göster', 'neden kapandı?')"},
     }},
 }
@@ -172,7 +172,7 @@ def check_watchers():
     bad = [f"{NAMES.get(k, k)} ({v['why']})" for k, v in st.items() if not v["ok"]]
     if bad:
         return FAIL, "Duran arka plan görevi: " + ", ".join(bad), \
-            "AETHER'ı yeniden başlat; tekrar ederse 'son hataları göster' de."
+            "FRIDAY'ı yeniden başlat; tekrar ederse 'son hataları göster' de."
     return OK, f"{len(started)} arka plan görevi çalışıyor", ""
 
 
@@ -230,7 +230,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if str((parameters or {}).get("action") or "").lower() == "errors":
             report = errors_report()
             if player is not None and hasattr(player, "show_content"):
-                player.show_content("AETHER günlüğü — son hatalar", report)
+                player.show_content("FRIDAY günlüğü — son hatalar", report)
             return report
         rows = run_checks(registry=getattr(player, "get_plugins", None))
         lines = [f"{mark} {label}: {text}" + (f"\n    → {fix}" if fix else "") for label, mark, text, fix in rows]
@@ -238,7 +238,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         head = "Denetlenen bileşenlerde sorun bulunmadı." if not bad else f"{len(bad)} konuda sorun var."
         report = head + "\n" + "\n".join(lines)
         if player is not None and hasattr(player, "show_content"):
-            player.show_content("AETHER öz-denetim", report)
+            player.show_content("FRIDAY öz-denetim", report)
         return report + "\n(Kullanıcıya kısaca söyle: önce sorunları ve çözümlerini, sonra hangi kontrollerin başarılı olduğunu belirt.)"
     except Exception as exc:
         return f"Öz-denetim yapılamadı: {exc}"
