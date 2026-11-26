@@ -13,6 +13,27 @@ class ThinkingStudioTests(unittest.TestCase):
         self.assertEqual(set(studio.MODES) | set(studio.POLICY) | set(studio.APP_FEATURES), set(range(1, 1001)))
         self.assertTrue(set(studio.MODES).isdisjoint(studio.POLICY))
 
+    def test_inventory_covers_every_id_once_and_uses_the_live_tool_registry(self):
+        import csv
+        import io
+        from core.studio_utilities import OPERATIONS
+        from tools.capability_inventory import write_inventory
+        output = io.StringIO()
+        write_inventory(output)
+        rows = list(csv.DictReader(io.StringIO(output.getvalue())))
+        self.assertEqual([int(r["Numara"]) for r in rows], list(range(1, 1001)))
+        self.assertEqual(set(studio.APP_IMPLEMENTATION), set(studio.APP_FEATURES))
+        self.assertEqual(len({r["Sınıf"] for r in rows}), 6)
+        for r in rows:
+            n = int(r["Numara"])
+            if n in studio.POLICY:
+                self.assertEqual(r["Sınıf"], "Davranış ilkesi")
+            if r["Yerel işlem"]:
+                self.assertIn(r["Yerel işlem"], OPERATIONS)
+        from core import integrated_capabilities as integrated
+        self.assertIn(605, integrated.resolve("aylık ne kadar biriktirmeliyim"))
+        self.assertIn("studio_utilities/savings_plan", integrated.guidance((605,)))
+
     def test_commands_and_reset(self):
         self.assertEqual(studio.parse("FRIDAY, karşı ben."), (13,))
         self.assertEqual(studio.parse("FRIDAY, düşüncemi geri sar."), (12,))

@@ -228,6 +228,39 @@ APP_STATUS = {
     499: "Katalog ve işlev regresyon testleri; her model cevabı doğrulanmış değil",
 }
 
+# Classify the implementation described by each application requirement.
+# APP_STATUS retains the exact scope (for example archive-only backups).
+APP_IMPLEMENTATION = {
+    471: "Kısmen tamamlanmış özellik", 472: "Gerçek çalışan araç",
+    473: "Gerçek çalışan araç", 474: "Kısmen tamamlanmış özellik",
+    475: "Gerçek çalışan araç", 476: "Kısmen tamamlanmış özellik",
+    477: "Gerçek çalışan araç", 478: "Harici hesap veya donanım gerektiren özellik",
+    479: "Gerçek çalışan araç", 480: "Kısmen tamamlanmış özellik",
+    481: "Kısmen tamamlanmış özellik", 482: "Gerçek çalışan araç",
+    483: "Gerçek çalışan araç", 484: "Gerçek çalışan araç",
+    485: "Kısmen tamamlanmış özellik", 486: "Kısmen tamamlanmış özellik",
+    487: "Kısmen tamamlanmış özellik", 488: "Geliştirilmesi gereken özellik",
+    489: "Gerçek çalışan araç", 490: "Kısmen tamamlanmış özellik",
+    491: "Kısmen tamamlanmış özellik", 492: "Gerçek çalışan araç",
+    493: "Geliştirilmesi gereken özellik", 494: "Kısmen tamamlanmış özellik",
+    495: "Kısmen tamamlanmış özellik", 496: "Kısmen tamamlanmış özellik",
+    497: "Kısmen tamamlanmış özellik", 498: "Kısmen tamamlanmış özellik",
+    499: "Kısmen tamamlanmış özellik",
+}
+
+
+def implementation_kind(n):
+    if n in POLICY:
+        return "Davranış ilkesi"
+    if n in APP_FEATURES:
+        return APP_IMPLEMENTATION[n]
+    if n in UTILITY_BINDINGS:
+        return "Gerçek çalışan araç"
+    if n in MODES:
+        return "Dil modeli yeteneği"
+    raise KeyError(n)
+
+
 def feature_status(n):
     if n in APP_FEATURES:
         return APP_STATUS.get(n, "Bağımsız uygulama özelliği henüz yapılmadı")
@@ -377,6 +410,8 @@ def apply_command(text: str):
 # Explicit operation bindings for existing deterministic tools.
 UTILITY_BINDINGS = {
     233:"priority_matrix", 242:"task_schedule", 578:"portions", 601:"budget_summary", 612:"budget_summary",
+    251:"budget_summary", 256:"task_schedule", 605:"savings_plan",
+    607:"weighted_options", 823:"trend",
     619:"split_cost", 685:"convert", 757:"dice", 801:"data_quality",
     804:"stats", 805:"stats", 807:"formula", 809:"data_quality", 813:"trend",
     821:"check_total", 824:"compare", 907:"conflicts", 932:"text_diff",

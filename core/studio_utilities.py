@@ -405,7 +405,22 @@ def data_quality(rows):
             "assumption":"Eksik anahtar, null ve boş metin eksik sayılır; veri değiştirilmez."}
 
 
-OPERATIONS = {"convert": convert, "portions": portions, "split_cost": split_cost,
+def savings_plan(target, saved, months):
+    """Equal monthly deposits to reach a nominal target, in one currency."""
+    goal, balance = positive(target), number(saved)
+    if balance < 0 or type(months) is not int or not 1 <= months <= 1200:
+        raise ValueError("Birikim negatif olamaz; süre 1–1200 tam ay olmalı.")
+    if any(x * 100 != (x * 100).to_integral_value() for x in (goal, balance)):
+        raise ValueError("Tutar en fazla iki ondalık basamak içermeli.")
+    cents = int(max(goal - balance, 0) * 100)
+    monthly, extra = divmod(cents, months)
+    return {"remaining": clean(Decimal(cents) / 100), "months": months,
+            "base_monthly": clean(Decimal(monthly) / 100),
+            "months_with_one_extra_cent": extra,
+            "assumption": "Aynı para birimi; faiz ve enflasyon dahil edilmedi."}
+
+
+OPERATIONS = {"savings_plan": savings_plan, "convert": convert, "portions": portions, "split_cost": split_cost,
               "stats": stats, "compare": compare, "conflicts": conflicts,
               "text_diff": text_diff, "dice": dice, "check_total": check_total, "formula": formula,
               "task_schedule": task_schedule, "budget_summary": budget_summary,

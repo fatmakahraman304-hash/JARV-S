@@ -22,11 +22,13 @@ import zipfile
 REPOSITORY = 'fatmakahraman304-hash/JARV-S'
 ROOT = Path(__file__).resolve().parents[1]
 LIMIT = 150 * 1024 * 1024
+DOWNLOAD_SECONDS = 120
 
 
 def _git(root, *args):
     p = subprocess.run(['git', '-C', str(root), *args], capture_output=True,
-                       text=True, encoding='utf-8', errors='replace', timeout=180, creationflags=0x08000000 if os.name == 'nt' else 0)
+                       text=True, encoding='utf-8', errors='replace', timeout=180,
+                       stdin=subprocess.DEVNULL, env={**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never'}, creationflags=0x08000000 if os.name == 'nt' else 0)
     if p.returncode:
         raise RuntimeError(p.stderr.strip() or 'Git işlemi başarısız.')
     return p.stdout.strip()
@@ -83,19 +85,34 @@ def _restore(root, label):
                 'git stash listesinde saklı.')
 
 
-def _get(url):
+def _get(url, *, limit=LIMIT):
     req = Request(url, headers={'User-Agent': 'Friday-Updater', 'Accept': 'application/vnd.github+json'})
+    deadline = time.monotonic() + DOWNLOAD_SECONDS
     for attempt in range(3):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("Güncelleme indirme süresi doldu. Yeniden deneyin.")
         try:
-            with urlopen(req, timeout=45) as response:
-                data = response.read(LIMIT + 1)
-            break
+            with urlopen(req, timeout=min(15, remaining)) as response:
+                data = bytearray()
+                while time.monotonic() < deadline:
+                    # read1 returns after at most one underlying read. read(n)
+                    # can wait indefinitely if the peer keeps trickling bytes.
+                    chunk = response.read1(min(256 * 1024, limit + 1 - len(data)))
+                    if not chunk:
+                        if isinstance(response.length, int) and response.length > 0:
+                            raise ConnectionError("Güncelleme indirmesi yarıda kesildi.")
+                        return bytes(data)
+                    data.extend(chunk)
+                    if len(data) > limit:
+                        raise RuntimeError('Güncelleme indirme sınırını aşıyor.')
+                raise RuntimeError("Güncelleme indirme süresi doldu. Yeniden deneyin.")
         except HTTPError as exc:
             # Retry temporary server failures, leaving authentication and quota
             # errors visible to the user without repeated requests.
+            exc.close()
             if exc.code not in {502, 503, 504} or attempt == 2:
                 raise
-            exc.close()
         except (URLError, TimeoutError, ConnectionError) as exc:
             reason = getattr(exc, 'reason', exc)
             transient = isinstance(reason, (socket.gaierror, TimeoutError, ConnectionError))
@@ -108,13 +125,29 @@ def _get(url):
                     ) from exc
                 raise
         time.sleep(attempt + 1)
-    if len(data) > LIMIT:
-        raise RuntimeError('Güncelleme indirme sınırını aşıyor.')
-    return data
 
 
 def _hash(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def _publisher_files(sha, progress):
+    """A configured trust policy must succeed on both ZIP and Git installations."""
+    from core.update_trust import trusted_key
+    pem = trusted_key()
+    if pem is None:
+        return None
+    from core.release_signatures import MAX_SIGNATURE, verify
+    from tools.release_package import MAX_TOTAL, verified_files
+    progress('Yayıncı imzası kontrol ediliyor…')
+    prefix = f'https://github.com/{REPOSITORY}/releases/download/friday-source-{sha}/friday-source'
+    envelope = _get(prefix + '.sig.json', limit=MAX_SIGNATURE)
+    payload = _get(prefix + '.zip', limit=MAX_TOTAL)
+    verify(payload, sha, envelope, pem)
+    _, contents = verified_files(payload, sha)
+    if 'gui/window.py' not in contents:
+        raise RuntimeError('İmzalı paket FRIDAY arayüzünü içermiyor.')
+    return {name: data for name, data in contents.items() if not _protected(name)}
 
 
 def _protected(name):
@@ -512,13 +545,15 @@ def _update_locked(root, progress):
         if current == sha:
             return False, f'FRIDAY güncel · {sha[:8]}'
 
+        signed_files = _publisher_files(sha, progress)
         if is_git:
             if int(_git(root, 'rev-list', '--count', f'{sha}..{current}')):
                 raise RuntimeError('Bu dalda GitHub sürümünde bulunmayan yerel commit var. Güncelleme durduruldu.')
             new_req = _git(root, 'show', f'{sha}:requirements.txt')
         else:
             progress('Yeni sürüm indiriliyor…')
-            files = _archive(_get(f'https://codeload.github.com/{REPOSITORY}/zip/{sha}'))
+            files = signed_files if signed_files is not None else _archive(
+                _get(f'https://codeload.github.com/{REPOSITORY}/zip/{sha}'))
             new_req = files['requirements.txt'].decode('utf-8')
         # Do not replace dependencies while Qt/audio DLLs are in use.
         old_req = (root / 'requirements.txt').read_text('utf-8')

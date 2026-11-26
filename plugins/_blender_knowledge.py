@@ -15,6 +15,7 @@ import html
 import io
 import json
 import math
+import os
 import re
 import tempfile
 import threading
@@ -185,16 +186,23 @@ def _rst_chunks(path: str, raw: bytes, size: int = 1400) -> list[dict]:
 
 def _download(url: str, log) -> Path:
     import urllib.request
-    tmp = Path(tempfile.mkstemp(suffix=Path(url).suffix or ".bin")[1])
+    from urllib.error import HTTPError
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
-        while True:
-            block = r.read(1 << 20)
-            if not block:
-                break
-            f.write(block)
-    log(f"[Blender] İndirildi: {url} ({tmp.stat().st_size // (1 << 20)} MB)")
-    return tmp
+    fd, name = tempfile.mkstemp(suffix=Path(url).suffix or ".bin")
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as output, urllib.request.urlopen(req, timeout=120) as response:
+            while block := response.read(1 << 20):
+                output.write(block)
+        log(f"[Blender] İndirildi: {url} ({tmp.stat().st_size // (1 << 20)} MB)")
+        return tmp
+    except HTTPError as exc:
+        exc.close()
+        tmp.unlink(missing_ok=True)
+        raise
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _from_source(url: str, log) -> list[dict]:
@@ -266,12 +274,12 @@ def ensure(binary, invoke, version: str = "", log=print) -> None:
         version = version or str((have or {}).get("version", ""))
     except Exception as exc:
         log(f"[Blender] API dizini çıkarılamadı: {exc}")
-    import os
     if os.environ.get("AETHER_BLENDER_NO_MANUAL"):
         return
-    if not MANUAL.is_file() and (_manual_job is None or not _manual_job.is_alive()):
-        _manual_job = threading.Thread(target=lambda: _safe(build_manual, version, log), daemon=True)
-        _manual_job.start()
+    with _lock:
+        if not MANUAL.is_file() and (_manual_job is None or not _manual_job.is_alive()):
+            _manual_job = threading.Thread(target=lambda: _safe(build_manual, version, log), daemon=True)
+            _manual_job.start()
 
 
 def _safe(fn, *a):
