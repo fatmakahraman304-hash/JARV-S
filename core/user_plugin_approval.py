@@ -101,3 +101,37 @@ def approved_source(root: Path, name: str) -> bytes:
             or data.get("name") != name or data.get("sha256") != digest):
         raise ValueError("Eklenti değişti; yeniden onay gerekli.")
     return raw
+
+
+def installed_names(root: Path) -> list[str]:
+    """List only the managed user files, including revoked or broken plugins."""
+    if root.is_symlink():
+        raise ValueError("Bağlantılı eklenti klasörü desteklenmiyor.")
+    if not root.is_dir():
+        return []
+    names = set()
+    for entry in root.iterdir():
+        if entry.name.endswith(".approval.json"):
+            name = entry.name[:-len(".approval.json")]
+        elif entry.suffix == ".py":
+            name = entry.stem
+        else:
+            continue
+        if _NAME.fullmatch(name):
+            names.add(name)
+    return sorted(names, key=str.casefold)
+
+
+def revoke(root: Path, name: str) -> None:
+    """Withdraw approval without touching the source, settings or bundled code."""
+    if not isinstance(name, str) or not _NAME.fullmatch(name) or root.is_symlink():
+        raise ValueError("Geçersiz eklenti konumu.")
+    # Unlink the receipt itself (including a symlink), never its target.
+    # A missing receipt already means no approval.
+    (root / (name + ".approval.json")).unlink(missing_ok=True)
+
+
+def remove(root: Path, name: str) -> None:
+    """Revoke first; if deletion fails, the remaining source stays unapproved."""
+    revoke(root, name)
+    (root / (name + ".py")).unlink(missing_ok=True)
