@@ -213,3 +213,13 @@ akışı başarılı. Yeni güven ve güncelleme yolunun kullanım koşulları
 - Fiziksel cihaz bekliyor — Android rotasyonu ve önceki APK üzerinde yükseltme,
   gerçek Windows kullanıcı profilinde anahtar taşıma ve panel takılmasının
   kullanıcının cihazındaki sebebi. Aşama 2–8 için üstteki açık işler sürüyor.
+
+## Temiz Git kurulumunun kesinti sonrası açılışı
+
+Aşama 1, kısmen tamamlandı. Süreç git merge tamamlanır tamamlanmaz kapanırsa
+yeni işlem kaydıyla hedef commit ve yedek dal açılışta doğrulanır. Kişisel
+dosyalar ve izlenen yerel değişiklikler korunur. Subprocess birleştirmeden
+sonra gerçek os._exit ile durduruldu; yerel değişiklik varken açılış durdu,
+temiz içerikle kurtarma çevrimdışı tamamlandı. Linux/Python 3.13 üzerinde
+48 güncelleyici/açılış/HUD testi geçti. Stash'li veya kısmen yazılmış Git
+çalışma ağacında otomatik yıkıcı onarım uygulanmaz.
