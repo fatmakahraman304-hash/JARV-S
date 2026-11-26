@@ -1721,10 +1721,14 @@ class MainWindow(QMainWindow):
     def _refresh_identity_rows(self) -> None:
         """Engine and voice, read from config — on start and whenever they change."""
         try:
-            from memory.config_manager import get_provider_mode, get_voice
+            from memory.config_manager import get_provider_mode, get_voice, get_provider_config
             mode = str(get_provider_mode() or "gemini")
-            engine = "GEMINI LIVE" if mode == "gemini" else f"YEREL {mode.upper()}"
-            voice = str(get_voice() or "--").upper()
+            if mode == "realtime":
+                engine = "OPENAI REALTIME · BULUT"
+                voice = str(get_provider_config("openai_realtime").get("voice_id") or "marin").upper()
+            else:
+                engine = "GEMINI LIVE" if mode == "gemini" else f"YEREL {mode.upper()}"
+                voice = str(get_voice() or "--").upper()
         except Exception:
             engine, voice = "GEMINI LIVE", "--"
         self._engine_label = engine
