@@ -95,3 +95,10 @@ kabulünü de çalıştırdı. Ayrı 150 saniyelik tanılama koşusu Blender ren
 sürecinde süre sınırına ulaştı; başarılı tam regresyon sayılmadı. Hiçbir Blender
 testi kaldırılmadı, atlanacak biçimde değiştirilmedi veya gizlenmedi. CI'da
 çekirdek regresyon ve mevcut Blender kabul kapsamları ayrı izlenecek.
+
+## Aşama 1 — araç sonucu bütünlüğü
+
+[Boş sonucun başarıya dönüşmesini engelleme](tool-outcomes.md), kayıtlı araçlar,
+konuşma/arka plan/bulut ve gerçek onay callback'lerinde ortak sonuç dönüşümü
+kullanır. Yerel test ve açık sınırlar ilgili kayıttadır. CI ve birleşme durumu
+GitHub PR kaydından doğrulanmalıdır; eski kayıt yeni başarı kanıtı sayılmaz.

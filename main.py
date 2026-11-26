@@ -2544,7 +2544,7 @@ class FridayLive:
                 _ctx = {"player": self.ui, "speak": self.speak,
                         "response": None, "session_memory": None}
                 r = await self._run_blocking(name, lambda: self._action_registry.run(name, args, _ctx))
-                result = r or "Done."
+                result = outcome.result_text(name, r)
                 # web_search: mirror results to the on-screen content panel
                 if (name == "web_search" and r
                         and not r.startswith("No results")
@@ -2561,7 +2561,7 @@ class FridayLive:
                 if self._plugin_registry.has(name):
                     r = await self._run_blocking(
                         name, lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=None))
-                    result = r or "Done."
+                    result = outcome.result_text(name, r)
                 else:
                     result = f"Unknown tool: {name}"
 

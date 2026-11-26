@@ -7,6 +7,8 @@ and `on_late(name, result_text)` is called when it does finish.
 """
 from __future__ import annotations
 
+from core import outcome
+
 import asyncio
 
 DEFAULT = 45.0
@@ -24,14 +26,18 @@ async def run(name: str, fn, wait: float | None = None, on_late=None):
     fut = loop.run_in_executor(None, fn)
     wait = WAITS.get(name, DEFAULT) if wait is None else wait
     try:
-        return await asyncio.wait_for(asyncio.shield(fut), timeout=wait)
+        return outcome.result_text(name, await asyncio.wait_for(asyncio.shield(fut), timeout=wait))
     except asyncio.TimeoutError:
+        if fut.done():
+            # A tool's own TimeoutError is not our waiting deadline. Surface
+            # its failure instead of announcing that finished work is running.
+            return outcome.result_text(name, fut.result())
         def done(f):
             try:
                 result = f.result()
             except BaseException as exc:
                 result = f"failed: {exc}"
             if on_late is not None:
-                on_late(name, str(result or "Done.")[:1500])
+                on_late(name, outcome.result_text(name, result)[:1500])
         fut.add_done_callback(done)
         return still_running(name, wait)
