@@ -80,8 +80,9 @@ with patch.object(u.os, "replace", side_effect=stop):
                                 capture_output=True, timeout=15)
         self.assertEqual(killed.returncode, 79, killed.stderr)
         launched = self.launch()
-        self.assertIn('ZIP kurtarması doğrulandı', launched.stdout)
+        self.assertIn('FRIDAY_RECOVERY_VERIFIED', launched.stdout)
         self.assertIn('APPLICATION_IMPORT_REACHED', launched.stderr)
+        self.assertNotIn('MIXED_VERSION_EXECUTED', launched.stderr)
         self.assertNotIn('MIXED_VERSION_EXECUTED', launched.stderr)
         self.assertFalse((self.root / 'a-added.py').exists())
         # The offline command remains idempotent after automatic recovery.

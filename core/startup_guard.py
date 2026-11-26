@@ -46,7 +46,9 @@ def preflight(root):
             # main.py and the guard may have been restored. Never continue with
             # Python code loaded from two different installation versions.
             if sys.stdout is not None:
-                print('FRIDAY — ZIP kurtarması doğrulandı; temiz süreçte yeniden açılıyor.', flush=True)
+                # A Windows console may still use cp1252. Recovery must not
+                # fail just because Turkish status text cannot be encoded.
+                print('FRIDAY_RECOVERY_VERIFIED: ZIP recovery verified; restarting a clean process.', flush=True)
             original = getattr(sys, 'orig_argv', None)
             arguments = (sys.argv[1:] if getattr(sys, 'frozen', False)
                          else original[1:] if original else sys.argv)
