@@ -65,7 +65,7 @@ def _set_aside(root):
 
 
 def _restore(root, label):
-    """Re-apply stashed edits; on conflict leave them stashed. Returns a note."""
+    """Check a stash in a disposable worktree before touching the user's tree."""
     ref = None
     for line in _git(root, 'stash', 'list').splitlines():
         if label in line:
@@ -73,16 +73,34 @@ def _restore(root, label):
             break
     if ref is None:
         return ''
+    note = (f' Yerel değişiklikler "{label}" adıyla git stash listesinde saklı; '
+            'yeniden uygulamadan önce gözden geçirin.')
+    # A different process may have edited or staged files after the update
+    # began. Never reset or overwrite those changes.
+    if _git(root, 'status', '--porcelain', '--untracked-files=no'):
+        return note
+    try:
+        with tempfile.TemporaryDirectory(prefix='friday-stash-check-') as directory:
+            worktree = Path(directory) / 'checkout'
+            _git(root, 'worktree', 'add', '--detach', str(worktree), 'HEAD')
+            try:
+                _git(worktree, 'stash', 'apply', ref)
+            finally:
+                _git(root, 'worktree', 'remove', '--force', str(worktree))
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        return note
+    # Recheck after the independent trial in case a user edited during it.
+    if _git(root, 'status', '--porcelain', '--untracked-files=no'):
+        return note
     try:
         _git(root, 'stash', 'pop', ref)
-        return ' Yerel değişikliklerin yeniden uygulandı.'
-    except RuntimeError:
-        try:
-            _git(root, 'reset', '--hard', 'HEAD')
-        except RuntimeError:
-            pass
-        return (f' Yerel değişikliklerin yeni sürümle çakıştı; kaybolmadı, "{label}" adıyla '
-                'git stash listesinde saklı.')
+    except RuntimeError as exc:
+        # Unexpected concurrent edits or a partial apply need manual recovery.
+        # The caller retains the transaction marker and must not auto-restart.
+        raise _RecoveryRequired(
+            f'Yerel değişiklikler uygulanırken işlem durdu. {note}'
+        ) from exc
+    return ' Yerel değişikliklerin yeniden uygulandı.'
 
 
 def _get(url, *, limit=LIMIT):
