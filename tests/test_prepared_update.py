@@ -52,3 +52,42 @@ class PreparedUpdate(unittest.TestCase):
                     self.assertTrue(maintenance.apply(target, progress=lambda _: None)[0])
             self.assertEqual((target / 'main.py').read_text(), 'new')
             self.assertEqual(local.read_bytes(), b'private sentinel')
+
+
+def verify_installed_runtime():
+    """Windows package acceptance runs this in the fully installed environment."""
+    import os
+    import subprocess
+    with tempfile.TemporaryDirectory() as directory:
+        target = Path(directory)
+        # Keep the actual interpreter and installed files outside the disposable
+        # target. A directory junction works without Windows Developer Mode.
+        link = target / '.venv'
+        if os.name == 'nt':
+            subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(link), sys.prefix],
+                           check=True)
+        else:
+            link.symlink_to(sys.prefix, target_is_directory=True)
+        for name in ('main.py', 'ui.py', 'requirements.txt'):
+            (target / name).write_bytes(b'old')
+        (target / 'update_channel.json').write_text(json.dumps({
+            'repository': app_updater.REPOSITORY, 'branch': 'main'}))
+        private = target / 'config/personal.json'
+        private.parent.mkdir()
+        private.write_bytes(b'personal sentinel')
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, 'w') as out:
+            for name in ('main.py', 'gui/window.py', 'requirements.txt'):
+                out.write(app_updater.ROOT / name, 'repo/' + name)
+        remote = json.dumps({'sha': 'c' * 40}).encode()
+        with patch.object(app_updater, '_get', side_effect=[remote, archive.getvalue()]):
+            changed, _ = maintenance.apply(target)
+        if not changed or (target / 'main.py').read_bytes() != (app_updater.ROOT / 'main.py').read_bytes():
+            raise AssertionError('Prepared source update was not installed')
+        app_updater.rollback_zip(target)
+        if (target / 'main.py').read_bytes() != b'old' or private.read_bytes() != b'personal sentinel':
+            raise AssertionError('Rollback or personal file preservation failed')
+
+
+if __name__ == '__main__':
+    verify_installed_runtime()

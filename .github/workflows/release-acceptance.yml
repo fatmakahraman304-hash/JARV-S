@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "tools/update_prepared_install.py"
+      - "tests/test_prepared_update.py"
       - "FRIDAY_BASLAT.cmd"
       - "requirements.txt"
       - "tools/release_package.py"
@@ -76,6 +78,8 @@ jobs:
           .\FRIDAY_BASLAT.cmd --install-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path .venv/friday-setup.ok)) { throw "Missing install receipt" }
+      - name: In-place maintenance with the installed interpreter and offline rollback
+        run: .\build\installed\.venv\Scripts\python.exe -m tests.test_prepared_update
       - name: Native packaged window, receipt and normal close
         run: .\build\installed\.venv\Scripts\python.exe tools/measure_window_startup.py --root build/installed --python build/installed/.venv/Scripts/pythonw.exe --out build/package-window --installed
       - name: Verify both installed browser engines and installed failure-reporting regressions
