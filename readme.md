@@ -1,5 +1,7 @@
 # FRIDAY
 
+Windows’ta Python 3.13 kuruluysa kaynak ZIP dosyasını yazılabilir bir klasöre çıkarıp **FRIDAY_BASLAT.cmd** dosyasına çift tıklayın. İlk çalıştırmada yerel Python ortamı hazırlanır. Sonraki açılışlar bu ortamı kullanır.
+
 [26 Kasım ana geliştirme kaydı ve doğrulanmamış işler](docs/development/master-progress-2026-11-26.md)
 
 [Ortak FRIDAY tasarımı, cihaz görünümleri ve uyumluluk notları](docs/friday-tasarim-kimlik.md)

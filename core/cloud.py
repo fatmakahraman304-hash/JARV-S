@@ -127,8 +127,8 @@ MANIFEST = (
 # No PyQt6, sounddevice or pyautogui: nothing on the server has a screen.
 REQUIREMENTS = (
     "google-genai>=2.8.0,<3", "httpx>=0.27,<1", "requests>=2.31,<3",
-    "cryptography>=42,<50", "psutil>=5.9,<8", "beautifulsoup4>=4.12,<5", "ddgs>=9,<10",
-    "pdfplumber", "PyPDF2", "python-docx", "python-pptx", "pillow>=10,<13", "openpyxl",
+    "cryptography>=50,<51", "psutil>=5.9,<8", "beautifulsoup4>=4.12,<5", "ddgs>=9,<10",
+    "pdfplumber", "pypdf>=7.1.1,<8", "python-docx", "python-pptx", "pillow>=13,<14", "openpyxl",
 )
 
 # Imported by the installed service's own Python before it is (re)started: a
