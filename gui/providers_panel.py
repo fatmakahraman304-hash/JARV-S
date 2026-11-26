@@ -83,10 +83,6 @@ class ProvidersOverlay(_HudOverlay):
     """
 
     changed = pyqtSignal()          # emitted on APPLY when the engine moved
-    # Emitted from a worker thread when something the machine had to be asked
-    # for — the installed voices — has arrived. A signal rather than a direct
-    # call because the worker must not touch a widget.
-    _live_ready = pyqtSignal()
     # (provider id, [(value, label), ...]) from a worker that went and asked an
     # endpoint what it offers.
     _models_ready = pyqtSignal(str, list)
@@ -122,7 +118,12 @@ class ProvidersOverlay(_HudOverlay):
         # so without this the panel freezes for most of two seconds every time
         # a dropdown is touched. Started here rather than at startup, because
         # nothing in this folder may run before somebody opens it.
-        self._live_ready.connect(self._on_live_ready)
+        # Prefetch can finish after the drawer (and its native Qt signals) is
+        # destroyed. Workers retain only Python events, never a bound Qt signal.
+        self._voice_prefetch = []
+        self._voice_timer = QTimer(self)
+        self._voice_timer.setInterval(100)
+        self._voice_timer.timeout.connect(self._check_voice_prefetch)
         self._models_ready.connect(self._on_models_ready)
         self._nvidia_probe_ready.connect(self._on_nvidia_probe_ready)
         self._nvidia_testing: set[str] = set()
@@ -135,9 +136,13 @@ class ProvidersOverlay(_HudOverlay):
                                       fromlist=["prefetch"])
                     _pf = getattr(_mod, "prefetch", None)
                     if _pf:
-                        _pf(self._live_ready.emit)
+                        ready = threading.Event()
+                        _pf(ready.set)
+                        self._voice_prefetch.append(ready)
                 except Exception:
                     pass
+        if self._voice_prefetch:
+            self._voice_timer.start()
         self._edits: dict[str, dict] = {}       # provider id -> {key: (widget, Field)}
         self._status: dict[str, QLabel] = {}    # provider id -> status line
         self._more: dict[str, bool] = {}        # provider id -> advanced shown
@@ -290,6 +295,14 @@ class ProvidersOverlay(_HudOverlay):
                 }}
                 QPushButton:hover {{ border-color: {C.BORDER_B}; }}
             """)
+
+    def _check_voice_prefetch(self):
+        pending = [event for event in self._voice_prefetch if not event.is_set()]
+        if not pending:
+            self._voice_timer.stop()
+        if len(pending) != len(self._voice_prefetch):
+            self._voice_prefetch = pending
+            self._on_live_ready()
 
     def _on_live_ready(self) -> None:
         """A machine-supplied list has arrived — redraw once so it appears."""
@@ -1115,15 +1128,17 @@ class ProvidersOverlay(_HudOverlay):
             self._say(pid, "NVIDIA modeli sınanıyor… Yanıt biraz sürebilir.", C.TEXT_DIM)
 
             def work():
+                working_model = ""
                 try:
                     inst = self._registry.build(pid, dict(values))
                     ok, msg = inst.probe(check_vision=False)
+                    working_model = str(inst.model)
                 except Exception:
                     # Gizli anahtar ve sunucunun ham hatası ekrana aktarılmaz.
                     ok, msg = False, "NVIDIA bağlantı testi tamamlanamadı. Yeniden deneyin."
                 try:
                     self._nvidia_probe_ready.emit(
-                        pid, ok, msg, str(values.get("model") or ""), str(inst.model))
+                        pid, ok, msg, str(values.get("model") or ""), working_model)
                 except RuntimeError:
                     pass  # Panel kapatılmış olabilir.
 

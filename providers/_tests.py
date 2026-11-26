@@ -1065,6 +1065,21 @@ def test_panel_settings_survive():
         check(f"all {len(combos)} boxes ignore the wheel unless focused",
               combos and all(isinstance(c, UI._ScrollSafeCombo) for c in combos))
 
+        # A delayed catalog download may finish after the native drawer closes.
+        from PyQt6 import sip
+        from providers import tts_piper
+        pending = []
+        with patch.object(tts_piper, "prefetch", side_effect=pending.append):
+            temporary_panel = UI.ProvidersOverlay()
+        sip.delete(temporary_panel)
+        check("delayed voice catalog request was scheduled", bool(pending))
+        for complete in pending:
+            complete()
+        check("late catalog callbacks retain only Python events",
+              all(isinstance(complete.__self__, threading.Event) for complete in pending))
+        sip.delete(ov2)
+        sip.delete(ov)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
