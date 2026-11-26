@@ -120,7 +120,7 @@ MANIFEST = (
     "actions/system_monitor.py", "actions/web_search.py",
     "plugins/__init__.py", "plugins/_telegram_ops.py", "plugins/telegram_remote.py",
     "providers/__init__.py", "providers/audio.py", "providers/base.py",
-    "providers/llm_openai.py", "providers/registry.py", "providers/schema.py",
+    "providers/llm_openai.py", "providers/llm_routellm.py", "providers/registry.py", "providers/schema.py",
     "providers/tts_system.py",
 )
 
