@@ -272,3 +272,13 @@ commit'indeydi. #214 ana dala alındı (3b279dc7ca3ad07407e6c1fc73e9392b5ebb5b11
 ses sağlayıcıları ile gerçek zamanlı oturum altyapısında değişiklikler
 birleşti. Bu özelliklerin gerçek hesap ve cihaz kabulü ayrıca açıktır.
 İndirme göstergesi yeni ana dal üzerinde 76 hedefli testle tekrar doğrulandı.
+
+## Git güncellemesinde eşzamanlı düzenleme koruması
+
+Geliştiriliyor — #233, yerel değişiklikleri önce geçici bir Git çalışma
+ağacında dener. Gerçek çalışma ağacına yeni düzenleme gelirse kayıtlı stash
+korunur. Gerçek uygulama beklenmedik biçimde yarıda kalırsa işlem kaydı
+bırakılır ve otomatik yeniden başlatma durur. Bu durum kullanıcı tarafından
+incelenmelidir. Linux ve Python 3.13 ortamında gerçek Git depoları ile
+çakışma ve eşzamanlı düzenleme senaryolarını içeren 58 test geçti.
+Windows CI sonuçları PR üzerinde izlenir.

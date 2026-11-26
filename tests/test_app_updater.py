@@ -440,6 +440,40 @@ class GitLocalChangesTests(unittest.TestCase):
         self.assertIn('MY VERSION', self.git('stash', 'show', '-p', 'stash@{0}'))
         self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')
 
+    def test_failed_stash_pop_never_discards_a_concurrent_edit(self):
+        (self.root / 'notes.py').write_bytes(b'my original edit\n')
+        previous = u._git.side_effect
+
+        def concurrent_edit(root, *args):
+            if args[:2] == ('stash', 'pop'):
+                (self.root / 'main.py').write_bytes(b'new concurrent edit\n')
+                raise RuntimeError('simulated concurrent change during restore')
+            return previous(root, *args)
+
+        u._git.side_effect = concurrent_edit
+        with self.assertRaises(u._RecoveryRequired):
+            u.update(self.root)
+        self.assertEqual((self.root / 'main.py').read_bytes(), b'new concurrent edit\n')
+        self.assertIn('my original edit', self.git('stash', 'show', '-p', 'stash@{0}'))
+        self.assertTrue((self.root / '.aether-update.lock').exists())
+
+    def test_concurrent_edit_during_stash_trial_keeps_both_changes(self):
+        (self.root / 'notes.py').write_bytes(b'my original edit\n')
+        previous = u._git.side_effect
+
+        def concurrent_edit(root, *args):
+            result = previous(root, *args)
+            if args[:2] == ('worktree', 'remove'):
+                (self.root / 'main.py').write_bytes(b'new concurrent edit\n')
+            return result
+
+        u._git.side_effect = concurrent_edit
+        changed, message = u.update(self.root)
+        self.assertTrue(changed)
+        self.assertIn('stash', message)
+        self.assertEqual((self.root / 'main.py').read_bytes(), b'new concurrent edit\n')
+        self.assertIn('my original edit', self.git('stash', 'show', '-p', 'stash@{0}'))
+
     def test_eol_update_preserves_untracked_collision(self):
         self.git('reset', '--hard', self.new)
         personal = self.root / 'local.txt'
