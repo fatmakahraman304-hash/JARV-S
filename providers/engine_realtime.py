@@ -17,8 +17,11 @@ QUEUE_SIZE = 128
 
 
 class RealtimeEngine:
-    def __init__(self, session, log=None):
+    def __init__(self, session, log=None, *, explicit_only=False, capture_allowed=None, reconnect=None):
         self._session = session
+        self._explicit_only = explicit_only
+        self._capture_allowed = capture_allowed or (lambda: True)
+        self._reconnect = reconnect or (lambda: None)
         self._log = log or (lambda message: None)
         self.caps = dict(DEFAULT_CAPS, audio_out=True)
         self._mic = bytearray()
@@ -36,6 +39,9 @@ class RealtimeEngine:
         return None
 
     async def send_realtime_input(self, *, audio):
+        if not self._capture_allowed():
+            self.discard_capture()
+            return
         if self._closed or self._invalid or self._overflow:
             return
         data = audio if isinstance(audio, bytes) else getattr(audio, "data", None)
@@ -64,6 +70,9 @@ class RealtimeEngine:
         self._local_turns.reset()
 
     async def flush_microphone(self, sample_rate=16000):
+        if not self._capture_allowed():
+            self.discard_capture()
+            return ""
         if self.auto_turn:
             self.discard_capture()
             return ""
@@ -81,6 +90,11 @@ class RealtimeEngine:
         return ""
 
     async def send_client_content(self, *, turns, turn_complete=True):
+        if self._explicit_only:
+            return  # main's shared background/injection channel is not consent
+        await self.send_user_content(turns=turns, turn_complete=turn_complete)
+
+    async def send_user_content(self, *, turns, turn_complete=True):
         if self._closed:
             return
         parts = turns.get("parts") if isinstance(turns, dict) else None
@@ -96,7 +110,7 @@ class RealtimeEngine:
         self._start(text=text)
 
     def _start(self, **request):
-        if self._closed:
+        if self._closed or ("pcm" in request and not self._capture_allowed()):
             return
         if self._invalid:
             self._log("SYS: Realtime oturumu geçersiz; yeniden bağlantı gerekli.")
@@ -108,6 +122,8 @@ class RealtimeEngine:
 
     async def _generate(self, request):
         try:
+            if "pcm" in request and not self._capture_allowed():
+                return
             async with aclosing(self._session.turn(**request)) as events:
                 async for event in events:
                     if self._closed or self._invalid:
@@ -121,6 +137,7 @@ class RealtimeEngine:
                 # Avoid leaking provider error bodies or user input to logs.
                 self._log(f"SYS: Realtime yanıtı tamamlanmadı ({type(exc).__name__}).")
                 await self._queue.put(Msg.turn_end())
+                self._reconnect()
 
     async def send_tool_response(self, *, function_responses):
         # This adapter never declares tools and must not replay a tool result.
@@ -152,6 +169,7 @@ class RealtimeEngine:
         self._queue.put_nowait(Msg.turn_end())
         # A cancelled task may not have entered the session generator.
         self._closing = self._loop.create_task(self._session.close())
+        self._reconnect()
 
     async def close(self):
         if self._closed:
