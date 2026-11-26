@@ -3723,11 +3723,17 @@ class FridayLive:
                 return (cfg["brightness_control"] and self._engine_mode() == "realtime"
                         and enabled(current.get("cloud_consent"))
                         and enabled(current.get("brightness_control")))
+            def media_allowed():
+                current = get_provider_config(PROVIDER_ID)
+                return (cfg["media_control"] and self._engine_mode() == "realtime"
+                        and enabled(current.get("cloud_consent"))
+                        and enabled(current.get("media_control")))
             async with conversation(
                 cfg["api_key"], cfg["model"], cfg["voice"],
                 guide_enabled=lambda: get_plugin_enabled("assistant_help"),
                 volume_enabled=volume_allowed,
                 brightness_enabled=brightness_allowed,
+                media_enabled=media_allowed,
             ) as rt:
                 engine = RealtimeEngine(
                     rt, log=self.ui.write_log, explicit_only=True,
