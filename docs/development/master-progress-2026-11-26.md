@@ -128,3 +128,39 @@ koşu 180 saniyelik süre sınırında tamamlanmadı. İlk Windows CI koşusunda
 sentetik eski manifest requirements.txt dosyasını içermediği için CRLF ile
 yazılan dosya haklı olarak çakışma sayıldı. Test artık mevcut dosyanın gerçek
 özetini kaydederek kurulu bir sürümü temsil eder. CI sonuçları PR #209'dadır.
+
+### #209 birleşme ve tekrar koşusu
+
+Güncelleyici düzeltmesi [#209](https://github.com/fatmakahraman304-hash/JARV-S/pull/209)
+ile ana dala alındı. Birleşen kod `32e513b2eb02d40ee1c422961512e5d6d3dbf420`.
+GitHub regresyonunda 1.047 testin Windows'ta 1.023'ü, Ubuntu'da 1.022'si
+geçti; sırasıyla 24 ve 25 test atlandı. İki sistemde güvenlik ve kurtarma,
+Windows kurulum, yeniden kurulum ve HUD kabulü ile kaynak paket adayı
+kontrolleri başarılı. Kaynak paketi adayı üretimi bir stabil sürüm yayını değildir.
+
+Yerel bağımlılık tanılamasında yalın Python'da httpx ve PyQt6 gibi modüller
+eksikti. Depodaki requirements.txt izole Python 3.13.5 ortamına kuruldu.
+Birleşen kodla ağaç içeriği aynı olan adayda tam koşu 267,380 saniyede bitti.
+1.044 test geçti, 3 test atlandı (iki Windows testi ve 250 MB Blender
+kılavuzunu indirme). Gerçek Blender modelleme, canlı bağlantı ve render
+testleri bu koşuya dahildi. Çıktıda SSL soketleri için ResourceWarning
+görüldü; kaynak yaşam döngüsü tanılaması açık kalıyor.
+15 izlenen JavaScript dosyası Node sözdizimi denetiminden geçti.
+
+Aynı Linux ortamında depo ölçüm aracıyla üçer ayrı süreçte, dönüşümlü,
+Qt offscreen ve render kapalıyken alınan medyanlar aşağıdadır.
+Eşzamanlı test yükü vardı. Sayılar HUD hazırlığının örnek ölçümüdür.
+
+| Ölçüm | Önce (#207) | Sonra (#209) |
+| --- | ---: | ---: |
+| HUD bağımlılıklarının yüklenmesi (ms) | 176,52 | 185,17 |
+| HUD bileşeninin oluşturulması (ms) | 39,77 | 49,66 |
+| Gizli HUD ile 1 saniyede süreç CPU zamanı (ms) | 19,99 | 11,41 |
+| Süreç belleği (MiB RSS) | 68,31 | 67,99 |
+
+Katalog sayımında 76 davranış ilkesi, 29 uygulama girdisi ve 895 konuşma
+yöntemi bulundu. Bu son grupta 18 yerel hesaplama/karşılaştırma bağlantısı
+var. Altı durumlu işlev ve uçtan uca çalışabilirlik envanteri açık.
+Takipte Aşama 1 için [#208](https://github.com/fatmakahraman304-hash/JARV-S/pull/208)
+anahtar saklama çalışmasının birleşme durumunu kontrol et. İmzalı kanalın
+güven kökü dağıtımı, saha ses/cihaz testleri ve üstteki kabul açıkları sürüyor.
