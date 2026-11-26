@@ -297,3 +297,11 @@ Kodlama ajanında iki süreç akışının açık kaldığı ayrıca gerçek alt
 yeniden üretildi. #236 (88a89f56e313d6b427259c10bb2b6beda11b78ec) bu
 akışları kapatır. Kodlama ajanı testleri 36/36 geçti. Blender test matrisi,
 bozuk indirmeleri reddedip resmî aynayı da deneyerek sürdürülür.
+
+## Son doğrulanmış ilerleme
+
+- Tamamlandı — #228, GÜNCELLE düğmesinde gerçek indirme ilerlemesini gösterir.
+- Kısmen tamamlandı — #233, Git güncellemesindeki stash çakışması ve eşzamanlı düzenlemeleri korur. Dört GitHub denetimi başarılıdır. Beklenmedik kısmi uygulama manuel inceleme gerektirir.
+- Tamamlandı — #236 kodlama ajanının alt süreç akışlarını kapatır. #235 Blender bağlantı testinin ve iki test okuyucusunun kaynaklarını kapatır. Blender 4.2 ve 5.0 test ve render denetimleri geçti.
+- Test bekliyor — 3b0657ebc349e2a9f2e6bedca05f4d49679b3756 üzerinde Linux/Python 3.13.5 tam test koşusu 1.169 test, 5 atlanan, 0 başarısız sonuç verdi. ResourceWarning görülmedi. NVIDIA ölçüm bağımlılığında pynvml FutureWarning incelemesi açıktır. Windows, fiziksel cihazlar ve gerçek hesaplar bu yerel koşunun dışındadır.
+- Geliştiriliyor — yayıncı güven kökü dağıtımı, Android anahtar rotasyonu, eklenti izolasyonu ve Aşama 1–8 kapsamındaki tamamlanmamış kabuller önceki tablolarda açıktır.
