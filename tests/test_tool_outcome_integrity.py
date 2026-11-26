@@ -86,6 +86,17 @@ class OutcomeIntegrity(unittest.TestCase):
 
 
 class AsyncOutcomeIntegrity(unittest.IsolatedAsyncioTestCase):
+    async def test_tool_timeout_is_a_failure_without_a_fake_background_job(self):
+        effects, late = [], []
+        def timeout():
+            effects.append('called')
+            raise TimeoutError('synthetic provider timeout')
+        with self.assertRaises(TimeoutError):
+            await toolwait.run('fixture', timeout, wait=2, on_late=lambda *args: late.append(args))
+        await asyncio.sleep(0)
+        self.assertEqual(effects, ['called'])
+        self.assertEqual(late, [])
+
     async def test_fast_and_late_missing_results_do_not_replay(self):
         effects, late = [], []
         ready = threading.Event()

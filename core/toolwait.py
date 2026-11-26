@@ -28,6 +28,10 @@ async def run(name: str, fn, wait: float | None = None, on_late=None):
     try:
         return outcome.result_text(name, await asyncio.wait_for(asyncio.shield(fut), timeout=wait))
     except asyncio.TimeoutError:
+        if fut.done():
+            # A tool's own TimeoutError is not our waiting deadline. Surface
+            # its failure instead of announcing that finished work is running.
+            return outcome.result_text(name, fut.result())
         def done(f):
             try:
                 result = f.result()
