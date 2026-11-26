@@ -105,9 +105,8 @@ UPLOADS_DIR = _make_uploads_dir()
 
 def _get_gemini_key() -> str | None:
     try:
-        import json as _json
-        with open(BASE_DIR / "config" / "api_keys.json", "r", encoding="utf-8") as f:
-            return _json.load(f).get("gemini_api_key")
+        from memory.config_manager import read_config
+        return read_config(BASE_DIR / "config" / "api_keys.json").get("gemini_api_key")
     except Exception:
         return None
 
@@ -834,11 +833,9 @@ class DashboardServer:
             automatically and you will have to accept it once per device.
         """
         try:
-            import json as _json
-            with open(BASE_DIR / "config" / "api_keys.json", "r",
-                      encoding="utf-8") as f:
-                if not _json.load(f).get("dashboard_https"):
-                    return False
+            from memory.config_manager import read_config
+            if not read_config(BASE_DIR / "config" / "api_keys.json").get("dashboard_https"):
+                return False
         except Exception:
             return False
         certs = BASE_DIR / "config" / "certs"
@@ -1599,11 +1596,12 @@ class DashboardServer:
         import json
         settings = BASE_DIR / "config" / "api_keys.json"
         try:
-            config = json.loads(settings.read_text("utf-8")) if settings.exists() else {}
+            from memory.config_manager import read_config
+            config = read_config(settings)
             use_ssl = bool(config.get("dashboard_https"))
             if use_ssl and not _ensure_certs():
                 raise ValueError("HTTPS sertifikası hazırlanamadı")
-        except (OSError, ValueError, AttributeError) as exc:
+        except (OSError, ValueError, AttributeError, RuntimeError) as exc:
             self._bind_error = f"Dashboard başlatılamadı: {type(exc).__name__}. HTTPS ve ayar dosyasını kontrol edin."
             print(self._bind_error)
             return

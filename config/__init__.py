@@ -12,8 +12,8 @@ def _platform_os() -> str:
 
 def get_config() -> dict:
     try:
-        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+        from memory.config_manager import read_config
+        return read_config(_CONFIG_PATH)
     except Exception:
         return {}
 

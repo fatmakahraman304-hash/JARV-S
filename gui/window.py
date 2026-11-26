@@ -546,7 +546,8 @@ class MainWindow(QMainWindow):
             cam_idx = 0
             try:
                 import json as _j
-                cfg = _j.loads((CONFIG_DIR / "api_keys.json").read_text())
+                from memory.config_manager import read_config
+                cfg = read_config(CONFIG_DIR / "api_keys.json")
                 cam_idx = int(cfg.get("camera_index", 0))
             except Exception:
                 pass
