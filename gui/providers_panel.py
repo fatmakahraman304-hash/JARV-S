@@ -655,7 +655,7 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(self._label(
             "Komutlar OpenAI bulutuna gönderilir ve ücret oluşabilir. Mikrofon kapalı "
             "başlar; isterseniz yerel konuşma algılama veya bas-konuş kullanılır. "
-            "Kılavuz ve isteğe bağlı onaylı ses seviyesi, parlaklık, medya ve sınırlı Windows uygulama açma dışında araçlar, diğer araçlar desteklenmez. Telefon soruları isteğe bağlıdır; ayrı izinle sesli yanıt yalnız telefona gönderilebilir. "
+            "Yalnızca kılavuz ve isteğe bağlı onaylı sınırlı bilgisayar kontrolleri desteklenir. Telefon soruları ve sesli yanıt ayrı izinlere bağlıdır. "
             "Bağlantı için websockets>=15 gerekir.", 7, C.TEXT_DIM))
         fields = (
             Field("api_key", "Ayrı OpenAI API anahtarı", kind="secret"),
@@ -673,7 +673,17 @@ class ProvidersOverlay(_HudOverlay):
         )
         self._edits[PROVIDER_ID] = {}
         self._hidden[PROVIDER_ID] = set()
+        sections = {"api_key": "01  MOTOR VE SES", "microphone": "02  SES GİRİŞİ",
+                    "phone_text": "03  CİHAZ BAĞLANTISI", "volume_control": "04  ONAYLI KONTROLLER"}
+        # Keep voice input and local transcription together in FRIDAY's own panel.
+        fields = tuple(f for f in fields if f.key not in ("input_transcription",)) 
+        fields = fields[:4] + (Field("input_transcription",
+            "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)",
+            kind="bool", default=False),) + fields[4:]
         for field in fields:
+            if field.key in sections:
+                lay.addSpacing(8)
+                lay.addWidget(self._label(sections[field.key], 9, C.PRI, bold=True))
             lay.addWidget(self._label(field.label, 8, C.TEXT_DIM))
             widget = self._make_widget(PROVIDER_ID, field, self._realtime_draft.get(field.key, field.default))
             if isinstance(widget, QComboBox):
