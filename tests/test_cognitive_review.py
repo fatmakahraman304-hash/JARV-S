@@ -54,6 +54,14 @@ class CognitiveReviewTests(unittest.TestCase):
         self.assertEqual(review["file_counts"]["verified"], 0)
         self.assertFalse(review["truth_verified"])
 
+    def test_long_answer_is_explicitly_marked_as_truncated(self):
+        self.engine.store.update(self.tid, result="a" * 5000)
+        prompts = []
+        review = review_node(self.engine, self.doc["id"], "a",
+                             ask=lambda prompt: (prompts.append(prompt) or {"verdict": "uncertain", "reason": "partial"}))
+        self.assertTrue(review["result_truncated"])
+        self.assertIn("Answer truncated: true", prompts[0])
+
     def test_file_change_during_model_call_discards_review(self):
         def ask(_):
             (self.folder / "output.txt").write_text("changed during review", encoding="utf-8")

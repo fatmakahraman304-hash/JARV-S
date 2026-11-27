@@ -87,7 +87,8 @@ def background_tasks(parameters: dict, player=None) -> str:
         counts = review["file_counts"]
         return (outcome.unverified("cognitive_review", "model opinion is not independent proof of truth",
                     opinion=review["opinion"], files_verified=counts["verified"],
-                    files_changed=counts["changed"], files_unavailable=counts["unavailable"])
+                    files_changed=counts["changed"], files_unavailable=counts["unavailable"],
+                    result_truncated=review["result_truncated"])
                 + "\n" + outcome.untrusted("review-opinion", review["reason"]))
 
     if action in ("cognitive_status", "cognitive_cancel", "cognitive_revise"):
