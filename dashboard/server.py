@@ -960,6 +960,28 @@ class DashboardServer:
             return False
         return True
 
+    def private_phone_socket(self, token):
+        """Require one live secure controller socket, never a TV or a token fanout."""
+        if not self._valid(token):
+            return None
+        matches = [ws for ws, tok in list(self._clients.items())
+                   if tok == token and ws not in self._screen_ws
+                   and getattr(ws.url, "scheme", "") == "wss"]
+        return matches[0] if len(matches) == 1 else None
+
+    async def deliver_private_phone_reply(self, socket, token, pcm, allowed):
+        from providers.realtime_phone_reply import reply_message
+        if not allowed() or self.private_phone_socket(token) is not socket:
+            return False
+        message = reply_message(pcm)
+        if not allowed() or self.private_phone_socket(token) is not socket:
+            return False
+        try:
+            await asyncio.wait_for(socket.send_json(message), timeout=5)
+        except Exception:
+            return False
+        return True
+
     async def broadcast(self, msg: dict, history: bool = True) -> None:
         if history:
             self._history.append(msg)
