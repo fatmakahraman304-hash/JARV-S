@@ -75,6 +75,15 @@ class NativeDiagnosticsTests(unittest.TestCase):
             self.assertIn("status=failed", tool.execute("system_snapshot", {}))
             collect.assert_not_called()
 
+    def test_revoking_sharing_during_collection_blocks_the_result(self):
+        snapshot = {"metrics": {"cpu_percent": 97}, "errors": []}
+        with tempfile.TemporaryDirectory() as directory, patch.object(native, "collect", return_value=snapshot), \
+             patch.object(native, "model_sharing_enabled", side_effect=[True, False]):
+            tool = TaskTools(Path(directory), ["system_snapshot"], log=lambda _: None)
+            result = tool.execute("system_snapshot", {})
+            self.assertIn("status=failed", result)
+            self.assertNotIn("97", result)
+
     def test_model_sharing_requires_explicit_boolean_setting_and_fails_closed(self):
         from memory import config_manager
         for setting in ({}, {"hardware_model_sharing": "true"}, {"hardware_model_sharing": 1}):

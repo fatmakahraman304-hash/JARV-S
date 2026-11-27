@@ -175,7 +175,10 @@ class TaskTools:
                 if not model_sharing_enabled():
                     return outcome.failed("system_snapshot", "hardware sharing with models is disabled; "
                                           "use local diagnostics or enable it in Settings")
-                return outcome.untrusted("local-system-metrics", json.dumps(model_metrics(collect()), ensure_ascii=False))
+                snapshot = collect()
+                if not model_sharing_enabled():
+                    return outcome.failed("system_snapshot", "hardware sharing was disabled while collecting")
+                return outcome.untrusted("local-system-metrics", json.dumps(model_metrics(snapshot), ensure_ascii=False))
             from core.action_loader import _call_handler
             if name == "file_processor":
                 if str(args.get("action") or "").lower() in ("run", "test"):
