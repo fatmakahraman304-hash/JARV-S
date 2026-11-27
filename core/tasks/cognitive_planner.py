@@ -4,14 +4,16 @@ from __future__ import annotations
 import json
 
 from core import outcome
-from core.tasks.cognitive import workflow_limits
+from core.tasks.cognitive import MAX_REPLANS, workflow_limits
 
 
-def create_workflow(engine, goal, deliver="voice", limits=None, ask=None):
+def create_workflow(engine, goal, deliver="voice", limits=None, ask=None, max_replans=0):
     goal = str(goal or "").strip()
     if not goal or len(goal) > 5000:
         raise ValueError("a goal of at most 5000 characters is required")
     limits = workflow_limits(limits)
+    if isinstance(max_replans, bool) or not isinstance(max_replans, int) or not 0 <= max_replans <= MAX_REPLANS:
+        raise ValueError(f"max_replans must be an integer between 0 and {MAX_REPLANS}")
     profiles = engine.agents()
     roles = [{"name": name, "mode": profile.mode,
               "tools": sorted(set(profile.tools))}
@@ -44,4 +46,24 @@ def create_workflow(engine, goal, deliver="voice", limits=None, ask=None):
         raise ValueError("the planner did not return a valid task graph")
     # The coordinator validates agent names, every dependency, all budgets and
     # tool permissions before persisting or dispatching any work.
-    return engine.cognitive.create(goal, response["nodes"], deliver=deliver, limits=limits)
+    return engine.cognitive.create(goal, response["nodes"], deliver=deliver, limits=limits,
+                                   max_replans=max_replans)
+
+
+def suggest_alternative(goal, task, failure_hint, ask=None):
+    """One model suggestion; it cannot select agents, tools, permissions or budgets."""
+    prompt = ("Suggest one different, practical approach for the failed task. "
+              "Return only JSON with exactly one field: {\"task\":\"new approach\"}. "
+              "Do not request new permissions, shell access, messaging or purchases. "
+              "The same agent and tools will be used and budget cannot increase. "
+              "Do not invent execution results.\nGoal:\n" + outcome.untrusted("goal", str(goal)[:5000])
+              + "\nOriginal task:\n" + outcome.untrusted("task", str(task)[:5000])
+              + "\nFailure category:\n" + outcome.untrusted("failure", str(failure_hint)[:300]))
+    if ask is None:
+        from core import gemini
+        ask = lambda text: gemini.as_json(text, tier=gemini.SMART, timeout_ms=15000)
+    value = ask(prompt)
+    if not isinstance(value, dict) or set(value) != {"task"}:
+        return None
+    task = value["task"]
+    return task.strip() if isinstance(task, str) and task.strip() and len(task) <= 5000 else None

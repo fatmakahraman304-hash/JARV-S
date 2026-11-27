@@ -52,7 +52,7 @@ def background_tasks(parameters: dict, player=None) -> str:
         try:
             from core.tasks.cognitive_planner import create_workflow
             doc = create_workflow(eng, a.get("task"), deliver=a.get("deliver") or "voice",
-                                  limits=a.get("limits"))
+                                  limits=a.get("limits"), max_replans=a.get("max_replans", 1))
         except (ValueError, TypeError) as e:
             return outcome.failed("cognitive_workflow", str(e))
         except Exception as e:
@@ -63,7 +63,7 @@ def background_tasks(parameters: dict, player=None) -> str:
     if action == "cognitive_start":
         try:
             doc = eng.cognitive.create(a.get("task"), a.get("nodes"), a.get("deliver") or "voice",
-                                       limits=a.get("limits"))
+                                       limits=a.get("limits"), max_replans=a.get("max_replans", 0))
         except (ValueError, TypeError) as e:
             return outcome.failed("cognitive_workflow", str(e))
         return outcome.started("cognitive_workflow", workflow_id=doc["id"], nodes=len(doc["nodes"]),
@@ -251,6 +251,8 @@ TOOL = {
         "and run a graph for the user's goal, using existing agent permissions. "
         "cognitive_start runs 1-12 nodes with explicit depends_on ids; "
         "independent nodes can run in parallel. Provide bounded alternatives where useful, "
+        "cognitive_auto may request one model-generated alternative after a failure if budget "
+        "allows; max_replans sets 0-2. Completed or uncertain writes require user inspection. "
         "without expanding tool permissions; uncertain operations are not repeated. Each node has minutes, rounds and max_calls; report or "
         "file_written selects the evidence check. Monetary costs are not capped. "
         "cognitive_list/status/cancel manage workflows; cognitive_revise updates only an unstarted "
@@ -281,6 +283,7 @@ TOOL = {
             "plan_id": {"type": "STRING", "description": "for plan_status or plan_cancel"},
             "workflow_id": {"type": "STRING", "description": "for cognitive workflow actions"},
             "node_id": {"type": "STRING", "description": "for cognitive_revise: unstarted node id"},
+            "max_replans": {"type": "INTEGER", "description": "0-2 automatic model replans; cognitive_auto defaults to 1, cognitive_start to 0"},
             "limits": {"type": "OBJECT", "description": "optional cognitive workflow limits; alternatives count against totals",
                        "properties": {"max_nodes": {"type": "INTEGER", "description": "1-12"},
                                       "max_minutes": {"type": "INTEGER", "description": "1-360 total node minutes"},

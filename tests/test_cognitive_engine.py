@@ -300,7 +300,8 @@ class CognitiveEngineTests(unittest.TestCase):
         eng.start_scheduler()
         try:
             self.assertTrue(done.wait(20))
-            self.assertEqual(eng.cognitive.get(doc["id"])["status"], "failed")
+            # A completed first write must be reviewed instead of retried.
+            self.assertEqual(eng.cognitive.get(doc["id"])["status"], "needs_review")
             folder = eng.store.workdir(doc["nodes"][0]["task_id"]) / "files"
             self.assertEqual((folder / "one.txt").read_text(encoding="utf-8"), "one")
             self.assertFalse((folder / "two.txt").exists())

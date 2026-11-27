@@ -213,3 +213,26 @@ Başlangıç `main`: `fe7acc21026c7b0b4979f8f90b69541189a77fc6`; #252–#258 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows cihazında, gerçek sağlayıcı hesaplarında ve GÜNCELLE panelinde uçtan uca kullanım doğrulanmadı.
+
+## 2026-11-27 — SOVEREIGN: sınırlı uyarlamalı yeniden planlama
+
+Başlangıç `main`: `21445324de9e5dcec9079814b4896bb88e878a6c`; #252–#260 korunur.
+
+### Tamamlanan
+
+- Modelin oluşturduğu bilişsel grafiklerde başarısız, yazma işlemi yapmamış düğüm için kalan dakika/araç bütçesi varsa model yeni bir yöntem önerebilir. Varsayılan bir, en fazla iki model yeniden planlaması yapılır; mevcut ajan, araçlar, bağımlılıklar ve bütçeler değiştirilmez. Tamamlanmış düğümler yeniden yürütülmez.
+- Model çağrısı öncesinde plan durumu ve hak kullanımı diske kaydedilir. Çağrı sırasında çökme veya sonucu belirsiz yazma olursa otomatik tekrar yerine inceleme istenir; iptalden sonra geç gelen öneri çalıştırılmaz. Paralel öneriler ayrılmış bütçeyi iki kez kullanamaz.
+- Önceden tanımlı alternatifler de dahil, önceki denemede tamamlanmış yazma/not işlemi varsa başarısız adım otomatik tekrarlanmaz. Bu durum `failed` yerine `needs_review` olarak bildirilir.
+
+### Testler ve başarısızlıklar
+
+- Yerel testlerde gerçek görev zamanlayıcısı, taklit model yanıtı, önceki yazma, paralel bütçe, yeniden başlatma ve iptal senaryoları kontrol edildi. Sağlayıcı yanıtları taklittir; gerçek sağlayıcı, maliyet ve model kalitesi ölçülmedi. Windows/Linux GitHub testleri ilgili değişiklik isteğinde izlenir.
+
+### Eksik kalan
+
+- Uyarlama aynı ajan ve izinlerle sınırlıdır; dinamik ajan/model değiştirme, genel bağımlılık grafiği yeniden düzenleme ve bağımsız anlamsal sonuç doğrulama henüz yoktur. Model çağrıları için token/para cinsinden kesin üst sınır yoktur. Süre bütçesi kesin duvar saati garantisi değildir.
+- Görev/grafik kayıtları hâlâ düz metin JSON'dur; şifreli Neural Journal'a taşınmadı. Aynı veri dizinini kullanan bağımsız süreçler için tam olarak bir kez garantisi yoktur. Konuşma, hafıza ve cihaz ağı için evrensel gizlilik ve diğer Omega aşamaları tamamlanmadı.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows bilgisayarı, gerçek model sağlayıcıları, GÜNCELLE paneli ve cihazlarla uçtan uca kabul testi yapılmadı.

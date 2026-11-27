@@ -12,6 +12,7 @@ import hashlib
 from pathlib import Path
 import re
 import secrets
+import threading
 
 from core import outcome
 from core.tasks.store import read_json, write_json
@@ -23,6 +24,7 @@ _LIVE = {"running", "stopping_failure", "stopping_review", "cancelling"}
 MAX_NODES = 12
 MAX_MINUTES = 360
 MAX_CALLS = 300
+MAX_REPLANS = 2
 
 
 def workflow_limits(limits=None):
@@ -58,6 +60,7 @@ class CognitiveCoordinator:
         self.root = Path(engine.store.root) / "cognitive"
         self.root.mkdir(parents=True, exist_ok=True)
         self._active = {p["id"] for p in self.all() if p.get("status") in _LIVE}
+        self._replanning = set()
 
     def _path(self, ident):
         if not isinstance(ident, str) or not _ID.fullmatch(ident):
@@ -82,8 +85,10 @@ class CognitiveCoordinator:
         digest = hashlib.sha256(f"{workflow}/{node}/{attempt}".encode()).hexdigest()[:24]
         return f"t{digest}-1"
 
-    def create(self, goal, nodes, deliver="voice", limits=None):
+    def create(self, goal, nodes, deliver="voice", limits=None, max_replans=0):
         limits = workflow_limits(limits)
+        if isinstance(max_replans, bool) or not isinstance(max_replans, int) or not 0 <= max_replans <= MAX_REPLANS:
+            raise ValueError(f"max_replans must be an integer between 0 and {MAX_REPLANS}")
         goal = str(goal or "").strip()
         if not goal or len(goal) > 5000 or not isinstance(nodes, list) or not 1 <= len(nodes) <= limits["max_nodes"]:
             raise ValueError(f"goal and 1-{limits['max_nodes']} nodes are required")
@@ -145,7 +150,8 @@ class CognitiveCoordinator:
         ident = "c" + secrets.token_hex(12)
         for node in checked:
             node["task_id"] = self._task_id(ident, node["id"], 0)
-        doc = {"id": ident, "goal": goal, "nodes": checked, "limits": limits, "status": "running",
+        doc = {"id": ident, "goal": goal, "nodes": checked, "limits": limits,
+               "max_replans": max_replans, "replans_used": 0, "status": "running",
                "created": self.engine._clock(), "finished": 0, "error": "",
                "deliver": deliver if deliver in ("voice", "panel", "silent") else "voice"}
         with self.engine._lock:
@@ -233,6 +239,11 @@ class CognitiveCoordinator:
         changed = False
         by_id = {node["id"]: node for node in doc["nodes"]}
         for node in doc["nodes"]:
+            replan = node.get("replan") or {}
+            if replan.get("status") == "started":
+                if (doc["id"], node["id"]) not in self._replanning:
+                    return self._halt(doc, "stopping_review", "Interrupted replan has an unknown outcome; it was not repeated.")
+                continue
             expected = self._task_id(doc["id"], node["id"], node["attempt"])
             if node.get("task_id") != expected:
                 return self._halt(doc, "stopping_failure", "invalid node task identity")
@@ -248,6 +259,8 @@ class CognitiveCoordinator:
                 if status == "needs_review":
                     return self._halt(doc, "stopping_review", "A tool outcome is uncertain; inspect it before retrying.")
                 if status in ("failed", "cancelled"):
+                    if status == "failed" and self._has_writes(task):
+                        return self._halt(doc, "stopping_review", "A previous attempt wrote data; inspect it before retrying.")
                     if status == "failed" and node["attempt"] < len(node["alternatives"]):
                         node["prior_error"] = _failure_hint(task.get("error"))
                         node["attempt"] += 1
@@ -255,6 +268,8 @@ class CognitiveCoordinator:
                         node["status"] = "pending"
                         changed = True
                         continue
+                    if status == "failed" and self._request_replan(doc, node, task, _failure_hint(task.get("error"))):
+                        return
                     return self._halt(doc, "stopping_failure", f"Node {node['id']} {status}: {task.get('error') or ''}")
                 if status == "done":
                     if node.get("status") != "done":
@@ -264,6 +279,8 @@ class CognitiveCoordinator:
                         if node["verification"] == "file_written":
                             valid = valid and any(a.get("status") == "verified" for a in artifacts)
                         if not valid:
+                            if self._has_writes(task):
+                                return self._halt(doc, "stopping_review", "Written data needs inspection before retrying.")
                             if node["attempt"] < len(node["alternatives"]):
                                 node["prior_error"] = "The previous attempt did not produce the required verified evidence."
                                 node["attempt"] += 1
@@ -271,6 +288,8 @@ class CognitiveCoordinator:
                                 node["status"] = "pending"
                                 changed = True
                                 continue
+                            if self._request_replan(doc, node, task, "The attempt did not produce the required evidence."):
+                                return
                             return self._halt(doc, "stopping_failure", f"Node {node['id']} has no required evidence")
                         node.update(status="done", artifacts=artifacts)
                         changed = True
@@ -318,3 +337,73 @@ class CognitiveCoordinator:
         doc.update(status=status, error=error)
         write_json(self._path(doc["id"]), doc)
         self._stop(doc)
+
+    @staticmethod
+    def _has_writes(task):
+        # A completed write remains a side effect even if the task later failed.
+        # Unknown ledger formats also fail closed.
+        ledger = task.get("cognitive_ledger") or {}
+        return not isinstance(ledger, dict) or bool(ledger)
+
+    def _request_replan(self, doc, node, task, hint):
+        if self._has_writes(task) or doc.get("replans_used", 0) >= doc.get("max_replans", 0):
+            return False
+        limits = workflow_limits(doc.get("limits"))
+        minutes = sum(n["minutes"] * (1 + len(n["alternatives"])) for n in doc["nodes"])
+        calls = sum(n["max_calls"] * (1 + len(n["alternatives"])) for n in doc["nodes"])
+        minutes += sum(n["minutes"] for n in doc["nodes"] if (n.get("replan") or {}).get("status") == "started")
+        calls += sum(n["max_calls"] for n in doc["nodes"] if (n.get("replan") or {}).get("status") == "started")
+        if minutes + node["minutes"] > limits["max_minutes"] or calls + node["max_calls"] > limits["max_calls"]:
+            return False
+        ident, nid = doc["id"], node["id"]
+        token = secrets.token_hex(16)
+        node["replan"] = {"status": "started", "token": token}
+        doc["replans_used"] = doc.get("replans_used", 0) + 1
+        # Persist before invoking the provider. After a crash we do not repeat
+        # a potentially billable call with an unknown outcome.
+        write_json(self._path(ident), doc)
+        self._replanning.add((ident, nid))
+        try:
+            threading.Thread(target=self._run_replan, args=(ident, nid, token, hint),
+                             daemon=True, name=f"cognitive-replan-{nid}").start()
+        except Exception:
+            self._replanning.discard((ident, nid))
+            raise
+        return True
+
+    def _run_replan(self, ident, nid, token, hint):
+        try:
+            from core.tasks.cognitive_planner import suggest_alternative
+            doc = self.get(ident)
+            node = next(n for n in doc["nodes"] if n["id"] == nid)
+            alternative = suggest_alternative(doc["goal"], node["task"], hint)
+            with self.engine._lock:
+                doc = self.get(ident)
+                if not doc or doc.get("status") != "running":
+                    return
+                node = next(n for n in doc["nodes"] if n["id"] == nid)
+                if node.get("replan") != {"status": "started", "token": token}:
+                    return
+                previous = [node["task"], *node["alternatives"]]
+                if not alternative or alternative.strip() in previous:
+                    node["replan"] = {"status": "failed"}
+                    return self._halt(doc, "stopping_failure", "The planner did not produce a new valid alternative.")
+                node["alternatives"].append(alternative.strip())
+                node["prior_error"] = hint
+                node["attempt"] += 1
+                node["task_id"] = self._task_id(ident, nid, node["attempt"])
+                node["status"] = "pending"
+                node["replan"] = {"status": "completed"}
+                write_json(self._path(ident), doc)
+        except Exception as exc:
+            with self.engine._lock:
+                doc = self.get(ident)
+                if doc and doc.get("status") == "running":
+                    node = next((n for n in doc["nodes"] if n["id"] == nid), None)
+                    if node and node.get("replan") == {"status": "started", "token": token}:
+                        node["replan"] = {"status": "failed"}
+                        self._halt(doc, "stopping_failure", f"Replan failed: {type(exc).__name__}")
+        finally:
+            with self.engine._lock:
+                self._replanning.discard((ident, nid))
+                self.engine._wake.set()
