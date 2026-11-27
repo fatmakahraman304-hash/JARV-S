@@ -15,9 +15,14 @@ class TaskStoreAtomicTests(unittest.TestCase):
             barrier = threading.Barrier(2, timeout=5)
             real_replace = store.os.replace
             errors = []
+            reached_barrier = threading.local()
 
             def replace_after_both_are_ready(src, dst):
-                barrier.wait()
+                # Windows may deny a concurrent replacement briefly. The
+                # production retry must not wait for the other writer again.
+                if not getattr(reached_barrier, "done", False):
+                    reached_barrier.done = True
+                    barrier.wait()
                 real_replace(src, dst)
 
             def writer(number):
