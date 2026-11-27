@@ -109,6 +109,13 @@ class RealtimeEngine:
             return
         self._start(text=text)
 
+    async def send_approved_recall(self, payload, allowed):
+        """Only the local HUD approval path may call this; recheck before sending."""
+        if not allowed():
+            self._log("SYS: Realtime hafıza aktarımı iptal edildi.")
+            return
+        self._start(recall_payload=payload, _recall_allowed=allowed)
+
     def _start(self, **request):
         if self._closed or ("pcm" in request and not self._capture_allowed()):
             return
@@ -122,6 +129,9 @@ class RealtimeEngine:
 
     async def _generate(self, request):
         try:
+            allowed = request.pop("_recall_allowed", None)
+            if "recall_payload" in request and (allowed is None or not allowed()):
+                return
             if "pcm" in request and not self._capture_allowed():
                 return
             async with aclosing(self._session.turn(**request)) as events:
