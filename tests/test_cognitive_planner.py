@@ -1,5 +1,6 @@
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -81,3 +82,26 @@ class CognitivePlannerTests(unittest.TestCase):
             answer = background_tasks.background_tasks({"action": "cognitive_auto", "task": "Yaz"})
         self.assertIn("status=failed", answer)
         self.assertEqual(self.engine.cognitive.all(), [])
+
+    def test_generated_graph_runs_with_real_scheduler(self):
+        root = Path(self.tmp.name)
+        finished = threading.Event()
+        def notify(event, _doc, _text):
+            if event == "plan_finished_unverified":
+                finished.set()
+        engine = TaskEngine(root / "live", root / "reports", [], autostart=False,
+                            notify=notify, tick=0.01, log=lambda *_: None,
+                            ask_fn=lambda *_: {"text": "Gerçek görev raporu", "calls": []},
+                            context_fn=lambda: {"assistant_name": "FRIDAY", "user_name": "", "language": "tr"})
+        engine._agents = self.engine._agents
+        plan = {"nodes": [{"id": "a", "task": "İncele", "minutes": 1},
+                          {"id": "b", "task": "Birleştir", "depends_on": ["a"], "minutes": 1}]}
+        doc = create_workflow(engine, "Rapor hazırla", "silent", ask=lambda _: plan)
+        engine.start_scheduler()
+        try:
+            self.assertTrue(finished.wait(10))
+            saved = engine.cognitive.get(doc["id"])
+            self.assertEqual(saved["status"], "finished_unverified")
+            self.assertEqual([node["status"] for node in saved["nodes"]], ["done", "done"])
+        finally:
+            engine.shutdown(wait=2)
