@@ -417,9 +417,9 @@ TOOL_DECLARATIONS = [
     {
         "name": "system_status",
         "description": (
-            "Returns real-time system metrics: CPU usage, RAM, GPU load, CPU temperature, "
-            "uptime, and process count. Use when the user asks about computer performance, "
-            "temperature, memory, or resource usage."
+            "Shows local system metrics in the desktop panel. CPU and RAM percentages are "
+            "returned to the model only when the user enables hardware sharing in Settings. "
+            "Never invent measurements that are not returned."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -2610,7 +2610,8 @@ class FridayLive:
 
             elif name == "system_status":
                 r = await loop.run_in_executor(None, get_system_status)
-                result = str(r)
+                from core.hardware_privacy import system_status_result
+                result = system_status_result(r, self.ui)
 
             elif name == "manage_monitor":
                 action = args.get("action", "").lower().strip()
@@ -3556,30 +3557,25 @@ class FridayLive:
     # ── System monitor ──────────────────────────────────────────────────────────
 
     async def _run_system_monitor(self) -> None:
-        """Background task: voice alerts when metrics exceed thresholds."""
+        """Keep detailed alerts local; optionally send a generic model warning."""
+        from core.hardware_privacy import route_monitor_alert
         while True:
             await asyncio.sleep(10)
             alert = await asyncio.to_thread(self._sys_monitor.check)
-            if alert and (self._user_away() or self._quiet()):
-                try:
-                    from core import away
-                    away.add(alert, kind="system", key="system")   # only the latest one is still news
-                except Exception:
-                    pass
-                self._push_if_gone(alert, "system")
+            if not alert:
                 continue
-            if not alert or not self.session or not self._awake:
-                continue
-            # Don't interrupt an active conversation
-            with self._speaking_lock:
-                speaking = self._is_speaking
-            if speaking or (time.monotonic() - self._last_user_speech) < 10:
-                continue
+            send = None
+            if self.session and self._awake and not (self._user_away() or self._quiet()):
+                with self._speaking_lock:
+                    speaking = self._is_speaking
+                if not speaking and (time.monotonic() - self._last_user_speech) >= 10:
+                    async def send(message):
+                        await self.session.send_client_content(
+                            turns={"role": "user", "parts": [{"text": message}]},
+                            turn_complete=True,
+                        )
             try:
-                await self.session.send_client_content(
-                    turns={"role": "user", "parts": [{"text": alert}]},
-                    turn_complete=True,
-                )
+                await route_monitor_alert(alert, self.ui, send)
             except Exception as e:
                 print(f"[Monitor] ⚠️ Could not send alert: {e}")
 
