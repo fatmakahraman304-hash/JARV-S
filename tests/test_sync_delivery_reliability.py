@@ -90,6 +90,28 @@ class SyncDeliveryReliability(unittest.TestCase):
             self.assertNotIn("inbox-tv.json", writes)
             self.assertEqual(hub._state["out_cmds"], [item])
 
+    def test_invalid_remote_documents_are_not_overwritten_or_acknowledged(self):
+        self.queue_everything()
+        for name in ("recent.json", "outbox-pc1.json", "images.json", "reminders.json"):
+            self.files[name] = "invalid"
+        writes = []
+        with patch.object(hub, "write_files", side_effect=lambda _t, _g, f: writes.append(f) or True):
+            hub._cycle()
+        for name in ("recent.json", "outbox-pc1.json", "images.json", "reminders.json"):
+            self.assertNotIn(name, writes[-1])
+        for name in ("pending", "turns", "img_new", "rem_new"):
+            self.assertEqual(len(hub._state[name]), 1, name)
+        self.assertFalse(hub._state["out_cmds"])  # unrelated valid destination succeeded
+
+    def test_unknown_inbox_entry_survives_processing_valid_command(self):
+        self.files["inbox-pc1.json"] = json.dumps([
+            {"text": "no identifier"}, {"id": "ok", "text": "merhaba"}])
+        writes = []
+        hub._state["inject"] = lambda _text: None
+        with patch.object(hub, "write_files", side_effect=lambda _t, _g, f: writes.append(f) or True):
+            hub._cycle()
+        self.assertEqual(json.loads(writes[-1]["inbox-pc1.json"]), [{"text": "no identifier"}])
+
     def test_enqueue_during_write_is_not_acknowledged_with_previous_batch(self):
         first = ("tv", {"id": "first", "kind": "say"})
         second = ("tv", {"id": "second", "kind": "say"})
