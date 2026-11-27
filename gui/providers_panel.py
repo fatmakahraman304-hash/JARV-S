@@ -662,6 +662,7 @@ class ProvidersOverlay(_HudOverlay):
             Field("model", "Model", kind="choice", choices=MODELS, default=MODELS[0]),
             Field("voice_id", "Ses", kind="choice", choices=VOICES, default=VOICES[0]),
             Field("microphone", "Mikrofon aktarımını aç", kind="bool", default=False),
+            Field("input_transcription", "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)", kind="bool", default=False),
             Field("volume_control", "Ekran onayıyla hoparlör ses kontrolü", kind="bool", default=False),
             Field("brightness_control", "Ekran onayıyla parlaklık kontrolü (%10–100)", kind="bool", default=False),
             Field("media_control", "Ekran onayıyla sistem medya kontrolü", kind="bool", default=False),
@@ -1297,7 +1298,7 @@ class ProvidersOverlay(_HudOverlay):
             answer = QMessageBox.question(
                 self, "OpenAI Realtime",
                 "Yazılı komutlar ve (açtıysanız) mikrofon komutları OpenAI bulutuna "
-                "gönderilecektir. API ücretleri oluşabilir. Kontrol izinleri açıksa her işlem ayrı ekran onayı ister. Bu deneysel modu açmak istiyor musunuz?",
+                "gönderilecektir. API ücretleri oluşabilir. Ses dökümü açıksa OpenAI transkripsiyonu ayrıca kullanılır ve metin yerel geçmişe kaydedilir. Kontrol izinleri açıksa her işlem ayrı ekran onayı ister. Bu deneysel modu açmak istiyor musunuz?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No)
             if answer != QMessageBox.StandardButton.Yes:

@@ -24,6 +24,7 @@ def validate_settings(cfg):
     session_event(voice)
     return {"api_key": key, "model": model, "voice": voice,
             "microphone": enabled(cfg.get("microphone")),
+            "input_transcription": enabled(cfg.get("microphone")) and enabled(cfg.get("input_transcription")),
             "volume_control": enabled(cfg.get("volume_control")),
             "brightness_control": enabled(cfg.get("brightness_control")),
             "media_control": enabled(cfg.get("media_control")),
