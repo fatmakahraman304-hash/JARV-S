@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
     _close_assistant_sig = pyqtSignal()
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
+    _engine_status_sig = pyqtSignal(str, str)
     _mode_note_sig  = pyqtSignal(str)        # a standing mode beside the state: quiet, meeting …
     _content_sig    = pyqtSignal(str, str)   # (title, text) — thread-safe content display
     _world_map_sig = pyqtSignal(bool)
@@ -184,6 +185,8 @@ class MainWindow(QMainWindow):
         self.wake_get_state    = None   # callable: () -> dict {enabled, awake, ready}
         self._muted            = False
         self._conversation_state = "INITIALISING"
+        self._engine_phase = "initial"
+        self._active_engine_mode = "unknown"
         self._realtime_mode = False
         self._realtime_mic_permitted = False
         self._voice_ptt = False
@@ -409,6 +412,7 @@ class MainWindow(QMainWindow):
         self._remote_update_sig.connect(self._start_update)
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._engine_status_sig.connect(self._apply_engine_status)
         self._mode_note_sig.connect(self._apply_mode_note)
         self._scan_generation = 0
         self._gesture_generation = 0
@@ -1772,12 +1776,23 @@ class MainWindow(QMainWindow):
             self._state_chip.set_state(state)
         self._refresh_status_strip()
 
+    def _apply_engine_status(self, phase, mode):
+        from gui.engine_status import PHASES, MODES
+        self._engine_phase = phase if phase in PHASES else "initial"
+        self._active_engine_mode = mode if mode in MODES else "unknown"
+        self._refresh_status_strip()
+        cc = getattr(self, "_control_center", None)
+        if cc is not None:
+            cc.set_engine_status(self._engine_phase, self._active_engine_mode)
+
     def _refresh_status_strip(self) -> None:
         if not hasattr(self, "_status_strip"):
             return
         _, mic = self._voice_presentation()
+        from gui.engine_status import engine_status
+        label, color, _ = engine_status(self._engine_phase, self._active_engine_mode)
         self._status_strip.set_items([
-            (f"MOTOR · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "PRI" if self._realtime_mode else "GREEN"),
+            (f"MOTOR · {label}", color),
             mic,
             (f"PROTOKOL · {APP_PROTOCOL}", "PRI"),
         ])
@@ -3781,6 +3796,7 @@ class MainWindow(QMainWindow):
                     self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
             self._control_center.set_state(self.hud.state, self.hud.speaking, self._muted)
             self._control_center.set_system_metrics(getattr(self, "_last_metrics_snapshot", {}))
+            self._control_center.set_engine_status(self._engine_phase, self._active_engine_mode)
             self._hud_cam_stack.setCurrentWidget(self._control_center)
         elif self._hud_cam_stack.currentWidget() is getattr(self, "_control_center", None):
             self._hud_cam_stack.setCurrentWidget(self.hud)
