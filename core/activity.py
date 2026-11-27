@@ -221,6 +221,8 @@ def record_tool(name: str, args: dict | None, result=None, error: BaseException 
         record(node, f"Yapılamadı: {base}", "fail")
     elif st == "warn":
         record(node, f"Doğrulanamadı: {base}", "warn")
+    elif st == "info":
+        record(node, f"Başlatıldı: {base}", "info")
     else:
         record(node, base, "ok")
 
@@ -265,6 +267,24 @@ def counts() -> dict[str, int]:
 def last_hit() -> dict[str, float]:
     with _lock:
         return dict(_last_hit)
+
+
+@dataclass(frozen=True)
+class ActivitySnapshot:
+    seq: int
+    events: tuple[Event, ...]
+    counts: dict[str, int]
+    hits: dict[str, float]
+    connected: frozenset[str]
+
+
+def snapshot(after_seq=None, limit=200):
+    """Read a consistent network/feed view, only copying on change."""
+    with _lock:
+        if after_seq == _seq:
+            return None
+        return ActivitySnapshot(_seq, tuple(_events)[-max(1, min(400, int(limit))):],
+                                dict(_counts), dict(_last_hit), frozenset(_connected))
 
 
 def last_seq() -> int:
