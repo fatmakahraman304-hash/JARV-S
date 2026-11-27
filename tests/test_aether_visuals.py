@@ -15,9 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class AetherVisuals(unittest.TestCase):
     def test_reactor_is_animated_cyan_geometry_not_an_embedded_picture(self):
-        from gui.reactor import Reactor3D, _ORANGE, _GOLD
-        self.assertGreater(_ORANGE.blue(), _ORANGE.red())
-        self.assertGreater(_GOLD.blue(), 200)
+        from gui.reactor import Reactor3D, _energy_palette
+        from gui.theme import C
+        _, gold, orange, _ = _energy_palette(QColor(C.PRI), QColor(C.PRI_DIM), QColor(C.WHITE), False)
+        self.assertGreater(orange.blue(), orange.red())
+        self.assertGreater(gold.blue(), 200)
         p = (ROOT / "gui" / "reactor.py").read_text(encoding="utf8")
         self.assertNotIn("QPixmap", p)
         self.assertNotIn("aether-core.webp", p)
