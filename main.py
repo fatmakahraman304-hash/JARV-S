@@ -3684,18 +3684,20 @@ class FridayLive:
         from memory.config_manager import get_provider_config
         from providers.realtime_settings import PROVIDER_ID, enabled
         if not enabled(get_provider_config(PROVIDER_ID).get("phone_reply")):
-            return False, None
+            return False, None, allowed
         dashboard = self._dashboard
         socket = dashboard.private_phone_socket(token)
         if socket is None:
-            return True, None
+            return True, None, lambda: False
+
+        def still_allowed():
+            return (allowed() and self._dashboard is dashboard
+                    and enabled(get_provider_config(PROVIDER_ID).get("phone_reply"))
+                    and dashboard.private_phone_socket(token) is socket)
 
         async def deliver(pcm):
-            def still_allowed():
-                return (allowed() and self._dashboard is dashboard
-                        and enabled(get_provider_config(PROVIDER_ID).get("phone_reply")))
             return await dashboard.deliver_private_phone_reply(socket, token, pcm, still_allowed)
-        return True, deliver
+        return True, deliver, still_allowed
 
     def _request_realtime_phone_audio(self, token, pcm):
         from providers.realtime_recall import valid_phone_pcm
@@ -3711,7 +3713,7 @@ class FridayLive:
         if confirm.pending_title():
             return {"ok": False, "status": "busy"}
 
-        private, reply = self._phone_reply_target(token, allowed)
+        private, reply, allowed = self._phone_reply_target(token, allowed)
         if private and reply is None:
             return {"ok": False, "status": "unavailable"}
 
@@ -3758,7 +3760,7 @@ class FridayLive:
         if confirm.pending_title():
             return {"ok": False, "status": "busy"}
 
-        private, reply = self._phone_reply_target(token, allowed)
+        private, reply, allowed = self._phone_reply_target(token, allowed)
         if private and reply is None:
             return {"ok": False, "status": "unavailable"}
 
