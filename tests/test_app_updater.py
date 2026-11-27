@@ -26,6 +26,40 @@ class UpdaterTests(unittest.TestCase):
                 z.writestr('repo/' + name, data)
         return buf.getvalue()
 
+    def test_interrupted_chunked_download_is_retried_from_start(self):
+        from http.client import IncompleteRead
+
+        class Response:
+            length = None  # chunked transfer
+
+            def __init__(self, chunks):
+                self.chunks = iter(chunks)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read1(self, _size):
+                item = next(self.chunks)
+                if isinstance(item, Exception):
+                    raise item
+                return item
+
+        responses = [Response([b'partial', IncompleteRead(b'')]),
+                     Response([b'complete', b''])]
+        with patch.object(u, 'urlopen', side_effect=responses) as open_url, patch.object(u.time, 'sleep'):
+            self.assertEqual(u._get('https://example.invalid/release'), b'complete')
+        self.assertEqual(open_url.call_count, 2)
+
+    def test_interrupted_chunked_download_stops_after_three_attempts(self):
+        from http.client import IncompleteRead
+        with patch.object(u, 'urlopen', side_effect=IncompleteRead(b'')) as open_url, patch.object(u.time, 'sleep'):
+            with self.assertRaises(IncompleteRead):
+                u._get('https://example.invalid/release')
+        self.assertEqual(open_url.call_count, 3)
+
     def test_zip_update_then_current(self):
         with patch.object(u, '_get', side_effect=[json.dumps({'sha': self.sha}).encode(), self.archive()]):
             self.assertTrue(u.update(self.root)[0])
