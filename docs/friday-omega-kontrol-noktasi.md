@@ -242,13 +242,13 @@ Başlangıç `main`: `21445324de9e5dcec9079814b4896bb88e878a6c`; #252–#260 kor
 
 ### Tamamlanan
 
-- `cognitive_review`, tamamlanmış bir düğümün görevini ve yanıtını araç kullanamayan ayrı bir model çağrısında eleştirir. İnceleme açıkça istendiğinde yapılır; düğümün metni ve sonucu yapılandırılmış model sağlayıcısına gönderilebilir. Bir çağrıda yalnızca bir düğüm incelenir; web ve özel düğümlerin sonuçları birleştirilmez.
+- `cognitive_review`, tamamlanmış bir düğümün görevini ve yanıtını araç kullanamayan ayrı bir model çağrısında eleştirir. Bu işlem için Ayarlar > Zekâ ve hafıza bölümünde ayrı, varsayılan kapalı paylaşım izni gerekir; açıldığında metin ve sonuç yapılandırılmış veya yedek model sağlayıcısına gönderilebilir. Özel hafıza veya donanım aracı kullanan düğümlerin incelemesi henüz desteklenmez.
 - Aynı işlem sırasında kaydedilmiş dosyaların mevcut baytları, ilgili başarılı yazma çağrısının içeriğiyle yeniden karşılaştırılır. Model çağrısı sırasında dosya veya görev sonucu değişirse inceleme kaydedilmez. Eksik/değişmiş dosya açıkça belirtilir.
 - Model değerlendirmesi ve nesnel dosya kontrolü ayrı tutulur; olumlu model görüşü genel doğruluğun kanıtı sayılmaz ve iş akışının `finished_unverified` durumu değiştirilmez. İnceleme sonucu mevcut görev kaydına yazılır ve durum ekranından görülebilir.
 
 ### Testler ve başarısızlıklar
 
-- Dosya değiştirme, çağrı sırasında yarış, yanıltıcı model görüşü, geçersiz veya ulaşılamayan model, belirsiz görev ve konuşma aracı entegrasyonu taklit sağlayıcı yanıtlarıyla test edildi. Gerçek model sağlayıcısı ile kalite, hız veya maliyet doğrulanmadı; GitHub Windows/Linux sonuçları ilgili değişiklik isteğinde izlenmelidir.
+- Dosya değiştirme, çağrı sırasında yarış, varsayılan kapalı izin, özel düğümlerin engellenmesi, izin iptali, yanıltıcı model görüşü, geçersiz veya ulaşılamayan model ve konuşma aracı entegrasyonu taklit sağlayıcı yanıtlarıyla test edildi. Gerçek model sağlayıcısı ile kalite, hız veya maliyet doğrulanmadı; GitHub Windows/Linux sonuçları ilgili değişiklik isteğinde izlenmelidir.
 
 ### Eksik kalan
 

@@ -217,6 +217,12 @@ class SettingsPage(QDialog):
                'uyarı da gönderilebilir. Bu ayar diğer veri ve cihaz eşitleme yollarını kapsamaz.',
                cfg.get_hardware_model_sharing,
                lambda: cfg.save_hardware_model_sharing(not cfg.get_hardware_model_sharing()))
+        switch(brain, 'Görev sonucunu modelle incele',
+               'Varsayılan kapalıdır. Açıldığında istenen ayrı inceleme, seçili görevin metnini ve '
+               'sonucunu yapılandırılan veya yedek model sağlayıcısına gönderebilir; özel bilgiler '
+               'içerebilir. Özel hafıza ve donanım araçlarını kullanan görevler bu incelemede engellenir.',
+               cfg.get_cognitive_review_sharing,
+               lambda: cfg.save_cognitive_review_sharing(not cfg.get_cognitive_review_sharing()))
         app_page = page('Uygulamalar', 'Uygulama adını yaz: kaynakları araştır, eksik kontrolleri geliştir ve test et.')
         app_name = QLineEdit()
         app_name.setPlaceholderText('Örneğin: CapCut, WhatsApp')

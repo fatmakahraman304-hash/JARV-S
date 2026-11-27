@@ -20,11 +20,13 @@ class Owner(QWidget):
         if name == '_wake_state': return lambda: {}
         if name.startswith('_'): return lambda *args: False
         raise AttributeError(name)
-state = {'sharing': False}
+state = {'sharing': False, 'review': False}
 owner = Owner()
 with patch('core.application_learning.report', return_value=''), \
      patch('memory.config_manager.get_hardware_model_sharing', side_effect=lambda: state['sharing']), \
-     patch('memory.config_manager.save_hardware_model_sharing', side_effect=lambda value: state.update(sharing=value)):
+     patch('memory.config_manager.save_hardware_model_sharing', side_effect=lambda value: state.update(sharing=value)), \
+     patch('memory.config_manager.get_cognitive_review_sharing', side_effect=lambda: state['review']), \
+     patch('memory.config_manager.save_cognitive_review_sharing', side_effect=lambda value: state.update(review=value)):
     dialog = SettingsPage(owner)
     assert dialog.show_category('Zekâ ve hafıza')
     control = next(x for x in dialog.findChildren(Toggle) if x.accessibleName() == 'Yerel teşhis ölçümlerini modelle paylaş')
@@ -33,6 +35,12 @@ with patch('core.application_learning.report', return_value=''), \
     assert control.isChecked() and state['sharing']
     control.click()
     assert not control.isChecked() and not state['sharing']
+    review = next(x for x in dialog.findChildren(Toggle) if x.accessibleName() == 'Görev sonucunu modelle incele')
+    assert not review.isChecked() and not state['review']
+    review.click()
+    assert review.isChecked() and state['review']
+    review.click()
+    assert not review.isChecked() and not state['review']
     dialog.close()
 '''
         with tempfile.TemporaryDirectory() as temp:

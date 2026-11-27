@@ -12,6 +12,14 @@ from core import outcome
 from core.tasks.store import write_json
 
 
+def _sharing_enabled():
+    try:
+        from memory.config_manager import get_cognitive_review_sharing
+        return get_cognitive_review_sharing() is True
+    except Exception:
+        return False
+
+
 def _fingerprint(rows):
     return sorted((str(r.get("path") or ""), str(r.get("status") or ""),
                    str(r.get("sha256") or "")) for r in rows)
@@ -36,8 +44,12 @@ def _completed_node(engine, ident, node_id):
 
 def review_node(engine, ident, node_id, ask=None):
     """Critique a completed node and recheck actual file bytes without acting."""
+    if not _sharing_enabled():
+        raise ValueError("task-result model review is disabled in Settings")
     with engine._lock:
         doc, node, child = _completed_node(engine, ident, node_id)
+        if {"recall_memory", "system_snapshot"} & set(node.get("tools") or []):
+            raise ValueError("private memory or hardware nodes cannot be sent to the reviewer")
         attempt = node["attempt"]
         instruction = node["task"] if not attempt else node["alternatives"][attempt - 1]
         result = str(child.get("result") or "")
@@ -59,7 +71,11 @@ def review_node(engine, ident, node_id, ask=None):
     if ask is None:
         from core import gemini
         ask = lambda text: gemini.as_json(text, tier=gemini.SMART, timeout_ms=15000)
+    if not _sharing_enabled():
+        raise ValueError("task-result model review was disabled")
     value = ask(prompt)
+    if not _sharing_enabled():
+        raise ValueError("task-result model review was disabled during the call")
     if (not isinstance(value, dict) or set(value) != {"verdict", "reason"}
             or value.get("verdict") not in ("supported", "uncertain", "issues")
             or not isinstance(value.get("reason"), str) or not value["reason"].strip()
