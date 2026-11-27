@@ -322,13 +322,14 @@ class HudCanvas(QWidget):
                 frames, t0, hop = sched
                 i = math.floor((now - t0) / hop)
                 if 0 <= i < len(frames):
-                    # Hand over *every* frame since the last tick, not just the one
+                    # Hand over recent frames since the last tick, not just the one
                     # under the cursor. This timer runs at 60 Hz but the paint is
                     # throttled and the machine may be busy, so a tick can span two
                     # or three 20 ms frames — and a consonant closure is only two
                     # frames long. Sampling one and discarding the rest is how the
                     # closures between words went missing.
                     j = self._vis_i if self._vis_i is not None else i
+                    # Never replay a long backlog after minimization or a stall.
                     v_seq = frames[max(0, j, i - 4):i + 1]
                     self._vis_i = max(j, i + 1)
                     v_level, v_open, v_wide = frames[i]
@@ -336,6 +337,9 @@ class HudCanvas(QWidget):
                         peak = max(f[0] for f in v_seq)
                         if peak > self._live_amp:
                             self._live_amp = peak
+                elif i < 0:
+                    # A queued schedule is not yet audible; do not open the mouth early.
+                    v_open = v_wide = v_level = 0.0
                 elif i >= len(frames):
                     self._visemes = None        # schedule spent
                     self._vis_i = None
