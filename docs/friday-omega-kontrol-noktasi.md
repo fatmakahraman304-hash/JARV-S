@@ -145,3 +145,23 @@ Başlangıç `main`: `128209817d6fbf20cf7ea7a7e371d4278614c3bd`; #252–#256 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows cihazında yerel işlem/performans, mikrofon, ses, bağlı cihazlar ve GÜNCELLE paneliyle uçtan uca kabul testleri henüz yapılmadı. Gerçek model sağlayıcılarıyla maliyet, hız ve kalite değerlendirilmedi.
+
+## 2026-11-27 — Yerel donanım analizi ve model paylaşımı
+
+### Tamamlanan
+
+- Donanım teşhisi artık varsayılan olarak ayrıntıları yalnızca yerel panelde gösterir; tek ölçümde yüksek CPU/RAM/disk kullanımı ve düşük, şarja bağlı olmayan pil için basit yerel eşik değerlendirmesi yapılır. Eşik aşılmaması donanım sağlığının kanıtı değildir.
+- Ayarlar > Zekâ ve hafıza bölümündeki açık kullanıcı tercihiyle modele sınırlı CPU, RAM, sistem diski ve pil yüzdeleri gönderilebilir. Donanım envanteri, arayüz adları ve toplam bayt bilgileri modele aktarılmaz. Arka plan teşhis aracı izin kapalıyken ölçümleri modele sunmaz. Ayar okunamazsa paylaşım kapalı kalır.
+
+### Testler ve başarısızlıklar
+
+- Yerel Linux testleri, paylaşımın varsayılan kapalı olmasını, açıkken veri azaltmayı ve #256 regresyonlarını kapsar. Qt bulunmayan yerel ortamda ayar ekranı açılarak test edilemedi; ilgili kullanıcı arayüzü testi GitHub Actions'ta çalıştırılır. Kullanıcının Windows cihazında fiziksel doğrulama yapılmadı.
+
+### Eksik kalan
+
+- Bu yerel eşik analizi bağımsız yerel dil modeli, arıza teşhisi veya onarım değildir; sıcaklık, fan, GPU kullanımı ve disk sağlığı gibi diğer ölçümler eklenmedi. Paylaşıma izin verildiğinde seçili yüzdeler kullanıcının yapılandırdığı uzak model sağlayıcısına ulaşabilir.
+- Genel Windows kontrolü, şifreli görev kayıtları, cihaz ağı, diğer modeller, kişisel yaşam ve Omega'nın kalan aşamaları sürmektedir. Gerçek GÜNCELLE paneli deneyimi doğrulanmadı.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows bilgisayarında ayar ekranı, panel, donanım ve sesli konuşma ile GÜNCELLE panelinin uçtan uca testi bekliyor.

@@ -37,11 +37,59 @@ class NativeDiagnosticsTests(unittest.TestCase):
 
     def test_incomplete_sources_are_honestly_reported(self):
         snapshot = {"errors": ["Windows CIM: timed out"], "metrics": {"battery": None}, "windows_cim": None}
-        with patch.object(native, "collect", return_value=snapshot):
+        with patch.object(native, "collect", return_value=snapshot), patch.object(native, "model_sharing_enabled", return_value=False):
             text = action.native_diagnostics({})
         self.assertIn("status=unverified", text)
         self.assertNotIn("status=done", text)
-        self.assertIn("<<<UNTRUSTED source=local-system-data>>>", text)
+        self.assertNotIn("<<<UNTRUSTED", text)
+
+    def test_local_only_diagnostics_show_details_without_sending_them_to_model(self):
+        snapshot = {"metrics": {"cpu_percent": 97, "memory": {"percent": 42}},
+                    "windows_cim": {"serial": "secret-hardware"}, "errors": []}
+        player = Mock()
+        with patch.object(native, "collect", return_value=snapshot), patch.object(native, "model_sharing_enabled", return_value=False):
+            result = action.native_diagnostics({}, player)
+        self.assertIn("status=done", result)
+        self.assertNotIn("secret-hardware", result)
+        self.assertNotIn("97", result)
+        self.assertIn("secret-hardware", player.show_content.call_args.args[1])
+        self.assertIn("CPU kullanımı", player.show_content.call_args.args[1])
+
+    def test_opted_in_metrics_are_minimized_for_both_model_paths(self):
+        snapshot = {"metrics": {"cpu_percent": 97.123, "memory": {"percent": 42, "total_bytes": 12345},
+                                "network_interfaces": [{"name": "private-wifi"}]},
+                    "windows_cim": {"serial": "secret-hardware"}, "errors": []}
+        with tempfile.TemporaryDirectory() as directory, patch.object(native, "collect", return_value=snapshot), \
+             patch.object(native, "model_sharing_enabled", return_value=True):
+            tool = TaskTools(Path(directory), ["system_snapshot"], log=lambda _: None)
+            for result in (action.native_diagnostics({}), tool.execute("system_snapshot", {})):
+                self.assertIn("97.1", result)
+                self.assertNotIn("secret-hardware", result)
+                self.assertNotIn("private-wifi", result)
+                self.assertNotIn("12345", result)
+
+    def test_disabled_background_sharing_never_collects_metrics(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(native, "collect") as collect, \
+             patch.object(native, "model_sharing_enabled", return_value=False):
+            tool = TaskTools(Path(directory), ["system_snapshot"], log=lambda _: None)
+            self.assertIn("status=failed", tool.execute("system_snapshot", {}))
+            collect.assert_not_called()
+
+    def test_model_sharing_requires_explicit_boolean_setting_and_fails_closed(self):
+        from memory import config_manager
+        for setting in ({}, {"hardware_model_sharing": "true"}, {"hardware_model_sharing": 1}):
+            with patch.object(config_manager, "load_api_keys", return_value=setting):
+                self.assertFalse(native.model_sharing_enabled())
+        with patch.object(config_manager, "load_api_keys", return_value={"hardware_model_sharing": True}):
+            self.assertTrue(native.model_sharing_enabled())
+        with patch.object(config_manager, "load_api_keys", side_effect=OSError("bad config")):
+            self.assertFalse(native.model_sharing_enabled())
+
+    def test_setting_updates_only_hardware_preference(self):
+        from memory import config_manager
+        with patch.object(config_manager, "_patch_config") as update:
+            config_manager.save_hardware_model_sharing(True)
+            update.assert_called_once_with(hardware_model_sharing=True)
 
     def test_private_diagnostics_cannot_coexist_with_web_tools(self):
         with tempfile.TemporaryDirectory() as directory:

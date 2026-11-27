@@ -494,6 +494,15 @@ def update_config(**fields) -> None:
     _patch_config(**fields)
 
 
+def get_hardware_model_sharing() -> bool:
+    """Hardware metrics are shared with models only after an explicit opt-in."""
+    return load_api_keys().get("hardware_model_sharing") is True
+
+
+def save_hardware_model_sharing(enabled: bool) -> None:
+    _patch_config(hardware_model_sharing=enabled is True)
+
+
 def get_input_device() -> str:
     """Microphone device name, or '' for the system default."""
     return (load_api_keys().get("input_device", "") or "").strip()

@@ -3,10 +3,54 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import platform
 import subprocess
+
+
+def model_sharing_enabled():
+    """Fail closed if settings are absent or cannot be read."""
+    try:
+        from memory.config_manager import get_hardware_model_sharing
+        return get_hardware_model_sharing() is True
+    except Exception:
+        return False
+
+
+def model_metrics(snapshot):
+    """Select aggregate metrics only; never send inventory or adapter names."""
+    metrics = snapshot.get("metrics") or {}
+    def percent(value):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+            return round(value, 1) if 0 <= value <= 100 else None
+        return None
+    result = {"cpu_percent": percent(metrics.get("cpu_percent"))}
+    for name in ("memory", "system_disk", "battery"):
+        value = metrics.get(name)
+        result[name + "_percent"] = percent(value.get("percent")) if isinstance(value, dict) else None
+    battery = metrics.get("battery")
+    plugged = battery.get("plugged_in") if isinstance(battery, dict) else None
+    result["battery_plugged_in"] = plugged if isinstance(plugged, bool) else None
+    result["incomplete"] = bool(snapshot.get("errors"))
+    return result
+
+
+def local_analysis(snapshot):
+    """Simple local thresholds, not a diagnosis or a prediction of failure."""
+    values = model_metrics(snapshot)
+    notices = []
+    for key, label in (("cpu_percent", "CPU"), ("memory_percent", "RAM"),
+                       ("system_disk_percent", "Sistem diski")):
+        if values[key] is not None and values[key] >= 90:
+            notices.append(f"{label} kullanımı bu ölçümde %90 veya üzerinde.")
+    if (values["battery_percent"] is not None and values["battery_percent"] <= 20
+            and values["battery_plugged_in"] is False):
+        notices.append("Pil %20 veya altında ve şarja bağlı görünmüyor.")
+    if values["incomplete"]:
+        notices.append("Bazı kaynaklar ölçülemedi; aşağıdaki hatalara bakın.")
+    return notices or ["Bu anlık ölçümde belirlenen eşik aşılmadı; bu, donanımın sağlıklı olduğunu kanıtlamaz."]
 
 _CIM_SCRIPT = r'''
 $ErrorActionPreference = 'Stop'

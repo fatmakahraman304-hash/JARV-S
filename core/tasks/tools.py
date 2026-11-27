@@ -84,7 +84,9 @@ _DECLS = {
     },
     "system_snapshot": {
         "name": "system_snapshot",
-        "description": ("Read local CPU, memory, disk, battery and network link state, plus Windows CIM hardware inventory when available. Read-only; network link state does not prove internet access."),
+        "description": ("Read aggregate CPU, memory, disk and battery percentages only if the user "
+                        "enabled hardware model sharing in Settings. Hardware identifiers and network "
+                        "names are excluded; internet connectivity is not tested."),
         "parameters": {"type": "OBJECT", "properties": {}},
     },
 }
@@ -169,8 +171,11 @@ class TaskTools:
                 return search_memory(str(args.get("query") or ""), limit=8)
             if name == "system_snapshot":
                 import json
-                from core.native_diagnostics import collect
-                return outcome.untrusted("local-system-data", json.dumps(collect(), ensure_ascii=False))
+                from core.native_diagnostics import collect, model_metrics, model_sharing_enabled
+                if not model_sharing_enabled():
+                    return outcome.failed("system_snapshot", "hardware sharing with models is disabled; "
+                                          "use local diagnostics or enable it in Settings")
+                return outcome.untrusted("local-system-metrics", json.dumps(model_metrics(collect()), ensure_ascii=False))
             from core.action_loader import _call_handler
             if name == "file_processor":
                 if str(args.get("action") or "").lower() in ("run", "test"):
