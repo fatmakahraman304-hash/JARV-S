@@ -116,17 +116,17 @@ class RealtimeEngine:
             return
         self._start(recall_payload=payload, _recall_allowed=allowed)
 
-    async def send_approved_phone(self, text, allowed):
+    async def send_approved_phone(self, text, allowed, reply=None):
         """Submit one locally approved remote question; no normal tool access."""
         if not isinstance(text, str) or not 0 < len(text.strip()) <= 4000 or not allowed():
             return
         from .realtime_recall import phone_payload
-        self._start(recall_payload=phone_payload(text), _recall_allowed=allowed)
+        self._start(recall_payload=phone_payload(text), _recall_allowed=allowed, _phone_reply=reply)
 
-    async def send_approved_phone_audio(self, pcm, allowed):
+    async def send_approved_phone_audio(self, pcm, allowed, reply=None):
         from .realtime_recall import valid_phone_pcm
         if valid_phone_pcm(pcm) and allowed():
-            self._start(phone_pcm=pcm, _recall_allowed=allowed)
+            self._start(phone_pcm=pcm, _recall_allowed=allowed, _phone_reply=reply)
 
     def _start(self, **request):
         if self._closed or ("pcm" in request and not self._capture_allowed()):
@@ -141,7 +141,12 @@ class RealtimeEngine:
 
     async def _generate(self, request):
         try:
+            from .realtime_phone_reply import MAX_REPLY_BYTES
+            reply = request.pop("_phone_reply", None)
             allowed = request.pop("_recall_allowed", None)
+            private_pcm = bytearray()
+            complete = False
+            oversized = False
             if ("recall_payload" in request or "phone_pcm" in request) and (allowed is None or not allowed()):
                 return
             if "pcm" in request and not self._capture_allowed():
@@ -150,7 +155,27 @@ class RealtimeEngine:
                 async for event in events:
                     if self._closed or self._invalid:
                         return
-                    await self._queue.put(event)
+                    if reply is None:
+                        await self._queue.put(event)
+                    else:
+                        if not allowed():
+                            self._invalid = True
+                            self._reconnect()
+                            return
+                        if event.data and not oversized:
+                            if len(private_pcm) + len(event.data) > MAX_REPLY_BYTES:
+                                private_pcm.clear()
+                                oversized = True
+                            else:
+                                private_pcm.extend(event.data)
+                        if event.server_content and event.server_content.turn_complete:
+                            complete = True
+            if reply is not None and allowed() and complete and not oversized and private_pcm:
+                delivered = await reply(bytes(private_pcm))
+                if delivered is False:
+                    self._log("SYS: Telefon yanıtı teslim edilemedi; başka cihaza aktarılmadı.")
+            elif reply is not None and oversized:
+                self._log("SYS: Telefon yanıtı 30 saniye sınırını aştı; gönderilmedi.")
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -158,7 +183,8 @@ class RealtimeEngine:
             if not self._closed:
                 # Avoid leaking provider error bodies or user input to logs.
                 self._log(f"SYS: Realtime yanıtı tamamlanmadı ({type(exc).__name__}).")
-                await self._queue.put(Msg.turn_end())
+                if reply is None:
+                    await self._queue.put(Msg.turn_end())
                 self._reconnect()
 
     async def send_tool_response(self, *, function_responses):

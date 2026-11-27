@@ -453,17 +453,46 @@
 
     // ── Live connection to the selected computer ─────────────────────────────
     let ws = null, wsGen = 0;
+    let privateReplyUrl = null, privateReplyAudio = null;
+    function clearPrivateReply() {
+      if (privateReplyAudio) {
+        privateReplyAudio.pause(); privateReplyAudio.removeAttribute('src');
+        privateReplyAudio.load(); privateReplyAudio.remove(); privateReplyAudio = null;
+      }
+      if (privateReplyUrl) { URL.revokeObjectURL(privateReplyUrl); privateReplyUrl = null; }
+    }
+    function showPrivateReply(m) {
+      if (typeof m.wav !== 'string' || m.wav.length > 2000000) return;
+      clearPrivateReply();
+      try {
+        const raw = atob(m.wav), bytes = new Uint8Array(raw.length);
+        if (raw.length < 44 || raw.length > 1440044 || raw.slice(0,4) !== 'RIFF' || raw.slice(8,12) !== 'WAVE') return;
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        privateReplyUrl = URL.createObjectURL(new Blob([bytes], {type: 'audio/wav'}));
+        privateReplyAudio = document.createElement('audio');
+        privateReplyAudio.controls = true;
+        privateReplyAudio.preload = 'metadata';
+        privateReplyAudio.src = privateReplyUrl;
+        privateReplyAudio.style.maxWidth = '100%';
+        sys('FRIDAY sesli yanıtı hazır. Dinlemek için oynat düğmesine dokun.');
+        feed.appendChild(privateReplyAudio);
+        feed.scrollTop = feed.scrollHeight;
+      } catch (_) { clearPrivateReply(); sys('Sesli yanıt açılamadı.'); }
+    }
+    window.addEventListener('pagehide', clearPrivateReply);
     function wsUrlFor(t) {
       const u = new URL(t.base || location.origin);
       return `${u.protocol === 'https:' ? 'wss' : 'ws'}://${u.host}/ws?token=${encodeURIComponent(t.token)}`;
     }
     function connectWS() {
       const t = T(), gen = ++wsGen;
+      clearPrivateReply();
       if (ws) { ws.onclose = null; try { ws.close(); } catch {} }
       ws = new WebSocket(wsUrlFor(t));
       ws.onopen = () => { if (gen === wsGen) { setState('idle'); } };
       ws.onclose = async (e) => {
         if (gen !== wsGen) return;
+        clearPrivateReply();
         setState('offline');
         if (e.code === 4001) {
           if (t.self) {
@@ -488,6 +517,7 @@
         else if (m.type === 'wake') sys('Uyandırma sözcüğü duyuldu — bağlanıyor…');
         else if (m.type === 'sys') sys(m.text);
         else if (m.type === 'realtime_command_status') realtimeCommandStatus(m);
+        else if (m.type === 'realtime_phone_reply') showPrivateReply(m);
         else if (m.type === 'file_received') _onFileReceived(m);
       };
     }
@@ -1063,7 +1093,7 @@
     }
     function realtimeCommandStatus(data) {
       const message = data.status === 'pending_confirmation'
-        ? 'Bilgisayarda ekran onayı bekleniyor. Yanıt bilgisayarda verilecek.'
+        ? 'Bilgisayarda ekran onayı bekleniyor. Yanıt seçili izin ayarına göre verilecek.'
         : data.status === 'busy' ? 'Bilgisayarda başka bir onay bekleniyor.'
         : 'Realtime telefon sorusu kabul edilmedi. Bilgisayarda izin ve bağlantıyı kontrol et.';
       sys(message); setState('idle');

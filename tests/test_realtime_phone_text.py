@@ -45,6 +45,7 @@ class PhoneTextTests(unittest.TestCase):
         obj = SimpleNamespace(_engine=engine, session=engine, _dashboard=dashboard,
                               _loop=loop, _session_realtime=True, _awake=True,
                               _engine_mode=lambda: "realtime", ui=Mock())
+        obj._phone_reply_target = lambda token, allowed: main.FridayLive._phone_reply_target(obj, token, allowed)
         cfg = {"cloud_consent": True, "phone_text": True}
         with patch("memory.config_manager.get_provider_config", return_value=cfg), patch(
                 "core.confirm.pending_title", return_value=""), patch(
@@ -68,6 +69,7 @@ class PhoneTextTests(unittest.TestCase):
         obj = SimpleNamespace(_engine=engine, session=engine, _dashboard=dashboard,
                               _loop=loop, _session_realtime=True, _awake=True,
                               _engine_mode=lambda: "realtime", ui=Mock())
+        obj._phone_reply_target = lambda token, allowed: main.FridayLive._phone_reply_target(obj, token, allowed)
         with patch("memory.config_manager.get_provider_config",
                    return_value={"cloud_consent": True}), patch("core.confirm.request") as gate:
             self.assertFalse(main.FridayLive._request_realtime_phone_text(obj, "live", "hello")["ok"])
