@@ -142,6 +142,9 @@ class Reactor3D:
         # geodesic wireframe
         self._mesh_v, self._mesh_e = _icosphere(2)
         self._mesh_v = self._mesh_v * _MESH_R
+        self._mesh_indices = (self._mesh_e[:, 0].copy(), self._mesh_e[:, 1].copy())
+        self._label_font = None
+        self._label_font_key = None
 
         # rays: a direction in 3-D, a length, a width, a flicker phase and speed
         ang = (np.arange(_N_RAYS) + rng.uniform(-0.35, 0.35, _N_RAYS)) * (2 * math.pi / _N_RAYS)
@@ -358,7 +361,7 @@ class Reactor3D:
         # 3. geodesic wireframe, dimmer at the back
         v = R_mesh @ self._mesh_v
         X, Y, Z, _ = self._project(v, cx, cy, r)
-        e0, e1 = self._mesh_e[:, 0], self._mesh_e[:, 1]
+        e0, e1 = self._mesh_indices
         zm = (Z[e0] + Z[e1]) / (2 * _MESH_R)
         lv = np.clip(((zm + 1.0) * 1.5).astype(np.int8), 0, 2).tolist()
         x0, y0, x1, y1 = X[e0].tolist(), Y[e0].tolist(), X[e1].tolist(), Y[e1].tolist()
@@ -412,13 +415,18 @@ class Reactor3D:
 
         # the name, under the sphere
         if name:
-            f = QFont()
-            f.setFamilies(_DISPLAY)
             fpx = max(10, int(r * 0.11))
-            f.setPixelSize(fpx)
-            f.setWeight(QFont.Weight.Light)
-            f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, max(2.0, round(r * 0.035)))
-            p.setFont(f)
+            spacing = max(2.0, round(r * 0.035))
+            key = (fpx, spacing)
+            if self._label_font_key != key:
+                f = QFont()
+                f.setFamilies(_DISPLAY)
+                f.setPixelSize(fpx)
+                f.setWeight(QFont.Weight.Light)
+                f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, spacing)
+                self._label_font = f
+                self._label_font_key = key
+            p.setFont(self._label_font)
             p.setPen(QPen(_with_alpha(white, 0.78 + 0.2 * min(1.0, amp * 2))))
             p.drawText(QRectF(cx - r * 1.6, cy + r * 1.50, r * 3.2, fpx * 1.8),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, name)
