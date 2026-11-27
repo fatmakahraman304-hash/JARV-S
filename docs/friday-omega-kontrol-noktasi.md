@@ -176,6 +176,7 @@ Başlangıç `main`: `fe7acc21026c7b0b4979f8f90b69541189a77fc6`; #252–#258 kor
 - `system_status` tam ölçümleri yerel panelde gösterir. Aynı #258 kullanıcı izni açık değilse ölçümleri modele göndermez; izin açıkken yalnızca sınırlandırılmış CPU/RAM yüzdelerini gönderir. İzin okuma hatasında paylaşım kapanır ve sonuç oluşturulurken izin yeniden kontrol edilir.
 - `SystemMonitor` ayrıntılı uyarıları yerel etkinlik günlüğüne yazar. Model paylaşımı açık ve konuşma uygun durumdaysa, ölçüm veya kimlik içermeyen genel bir uyarı modele iletilir. Model izni cihaz eşitlemesine izin sayılmadığından uyarı Gist/uzak cihaz veya yokluk kuyruğuna aktarılmaz.
 - Teşhis ve canlı durum için aynı izin okuma işlevi kullanılır. Yerel uyarının gösterilmesi, izin iptali ve gerçek izleme döngüsü dahil testler eklenmiştir.
+- Ana ayar dosyası eksik veya bozuksa eski yedekteki açık paylaşım izni geri yüklenmez; politika kapalı kalır. Diğer kullanıcı ayarlarının mevcut yedek kurtarma davranışı korunur.
 
 ### Testler ve başarısızlıklar
 
