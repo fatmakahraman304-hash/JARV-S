@@ -99,10 +99,11 @@ class NetworkCanvas(QWidget):
         self.update()
 
     def advance(self, dt: float, speaking: bool = False, thinking: bool = False,
-                muted: bool = False) -> None:
+                muted: bool = False, *, state: str = "") -> None:
         self._t += dt
+        self._reactor_state = (state, speaking, thinking, muted)
         if self._reactor is not None:
-            self._reactor.step(dt, speaking, thinking, muted)
+            self._reactor.step(dt, speaking, thinking, muted, state=state)
         self.update()
 
     # ── geometry ──────────────────────────────────────────────────────────────
@@ -252,8 +253,12 @@ class NetworkCanvas(QWidget):
 
         # the core
         if self._reactor is not None:
-            self._reactor.paint(p, core.x(), core.y(), self._core_r, qcol(C.PRI), qcol(C.ACC),
-                                qcol(C.WHITE), 0.0, False, self.core_label)
+            state, speaking, thinking, muted = getattr(self, "_reactor_state", ("", False, False, False))
+            main = qcol(C.MUTED_C if muted else C.PRI)
+            acc = qcol(C.MUTED_C if muted else C.ACC if speaking else C.ACC2 if thinking
+                       else C.GREEN if state == "LISTENING" else C.PRI_DIM)
+            self._reactor.paint(p, core.x(), core.y(), self._core_r, main, acc,
+                                qcol(C.WHITE), 0.0, speaking and not muted, self.core_label, muted=muted)
         else:
             cg = QRadialGradient(core, self._core_r)
             cg.setColorAt(0.0, qcol(C.WHITE))
@@ -633,4 +638,4 @@ class ControlCenter(QWidget):
         dt, self._last = min(0.1, now - self._last), now
         state, speaking, muted = self._state
         self._refresh()
-        self.network.advance(dt, speaking, state in ("THINKING", "PROCESSING"), muted)
+        self.network.advance(dt, speaking, state in ("THINKING", "PROCESSING"), muted, state=state)

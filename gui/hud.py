@@ -371,7 +371,8 @@ class HudCanvas(QWidget):
         else:
             if self._reactor is not None:
                 self._reactor.step(dt, self.speaking,
-                                   self.state in ("THINKING", "PROCESSING"), self.muted)
+                                   self.state in ("THINKING", "PROCESSING"), self.muted,
+                                   state=self.state, amp=amp)
             # Fallback core: slow "breathing" base target, lifted by the level.
             if now - self._last_t > (0.12 if self.speaking else 0.5):
                 if self.speaking:
@@ -463,7 +464,7 @@ class HudCanvas(QWidget):
         if self._reactor is None:
             return self._paint_core_classic(p, cx, cy, r, W, H)
         main, acc = self._core_colours()
-        amp = self._amp_disp
+        amp = 0.0 if self.state in ("SLEEPING", "TEXT_READY") else self._amp_disp
         live = (self.speaking or amp > 0.04) and not self.muted
         self._reactor.paint(p, cx, cy, r, main, acc, qcol(C.WHITE), amp, live,
                             self._assistant_name or "", muted=self.muted)
