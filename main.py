@@ -3666,19 +3666,67 @@ class FridayLive:
 
     # ── dashboard command relay ─────────────────────────────────────────────
 
+    def _realtime_phone_active(self):
+        return self._engine_mode() == "realtime" or getattr(self, "_session_realtime", False)
+
+    def _request_realtime_phone_text(self, token, text):
+        from memory.config_manager import get_provider_config
+        from providers.realtime_settings import PROVIDER_ID, enabled
+        from core import confirm
+        engine, dashboard, loop = self._engine, self._dashboard, self._loop
+
+        def allowed():
+            if (engine is None or dashboard is None or self._engine is not engine
+                    or self._dashboard is not dashboard or self.session is not engine
+                    or not getattr(self, "_session_realtime", False)
+                    or self._engine_mode() != "realtime" or not self._awake
+                    or not dashboard._valid(token)):
+                return False
+            current = get_provider_config(PROVIDER_ID)
+            return enabled(current.get("cloud_consent")) and enabled(current.get("phone_text"))
+
+        send = getattr(engine, "send_approved_phone", None)
+        if (not isinstance(text, str) or not 0 < len(text.strip()) <= 4000
+                or not allowed() or not callable(send) or not loop or not loop.is_running()):
+            return {"ok": False, "status": "rejected"}
+        text = text.strip()
+        if confirm.pending_title():
+            return {"ok": False, "status": "busy"}
+
+        def after_approval():
+            if not allowed() or not loop.is_running():
+                return "NOT EXECUTED: Telefon oturumu veya izin sona erdi."
+            coroutine = send(text, allowed)
+            try:
+                asyncio.run_coroutine_threadsafe(coroutine, loop)
+            except RuntimeError:
+                coroutine.close()
+                return "NOT EXECUTED: Realtime oturumu kapandı."
+            return "Telefon sorusu sıraya alındı; gönderim henüz doğrulanmadı."
+
+        self.ui.show_content("Telefondan gelen Realtime sorusu — önizleme", text)
+        result = confirm.request(key="realtime_phone_text", title="Telefon sorusunu OpenAI'ye gönder",
+            detail="Önizlemedeki soru yalnızca ekran onayından sonra gönderilir. "
+                   "Araçlar kapalı; yanıt bilgisayarda. Telefona geçmiş veya ses aktarılmaz.",
+            run=after_approval)
+        pending = result.startswith("[CONFIRMATION_PENDING]")
+        return {"ok": pending, "status": "pending_confirmation" if pending else "unavailable"}
+
     async def _process_dashboard_commands(self) -> None:
         while True:
             try:
                 text = await asyncio.wait_for(
                     self._dashboard._command_queue.get(), timeout=0.5
                 )
-                if not text:
+                if not text or self._realtime_phone_active():
                     continue
                 # Wait up to 8s for session to become ready after a wake
                 for _ in range(80):
                     if self.session:
                         break
                     await asyncio.sleep(0.1)
+                if self._realtime_phone_active():
+                    continue
                 if self.session:
                     # A remote command is deliberate control and the phone user
                     # has no desktop WAKE button — so it wakes FRIDAY if asleep.
@@ -3925,6 +3973,8 @@ class FridayLive:
             self._dashboard.set_connect_callback(self._on_phone_connected)
             self._dashboard.set_scan_callback(self.ui.show_camera_scan)
             self._dashboard.set_update_callback(self.ui.start_update)
+            self._dashboard.set_realtime_phone_callbacks(
+                self._realtime_phone_active, self._request_realtime_phone_text)
             self._keep_task(asyncio.create_task(self._dashboard.serve()))
             # Runs for the whole lifetime, not just inside an active session
             self._keep_task(asyncio.create_task(self._process_dashboard_commands()))
