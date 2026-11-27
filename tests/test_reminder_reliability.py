@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 from xml.etree import ElementTree
 
@@ -49,7 +49,8 @@ class ReminderReliability(unittest.TestCase):
         with patch.object(reminder.shutil, "which", side_effect=which), \
              patch.object(reminder.sys, "executable", "/some dir/python"), \
              patch.object(reminder.subprocess, "run", side_effect=run):
-            reminder._schedule_linux(datetime(2030, 1, 1), "job", Path("/some dir/task.py"))
+            # This models a Linux path even when the test suite runs on Windows.
+            reminder._schedule_linux(datetime(2030, 1, 1), "job", PurePosixPath("/some dir/task.py"))
         self.assertEqual(calls, ["'/some dir/python' '/some dir/task.py'\n"])
 
 
