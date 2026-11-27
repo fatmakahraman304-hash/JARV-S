@@ -482,6 +482,11 @@ class ControlCenter(QWidget):
         self._summary.setWordWrap(True)
         self._summary.setStyleSheet(f"color: {C.TEXT_MED}; padding: 4px 10px;")
         root.addWidget(self._summary)
+        self._system_status = QLabel("Sistem ölçümü bekleniyor…")
+        self._system_status.setFont(px_font(11, QFont.Weight.Medium))
+        self._system_status.setWordWrap(True)
+        self._system_status.setStyleSheet(f"color: {C.PRI}; padding: 2px 10px;")
+        root.addWidget(self._system_status)
 
         body = QHBoxLayout()
         body.setSpacing(14)
@@ -507,6 +512,20 @@ class ControlCenter(QWidget):
         self._state = ("", False, False)
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._tick)
+
+    def set_system_metrics(self, snapshot):
+        """Reuse the main HUD sampler; never start another CPU/GPU probe."""
+        def format_value(key, suffix, cap=None):
+            try:
+                value = float(snapshot[key])
+                if not math.isfinite(value) or value < 0 or (cap is not None and value > cap):
+                    return "—"
+                return f"{value:.0f}{suffix}"
+            except (KeyError, TypeError, ValueError):
+                return "—"
+        self._system_status.setText(
+            f"SİSTEM  ·  CPU {format_value('cpu', '%', 100)}  ·  RAM {format_value('mem', '%', 100)}  ·  "
+            f"GPU {format_value('gpu', '%', 100)}  ·  SICAKLIK {format_value('tmp', '°C')}")
 
     # the HUD state, so the core turns like the main one
     def set_state(self, state: str, speaking: bool, muted: bool) -> None:
