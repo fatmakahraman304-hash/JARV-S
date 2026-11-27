@@ -1389,11 +1389,64 @@ class FridayLive:
         except Exception as exc:
             self.ui.write_log(f"SYS: Hafıza kaydı başarısız: {exc}")
 
+    def _request_realtime_recall(self, query):
+        """Preview exact bounded historical data and require local HUD approval."""
+        from memory.config_manager import get_provider_config
+        from providers.realtime_settings import PROVIDER_ID, enabled
+        from providers.realtime_recall import recall_text, MAX_QUERY
+        from memory.continuity import realtime_history
+        engine = getattr(self, "_engine", None)
+        loop = self._loop
+
+        def allowed():
+            return (engine is not None and self._engine is engine
+                    and getattr(self, "_session_realtime", False)
+                    and self._engine_mode() == "realtime"
+                    and enabled(get_provider_config(PROVIDER_ID).get("cloud_consent")))
+
+        send = getattr(engine, "send_approved_recall", None)
+        if not allowed() or not callable(send) or not loop or not loop.is_running():
+            self.ui.write_log("SYS: Önce Realtime bağlantısını açın.")
+            return
+        try:
+            if len(query) > MAX_QUERY:
+                raise ValueError("Hafıza araması en fazla 200 karakter olabilir.")
+            payload = recall_text(query, realtime_history(query, limit=6))
+        except ValueError as exc:
+            self.ui.write_log(f"SYS: {exc}")
+            return
+        except Exception:
+            self.ui.write_log("SYS: Realtime geçmişi okunamadı.")
+            return
+
+        def after_approval():
+            if not allowed() or not loop.is_running():
+                return "NOT EXECUTED: Realtime oturumu veya izin değişti."
+            coroutine = send(payload, allowed)
+            try:
+                asyncio.run_coroutine_threadsafe(coroutine, loop)
+            except RuntimeError:
+                coroutine.close()
+                return "NOT EXECUTED: Realtime oturumu kapandı."
+            return "Hafıza aktarım isteği sıraya alındı; gönderim henüz doğrulanmadı."
+
+        self.ui.show_content("OpenAI'ye aktarılacak geçmiş — önizleme", payload)
+        from core import confirm
+        result = confirm.request(
+            key="realtime_recall", title="Geçmişi OpenAI'ye aktar",
+            detail="Önizlemede gösterilen sınırlı geçmiş, yalnızca bu yanıt için OpenAI'ye gönderilecek. "
+                   "Geçmiş komutlar çalıştırılmayacak. Onaylamazsanız aktarılmaz.",
+            run=after_approval)
+        self.ui.write_log("SYS: " + result)
+
     def _on_text_command(self, text: str):
         realtime_selected = self._engine_mode() == "realtime"
         realtime_active = getattr(self, "_session_realtime", False)
         raw = str(text).strip()
         command, _, query = raw.partition(" ")
+        if command.casefold() == "/realtime-hatirla":
+            self._request_realtime_recall(query)
+            return
         if command.casefold() == "/realtime-hafiza" or (
                 (realtime_selected or realtime_active)
                 and raw.casefold() in ("/hafiza", "nerede kaldık", "nerede kaldik")):
