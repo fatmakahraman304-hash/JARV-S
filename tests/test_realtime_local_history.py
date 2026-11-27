@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,7 +41,7 @@ class RealtimeLocalHistoryTests(unittest.TestCase):
 
     def test_existing_database_migrates_without_losing_rows(self):
         path = self.root / "continuity.sqlite3"
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, time TEXT, role TEXT, text TEXT)")
             db.execute("INSERT INTO events(time,role,text) VALUES(?,?,?)",
                        ("2026-11-26T12:00:00", "Kullanıcı", "old history"))
@@ -52,14 +53,14 @@ class RealtimeLocalHistoryTests(unittest.TestCase):
         c.record("Kullanıcı", "shared")
         c.record_realtime("FRIDAY", "separate")
         backup = c.backup_history(self.root / "backup.sqlite3")
-        with sqlite3.connect(backup) as db:
+        with closing(sqlite3.connect(backup)) as db, db:
             self.assertEqual(db.execute("SELECT text FROM events").fetchone()[0], "shared")
             self.assertEqual(db.execute("SELECT text FROM realtime_events").fetchone()[0], "separate")
 
     def test_old_backup_restore_reinitializes_schema(self):
         c.record("Kullanıcı", "existing")
         old = c.backup_history(self.root / "old.sqlite3")
-        with sqlite3.connect(old) as db:
+        with closing(sqlite3.connect(old)) as db, db:
             db.execute("DROP TABLE realtime_events")
         target_dir = self.root / "restored"
         with patch.object(c, "data_dir", return_value=target_dir):
