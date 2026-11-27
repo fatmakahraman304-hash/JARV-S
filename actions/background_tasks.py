@@ -48,6 +48,53 @@ def background_tasks(parameters: dict, player=None) -> str:
     a = dict(parameters or {})
     action = str(a.get("action") or "list").strip().lower()
 
+    if action == "cognitive_start":
+        try:
+            doc = eng.cognitive.create(a.get("task"), a.get("nodes"), a.get("deliver") or "voice")
+        except (ValueError, TypeError) as e:
+            return outcome.failed("cognitive_workflow", str(e))
+        return outcome.started("cognitive_workflow", workflow_id=doc["id"], nodes=len(doc["nodes"]),
+                               note="independent nodes may run in parallel; final result is not independently verified")
+
+    if action == "cognitive_list":
+        docs = eng.cognitive.all()[:10]
+        return ("\n".join(f"{p['id']} [{p['status']}] {p['goal'][:150]}" for p in docs)
+                if docs else "No cognitive workflows yet.")
+
+    if action in ("cognitive_status", "cognitive_cancel", "cognitive_revise"):
+        try:
+            wid = str(a.get("workflow_id") or "").strip()
+            docs = eng.cognitive.all() if not wid else []
+            doc = eng.cognitive.get(wid) if wid else (docs[0] if docs else None)
+            if not doc:
+                return outcome.failed("cognitive_workflow", "no such workflow")
+            if action == "cognitive_cancel":
+                if not eng.cognitive.cancel(doc["id"]):
+                    return outcome.failed("cognitive_workflow", "workflow is not active")
+                return outcome.started("cognitive_cancel", workflow_id=doc["id"],
+                                       note="cancellation requested; an in-flight tool may still be stopping")
+            if action == "cognitive_revise":
+                if not eng.cognitive.revise(doc["id"], str(a.get("node_id") or ""), a.get("note")):
+                    return outcome.failed("cognitive_workflow", "only an unstarted node can be revised")
+                return outcome.done("cognitive_revise", workflow_id=doc["id"], node=a.get("node_id"))
+        except (ValueError, TypeError) as e:
+            return outcome.failed("cognitive_workflow", str(e))
+        lines = [f"workflow_id={doc['id']} workflow_status={doc['status']}",
+                 "Task reports do not independently verify the overall goal; monetary costs are not capped."]
+        for node in doc["nodes"]:
+            child = eng.get(node["task_id"])
+            lines.append(f"{node['id']} · {node['status']} · {node['agent']} · attempt {node['attempt'] + 1}")
+            if child:
+                budget = child.get("cognitive_budget") or {}
+                lines.append(f"  tool_calls={budget.get('used_calls', 0)}/{budget.get('max_calls', 0)}")
+                if child.get("result"):
+                    lines.append(outcome.untrusted("node-result", child["result"][:2000]))
+            for artifact in node.get("artifacts") or []:
+                lines.append(f"  file={artifact.get('location') or artifact.get('path')} verification={artifact.get('status')}")
+        if doc.get("error"):
+            lines.append("error=" + str(doc["error"])[:300])
+        return "\n".join(lines)
+
     if action == "plan":
         try:
             plan = eng.plans.create(a.get("task"), a.get("steps"), a.get("deliver") or "voice")
@@ -171,7 +218,8 @@ TOOL = {
         "list. For a quick answer the user is waiting for, use web_search instead. "
         "start = hand the task to an agent — agent 'researcher' for research (it plans, reads "
         "sources in full, checks every quote against the page and writes a cited report), "
-        "'general' for other work and 'system_diagnostics' for read-only local system assessment; task = the whole request, self-contained, in the user's words; "
+        "'general' for other work and 'system_diagnostics' for read-only local system assessment; "
+        "task = the whole request, self-contained, in the user's words; "
         "minutes = the time budget when the user gives one ('research this for 10 minutes' -> 10); "
         "without one, 10 for research, more (20-40) when the user asks for something thorough or "
         "in depth; at = start later, "
@@ -186,19 +234,25 @@ TOOL = {
         "simple extraction or formatting, smart for reasoning and all research. The user's "
         "existing provider preferences and model fallback remain in effect. Wait for a step to finish before "
         "starting the next. Use this only when the user wants work carried out, not merely "
-        "a plan drafted. The existing restricted background tools apply; no computer control, "
+        "a plan drafted. cognitive_start runs 1-6 nodes with explicit depends_on ids; "
+        "independent nodes can run in parallel. Provide bounded alternatives where useful, "
+        "without expanding tool permissions; uncertain operations are not repeated. Each node has minutes, rounds and max_calls; report or "
+        "file_written selects the evidence check. Monetary costs are not capped. "
+        "cognitive_list/status/cancel manage workflows; cognitive_revise updates only an unstarted "
+        "node when the user asks. Do not treat generated reports as independently verified. "
+        "The existing restricted background tools apply; no computer control, "
         "external messaging or purchases. plan_list shows saved plans, plan_status and "
         "plan_cancel accept plan_id or use the latest matching plan. Results "
         "are task reports, not proof that real-world actions succeeded. "
         "task_id may be left empty to mean the latest task."),
-    "brief": "Hands long work to background agents; run ordered steps with plan and use "
-             "plan_list, plan_status or plan_cancel. Also supports start, list, status, result, finish, cancel, steer.",
+    "brief": "Runs background work: cognitive_start executes dependency graphs with budgets and "
+             "cognitive_status/cancel/revise manage them; plan runs ordered steps. Also supports task start/list/status/cancel.",
     "tier": "core",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel"]},
+                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise"]},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},
             "minutes": {"type": "INTEGER", "description": "for start: time budget in minutes"},
@@ -209,6 +263,19 @@ TOOL = {
             "task_id": {"type": "STRING"},
             "note": {"type": "STRING", "description": "for steer: the new instruction"},
             "plan_id": {"type": "STRING", "description": "for plan_status or plan_cancel"},
+            "workflow_id": {"type": "STRING", "description": "for cognitive workflow actions"},
+            "node_id": {"type": "STRING", "description": "for cognitive_revise: unstarted node id"},
+            "nodes": {"type": "ARRAY", "description": "for cognitive_start: 1-6 dependency graph nodes",
+                      "items": {"type": "OBJECT", "properties": {
+                          "id": {"type": "STRING"}, "task": {"type": "STRING"},
+                          "agent": {"type": "STRING"},
+                          "depends_on": {"type": "ARRAY", "items": {"type": "STRING"}},
+                          "alternatives": {"type": "ARRAY", "items": {"type": "STRING"}},
+                          "minutes": {"type": "INTEGER"}, "rounds": {"type": "INTEGER"},
+                          "max_calls": {"type": "INTEGER"},
+                          "model_tier": {"type": "STRING", "enum": ["fast", "smart"]},
+                          "verification": {"type": "STRING", "enum": ["report", "file_written"]}},
+                          "required": ["id", "task"]}},
             "steps": {"type": "ARRAY", "description": "for plan: 1-6 ordered steps",
                       "items": {"type": "OBJECT", "properties": {
                           "task": {"type": "STRING"},
