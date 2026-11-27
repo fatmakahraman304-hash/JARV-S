@@ -57,7 +57,47 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
           "rem_known": None, "out_cmds": [], "recent": [], "img_new": [], "gallery": [],
           "arch_queue": [], "arch_last": 0.0, "arch_id": "",
-          "push_keys": None, "push_subs": {}, "pushed": set(), "push_gone": set()}
+          "push_keys": None, "push_subs": {}, "pushed": set(), "push_gone": set(), "journal": None}
+
+_DURABLE_QUEUES = ("pending", "turns", "out_cmds", "img_new", "rem_new")
+_start_lock = threading.Lock()
+
+
+def _save_queues_locked(replacements=None):
+    """Commit a candidate snapshot before changing the live queues; lock held."""
+    journal = _state.get("journal")
+    if journal is not None:
+        replacements = replacements or {}
+        journal.save({name: replacements.get(name, _state[name]) for name in _DURABLE_QUEUES})
+
+
+def _enqueue_locked(name, item):
+    _save_queues_locked({name: [*_state[name], item]})
+    _state[name].append(item)
+
+
+def _set_reply_locked(cid, text):
+    """Persist a reply before exposing it to the sync loop; lock held."""
+    pending = _state["pending"]
+    idx = next((i for i, p in enumerate(pending) if p.get("id") == cid and p.get("reply") is None), None)
+    if idx is None:
+        return False
+    updated = dict(pending[idx], reply=text)
+    candidate = list(pending)
+    candidate[idx] = updated
+    _save_queues_locked({"pending": candidate})
+    pending[idx]["reply"] = text
+    return True
+
+
+def _reply_locked(cid, text):
+    if not _set_reply_locked(cid, text) and not any(p.get("id") == cid for p in _state["pending"]):
+        _enqueue_locked("pending", {"id": cid, "at": time.time(), "reply": text})
+
+
+def _ensure_pending_locked(cid):
+    if not any(p.get("id") == cid for p in _state["pending"]):
+        _enqueue_locked("pending", {"id": cid, "at": time.time(), "reply": None})
 
 
 def _log(msg: str) -> None:
@@ -289,7 +329,7 @@ def note_turn(role: str, text: str) -> None:
             "role": "user" if role.lower().startswith(("kullan", "user")) else "aether",
             "text": str(text)[:600], "sync_id": uuid.uuid4().hex}
     with _state["lock"]:
-        _state["turns"].append(turn)
+        _enqueue_locked("turns", turn)
         _state["arch_queue"].append(turn)
 
 
@@ -300,7 +340,7 @@ def note_reply(text: str) -> None:
     with _state["lock"]:
         for p in _state["pending"]:
             if p.get("reply") is None and time.time() - p["at"] < REPLY_WAIT:
-                p["reply"] = str(text)[:2000]
+                _set_reply_locked(p["id"], str(text)[:2000])
                 break
 
 
@@ -365,8 +405,8 @@ def add_reminder(text: str, due_ts: float, rid: str = "") -> str:
     """Share a reminder set on this computer with every device. Returns its id."""
     rid = rid or new_reminder_id()
     with _state["lock"]:
-        _state["rem_new"].append({"id": rid, "text": str(text)[:200], "due": int(due_ts * 1000),
-                                  "from": device_name(), "cancelled": ""})
+        _enqueue_locked("rem_new", {"id": rid, "text": str(text)[:200], "due": int(due_ts * 1000),
+                                    "from": device_name(), "cancelled": ""})
     _known().add(rid)
     _save_known()
     return rid
@@ -380,7 +420,7 @@ def cancel_reminder(rid: str) -> bool:
         r = r or next((x for x in _state["rem_new"] if x.get("id") == rid), None)
         if r is None:
             return False
-        _state["rem_new"].append({**r, "cancelled": _now()})
+        _enqueue_locked("rem_new", {**r, "cancelled": _now()})
     return True
 
 
@@ -501,7 +541,7 @@ def send_to_device(name: str, cmd: dict) -> tuple[bool, str]:
     if len(json.dumps(item)) > 4_000_000:
         return False, "Gönderilecek şey çok büyük."
     with _state["lock"]:
-        _state["out_cmds"].append((d["id"], item))
+        _enqueue_locked("out_cmds", (d["id"], item))
     tail = "" if device_online(d) else " (şu an kapalı görünüyor; açılınca görecek)"
     return True, f"{d.get('name')} cihazına gönderiyorum{tail}."
 
@@ -709,8 +749,8 @@ def add_image(prompt: str, url: str, **extra) -> None:
     if not str(url).startswith("https://"):
         return
     with _state["lock"]:
-        _state["img_new"].append({"id": f"{device_id()}-{int(time.time() * 1000):x}", "prompt": str(prompt)[:200],
-                                  "url": url, "from": device_name(), "ts": _now(), **extra})
+        _enqueue_locked("img_new", {"id": f"{device_id()}-{uuid.uuid4().hex}", "prompt": str(prompt)[:200],
+                                    "url": url, "from": device_name(), "ts": _now(), **extra})
 
 
 def gallery() -> list[dict]:
@@ -970,6 +1010,11 @@ def on_owner_change(fn) -> None:
 def start(inject) -> bool:
     """Begin syncing if the user has set it up. inject(text) hands a remote
     command to the voice session (thread-safe)."""
+    with _start_lock:
+        return _start_locked(inject)
+
+
+def _start_locked(inject) -> bool:
     _state["inject"] = inject
     s = settings()
     if not (s.get("github_token") and s.get("gist_id")):
@@ -977,6 +1022,44 @@ def start(inject) -> bool:
         return False
     if _state["thread"] and _state["thread"].is_alive():
         return True
+    try:
+        from core.neural_journal import NeuralJournal
+        from memory.config_manager import CONFIG_DIR
+        with _state["lock"]:
+            journal = _state.get("journal")
+            if journal is not None and journal.scope != s["gist_id"]:
+                if any(_state[name] for name in _DURABLE_QUEUES):
+                    raise RuntimeError("Bekleyen cihaz kayıtları önceki hesaba ait.")
+                journal.close()
+                _state["journal"] = journal = None
+                _state["done"] = set()
+            if journal is None:
+                journal = NeuralJournal(CONFIG_DIR, s["gist_id"])
+                try:
+                    saved = journal.load()
+                    if any(not isinstance(x, dict) for name in ("pending", "turns", "img_new", "rem_new") for x in saved[name]):
+                        raise ValueError("Geçersiz kayıt içeriği")
+                    if any(not isinstance(x, (tuple, list)) or len(x) != 2 or not isinstance(x[1], dict)
+                           for x in saved["out_cmds"]):
+                        raise ValueError("Geçersiz cihaz kuyruğu")
+                    # An interrupted action must never silently be retried or
+                    # reported as successful when its real outcome is unknown.
+                    for p in saved["pending"]:
+                        if p.get("reply") is None:
+                            p["reply"] = "FRIDAY yeniden açıldı; önceki işlemin sonucu doğrulanamadı. Otomatik tekrarlanmadı."
+                    saved["out_cmds"] = [tuple(x) for x in saved["out_cmds"]]
+                    merged = {name: saved[name] + list(_state[name]) for name in _DURABLE_QUEUES}
+                    journal.save(merged)
+                    for name in _DURABLE_QUEUES:
+                        _state[name] = merged[name]
+                    _state["journal"] = journal
+                except Exception:
+                    journal.close()
+                    raise
+    except Exception as exc:
+        _state["status"] = f"hata: cihaz kaydı açılamadı: {exc}"[:160]
+        _log(f"[Sync] {_state['status']}")
+        return False
     _state["stop"].clear()
     t = threading.Thread(target=_loop, daemon=True, name="aether-sync")
     _state["thread"] = t
@@ -1004,6 +1087,10 @@ def _cycle() -> None:
     token, gid = s.get("github_token", ""), s.get("gist_id", "")
     if not token or not gid:
         _state["status"] = "kurulmadı"
+        return
+    journal = _state.get("journal")
+    if journal is not None and journal.scope != gid:
+        _state["status"] = "hata: cihaz eşitleme hesabı değişti; bekleyen kayıtlar korunuyor"
         return
     me = device_id()
     now = time.time()
@@ -1069,6 +1156,31 @@ def _cycle() -> None:
     for cmd in inbox:
         cid = str(cmd.get("id") or "")
         if not cid or cid in _state["done"]:
+            continue
+        with _state["lock"]:
+            journal = _state.get("journal")
+            placeholder = {"id": cid, "at": time.time(), "reply": None}
+            already_waiting = any(p.get("id") == cid for p in _state["pending"])
+            queues = {name: _state[name] for name in _DURABLE_QUEUES}
+            if not already_waiting:
+                queues["pending"] = [*_state["pending"], placeholder]
+            is_new = journal.claim(me, cid, queues) if journal is not None else True
+            if journal is not None and is_new and not already_waiting:
+                _state["pending"].append(placeholder)
+        if not is_new:
+            _state["done"].add(cid)
+            # The process may have stopped after recording the claim but
+            # before reporting the result. Do not execute it a second time.
+            with _state["lock"]:
+                pending = any(p.get("id") == cid for p in _state["pending"])
+            try:
+                published = json.loads(files.get(f"outbox-{me}.json") or "[]")
+                pending = pending or (isinstance(published, list) and
+                                      any(isinstance(p, dict) and p.get("id") == cid for p in published))
+            except (ValueError, TypeError):
+                pending = True  # preserve malformed output, do not guess
+            if not pending:
+                _reply(cid, "Bu komut daha önce alındı; sonucu doğrulanamadı ve otomatik tekrarlanmadı.")
             continue
         _state["done"].add(cid)
         if cmd.get("kind") in _ITEM_KINDS:
@@ -1187,11 +1299,15 @@ def _cycle() -> None:
 
     if not writes or write_files(token, gid, writes):
         with _state["lock"]:
-            _ack_queue("pending", answered)
-            _ack_queue("turns", turns)
-            _ack_queue("out_cmds", outgoing)
-            _ack_queue("img_new", new_g)
-            _ack_queue("rem_new", reminders)
+            batches = {"pending": answered, "turns": turns, "out_cmds": outgoing,
+                       "img_new": new_g, "rem_new": reminders}
+            replacements = {}
+            for name, batch in batches.items():
+                ids = {id(item) for item in batch}
+                replacements[name] = [item for item in _state[name] if id(item) not in ids]
+            if any(batches.values()):
+                _save_queues_locked(replacements)
+                _state.update(replacements)
         _state["etag"] = ""
     else:
         # Force a fresh snapshot after a failed or ambiguous write. Queues stay
@@ -1230,7 +1346,7 @@ def on_item(fn) -> None:
 
 def _reply(cid: str, text: str) -> None:
     with _state["lock"]:
-        _state["pending"].append({"id": cid, "at": time.time(), "reply": text})
+        _reply_locked(cid, text)
 
 
 def _received_dir() -> Path:
@@ -1298,7 +1414,7 @@ def _queue_to(dev_id: str, cmd: dict) -> None:
     item = dict(cmd)
     item.update({"id": f"{device_id()}-{uuid.uuid4().hex}", "from": device_name(), "ts": _now()})
     with _state["lock"]:
-        _state["out_cmds"].append((dev_id, item))
+        _enqueue_locked("out_cmds", (dev_id, item))
 
 
 def deliver_to_voice(title: str, text: str) -> str:
@@ -1371,7 +1487,7 @@ def _run_command(cid: str, text: str, sender: str) -> None:
         cb = _state.get("on_update")
         reply = "Güncelleme başladı; FRIDAY kendini yeniden açacak." if cb else "Güncelleme burada başlatılamıyor."
         with _state["lock"]:
-            _state["pending"].append({"id": cid, "at": time.time(), "reply": reply})
+            _reply_locked(cid, reply)
         if cb:
             try:
                 cb()
@@ -1392,28 +1508,27 @@ def _run_command(cid: str, text: str, sender: str) -> None:
             except Exception as exc:
                 msg = f"Kumanda: {exc}"
             with _state["lock"]:
-                _state["pending"].append({"id": cid, "at": time.time(), "reply": msg})
+                _reply_locked(cid, msg)
         threading.Thread(target=go, daemon=True, name="sync-adb").start()
         return
     if text.startswith("quick:"):
         from core import remote_control
         ok, msg, extra = remote_control.perform(text.split(":", 1)[1].strip())
         with _state["lock"]:
-            _state["pending"].append({"id": cid, "at": time.time(),
-                                      "reply": msg if not extra.get("image") else msg + " (görüntü bilgisayarda)"})
+            _reply_locked(cid, msg if not extra.get("image") else msg + " (görüntü bilgisayarda)")
         return
     inject = _state["inject"]
     with _state["lock"]:
-        _state["pending"].append({"id": cid, "at": time.time(), "reply": None})
+        _ensure_pending_locked(cid)
     if inject is None:
         with _state["lock"]:
-            _state["pending"][-1]["reply"] = "Bu bilgisayarda sesli oturum açık değil."
+            _set_reply_locked(cid, "Bu bilgisayarda sesli oturum açık değil.")
         return
     try:
         inject(f"[{sender} cihazından komut] {text}")
     except Exception as exc:
         with _state["lock"]:
-            _state["pending"][-1]["reply"] = f"Komut iletilemedi: {exc}"
+            _set_reply_locked(cid, f"Komut iletilemedi: {exc}")
 
 
 # ── the setup link for other devices ─────────────────────────────────────────

@@ -74,6 +74,9 @@ screenshots/
 /config/device_id
 /config/aether_kurulum_qr.png
 /config/shared_reminders.json
+/config/neural_sync.sqlite3*
+/config/neural_sync.key
+/config/neural_sync.lock
 /tools/platform-tools/
 /config/android_devices.json
 

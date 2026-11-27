@@ -24,6 +24,7 @@ Bu kayıt tam kaynak kod denetimi veya Omega aşamalarının tamamlandığı anl
 ## İkinci oturum: cihaz eşitleme güvenilirliği
 
 Başlangıç `main`: `e01a9ac3c1cb0e608da66c120415b7acbe411bdc` (#252 korunur).
+Bu bölüm o oturumun durumudur; üçüncü oturumdaki kalıcı yerel kayıt değişiklikleri aşağıdadır.
 
 ### Tamamlanan
 
@@ -43,3 +44,27 @@ Başlangıç `main`: `e01a9ac3c1cb0e608da66c120415b7acbe411bdc` (#252 korunur).
 
 - Kullanıcının gerçek bilgisayarındaki takılan güncelleme yeniden üretilemedi; kök nedeni bilinmiyor. Yayın imzalama anahtarı ve gerçek imzalı kurulum paketi doğrulanmadı.
 - Gerçek telefon, TV, diğer cihazlar, mikrofon ve hoparlör bu oturumda bağlanmadı. Kullanıcıya özel hesaplarla gerçek ağ, gecikme ve cihazlar arası ses kabul testleri yapılmadı.
+
+## Üçüncü oturum: Neural Network için kalıcı yerel eşitleme temeli
+
+Başlangıç `main`: `0211c4929f922ae5baa6d6c819709b8ddb618528`; #252 ve #253 korunur.
+
+### Tamamlanan
+
+- `core/neural_journal.py`: Cihaz eşitleme bekleme kayıtları SQLite işlemi içinde AES-256-GCM ile şifrelenir; komut kimlikleri HMAC özetiyle saklanır. Windows'ta şifreleme anahtarı mevcut kullanıcının DPAPI profiliyle korunur. Tek çalışan süreç kilidi, bozuk kayıt/eksik anahtar durumunda durma ve farklı Gist hesabına bekleyen veriyi yanlışlıkla aktarmama kontrolü eklendi.
+- `core/sync_hub.py`: Eşitleme başlatıldıktan sonra bekleyen yanıt, konuşma, cihaz mesajı, resim ve hatırlatıcı kuyrukları yerel kayda yazılır ve yeniden başlatmada yüklenir. Gist yazımı başarıyla döndüğünde yalnızca işlenen anlık görüntü işlemli olarak kuyruktan çıkarılır.
+- Gelen bir komutun kimliği ve bekleyen yanıt kaydı aynı SQLite işlemiyle eylemden önce kaydedilir. Eylemin sonucu bilinmeden kesinti olursa yeniden açılışta durum belirsiz olarak bildirilir; komut otomatik tekrarlanmaz. İşlenmiş kimlikler yeniden başlatmalar arasında saklanır.
+- Sürecin zorla sonlandırılması, eksik anahtar, bozuk şifreli içerik, farklı Gist hesabı, kilit, diske yazma hatası ve yinelenen komut için testler eklendi. Linux/Python 3.12 ile cihaz ve güncelleyici regresyonlarından 143 test geçti. Windows/Linux Python 3.13 sonuçları GitHub iş akışından ayrıca doğrulanmalıdır.
+
+### Eksik kalan
+
+- Bu sadece masaüstündeki Gist eşitleme kuyruklarını kapsar; bağımsız `core/tasks` görev deposu, konuşma arşiv kuyruğu, diğer istemcilerin yerel verileri ve eski veriler bu şifreli depoya taşınmadı. Eşitleme hiç başlatılmadıysa eski bellek içi davranış sürer.
+- Gist hâlâ taşıma katmanıdır; gönderilen içerik bu değişiklikle uçtan uca şifrelenmez, sunucu tarafından atomik çoklu cihaz yazımı veya kimlikli yeni gerçek zamanlı taşıma eklenmedi. Tüm cihazları birbirine bağlayan kayıt, güvenilir kimlik, yetkilendirme ve otomatik tekrar önleme tamamlanmadı.
+- Windows DPAPI aynı kullanıcı profilindeki işlemlere açıktır; Linux/macOS için anahtar 0600 izinli yerel dosyada tutulur ve anahtarı da okuyabilen aynı kullanıcı veya yöneticiye karşı koruma sağlamaz. Dosya adı, boyut ve işlem zamanları gizlenmez. Windows kullanıcı profili veya anahtarı kaybolursa veri kurtarma planı henüz yoktur.
+- Ağ yazımının sunucuda gerçekleşip yanıtın kaybolduğu ve karşı cihazın iletiyi tükettiği durumlarda tüm sistem için tam olarak bir kez teslim garantisi yoktur. Diğer cihazların Gist komutlarına güven politikası ayrıca incelenmelidir.
+- Merkezi zekâ, çoklu model yönlendirme, Windows kontrolü, diğer platformların istemcileri ve Omega'nın diğer bölümleri bu oturumda tamamlanmadı.
+
+### Başarısız veya fiziksel cihaz gerektiren
+
+- Kullanıcının laptopu, telefonları, TV'si, saati ve akıllı ev cihazları üzerinde canlı test yapılmadı; gerçek Gist hesabıyla kesinti, çoklu cihaz yarışı ve kişisel veri taşıma deneyi gerçekleştirilmedi.
+- Kullanıcının güncelleme panelinin neden takıldığı ve gerçek imzalı kurulum paketinin yayın durumu hâlâ doğrulanmadı. Bu değişiklik yeni paket bağımlılığı eklemez; `cryptography` önceden `requirements.txt` içinde bulunur.
