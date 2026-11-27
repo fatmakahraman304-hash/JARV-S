@@ -22,7 +22,7 @@ import time
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPainter, QPen,
                          QRadialGradient)
-from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from core import activity
 from gui.style import btn_css, px_font, with_alpha
@@ -80,12 +80,15 @@ class NetworkCanvas(QWidget):
         self._pending: dict[str, float] = {}     # app nodes whose login page is opening
         self._caption = ""
         self._t = 0.0
+        self._outcomes = {}
 
     # ── data ──────────────────────────────────────────────────────────────────
-    def set_data(self, counts, hits, caption: str, connected=None) -> None:
+    def set_data(self, counts, hits, caption: str, connected=None, outcomes=None) -> None:
         self._counts, self._hits, self._caption = counts, hits, caption
         if connected is not None:
             self._connected = set(connected)
+        if outcomes is not None:
+            self._outcomes = dict(outcomes)
 
     def _is_app_off(self, key: str) -> bool:
         """An app reached through Composio whose account is not connected."""
@@ -155,7 +158,8 @@ class NetworkCanvas(QWidget):
                 elif self._is_app_off(k):
                     self.setToolTip(f"{self.labels[k]} · bağlı değil — bağlamak için tıkla")
                 else:
-                    self.setToolTip(f"{self.labels[k]} · bu oturumda {n} işlem")
+                    status = {"ok": "tamamlandı", "warn": "doğrulanamadı", "fail": "başarısız", "info": "bilgi / başlangıç"}.get(self._outcomes.get(k), "kayıt yok")
+                    self.setToolTip(f"{self.labels[k]} · bu oturumda {n} işlem · son kayıt: {status}")
             else:
                 self.setToolTip("")
 
@@ -212,7 +216,8 @@ class NetworkCanvas(QWidget):
         p.setFont(px_font(13))
         p.setPen(QPen(qcol(C.TEXT_MED)))
         p.drawText(QRectF(24, 38, 400, 20), Qt.AlignmentFlag.AlignVCenter,
-                   f"{active} / {len(self.nodes)} bağlantı aktif")
+                   (f"{active} / {len(self.nodes)} düğüm kullanıldı / bağlı" if not self.custom_nodes
+                    else f"{active} / {len(self.nodes)} düğüm aktif"))
 
         # mesh: faint links between neighbouring outer nodes
         outer = [k for k, _l, _i, ring in self.nodes if ring == 1]
@@ -235,18 +240,18 @@ class NetworkCanvas(QWidget):
             else:
                 p.setPen(QPen(with_alpha(C.TEXT_DIM, 0.12), 1, Qt.PenStyle.DashLine))
             p.drawLine(core, c)
-            if n and not dim:
-                # a slow steady flow on every active link, and a bright burst
-                # travelling outwards for a few seconds after each use
+            if n and not dim and 0 <= now - self._hits.get(k, 0) < 3.0:
+                # Pulses represent recent recorded activity, not ongoing execution.
                 p.setPen(Qt.PenStyle.NoPen)
-                recent = now - self._hits.get(k, 0) < 3.0
-                for j in range(3 if recent else 1):
+                recent = True
+                pulse_color = getattr(C, _STATUS_COL.get(self._outcomes.get(k), "TEXT"))
+                for j in range(3):
                     u = ((self._t * (0.9 if recent else 0.25)) + j / 3.0 + hash(k) % 97 / 97) % 1.0
                     x = core.x() + (c.x() - core.x()) * u
                     yy = core.y() + (c.y() - core.y()) * u
                     rr = 6.0 if recent else 3.5
                     pg = QRadialGradient(x, yy, rr)
-                    pg.setColorAt(0.0, with_alpha(C.WHITE if recent else C.ACC, 0.95))
+                    pg.setColorAt(0.0, with_alpha(pulse_color, 0.95))
                     pg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
                     p.setBrush(QBrush(pg))
                     p.drawEllipse(QPointF(x, yy), rr, rr)
@@ -276,7 +281,8 @@ class NetworkCanvas(QWidget):
             dim = bool(self._filter) and self._filter != k
             r = 22.0 if ring == 0 else 20.0
             on = self._is_on(k)
-            base = qcol(C.PRI) if on else qcol(C.TEXT_DIM)
+            outcome = self._outcomes.get(k)
+            base = qcol(getattr(C, _STATUS_COL[outcome]) if outcome in ("fail", "warn") else C.PRI) if on else qcol(C.TEXT_DIM)
             alpha = 0.35 if dim else 1.0
             if on and not dim:
                 gl = QRadialGradient(c, r * 2.0)
@@ -307,7 +313,7 @@ class NetworkCanvas(QWidget):
                 bw = max(18.0, p.fontMetrics().horizontalAdvance(txt) + 9)
                 br = QRectF(c.x() + r * 0.45, c.y() - r - 4, bw, 18)
                 p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QBrush(with_alpha(C.PRI, alpha)))
+                p.setBrush(QBrush(with_alpha(base, alpha)))
                 p.drawRoundedRect(br, 9, 9)
                 p.setPen(QPen(qcol(C.DARK)))
                 p.drawText(br, Qt.AlignmentFlag.AlignCenter, txt)
@@ -388,7 +394,7 @@ class ActivityFeed(QWidget):
         p.setFont(px_font(11))
         p.setPen(QPen(qcol(C.TEXT_DIM)))
         p.drawText(QRectF(22, 40, W - 44, 18), Qt.AlignmentFlag.AlignVCenter,
-                   "FRIDAY'ın yaptığı her işlem, anında.")
+                   "Son yerel etkinlik kayıtları · sonuçlarıyla birlikte.")
         p.setPen(QPen(with_alpha(C.PRI, 0.18), 1))
         p.drawLine(QPointF(18, 68), QPointF(W - 18, 68))
 
@@ -471,6 +477,16 @@ class ControlCenter(QWidget):
         self._feed_btn.clicked.connect(self._toggle_feed)
         bar.addWidget(self._feed_btn)
         root.addLayout(bar)
+        self._summary = QLabel("Etkinlik kayıtları okunuyor…")
+        self._summary.setFont(px_font(11, QFont.Weight.Medium))
+        self._summary.setWordWrap(True)
+        self._summary.setStyleSheet(f"color: {C.TEXT_MED}; padding: 4px 10px;")
+        root.addWidget(self._summary)
+        self._system_status = QLabel("Sistem ölçümü bekleniyor…")
+        self._system_status.setFont(px_font(11, QFont.Weight.Medium))
+        self._system_status.setWordWrap(True)
+        self._system_status.setStyleSheet(f"color: {C.PRI}; padding: 2px 10px;")
+        root.addWidget(self._system_status)
 
         body = QHBoxLayout()
         body.setSpacing(14)
@@ -491,10 +507,25 @@ class ControlCenter(QWidget):
         self._check_finished.connect(self._on_check_finished)
 
         self._seq = -1
+        self._next_age_refresh = 0.0
         self._last = time.monotonic()
         self._state = ("", False, False)
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._tick)
+
+    def set_system_metrics(self, snapshot):
+        """Reuse the main HUD sampler; never start another CPU/GPU probe."""
+        def format_value(key, suffix, cap=None):
+            try:
+                value = float(snapshot[key])
+                if not math.isfinite(value) or value < 0 or (cap is not None and value > cap):
+                    return "—"
+                return f"{value:.0f}{suffix}"
+            except (KeyError, TypeError, ValueError):
+                return "—"
+        self._system_status.setText(
+            f"SİSTEM  ·  CPU {format_value('cpu', '%', 100)}  ·  RAM {format_value('mem', '%', 100)}  ·  "
+            f"GPU {format_value('gpu', '%', 100)}  ·  SICAKLIK {format_value('tmp', '°C')}")
 
     # the HUD state, so the core turns like the main one
     def set_state(self, state: str, speaking: bool, muted: bool) -> None:
@@ -525,19 +556,30 @@ class ControlCenter(QWidget):
         for key in connected.intersection(self.network._pending):
             self.network.set_pending(key, False)
             activity.record(key, f"{activity.NODE_LABEL[key]} hesabı bağlandı", "ok", count=False)
-        seq = activity.last_seq()
-        if force or seq != self._seq:
-            self._seq = seq
-            events = activity.recent(200)
+        snapshot = activity.snapshot(None if force else self._seq)
+        if snapshot is not None:
+            self._seq = snapshot.seq
+            events = snapshot.events
             caption = ""
+            outcomes = {e.node: e.status for e in events}
             for e in reversed(events):
                 if e.node == "voice" and "yanıtladı:" in e.text:
                     caption = e.text.split("yanıtladı:", 1)[1].strip()
                     break
-            self.network.set_data(activity.counts(), activity.last_hit(), caption, connected)
+            self.network.set_data(snapshot.counts, snapshot.hits, caption,
+                                  snapshot.connected, outcomes)
             self.feed.set_events(events)
-        else:
-            self.feed.update()      # keeps the "x sn" ages fresh
+            summary = {status: sum(e.status == status for e in events)
+                       for status in ("ok", "warn", "fail", "info")}
+            self._summary.setText(
+                f"Son {len(events)} kayıt: {summary['ok']} tamamlandı · "
+                f"{summary['warn']} doğrulanamadı · {summary['fail']} başarısız · "
+                f"{summary['info']} bilgi / başlangıç")
+        now = time.monotonic()
+        if now >= self._next_age_refresh:
+            self._next_age_refresh = now + 1.0
+            if self.feed.isVisible():
+                self.feed.update()
 
     def _check_connections(self) -> None:
         """Check more often while a browser authorization is pending."""
@@ -633,6 +675,9 @@ class ControlCenter(QWidget):
         threading.Thread(target=work, daemon=True, name="composio-link").start()
 
     def _tick(self) -> None:
+        if not self.isVisible() or self.window().isMinimized():
+            self._last = time.monotonic()
+            return
         self._check_connections()
         now = time.monotonic()
         dt, self._last = min(0.1, now - self._last), now

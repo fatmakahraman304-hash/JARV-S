@@ -1465,6 +1465,10 @@ class MainWindow(QMainWindow):
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
+        self._last_metrics_snapshot = snap
+        cc = getattr(self, "_control_center", None)
+        if cc is not None and cc.isVisible():
+            cc.set_system_metrics(snap)
 
         cpu, mem = snap["cpu"], snap["mem"]
         self._g_cpu.set_value(cpu, f"{cpu:.0f}%")
@@ -3776,6 +3780,7 @@ class MainWindow(QMainWindow):
                 if self.__dict__.get("_chess_panel") is None:
                     self._hud_cam_stack.currentChanged.connect(self._sync_cc_btn)
             self._control_center.set_state(self.hud.state, self.hud.speaking, self._muted)
+            self._control_center.set_system_metrics(getattr(self, "_last_metrics_snapshot", {}))
             self._hud_cam_stack.setCurrentWidget(self._control_center)
         elif self._hud_cam_stack.currentWidget() is getattr(self, "_control_center", None):
             self._hud_cam_stack.setCurrentWidget(self.hud)
