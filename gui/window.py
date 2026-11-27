@@ -3834,6 +3834,14 @@ class MainWindow(QMainWindow):
         if not d.get("os_system"):
             return False
         providers = d.get("providers") if isinstance(d.get("providers"), dict) else {}
+        if str(providers.get("mode") or "").lower() == "realtime":
+            try:
+                from memory.config_manager import get_provider_config
+                from providers.realtime_settings import PROVIDER_ID, validate_settings
+                validate_settings(get_provider_config(PROVIDER_ID))
+                return True
+            except (ValueError, RuntimeError):
+                return False
         # A Gemini key, or a choice to run without one: a local engine needs no key.
         return bool(d.get("gemini_api_key") or d.get("local_only")
                     or str(providers.get("mode") or "").lower() == "pipeline")
