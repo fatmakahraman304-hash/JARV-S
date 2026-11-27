@@ -254,8 +254,44 @@ Başlangıç `main`: `21445324de9e5dcec9079814b4896bb88e878a6c`; #252–#260 kor
 
 - Eleştiri ayrı bir çağrıdır ancak farklı bir model ya da sağlayıcı garantisi yoktur; dış kaynaklar veya gerçek dünya etkileri bağımsız doğrulanmaz. Henüz otomatik denetim, otomatik düzeltme veya token/para bütçesi yoktur.
 - Yalnızca mevcut `write_file` kayıtlarından en fazla 16 dosyanın baytları karşılaştırılır; başka araçların veya kullanıcı bilgisayarındaki sistem değişikliklerinin doğruluğu bu kontrolle kanıtlanmaz. Görev ve inceleme kayıtları şifrelenmemiş JSON'da kalır.
-- Evrensel izin yönetimi, Windows yönetimi, kişisel hayat araçları ve uçtan uca şifreli cihaz ağı tamamlanmadı. Orijinal 29 bölümün ayrı başlık listesi bu depoda bulunmadığından tamamı tek tek doğrulanmış olarak işaretlenmedi.
+- Evrensel izin yönetimi, Windows yönetimi, kişisel hayat araçları ve uçtan uca şifreli cihaz ağı tamamlanmadı. Orijinal 29 bölümün başlıkları aşağıda ayrı izlenir; incelenmemiş bölümler tamamlanmış sayılmaz.
 
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows cihazı, GÜNCELLE paneli ve gerçek sağlayıcı hesaplarıyla uçtan uca kabul testleri yapılmadı.
+
+## PROJECT FRIDAY OMEGA — 29 bölümün izleme durumu
+
+Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** yalnızca aşağıda anılan kodun varlığını gösterir, bölümün tamamlandığını göstermez. **Henüz doğrulanmadı**, özellik yok demek değildir; kapsam bu kontrol noktasında yeterince incelenmemiştir. Tüm bölümler ve tam kaynak denetimi açıktır.
+
+| No | Özgün bölüm | Mevcut kanıt ve durum |
+| --- | --- | --- |
+| 1 | ANA GÖREVİN | Kısmi: merkezi görev ve cihaz çalışmaları sürüyor; nihai hedef açık. |
+| 2 | BAŞTAN SONA KAYNAK KOD DENETİMİ | Kısmi: önceki oturumlardaki belirli hata düzeltmeleri kaydedildi; bütün kaynak denetlenmedi. |
+| 3 | FRIDAY CENTRAL INTELLIGENCE | Kısmi: #255, #257, #260 ve bu oturumdaki görev planlama/yürütme çalışmaları. |
+| 4 | MULTI-BRAIN — ÇOKLU MODEL ZEKÂSI | Kısmi: mevcut FAST/SMART yönlendirmesi; bütün katmanlar ve canlı performans ölçümü eksik. |
+| 5 | FRIDAY PERSONAL OPERATING SYSTEM | Henüz uçtan uca doğrulanmadı. |
+| 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi; kapsamlı yetkili yönetim tamamlanmadı. |
+| 7 | HARDWARE INTELLIGENCE | Kısmi: #256 ve #258 yerel ölçümler ve basit eşikler; tüm sensörler ve fiziksel kabul eksik. |
+| 8 | FRIDAY OMNIVISION — EKRANI ANLAMA | Henüz uçtan uca doğrulanmadı. |
+| 9 | UNIVERSAL APPLICATION INTELLIGENCE | Henüz uçtan uca doğrulanmadı. |
+| 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: #253–#254 eşitleme ve yerel kuyruk güvenilirliği; uçtan uca şifreli cihaz ağı eksik. |
+| 11 | FRIDAY SMART HOME | Henüz uçtan uca doğrulanmadı; varsayılan oda sınırı korunmalı. |
+| 12 | FRIDAY VOICE — DOĞAL CANLI KONUŞMA | Henüz fiziksel cihazda ve uçtan uca doğrulanmadı; mevcut kadın sesi korunmalı. |
+| 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü; birleşik şifreli görev/hafıza geçişi eksik. |
+| 14 | FRIDAY EXPERT AGENT NETWORK | Kısmi: mevcut genel ve araştırma ajanları ile sınırlı paralel görevler; tüm uzmanlıklar eksik. |
+| 15 | FRIDAY AUTONOMOUS WORK | Kısmi: kalıcı graf ve sınırlı yeniden planlama; genel yetkiler ve kesinti garantileri eksik. |
+| 16 | FRIDAY SOFTWARE ENGINEER | Henüz tam kapsamda doğrulanmadı. |
+| 17 | SECOND BRAIN — KENDİNİ DENETLEYEN VE GELİŞTİREN SİSTEM | Henüz tam kapsamda doğrulanmadı. |
+| 18 | FRIDAY UNIVERSAL KNOWLEDGE | Kısmi: mevcut araştırma ajanı; tüm dosya türleri ve kaynak kabulü doğrulanmadı. |
+| 19 | KİŞİSEL HESAP VE SERVİS ENTEGRASYONLARI | Henüz tam kapsamda ve gerçek hesaplarla doğrulanmadı. |
+| 20 | FRIDAY HUD — ÖZGÜN SİNEMATİK ARAYÜZ | Henüz tüm cihaz ve panellerde uçtan uca doğrulanmadı. |
+| 21 | FRIDAY SECURITY CORE | Kısmi: #258–#259 donanım paylaşımı ve bu oturumdaki inceleme izni; merkezi izin sistemi eksik. |
+| 22 | PERFORMANCE ENGINE | Henüz tüm hedefler için ölçülmedi. |
+| 23 | FRIDAY UPDATE ENGINE | Kısmi: #252 kurtarma/indirme düzeltmeleri ve CI kabulü; gerçek kullanıcı cihazı ve imzalı yayın doğrulanmadı. |
+| 24 | GERÇEK YETENEK KATALOĞU | Henüz tam katalog denetimi doğrulanmadı. |
+| 25 | FRIDAY KİŞİLİĞİ | Mevcut kimlik ve ses korunmalı; tam kabul henüz doğrulanmadı. |
+| 26 | GERÇEK HAYAT KABUL SENARYOLARI | Henüz tüm senaryolar gerçek cihaz ve hesaplarla doğrulanmadı. |
+| 27 | GELİŞTİRME VE KABUL PLANI | Kısmi: aşamalı kod, test ve kontrol noktaları var; 12 aşamanın tamamı bitmedi. |
+| 28 | KESİN KURALLAR | Sürekli uygulanıyor; tüm depo için uyum denetimi tamamlanmadı. |
+| 29 | NİHAİ TESLİM | Tamamlanmadı; yalnızca doğrulanmış ara işler teslim edildi. |
