@@ -30,7 +30,8 @@ def validate_settings(cfg):
             "media_control": enabled(cfg.get("media_control")),
             "app_control": enabled(cfg.get("app_control")),
             "phone_text": enabled(cfg.get("phone_text")),
-            "phone_audio": enabled(cfg.get("phone_audio"))}
+            "phone_audio": enabled(cfg.get("phone_audio")),
+            "phone_reply": enabled(cfg.get("phone_reply"))}
 
 
 def check_dependency():
