@@ -418,10 +418,49 @@ def rollback_zip(root=ROOT, progress=print):
         return _recover_zip(root, marker, transaction, progress)
 
 
+def _zip_state(root):
+    """Use a packaged source baseline before the first in-place update.
+
+    This local inventory detects accidental edits/collisions; it is not
+    publisher authentication. A completed update's own journal takes priority.
+    Legacy GitHub archives with neither inventory retain their old behaviour.
+    """
+    state = _target(root, ".aether-update.json")
+    if state.exists():
+        return json.loads(state.read_text("utf-8"))
+    candidate = _target(root, "friday-release.json")
+    if not candidate.exists():
+        return {}
+    try:
+        with candidate.open("rb") as handle:
+            raw = handle.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("inventory size")
+        manifest = json.loads(raw)
+        sha = manifest["source_commit"]
+        entries = manifest["files"]
+        if (manifest.get("schema") != 1 or manifest.get("kind") != "source-candidate"
+                or not isinstance(sha, str) or not re.fullmatch("[0-9a-f]{40}", sha)
+                or not isinstance(entries, dict) or len(entries) > 2000
+                or not {"main.py", "ui.py", "requirements.txt", "gui/window.py"} <= entries.keys()):
+            raise ValueError("inventory identity")
+        _validate_names(entries)
+        files = {}
+        for name, entry in entries.items():
+            digest = entry["sha256"]
+            if not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest):
+                raise ValueError("inventory digest")
+            if not _protected(name):
+                files[name] = digest
+        return {"sha": sha, "files": files}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as exc:
+        raise RuntimeError("Kaynak paketinin başlangıç dosya listesi doğrulanamadı. Yerel dosyalar korunuyor.") from exc
+
+
 def _apply_zip(root, files, sha, branch, progress=lambda message: None, *, marker=None):
     """Back up before writing; restore every changed/deleted file on failure."""
     state_path = root / '.aether-update.json'
-    old = json.loads(state_path.read_text('utf-8')) if state_path.exists() else {}
+    old = _zip_state(root)
     previous = old.get('files', {})
     _validate_names(previous)
     _validate_names(files)
@@ -571,8 +610,7 @@ def _update_locked(root, progress, *, prepared_manifest=None):
     release_marker = True
     try:
         is_git = (root / '.git').exists()
-        state_file = root / '.aether-update.json'
-        state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
+        state = {} if is_git else _zip_state(root)
         eol_only, real_changes = False, []
         if is_git:
             real_changes, eol_only = _local_changes(root)
@@ -679,8 +717,7 @@ def check(root=ROOT) -> dict:
             changes = _git(root, 'log', '-15', '--format=%s', f'{current}..{sha}').splitlines()
         return {"newer": bool(behind and not ahead), "sha": sha, "current": current, "changes": changes,
                 "branch": branch, "ahead": ahead, "behind": behind}
-    state_file = root / '.aether-update.json'
-    state = json.loads(state_file.read_text('utf-8')) if state_file.exists() else {}
+    state = _zip_state(root)
     channel = json.loads((root / 'update_channel.json').read_text('utf-8'))
     branch = state.get('branch', channel['branch'])
     commit = json.loads(_get(f'https://api.github.com/repos/{REPOSITORY}/commits/{quote(branch, safe="")}'))
