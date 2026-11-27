@@ -92,4 +92,4 @@ Başlangıç `main`: `73514d8c7e0e91375969b47a207a6db42c1e8ef1`; #252, #253 ve #
 ### Testler ve başarısızlıklar
 
 - Linux/Python 3.12 üzerinde merkezi plan, model geri dönüşü, #254 şifreli kayıt, eşitleme ve güncelleyici dâhil 183 ilgili test geçti. Üretim sağlayıcı anahtarı veya gerçek donanım kullanılmadı.
-- Windows ve Linux/Python 3.13 sonuçları bu değişikliğin GitHub Actions çalışmasından doğrulanmalıdır. Kullanıcının bilgisayarındaki güncelleme panelinin önceki takılma nedeni hâlâ belirlenmedi.
+- GitHub Actions merkezi plan testleri Windows ve Linux/Python 3.13 üzerinde geçti; genel regresyonun durumu #255 iş akışında izlenir. Kullanıcının bilgisayarındaki güncelleme panelinin önceki takılma nedeni hâlâ belirlenmedi.
