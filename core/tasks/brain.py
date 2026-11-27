@@ -221,28 +221,32 @@ def ask(system: str, turns: list, decls: list | None, *, tier: str = "smart",
     if tier not in (gemini.FAST, gemini.SMART):
         raise ValueError("unsupported background model tier")
     decls = strip_meta(decls) if decls else None
-    rungs: list = []
     discovery_failed = False
+    listed_models = False
     key = gemini.api_key()
-    if key:
-        ladder = [m for m in gemini._LADDERS[tier]
-                  if m != gemini.LIVE and not m.startswith(gemini.PROVIDER_PREFIX)]
-        if verified_models:
-            accessible = _accessible_gemini(key)
-            discovery_failed = accessible is None
-            ladder = [model for model in ladder if accessible is not None and model in accessible]
-        rungs = gemini.usable_rungs(ladder)
     provider = list(gemini._provider_rungs(tier))
-    rungs = (provider + rungs) if (provider and gemini._provider_first()) else (rungs + provider)
-    if not rungs:
-        if discovery_failed:
-            raise NoModel("Gemini model availability could not be checked; retry later", transient=True)
-        if verified_models and key:
-            raise NoModel("no configured Gemini model was listed as available; retry later", transient=True)
-        raise NoModel("no Gemini key and no provider configured", transient=False)
+    provider_first = bool(provider and gemini._provider_first())
+
+    def candidates():
+        nonlocal discovery_failed, listed_models
+        # Honor the user's preferred provider without paying for model catalog
+        # discovery unless that provider actually fails.
+        if provider_first:
+            yield from provider
+        if key:
+            ladder = [m for m in gemini._LADDERS[tier]
+                      if m != gemini.LIVE and not m.startswith(gemini.PROVIDER_PREFIX)]
+            if verified_models:
+                accessible = _accessible_gemini(key)
+                discovery_failed = accessible is None
+                ladder = [model for model in ladder if accessible is not None and model in accessible]
+            listed_models = bool(ladder)
+            yield from gemini.usable_rungs(ladder)
+        if not provider_first:
+            yield from provider
 
     errors, transient = [], False
-    for model in rungs:
+    for model in candidates():
         try:
             if model.startswith(gemini.PROVIDER_PREFIX):
                 return _ask_provider(model, system, turns, decls)
@@ -261,4 +265,10 @@ def ask(system: str, turns: list, decls: list | None, *, tier: str = "smart",
             elif _is_network(msg):
                 transient = True
             print(f"[Tasks] {model} failed: {msg[:160]}")
+    if verified_models and key and not listed_models:
+        transient = True
+        errors.append("Gemini model availability could not be checked" if discovery_failed
+                      else "no configured Gemini model was listed as available")
+    if not errors:
+        raise NoModel("no Gemini key and no provider configured", transient=False)
     raise NoModel("no model answered — " + "; ".join(errors[-3:]), transient=transient)
