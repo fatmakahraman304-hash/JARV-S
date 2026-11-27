@@ -176,25 +176,26 @@ def match(target: str, entities: list[dict], domains: tuple[str, ...] = CONTROLL
     pool = [e for e in entities if domain_of(e) in domains and (not doms or domain_of(e) in doms)
             and (not only_on or e.get("state") == "on")]
     t = norm(target)
-    for e in pool:
-        if t == norm(name_of(e)):
-            return [e]
+    exact = [e for e in pool if t in (norm(name_of(e)), norm(e.get("entity_id", "")))]
+    if exact:
+        return exact
     if not content:
         if not doms:
             return []
-        return pool if (every or len(pool) == 1) else pool[:0]
+        return pool
     scored = []
     for e in pool:
         ew = norm(name_of(e)).split() + norm(e.get("entity_id", "").replace("_", " ").replace(".", " ")).split()
         hit = sum(1 for w in content if any(_same(w, x) for x in ew))
-        if hit:
+        if hit == len(content):
             scored.append((hit, len(name_of(e)), e))
     if not scored:
         return []
     scored.sort(key=lambda x: (-x[0], x[1]))
     if every:
         return [e for _, _, e in scored]
-    return [scored[0][2]]
+    best = scored[0][0]
+    return [e for score, _, e in scored if score == best]
 
 
 # ── what to say back ──────────────────────────────────────────────────────────
@@ -346,6 +347,22 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return f"Smart home error: {exc}"
 
 
+def _is_explicit_group(target: str) -> bool:
+    words = norm(target).split()
+    return (any(w in ALL_WORDS for w in words)
+            or ("acik" in words and ("kalan" in words or "olan" in words))
+            or "left on" in norm(target))
+
+
+def _ambiguous(hits: list[dict], target: str) -> bool:
+    return len(hits) > 1 and not _is_explicit_group(target)
+
+
+def _choose_device(hits: list[dict]) -> str:
+    return "Birden fazla cihaz eşleşti; hangisini istiyorsunuz? " + ", ".join(
+        f"{name_of(e)} ({e.get('entity_id', '')})" for e in hits[:10])
+
+
 def _run(p: dict) -> str:
     action = str(p.get("action") or "status").strip().lower()
     target = str(p.get("target") or "").strip()
@@ -418,15 +435,19 @@ def _run(p: dict) -> str:
         hits = match(target, states, ("scene", "script"))
         if not hits:
             return f"No scene or script called '{target}'."
+        if len(hits) > 1:
+            return _choose_device(hits)
         e = hits[0]
         _call(domain_of(e), "turn_on", {"entity_id": e["entity_id"]})
-        return f"Scene started: {name_of(e)}."
+        return f"Sahne komutu gönderildi: {name_of(e)}; sonuç doğrulanmadı."
 
     if action not in ("on", "off", "toggle", "set"):
         return "Unknown action; use on, off, toggle, set, scene, state, list, setup or status."
     hits = match(target, states)
     if not hits:
         return f"No device called '{target}' in Home Assistant. Say 'evdeki cihazları listele' to hear the names."
+    if _ambiguous(hits, target):
+        return _choose_device(hits)
     done = []
     for e in hits[:25]:
         dom = domain_of(e)
@@ -443,4 +464,4 @@ def _run(p: dict) -> str:
                        if extra else ""))
     if not done:
         return "Nothing changed: locks and alarms are only changed when you name them exactly."
-    return "Done: " + "; ".join(done) + "."
+    return "Komut gönderildi: " + "; ".join(done) + ". Cihazın son durumu doğrulanmadı."
