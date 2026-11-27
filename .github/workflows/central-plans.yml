@@ -1,0 +1,30 @@
+name: FRIDAY central task plans
+on:
+  pull_request:
+    paths:
+      - 'actions/background_tasks.py'
+      - 'core/tasks/**'
+      - 'tests/test_central_plans.py'
+      - '.github/workflows/central-plans.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  plan-engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Sequential execution, cancellation, privacy and model fallback
+        run: python -m unittest -v tests.test_central_plans tests.test_task_store_atomic

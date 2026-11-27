@@ -13,6 +13,7 @@ test harness or a plugin without main.py still gets an engine.
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 
 _BASE = Path(__file__).resolve().parent.parent.parent
@@ -72,6 +73,43 @@ def _call(method: str, *args) -> None:
 
 def _notify(event: str, task: dict | None, text: str) -> None:
     if not task:
+        return
+    if event in ("plan_finished_unverified", "plan_failed"):
+        goal = task.get("goal") or ""
+        if event == "plan_failed":
+            _call("write_log", f"ERR: Plan stopped — {goal[:120]}: {text[:160]}")
+            if task.get("deliver") != "silent":
+                _call("request_say", "[BACKGROUND PLAN STOPPED] The plan stopped before all steps "
+                      "finished. Tell the user in their language that it stopped and why, without "
+                      f"claiming completion. Reason: {text[:200]}")
+            return
+        _call("write_log", f"SYS: Plan steps finished — {goal[:120]}; outcome not independently verified")
+        if task.get("deliver") == "silent":
+            return
+        rows = []
+        for index, step in enumerate(task.get("steps") or [], 1):
+            child = _engine.get(step.get("task_id")) if _engine else None
+            result = (child or {}).get("result") or "Sonuç bulunamadı."
+            rows.append(f"{index}. {step.get('task', '')}\n{result[:1200]}")
+            for artifact in step.get("artifacts") or []:
+                label = {"verified": "doğrulandı", "changed": "değişmiş", "unavailable": "erişilemedi"}.get(
+                    artifact.get("status"), "bilinmiyor")
+                checked = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(artifact.get("checked_at") or 0))
+                rows.append(f"Dosya: {artifact.get('location') or artifact.get('path', '')} · {label} · kontrol: {checked}")
+        body = (f"{goal}\n\n" + "\n\n".join(rows)
+                + "\n\nAdımlar tamamlandı; sonuçların doğruluğu ayrıca değerlendirilmelidir.")
+        _call("show_content", "PLAN SONUÇLARI", body[:6000])
+        try:
+            from core import sync_hub
+            sync_hub.deliver_to_voice("Plan sonuçları hazır", body)
+        except Exception as e:
+            print(f"[Tasks] plan result not sent to the other device: {e}")
+        if task.get("deliver") == "voice":
+            from core import outcome
+            _call("request_say", "[BACKGROUND PLAN FINISHED] The steps finished, but the outcome "
+                  "has not been independently verified. Tell the user in their language that "
+                  "results are ready, and do not claim that real-world actions succeeded.\n"
+                  + outcome.untrusted("plan-results", body[:3000]))
         return
     title = task.get("title") or ""
     deliver = task.get("deliver") or "voice"

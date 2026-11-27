@@ -142,6 +142,8 @@ class TaskEngine:
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._agents = None
+        from core.tasks.plans import PlanCoordinator
+        self.plans = PlanCoordinator(self)
         self._recover()
         self._thread = None
         if autostart:
@@ -191,24 +193,32 @@ class TaskEngine:
     # ── the public surface ───────────────────────────────────────────────────
     def start(self, task: str, agent: str = "general", minutes=None, rounds=None,
               deliver: str = "voice", origin: str = "desk", not_before: float = 0.0,
-              files=None, title: str = "", extra: dict | None = None) -> dict:
+              files=None, title: str = "", extra: dict | None = None, *, task_id: str | None = None,
+              model_tier: str = "smart") -> dict:
         """`extra` is the caller's own bookkeeping, kept on the task and never read
         here — the cloud body keeps which chat a task reports to. It cannot
         overwrite a field the engine owns."""
         text = str(task or "").strip()
         if not text:
             raise ValueError("the task is empty")
+        if model_tier not in ("fast", "smart"):
+            raise ValueError("invalid background model tier")
         profiles = self.agents()
         prof = profiles.get(str(agent or "").lower()) or profiles.get("general") \
             or next(iter(profiles.values()))
         now = self._clock()
         minutes = max(1, min(720, int(minutes or prof.minutes)))
         rounds = max(1, min(400, int(rounds or prof.rounds)))
-        tid = new_id()
+        if task_id is not None and not re.fullmatch(r"t[0-9a-f]{24}-[1-6]", task_id):
+            raise ValueError("invalid planned task id")
+        tid = task_id or new_id()
+        if self.store.get(tid) or self.store._path(tid).exists():
+            raise ValueError("task id already exists")
         copied = self._copy_inputs(tid, files or [])
         not_before = float(not_before or 0)
         task_doc = {
             "id": tid, "agent": prof.name, "title": _title(title or text), "task": text,
+            "model_tier": model_tier,
             "origin": origin, "deliver": deliver if deliver in ("voice", "panel", "silent") else "voice",
             "status": "scheduled" if not_before > now else "queued",
             "created": now, "started": 0.0, "finished": 0.0, "not_before": not_before,
@@ -271,6 +281,7 @@ class TaskEngine:
     def _dispatch(self) -> None:
         now = self._clock()
         with self._lock:
+            self.plans.advance()
             self._workers = {k: v for k, v in self._workers.items() if v.is_alive()}
             for t in self.store.all():
                 if len(self._workers) >= self.max_parallel:
@@ -327,7 +338,10 @@ class TaskEngine:
         system = self._system_prompt(task, profile, getattr(tools, "has_web", True))
         ask = self._ask
         if ask is None:
+            from functools import partial
             from core.tasks.brain import ask
+            ask = partial(ask, tier=task.get("model_tier", "smart"),
+                          verified_models=bool(task.get("plan_ref")))
 
         if getattr(profile, "mode", "") == "research":
             from core.tasks.research import ResearchRunner
