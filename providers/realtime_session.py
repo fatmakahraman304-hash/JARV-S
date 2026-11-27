@@ -24,9 +24,12 @@ TURN_SECONDS = 60
 
 
 class RealtimeSession:
-    def __init__(self, ws, voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None, app_enabled=None):
+    def __init__(self, ws, voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None, app_enabled=None, input_transcript=None):
         self._ws = ws
         self._setup = rt.session_event(voice)
+        self._input_transcript = input_transcript
+        if input_transcript is not None:
+            self._setup["session"]["audio"]["input"]["transcription"] = {"model": "gpt-transcribe"}
         self._guide_enabled = guide_enabled or (lambda: False)
         self._volume_enabled = volume_enabled or (lambda: False)
         self._brightness_enabled = brightness_enabled or (lambda: False)
@@ -111,13 +114,47 @@ class RealtimeSession:
         seen = set()
         rounds = 0
         response_audio_start = 0
+        speech_item = None
+        input_finished = False
+        input_text = ""
+
+        def capture_input(event):
+            nonlocal input_finished, input_text
+            if (speech_item is None or input_finished or event.get("item_id") != speech_item
+                    or event.get("content_index") != 0):
+                return
+            if event["type"] == "conversation.item.input_audio_transcription.completed":
+                value = event.get("transcript")
+                if isinstance(value, str) and len(value) <= MAX_TRANSCRIPT:
+                    input_text = value.strip()
+                input_finished = True
+            elif event["type"] == "conversation.item.input_audio_transcription.failed":
+                input_finished = True
+
         try:
-            await self._before(deadline, rt._send, self._ws, item)
+            if pcm is not None and self._input_transcript is not None:
+                await self._before(deadline, rt._send, self._ws, {
+                    "type": "input_audio_buffer.append",
+                    "audio": item["item"]["content"][0]["audio"]})
+                await self._before(deadline, rt._send, self._ws, {"type": "input_audio_buffer.commit"})
+                for _ in range(64):
+                    event = await self._before(deadline, rt._receive, self._ws)
+                    if event["type"] == "input_audio_buffer.committed":
+                        speech_item = event.get("item_id")
+                        if not isinstance(speech_item, str) or not speech_item:
+                            raise rt.RealtimeError("Realtime ses kaydı kimliği geçersiz.")
+                        break
+                else:
+                    raise rt.RealtimeError("Realtime ses kaydı onayı alınamadı.")
+            else:
+                await self._before(deadline, rt._send, self._ws, item)
             await self._before(deadline, rt._send, self._ws, {"type": "response.create"})
             for _ in range(rt.MAX_EVENTS):
                 event = await self._before(deadline, rt._receive, self._ws)
                 kind = event["type"]
-                if kind == "response.created":
+                if kind.startswith("conversation.item.input_audio_transcription."):
+                    capture_input(event)
+                elif kind == "response.created":
                     response = event.get("response")
                     candidate = response.get("id") if isinstance(response, dict) else None
                     if response_id is not None or not isinstance(candidate, str) or not candidate:
@@ -193,6 +230,21 @@ class RealtimeSession:
                     line = "".join(transcript).strip()
                     if line:
                         yield Msg.said(line)
+                    # Transcription is asynchronous and can arrive after response.done.
+                    # Limit the wait; never attach a later turn's transcript.
+                    if speech_item is not None and not input_finished:
+                        grace = min(deadline, asyncio.get_running_loop().time() + 2)
+                        for _ in range(64):
+                            remaining = grace - asyncio.get_running_loop().time()
+                            if remaining <= 0 or input_finished:
+                                break
+                            try:
+                                event = await asyncio.wait_for(rt._receive(self._ws), remaining)
+                            except TimeoutError:
+                                break
+                            capture_input(event)
+                    if input_text:
+                        self._input_transcript(input_text)
                     finished = True
                     yield Msg.turn_end()
                     return
@@ -215,12 +267,12 @@ class RealtimeSession:
 
 
 @asynccontextmanager
-async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None, app_enabled=None):
+async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None, app_enabled=None, input_transcript=None):
     """Explicit opt-in cloud connection; session history is not saved locally."""
     async with rt.open_realtime(api_key, model) as ws:
         session = RealtimeSession(ws, voice, guide_enabled=guide_enabled, volume_enabled=volume_enabled,
                                   brightness_enabled=brightness_enabled, media_enabled=media_enabled,
-                                  app_enabled=app_enabled)
+                                  app_enabled=app_enabled, input_transcript=input_transcript)
         try:
             await session.start()
             yield session
