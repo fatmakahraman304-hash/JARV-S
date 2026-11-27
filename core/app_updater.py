@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import hashlib
+from http.client import IncompleteRead
 import io
 import json
 import os
@@ -142,9 +143,9 @@ def _get(url, *, limit=LIMIT, progress=None):
             exc.close()
             if exc.code not in {502, 503, 504} or attempt == 2:
                 raise
-        except (URLError, TimeoutError, ConnectionError) as exc:
+        except (URLError, TimeoutError, ConnectionError, IncompleteRead) as exc:
             reason = getattr(exc, 'reason', exc)
-            transient = isinstance(reason, (socket.gaierror, TimeoutError, ConnectionError))
+            transient = isinstance(reason, (socket.gaierror, TimeoutError, ConnectionError, IncompleteRead))
             if not transient or attempt == 2:
                 if isinstance(reason, socket.gaierror):
                     host = urlsplit(url).hostname

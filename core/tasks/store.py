@@ -16,6 +16,7 @@ import json
 import os
 import secrets
 import shutil
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -30,18 +31,25 @@ def new_id() -> str:
 
 def write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    # A virus scanner or an indexer can hold the target for a moment on Windows;
-    # one of those should cost a retry, not a lost checkpoint.
-    for attempt in range(5):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            if attempt == 4:
-                raise
-            time.sleep(0.05 * (attempt + 1))
+    # Each writer needs its own sibling: a shared .tmp can be truncated or
+    # renamed by another worker before this writer reaches os.replace().
+    payload = json.dumps(data, ensure_ascii=False, indent=1)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        # A virus scanner or indexer may briefly hold the target on Windows.
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def read_json(path: Path, default):
@@ -73,8 +81,9 @@ class TaskStore:
 
     def create(self, task: dict) -> dict:
         with self._lock:
-            self._tasks[task["id"]] = task
+            task = json.loads(json.dumps(task))
             write_json(self._path(task["id"]), task)
+            self._tasks[task["id"]] = task
             self._prune()
             return json.loads(json.dumps(task))
 
@@ -86,13 +95,15 @@ class TaskStore:
     def mutate(self, tid: str, fn) -> dict | None:
         """Change a task under the lock and write it. `fn(task)` edits in place."""
         with self._lock:
-            t = self._tasks.get(tid)
-            if t is None:
+            original = self._tasks.get(tid)
+            if original is None:
                 return None
+            t = json.loads(json.dumps(original))
             fn(t)
             if len(t.get("events") or []) > _MAX_EVENTS:
                 t["events"] = t["events"][-_MAX_EVENTS:]
             write_json(self._path(tid), t)
+            self._tasks[tid] = t
             return json.loads(json.dumps(t))
 
     def update(self, tid: str, **fields) -> dict | None:
