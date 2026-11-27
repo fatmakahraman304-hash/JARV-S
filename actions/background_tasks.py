@@ -48,6 +48,51 @@ def background_tasks(parameters: dict, player=None) -> str:
     a = dict(parameters or {})
     action = str(a.get("action") or "list").strip().lower()
 
+    if action == "plan":
+        try:
+            plan = eng.plans.create(a.get("task"), a.get("steps"), a.get("deliver") or "voice")
+        except (ValueError, TypeError) as e:
+            return outcome.failed("background_plan", str(e))
+        return outcome.started("background_plan", plan_id=plan["id"], steps=len(plan["steps"]),
+                               note="steps run in order; the final outcome is not independently verified")
+
+    if action == "plan_list":
+        plans = eng.plans.all()[:10]
+        return ("\n".join(f"{p['id']} [{p['status']}] {p['goal'][:150]}" for p in plans)
+                if plans else "No background plans yet.")
+
+    if action in ("plan_status", "plan_cancel"):
+        try:
+            plan_id = str(a.get("plan_id") or "").strip()
+            if plan_id:
+                plan = eng.plans.get(plan_id)
+            else:
+                plans = eng.plans.all()
+                plan = next((p for p in plans if p["status"] == "running"), None) if action == "plan_cancel" else (plans[0] if plans else None)
+        except ValueError as e:
+            return outcome.failed("background_plan", str(e))
+        if not plan:
+            return outcome.failed("background_plan", "no such plan")
+        if action == "plan_cancel":
+            if not eng.plans.cancel(plan["id"]):
+                return outcome.failed("background_plan", "this plan is not running")
+            return outcome.started("background_plan_cancel", plan_id=plan["id"],
+                                   note="cancellation requested; an in-flight tool may still be stopping")
+        lines = [f"plan_id={plan['id']} plan_status={plan['status']}",
+                 "Finished means task reports are ready; the overall outcome is not independently verified."]
+        for index, step in enumerate(plan["steps"], 1):
+            child = eng.get(step["task_id"])
+            status = (child or {}).get("status", step.get("status", "pending"))
+            lines.append(f"{index}. {step['task']} · {status} · {step['agent']} · {step['model_tier']}")
+            for artifact in step.get("artifacts") or []:
+                lines.append(f"  file={artifact.get('location') or artifact['path']} verification={artifact['status']} "
+                             f"sha256={artifact.get('sha256', '')} checked_at={artifact.get('checked_at', '')}")
+            if child and child.get("result"):
+                lines.append(outcome.untrusted("step-result", child["result"][:2500]))
+        if plan.get("error"):
+            lines.append("error=" + str(plan["error"])[:300])
+        return "\n".join(lines)
+
     if action == "start":
         task = str(a.get("task") or "").strip()
         if not task:
@@ -136,15 +181,24 @@ TOOL = {
         "list = the tasks and their state; status = how one is going; result = a finished task's "
         "result; finish = stop now and write up what was found; cancel = stop without a result; "
         "steer = add an instruction to a running task (note); agents = the available agents. "
+        "plan = actually run an explicitly requested multi-step goal as 1-6 ordered background "
+        "steps, each with task, agent, optional minutes and model_tier; choose fast only for "
+        "simple extraction or formatting, smart for reasoning and all research. The user's "
+        "existing provider preferences and model fallback remain in effect. Wait for a step to finish before "
+        "starting the next. Use this only when the user wants work carried out, not merely "
+        "a plan drafted. The existing restricted background tools apply; no computer control, "
+        "external messaging or purchases. plan_list shows saved plans, plan_status and "
+        "plan_cancel accept plan_id or use the latest matching plan. Results "
+        "are task reports, not proof that real-world actions succeeded. "
         "task_id may be left empty to mean the latest task."),
-    "brief": "Hands long work (research, reports) to a background agent: start, list, status, "
-             "result, finish, cancel, steer.",
+    "brief": "Hands long work to background agents; run ordered steps with plan and use "
+             "plan_list, plan_status or plan_cancel. Also supports start, list, status, result, finish, cancel, steer.",
     "tier": "core",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents"]},
+                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel"]},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general"},
             "minutes": {"type": "INTEGER", "description": "for start: time budget in minutes"},
@@ -154,6 +208,13 @@ TOOL = {
             "file_path": {"type": "STRING", "description": "for start: a file to work from"},
             "task_id": {"type": "STRING"},
             "note": {"type": "STRING", "description": "for steer: the new instruction"},
+            "plan_id": {"type": "STRING", "description": "for plan_status or plan_cancel"},
+            "steps": {"type": "ARRAY", "description": "for plan: 1-6 ordered steps",
+                      "items": {"type": "OBJECT", "properties": {
+                          "task": {"type": "STRING"},
+                          "agent": {"type": "STRING", "description": "available agent, e.g. general or researcher"},
+                          "minutes": {"type": "INTEGER"},
+                          "model_tier": {"type": "STRING", "enum": ["fast", "smart"]}}, "required": ["task"]}},
         },
         "required": ["action"],
     },

@@ -68,3 +68,28 @@ Başlangıç `main`: `0211c4929f922ae5baa6d6c819709b8ddb618528`; #252 ve #253 ko
 
 - Kullanıcının laptopu, telefonları, TV'si, saati ve akıllı ev cihazları üzerinde canlı test yapılmadı; gerçek Gist hesabıyla kesinti, çoklu cihaz yarışı ve kişisel veri taşıma deneyi gerçekleştirilmedi.
 - Kullanıcının güncelleme panelinin neden takıldığı ve gerçek imzalı kurulum paketinin yayın durumu hâlâ doğrulanmadı. Bu değişiklik yeni paket bağımlılığı eklemez; `cryptography` önceden `requirements.txt` içinde bulunur.
+
+## Dördüncü oturum: merkezi görev planları
+
+Başlangıç `main`: `73514d8c7e0e91375969b47a207a6db42c1e8ef1`; #252, #253 ve #254 korunur.
+
+### Tamamlanan
+
+- `core/tasks/plans.py`, mevcut `TaskEngine` ve `actions/background_tasks.py`: Kullanıcı gerçekten birden fazla adımlı iş istediğinde FRIDAY 1–6 sıralı görevden oluşan plan oluşturabilir; her adım mevcut arka plan ajanı ve araç izinleriyle yürütülür. Önceki adım bitmeden sonraki başlamaz; başarısız adım planı durdurur. Plan durumu listelenebilir, sorgulanabilir ve iptal edilebilir.
+- Plan ve önceden belirlenmiş adım kimlikleri diskte saklanır. Adım oluşturulup plan kaydı güncellenmeden süreç kesilirse yeniden açılışta aynı kimlikte ikinci görev oluşturulmaz. İptal isteği kalıcıdır ve yeniden başlatmada tamamlanır; çalışan bir araç anında durmayabilir.
+- Önceki sonuç, yalnızca iki adımın web/özel hafıza sınırları aynıysa sınırlı ve güvenilmeyen içerik olarak sonraki adıma verilir. Kayıtlı ajan araçları veya çalışma modu değişmişse yeni adım başlatılmaz. Mevcut arka plan araç kısıtları korunur; komut çalıştırma, dış mesaj ve satın alma yetkisi eklenmez.
+- Bir adımın `write_file` aracıyla yazdığı en fazla 16 dosya gerçek içerikle karşılaştırılır, kontrol anı ve SHA-256 kaydedilir; değişmiş veya okunamayan dosya belirtilir. Diğer içeriklerin ve gerçek dünyadaki sonuçların doğruluğu bu kontrolle kanıtlanmaz; plan genel sonucu `finished_unverified` olarak gösterilir.
+- Plan adımları için var olan `fast` veya `smart` model katmanı seçilebilir. Araştırma adımları `smart` kullanır; Gemini modelleri bu adımlarda önce ilgili anahtarın model listesiyle karşılaştırılır, listelenmeyen isimler denenmez. Keşif başarısızsa yapılandırılmış diğer sağlayıcı denenir veya görev bekletilir. Kullanıcının sağlayıcı önceliği korunur; boş sağlayıcı yanıtı başarılı sonuç sayılmaz. Yeni model kimliği veya doğrulanmamış kalite iddiası eklenmedi.
+- Tamamlanan planın özeti masaüstünde gösterilir ve mevcut cihaz eşitleme bağlantısı uygunsa sesin sahibi cihaza kuyruklanır. Gist yerine yeni bir taşıma protokolü eklenmedi.
+
+### Eksik kalan ve doğrulama sınırları
+
+- Bu, merkezi zekânın görev planlama/yürütme parçasıdır; tüm konuşma, cihaz kontrolü, işletim sistemi, uygulama ve uzman ajanları kapsayan bütünleşik mimari değildir. Adımların içerikleri asistanın isteğinden gelir; ayrı bir planlama modeli çağrısı veya bağımsız anlamsal doğrulayıcı eklenmedi.
+- Plan ve `core/tasks` kayıtları mevcut düz metin JSON altyapısında kalır; #254'ün şifreli eşitleme deposuna taşınmadı. Aynı görev dizinini kullanan birden fazla bağımsız FRIDAY süreci için plan adımlarında tam olarak bir kez yürütme garantisi yoktur. Bir adımın içinde kesilen araç çağrısı görev motoru tarafından yeniden denenebilir.
+- Model katmanı seçimi erişilebilir en güçlü modeli, maliyeti veya sağlayıcı yeteneklerini otomatik ölçüp garanti etmez. Model listesi API'si Gemini'de modele erişimi listeler; araç çağrısı başarısını garanti etmez. Kullanıcının yapılandırdığı diğer sağlayıcı seçimi ayrıca canlı keşif ile doğrulanmaz. Gerçek sağlayıcı yanıtları, ses gecikmesi ve maliyet bu oturumda ölçülmedi.
+- Gist dışı uçtan uca şifreli cihaz iletişimi, telefon/TV/saat istemcileri, tam ortak hafıza, Windows/PowerShell/CMD ve donanım entegrasyonları bu çalışmada tamamlanmadı. Kullanıcının gerçek cihazları ve GÜNCELLE paneli üzerinde canlı kabul testi yapılmadı.
+
+### Testler ve başarısızlıklar
+
+- Linux/Python 3.12 üzerinde merkezi plan, model geri dönüşü, #254 şifreli kayıt, eşitleme ve güncelleyici dâhil 183 ilgili test geçti. Üretim sağlayıcı anahtarı veya gerçek donanım kullanılmadı.
+- GitHub Actions merkezi plan testleri Windows ve Linux/Python 3.13 üzerinde geçti; genel regresyonun durumu #255 iş akışında izlenir. Kullanıcının bilgisayarındaki güncelleme panelinin önceki takılma nedeni hâlâ belirlenmedi.
