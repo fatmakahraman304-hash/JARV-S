@@ -3760,6 +3760,21 @@ class FridayLive:
                 return (cfg["app_control"] and self._engine_mode() == "realtime"
                         and enabled(current.get("cloud_consent"))
                         and enabled(current.get("app_control")))
+            def save_voice_transcript(text):
+                current = get_provider_config(PROVIDER_ID)
+                if (not getattr(self, "_session_realtime", False)
+                        or self._engine_mode() != "realtime"
+                        or not all(enabled(current.get(k)) for k in
+                                   ("cloud_consent", "microphone", "input_transcription"))):
+                    return
+                # A speech-to-text hypothesis is history, not a second command.
+                # Do not inject it into the shared receive/intent or learner path.
+                try:
+                    from memory.continuity import record_realtime
+                    record_realtime("Kullanıcı", text)
+                    self.ui.write_log(f"You (ses dökümü): {text}")
+                except Exception:
+                    self.ui.write_log("SYS: Realtime ses dökümü kaydedilemedi.")
             async with conversation(
                 cfg["api_key"], cfg["model"], cfg["voice"],
                 guide_enabled=lambda: get_plugin_enabled("assistant_help"),
@@ -3767,6 +3782,7 @@ class FridayLive:
                 brightness_enabled=brightness_allowed,
                 media_enabled=media_allowed,
                 app_enabled=app_allowed,
+                input_transcript=save_voice_transcript if cfg["input_transcription"] else None,
             ) as rt:
                 engine = RealtimeEngine(
                     rt, log=self.ui.write_log, explicit_only=True,
