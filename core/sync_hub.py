@@ -57,7 +57,8 @@ _state = {"thread": None, "stop": threading.Event(), "inject": None, "pending": 
           "owner": None, "on_owner": None, "devices": [], "rem_new": [], "on_reminder": None,
           "rem_known": None, "out_cmds": [], "recent": [], "img_new": [], "gallery": [],
           "arch_queue": [], "arch_last": 0.0, "arch_id": "",
-          "push_keys": None, "push_subs": {}, "pushed": set(), "push_gone": set(), "journal": None}
+          "push_keys": None, "push_subs": {}, "pushed": set(), "push_gone": set(),
+          "journal": None, "journal_required": False}
 
 _DURABLE_QUEUES = ("pending", "turns", "out_cmds", "img_new", "rem_new")
 _start_lock = threading.Lock()
@@ -66,6 +67,8 @@ _start_lock = threading.Lock()
 def _save_queues_locked(replacements=None):
     """Commit a candidate snapshot before changing the live queues; lock held."""
     journal = _state.get("journal")
+    if journal is None and _state.get("journal_required"):
+        raise RuntimeError("Cihaz kayıtları açılamadı; işlem kuyruğa alınmadı.")
     if journal is not None:
         replacements = replacements or {}
         journal.save({name: replacements.get(name, _state[name]) for name in _DURABLE_QUEUES})
@@ -1022,6 +1025,7 @@ def _start_locked(inject) -> bool:
         return False
     if _state["thread"] and _state["thread"].is_alive():
         return True
+    _state["journal_required"] = True
     try:
         from core.neural_journal import NeuralJournal
         from memory.config_manager import CONFIG_DIR
@@ -1089,6 +1093,9 @@ def _cycle() -> None:
         _state["status"] = "kurulmadı"
         return
     journal = _state.get("journal")
+    if journal is None and _state.get("journal_required"):
+        _state["status"] = "hata: cihaz kaydı açılamadı; eşitleme durduruldu"
+        return
     if journal is not None and journal.scope != gid:
         _state["status"] = "hata: cihaz eşitleme hesabı değişti; bekleyen kayıtlar korunuyor"
         return
