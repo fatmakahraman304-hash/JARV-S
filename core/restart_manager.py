@@ -53,7 +53,9 @@ def schedule_restart(project_root: Path, current_pid: int,
             creationflags=(0x08000000 if os.name == "nt" else 0),
             start_new_session=(os.name != "nt"),
         )
-    if helper_proc.poll() is not None and helper_proc.returncode != 0:
+    # Even exit code zero is premature: the helper must still be waiting for
+    # this live process. Closing the GUI now could strand the installation.
+    if helper_proc.poll() is not None:
         raise RuntimeError(
             "Yeniden başlatma aracı hemen sonlandı. "
             "Friday/logs/restart.log dosyasını kontrol edin."
