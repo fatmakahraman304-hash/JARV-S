@@ -27,7 +27,7 @@ with patch('core.application_learning.report', return_value=''), \
      patch('memory.config_manager.save_hardware_model_sharing', side_effect=lambda value: state.update(sharing=value)):
     dialog = SettingsPage(owner)
     assert dialog.show_category('Zekâ ve hafıza')
-    control = next(x for x in dialog.findChildren(Toggle) if x.accessibleName() == 'Donanım ölçümlerini modelle paylaş')
+    control = next(x for x in dialog.findChildren(Toggle) if x.accessibleName() == 'Yerel teşhis ölçümlerini modelle paylaş')
     assert not control.isChecked() and not state['sharing']
     control.click()
     assert control.isChecked() and state['sharing']

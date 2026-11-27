@@ -210,10 +210,11 @@ class SettingsPage(QDialog):
         brain = page('Zekâ ve hafıza', 'Modellerini ve asistanın hatırladıklarını yönet.')
         action(brain, 'Motor ve sağlayıcılar', 'Yapay zekâ modelleri ve bağlantı ayarları.', owner._open_providers)
         action(brain, 'Hafıza', 'Kaydedilmiş bilgileri görüntüle ve düzenle.', owner._open_memory_panel)
-        switch(brain, 'Donanım ölçümlerini modelle paylaş',
+        switch(brain, 'Yerel teşhis ölçümlerini modelle paylaş',
                'Varsayılan kapalıdır. Açılırsa CPU, RAM, disk ve pilin sınırlı ölçümleri '
                'yapılandırılan model sağlayıcısına gönderilebilir; donanım kimlikleri ve ağ adları gönderilmez. '
-               'Kapalıyken teşhis bilgisayarda gösterilir.',
+               'Kapalıyken bu teşhis bilgisayarda gösterilir. FRIDAY’in diğer sistem durumu ve '
+               'otomatik uyarı özellikleri bu ayara henüz bağlı değildir.',
                cfg.get_hardware_model_sharing,
                lambda: cfg.save_hardware_model_sharing(not cfg.get_hardware_model_sharing()))
         app_page = page('Uygulamalar', 'Uygulama adını yaz: kaynakları araştır, eksik kontrolleri geliştir ve test et.')

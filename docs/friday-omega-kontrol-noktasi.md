@@ -151,7 +151,7 @@ Başlangıç `main`: `128209817d6fbf20cf7ea7a7e371d4278614c3bd`; #252–#256 kor
 ### Tamamlanan
 
 - Donanım teşhisi artık varsayılan olarak ayrıntıları yalnızca yerel panelde gösterir; tek ölçümde yüksek CPU/RAM/disk kullanımı ve düşük, şarja bağlı olmayan pil için basit yerel eşik değerlendirmesi yapılır. Eşik aşılmaması donanım sağlığının kanıtı değildir.
-- Ayarlar > Zekâ ve hafıza bölümündeki açık kullanıcı tercihiyle modele sınırlı CPU, RAM, sistem diski ve pil yüzdeleri gönderilebilir. Donanım envanteri, arayüz adları ve toplam bayt bilgileri modele aktarılmaz. Arka plan teşhis aracı izin kapalıyken ölçümleri modele sunmaz. Ayar okunamazsa paylaşım kapalı kalır.
+- Ayarlar > Zekâ ve hafıza bölümündeki açık kullanıcı tercihiyle yerel teşhis aracından modele sınırlı CPU, RAM, sistem diski ve pil yüzdeleri gönderilebilir. Bu araç üzerinden donanım envanteri, arayüz adları ve toplam bayt bilgileri modele aktarılmaz. Arka plan teşhis aracı izin kapalıyken ölçümleri modele sunmaz. Ayar okunamazsa paylaşım kapalı kalır.
 
 ### Testler ve başarısızlıklar
 
@@ -159,7 +159,8 @@ Başlangıç `main`: `128209817d6fbf20cf7ea7a7e371d4278614c3bd`; #252–#256 kor
 
 ### Eksik kalan
 
-- Bu yerel eşik analizi bağımsız yerel dil modeli, arıza teşhisi veya onarım değildir; sıcaklık, fan, GPU kullanımı ve disk sağlığı gibi diğer ölçümler eklenmedi. Paylaşıma izin verildiğinde seçili yüzdeler kullanıcının yapılandırdığı uzak model sağlayıcısına ulaşabilir.
+- Bu ayar diğer sistem bilgisi yollarını henüz kapsamaz: mevcut `system_status` canlı konuşma aracı ve `SystemMonitor` otomatik uyarıları model sağlayıcısına donanım ölçümleri iletebilir. Bunlar ortak gizlilik yetkilendirmesine taşınana kadar genel cihaz verisi gizliliği sağlanmış sayılmaz.
+- Bu yerel eşik analizi bağımsız yerel dil modeli, arıza teşhisi veya onarım değildir; sıcaklık, fan, GPU kullanımı ve disk sağlığı gibi diğer ölçümler bu araca eklenmedi. Paylaşıma izin verildiğinde seçili yüzdeler kullanıcının yapılandırdığı uzak model sağlayıcısına ulaşabilir.
 - Genel Windows kontrolü, şifreli görev kayıtları, cihaz ağı, diğer modeller, kişisel yaşam ve Omega'nın kalan aşamaları sürmektedir. Gerçek GÜNCELLE paneli deneyimi doğrulanmadı.
 
 ### Fiziksel cihaz gerektirenler
