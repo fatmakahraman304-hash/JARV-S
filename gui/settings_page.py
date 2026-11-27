@@ -213,8 +213,8 @@ class SettingsPage(QDialog):
         switch(brain, 'Yerel teşhis ölçümlerini modelle paylaş',
                'Varsayılan kapalıdır. Açılırsa CPU, RAM, disk ve pilin sınırlı ölçümleri '
                'yapılandırılan model sağlayıcısına gönderilebilir; donanım kimlikleri ve ağ adları gönderilmez. '
-               'Kapalıyken bu teşhis bilgisayarda gösterilir. FRIDAY’in diğer sistem durumu ve '
-               'otomatik uyarı özellikleri bu ayara henüz bağlı değildir.',
+               'Teşhis, sistem durumu ve uyarılar yerel panelde kalır. Açıkken modele genel bir '
+               'uyarı da gönderilebilir. Bu ayar diğer veri ve cihaz eşitleme yollarını kapsamaz.',
                cfg.get_hardware_model_sharing,
                lambda: cfg.save_hardware_model_sharing(not cfg.get_hardware_model_sharing()))
         app_page = page('Uygulamalar', 'Uygulama adını yaz: kaynakları araştır, eksik kontrolleri geliştir ve test et.')

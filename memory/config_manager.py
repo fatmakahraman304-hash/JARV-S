@@ -495,8 +495,12 @@ def update_config(**fields) -> None:
 
 
 def get_hardware_model_sharing() -> bool:
-    """Hardware metrics are shared with models only after an explicit opt-in."""
-    return load_api_keys().get("hardware_model_sharing") is True
+    """Require current primary opt-in; an old backup must not restore consent."""
+    try:
+        data = _storage.read_document(CONFIG_FILE)
+    except (OSError, ValueError, _storage.StorageError):
+        return False
+    return isinstance(data, dict) and data.get("hardware_model_sharing") is True
 
 
 def save_hardware_model_sharing(enabled: bool) -> None:

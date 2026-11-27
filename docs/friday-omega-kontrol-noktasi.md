@@ -166,3 +166,28 @@ Başlangıç `main`: `128209817d6fbf20cf7ea7a7e371d4278614c3bd`; #252–#256 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows bilgisayarında ayar ekranı, panel, donanım ve sesli konuşma ile GÜNCELLE panelinin uçtan uca testi bekliyor.
+
+## 2026-11-27 — APEX: donanım durumu ve uyarı gizliliği
+
+Başlangıç `main`: `fe7acc21026c7b0b4979f8f90b69541189a77fc6`; #252–#258 korunur.
+
+### Tamamlanan
+
+- `system_status` tam ölçümleri yerel panelde gösterir. Aynı #258 kullanıcı izni açık değilse ölçümleri modele göndermez; izin açıkken yalnızca sınırlandırılmış CPU/RAM yüzdelerini gönderir. İzin okuma hatasında paylaşım kapanır ve sonuç oluşturulurken izin yeniden kontrol edilir.
+- `SystemMonitor` ayrıntılı uyarıları yerel etkinlik günlüğüne yazar. Model paylaşımı açık ve konuşma uygun durumdaysa, ölçüm veya kimlik içermeyen genel bir uyarı modele iletilir. Model izni cihaz eşitlemesine izin sayılmadığından uyarı Gist/uzak cihaz veya yokluk kuyruğuna aktarılmaz.
+- Teşhis ve canlı durum için aynı izin okuma işlevi kullanılır. Yerel uyarının gösterilmesi, izin iptali ve gerçek izleme döngüsü dahil testler eklenmiştir.
+- Ana ayar dosyası eksik veya bozuksa eski yedekteki açık paylaşım izni geri yüklenmez; politika kapalı kalır. Diğer kullanıcı ayarlarının mevcut yedek kurtarma davranışı korunur.
+
+### Testler ve başarısızlıklar
+
+- Yerel Linux testleri, Windows/Linux GitHub Actions ve kurulum regresyonlarının son durumları ilgili değişiklik isteğinden doğrulanmalıdır. Yerel testlerde Windows'a özel CIM kontrolü atlanır.
+
+### Eksik kalan
+
+- Bu, evrensel gizlilik motoru değildir. Konuşma, hafıza, ekran, dosyalar, diğer araçlar ve cihaz eşitleme yollarının tamamı bu politikaya bağlanmadı veya denetlenmedi; Gist uçtan uca şifreli değildir. Kullanıcının mevcut izinleri bu alanlar için ayrıca gereklidir.
+- İzin kapalıyken veya kullanıcı uzaktayken sistem uyarıları artık yalnızca yerel etkinlik günlüğüne düşer; otomatik sesli ve uzak cihaz uyarıları bu koşullarda gönderilmez. Güvenli ve açıkça yetkilendirilmiş uzak bildirim henüz yoktur.
+- Model tabanlı planlama/yeniden planlama, bağımsız anlamsal doğrulama, token/para bütçesi, şifreli görev depolaması, Windows yönetimi ve diğer Omega aşamaları henüz tamamlanmadı.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows bilgisayarında gerçek sıcaklık/yük uyarıları, konuşma akışı, mikrofon, GÜNCELLE paneli ve bağlı cihazlarla kabul testi yapılmadı.

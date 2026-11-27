@@ -12,11 +12,8 @@ import subprocess
 
 def model_sharing_enabled():
     """Fail closed if settings are absent or cannot be read."""
-    try:
-        from memory.config_manager import get_hardware_model_sharing
-        return get_hardware_model_sharing() is True
-    except Exception:
-        return False
+    from core.hardware_privacy import model_sharing_enabled as allowed
+    return allowed()
 
 
 def model_metrics(snapshot):

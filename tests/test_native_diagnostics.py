@@ -87,12 +87,25 @@ class NativeDiagnosticsTests(unittest.TestCase):
     def test_model_sharing_requires_explicit_boolean_setting_and_fails_closed(self):
         from memory import config_manager
         for setting in ({}, {"hardware_model_sharing": "true"}, {"hardware_model_sharing": 1}):
-            with patch.object(config_manager, "load_api_keys", return_value=setting):
+            with patch.object(config_manager._storage, "read_document", return_value=setting):
                 self.assertFalse(native.model_sharing_enabled())
-        with patch.object(config_manager, "load_api_keys", return_value={"hardware_model_sharing": True}):
+        with patch.object(config_manager._storage, "read_document", return_value={"hardware_model_sharing": True}):
             self.assertTrue(native.model_sharing_enabled())
-        with patch.object(config_manager, "load_api_keys", side_effect=OSError("bad config")):
+        with patch.object(config_manager._storage, "read_document", side_effect=OSError("bad config")):
             self.assertFalse(native.model_sharing_enabled())
+
+    def test_corrupt_or_missing_primary_cannot_restore_old_backup_consent(self):
+        from memory import config_manager
+        with tempfile.TemporaryDirectory() as directory:
+            primary = Path(directory) / "settings.json"
+            backup = primary.with_name(primary.name + ".bak")
+            backup.write_text('{"hardware_model_sharing": true}', encoding="utf-8")
+            with patch.object(config_manager, "CONFIG_FILE", primary):
+                self.assertFalse(config_manager.get_hardware_model_sharing())
+                primary.write_text("{broken", encoding="utf-8")
+                self.assertFalse(config_manager.get_hardware_model_sharing())
+                primary.write_text('{"hardware_model_sharing": true}', encoding="utf-8")
+                self.assertTrue(config_manager.get_hardware_model_sharing())
 
     def test_setting_updates_only_hardware_preference(self):
         from memory import config_manager
