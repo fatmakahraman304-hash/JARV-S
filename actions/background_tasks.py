@@ -171,7 +171,7 @@ TOOL = {
         "list. For a quick answer the user is waiting for, use web_search instead. "
         "start = hand the task to an agent — agent 'researcher' for research (it plans, reads "
         "sources in full, checks every quote against the page and writes a cited report), "
-        "'general' for other work; task = the whole request, self-contained, in the user's words; "
+        "'general' for other work and 'system_diagnostics' for read-only local system assessment; task = the whole request, self-contained, in the user's words; "
         "minutes = the time budget when the user gives one ('research this for 10 minutes' -> 10); "
         "without one, 10 for research, more (20-40) when the user asks for something thorough or "
         "in depth; at = start later, "
@@ -200,7 +200,7 @@ TOOL = {
             "action": {"type": "STRING",
                        "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel"]},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
-            "agent": {"type": "STRING", "description": "for start: researcher | general"},
+            "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},
             "minutes": {"type": "INTEGER", "description": "for start: time budget in minutes"},
             "at": {"type": "STRING", "description": "for start: when to begin, local time"},
             "deliver": {"type": "STRING", "enum": ["voice", "panel", "silent"],
@@ -212,7 +212,7 @@ TOOL = {
             "steps": {"type": "ARRAY", "description": "for plan: 1-6 ordered steps",
                       "items": {"type": "OBJECT", "properties": {
                           "task": {"type": "STRING"},
-                          "agent": {"type": "STRING", "description": "available agent, e.g. general or researcher"},
+                          "agent": {"type": "STRING", "description": "available agent, e.g. general, researcher or system_diagnostics"},
                           "minutes": {"type": "INTEGER"},
                           "model_tier": {"type": "STRING", "enum": ["fast", "smart"]}}, "required": ["task"]}},
         },

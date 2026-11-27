@@ -2110,7 +2110,9 @@ class Runtime:
 
     def _task_tools(self, task: dict, profile):
         research = getattr(profile, "mode", "") == "research"
-        return cloud_task_tools(self.tasks.store.workdir(task["id"]), profile.tools, self.toolbox,
+        # A cloud server must not present its own hardware as the user's laptop.
+        wanted = [name for name in profile.tools if name != "system_snapshot"]
+        return cloud_task_tools(self.tasks.store.workdir(task["id"]), wanted, self.toolbox,
                                 () if research else _TASK_EXTRAS, log=self.log)
 
     def _task_event(self, event: str, task: dict | None, text: str) -> None:
