@@ -3679,6 +3679,24 @@ class FridayLive:
                 and self._dashboard._valid(token) and enabled(cfg.get("cloud_consent"))
                 and enabled(cfg.get("phone_audio")))
 
+    def _phone_reply_target(self, token, allowed):
+        """Snapshot delivery target before HUD approval; no fallback to another device."""
+        from memory.config_manager import get_provider_config
+        from providers.realtime_settings import PROVIDER_ID, enabled
+        if not enabled(get_provider_config(PROVIDER_ID).get("phone_reply")):
+            return False, None
+        dashboard = self._dashboard
+        socket = dashboard.private_phone_socket(token)
+        if socket is None:
+            return True, None
+
+        async def deliver(pcm):
+            def still_allowed():
+                return (allowed() and self._dashboard is dashboard
+                        and enabled(get_provider_config(PROVIDER_ID).get("phone_reply")))
+            return await dashboard.deliver_private_phone_reply(socket, token, pcm, still_allowed)
+        return True, deliver
+
     def _request_realtime_phone_audio(self, token, pcm):
         from providers.realtime_recall import valid_phone_pcm
         from core import confirm
@@ -3693,10 +3711,14 @@ class FridayLive:
         if confirm.pending_title():
             return {"ok": False, "status": "busy"}
 
+        private, reply = self._phone_reply_target(token, allowed)
+        if private and reply is None:
+            return {"ok": False, "status": "unavailable"}
+
         def after_approval():
             if not allowed() or not loop.is_running():
                 return "NOT EXECUTED: Telefon kaydı izni veya oturumu sona erdi."
-            coroutine = send(pcm, allowed)
+            coroutine = send(pcm, allowed, reply=reply) if private else send(pcm, allowed)
             try:
                 asyncio.run_coroutine_threadsafe(coroutine, loop)
             except RuntimeError:
@@ -3707,7 +3729,8 @@ class FridayLive:
         result = confirm.request(key="realtime_phone_audio", title="Telefon ses kaydını OpenAI'ye gönder",
             detail=f"Eşleştirilmiş telefondan {len(pcm)/32000:.1f} saniyelik ses kaydı alındı. "
                    "İçeriği henüz dinlenmedi. Onaylarsanız OpenAI'ye iletilir; "
-                   "araçlar kapalı, yanıt bilgisayarda. Ücret oluşabilir.", run=after_approval)
+                   + ("araçlar kapalı, yanıt yalnız telefonda. " if private else "araçlar kapalı, yanıt bilgisayarda. ") +
+                   "Ücret oluşabilir.", run=after_approval)
         pending = result.startswith("[CONFIRMATION_PENDING]")
         return {"ok": pending, "status": "pending_confirmation" if pending else "unavailable"}
 
@@ -3735,10 +3758,14 @@ class FridayLive:
         if confirm.pending_title():
             return {"ok": False, "status": "busy"}
 
+        private, reply = self._phone_reply_target(token, allowed)
+        if private and reply is None:
+            return {"ok": False, "status": "unavailable"}
+
         def after_approval():
             if not allowed() or not loop.is_running():
                 return "NOT EXECUTED: Telefon oturumu veya izin sona erdi."
-            coroutine = send(text, allowed)
+            coroutine = send(text, allowed, reply=reply) if private else send(text, allowed)
             try:
                 asyncio.run_coroutine_threadsafe(coroutine, loop)
             except RuntimeError:
@@ -3749,7 +3776,8 @@ class FridayLive:
         self.ui.show_content("Telefondan gelen Realtime sorusu — önizleme", text)
         result = confirm.request(key="realtime_phone_text", title="Telefon sorusunu OpenAI'ye gönder",
             detail="Önizlemedeki soru yalnızca ekran onayından sonra gönderilir. "
-                   "Araçlar kapalı; yanıt bilgisayarda. Telefona geçmiş veya ses aktarılmaz.",
+                   + ("Araçlar kapalı; yanıt yalnız telefonda." if private else
+                    "Araçlar kapalı; yanıt bilgisayarda. Telefona geçmiş veya ses aktarılmaz."),
             run=after_approval)
         pending = result.startswith("[CONFIRMATION_PENDING]")
         return {"ok": pending, "status": "pending_confirmation" if pending else "unavailable"}
