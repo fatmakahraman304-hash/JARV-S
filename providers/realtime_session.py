@@ -17,6 +17,7 @@ from . import audio
 from .base import Msg
 from . import realtime_transport as rt
 from . import realtime_tools as tools
+from . import realtime_recall as recall
 
 MAX_TURNS = 12
 MAX_TRANSCRIPT = 16_000
@@ -94,7 +95,7 @@ class RealtimeSession:
             if not self._ready:
                 await self.close()
 
-    async def turn(self, *, text=None, pcm=None):
+    async def turn(self, *, text=None, pcm=None, recall_payload=None):
         """Yield FRIDAY audio, one full output transcript, then turn-end."""
         if not self._ready or self._closed:
             raise rt.RealtimeError("Önce yeni bir Realtime oturumu açın.")
@@ -102,7 +103,11 @@ class RealtimeSession:
             raise rt.RealtimeError("Önceki Realtime yanıtı hâlâ çalışıyor.")
         if self._turns >= MAX_TURNS:
             raise rt.RealtimeError("Oturum tur sınırı doldu; yeni oturum açın.")
-        item = rt.input_event(text=text, pcm=pcm)
+        if recall_payload is not None and (text is not None or pcm is not None):
+            raise ValueError("Hafıza isteği ayrı bir konuşma turu olmalı.")
+        read_only = recall_payload is not None
+        item = None if read_only else rt.input_event(text=text, pcm=pcm)
+        response_event = recall.response_event(recall_payload) if read_only else {"type": "response.create"}
         self._busy = True
         self._turns += 1
         finished = False
@@ -146,9 +151,9 @@ class RealtimeSession:
                         break
                 else:
                     raise rt.RealtimeError("Realtime ses kaydı onayı alınamadı.")
-            else:
+            elif not read_only:
                 await self._before(deadline, rt._send, self._ws, item)
-            await self._before(deadline, rt._send, self._ws, {"type": "response.create"})
+            await self._before(deadline, rt._send, self._ws, response_event)
             for _ in range(rt.MAX_EVENTS):
                 event = await self._before(deadline, rt._receive, self._ws)
                 kind = event["type"]
@@ -197,6 +202,8 @@ class RealtimeSession:
                     has_calls = any(isinstance(item, dict) and item.get("type") == "function_call"
                                     for item in (response.get("output") or []))
                     if has_calls:
+                        if read_only:
+                            raise rt.RealtimeError("Hafıza yanıtında araç çağrısı reddedildi.")
                         if rounds >= tools.MAX_ROUNDS:
                             raise rt.RealtimeError("Realtime araç tur sınırı aşıldı.")
                         declared = {d["name"] for d in self._setup["session"]["tools"]}
