@@ -272,3 +272,36 @@ commit'indeydi. #214 ana dala alındı (3b279dc7ca3ad07407e6c1fc73e9392b5ebb5b11
 ses sağlayıcıları ile gerçek zamanlı oturum altyapısında değişiklikler
 birleşti. Bu özelliklerin gerçek hesap ve cihaz kabulü ayrıca açıktır.
 İndirme göstergesi yeni ana dal üzerinde 76 hedefli testle tekrar doğrulandı.
+
+## Git güncellemesinde eşzamanlı düzenleme koruması
+
+Geliştiriliyor — #233, yerel değişiklikleri önce geçici bir Git çalışma
+ağacında dener. Gerçek çalışma ağacına yeni düzenleme gelirse kayıtlı stash
+korunur. Gerçek uygulama beklenmedik biçimde yarıda kalırsa işlem kaydı
+bırakılır ve otomatik yeniden başlatma durur. Bu durum kullanıcı tarafından
+incelenmelidir. Linux ve Python 3.13 ortamında gerçek Git depoları ile
+çakışma ve eşzamanlı düzenleme senaryolarını içeren 58 test geçti.
+Windows CI sonuçları PR üzerinde izlenir.
+
+## Açık dosya tanıtıcısı araştırması
+
+Test bekliyor — 1.158 testlik Linux koşusu başarılı oldu, beş test atlandı.
+Koşudaki iki açık metin dosyası uyarısı testlerdeki main.py okuyucularına
+izlendi. Kapanışta görülen açık ikili okuyucu uyarısı, gerçek Blender alt
+sürecini kullanan LiveLink testinin tek başına çalıştırılmasında yeniden
+üretildi. Test kapatılırken süreç çıktısı artık toplanır ve süreç beklenir.
+Üç hedefli test grubu 17 testte ResourceWarning uyarısı vermeden geçti.
+Bu bulgu tüm uygulamanın uzun süreli kaynak kullanımını doğrulamaz.
+
+Kodlama ajanında iki süreç akışının açık kaldığı ayrıca gerçek alt süreçle
+yeniden üretildi. #236 (88a89f56e313d6b427259c10bb2b6beda11b78ec) bu
+akışları kapatır. Kodlama ajanı testleri 36/36 geçti. Blender test matrisi,
+bozuk indirmeleri reddedip resmî aynayı da deneyerek sürdürülür.
+
+## Son doğrulanmış ilerleme
+
+- Tamamlandı — #228, GÜNCELLE düğmesinde gerçek indirme ilerlemesini gösterir.
+- Kısmen tamamlandı — #233, Git güncellemesindeki stash çakışması ve eşzamanlı düzenlemeleri korur. Dört GitHub denetimi başarılıdır. Beklenmedik kısmi uygulama manuel inceleme gerektirir.
+- Tamamlandı — #236 kodlama ajanının alt süreç akışlarını kapatır. #235 Blender bağlantı testinin ve iki test okuyucusunun kaynaklarını kapatır. Blender 4.2 ve 5.0 test ve render denetimleri geçti.
+- Test bekliyor — 3b0657ebc349e2a9f2e6bedca05f4d49679b3756 üzerinde Linux/Python 3.13.5 tam test koşusu 1.169 test, 5 atlanan, 0 başarısız sonuç verdi. ResourceWarning görülmedi. NVIDIA ölçüm bağımlılığında pynvml FutureWarning incelemesi açıktır. Windows, fiziksel cihazlar ve gerçek hesaplar bu yerel koşunun dışındadır.
+- Geliştiriliyor — yayıncı güven kökü dağıtımı, Android anahtar rotasyonu, eklenti izolasyonu ve Aşama 1–8 kapsamındaki tamamlanmamış kabuller önceki tablolarda açıktır.

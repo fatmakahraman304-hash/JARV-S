@@ -3,6 +3,7 @@ import asyncio
 import threading
 import time
 import unittest
+from pathlib import Path
 
 from core import toolwait
 
@@ -49,7 +50,7 @@ class ToolWait(unittest.TestCase):
         self.assertEqual(late, ["failed: ağ yok"])
 
     def test_main_uses_it_and_handles_go_away(self):
-        src = open(__import__("pathlib").Path(__file__).resolve().parent.parent / "main.py", encoding="utf-8").read()
+        src = (Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
         self.assertIn("r = await self._run_blocking(name, lambda: self._action_registry.run(name, args, _ctx))", src)
         self.assertIn("self._plugin_registry.run(name, args, player=self.ui, session_memory=None))", src)
         self.assertIn('getattr(response, "go_away", None)', src)

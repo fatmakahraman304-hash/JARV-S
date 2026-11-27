@@ -26,7 +26,8 @@ def validate_settings(cfg):
             "microphone": enabled(cfg.get("microphone")),
             "volume_control": enabled(cfg.get("volume_control")),
             "brightness_control": enabled(cfg.get("brightness_control")),
-            "media_control": enabled(cfg.get("media_control"))}
+            "media_control": enabled(cfg.get("media_control")),
+            "app_control": enabled(cfg.get("app_control"))}
 
 
 def check_dependency():

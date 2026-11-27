@@ -76,6 +76,26 @@ class SafeRollbackTest(unittest.TestCase):
 
 
 class ClaudeStreamTest(unittest.TestCase):
+    def test_subprocess_streams_close_after_output_is_collected(self):
+        import subprocess
+        import sys
+        processes = []
+        original = subprocess.Popen
+
+        def start(*args, **kwargs):
+            process = original(*args, **kwargs)
+            processes.append(process)
+            return process
+
+        command = [sys.executable, '-c',
+                   "import sys; print('hello'); print('problem', file=sys.stderr)"]
+        with mock.patch.object(agent_coding.subprocess, 'Popen', side_effect=start):
+            code, lines, error = agent_coding._stream(command, Path('.'), '', lambda _: None, 5)
+        self.assertEqual((code, lines, error), (0, ['hello'], 'problem\n'))
+        self.assertTrue(processes[0].stdin.closed)
+        self.assertTrue(processes[0].stdout.closed)
+        self.assertTrue(processes[0].stderr.closed)
+
     def test_events(self):
         logged = []
         tool = {"type": "assistant", "message": {"content": [

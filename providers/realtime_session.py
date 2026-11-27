@@ -24,13 +24,14 @@ TURN_SECONDS = 60
 
 
 class RealtimeSession:
-    def __init__(self, ws, voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None):
+    def __init__(self, ws, voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None, app_enabled=None):
         self._ws = ws
         self._setup = rt.session_event(voice)
         self._guide_enabled = guide_enabled or (lambda: False)
         self._volume_enabled = volume_enabled or (lambda: False)
         self._brightness_enabled = brightness_enabled or (lambda: False)
         self._media_enabled = media_enabled or (lambda: False)
+        self._app_enabled = app_enabled or (lambda: False)
         if self._guide_enabled():
             self._setup['session']['tools'] = [tools.declaration()]
             self._setup['session']['instructions'] += (
@@ -51,6 +52,11 @@ class RealtimeSession:
             self._setup["session"]["instructions"] += (
                 " On explicit request, request_media requests a single system media command. "
                 "HUD approval is required; playback and target player are not verified.")
+        if self._app_enabled() and tools.realtime_apps.supported():
+            self._setup["session"]["tools"].append(tools.app_declaration())
+            self._setup["session"]["instructions"] += (
+                " On explicit request, request_open_app requests one allowlisted Windows app. "
+                "HUD approval is required; the window opening is not verified.")
         self._ready = False
         self._closed = False
         self._busy = False
@@ -166,6 +172,8 @@ class RealtimeSession:
                                 and not self._closed and self._brightness_enabled(),
                             media_enabled=lambda: "request_media" in declared
                                 and not self._closed and self._media_enabled(),
+                            app_enabled=lambda: "request_open_app" in declared
+                                and not self._closed and self._app_enabled(),
                             seen=seen)
                         if output is None:
                             raise rt.RealtimeError("Realtime araç sonucu geçersiz.")
@@ -207,11 +215,12 @@ class RealtimeSession:
 
 
 @asynccontextmanager
-async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None):
+async def conversation(api_key: str, model=rt.MODELS[0], voice="marin", guide_enabled=None, volume_enabled=None, brightness_enabled=None, media_enabled=None, app_enabled=None):
     """Explicit opt-in cloud connection; session history is not saved locally."""
     async with rt.open_realtime(api_key, model) as ws:
         session = RealtimeSession(ws, voice, guide_enabled=guide_enabled, volume_enabled=volume_enabled,
-                                  brightness_enabled=brightness_enabled, media_enabled=media_enabled)
+                                  brightness_enabled=brightness_enabled, media_enabled=media_enabled,
+                                  app_enabled=app_enabled)
         try:
             await session.start()
             yield session

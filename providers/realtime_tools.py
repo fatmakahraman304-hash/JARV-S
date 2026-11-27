@@ -9,6 +9,7 @@ import json
 import re
 
 from .realtime_transport import RealtimeError
+from . import realtime_apps
 
 TOPICS = ("index", "startup", "providers", "audio", "plugins", "routines",
           "updates", "diagnostics", "tasks")
@@ -103,8 +104,17 @@ def media_declaration():
                 "required": ["operation"], "additionalProperties": False}}
 
 
+def app_declaration():
+    return {"type": "function", "name": "request_open_app",
+            "description": "Request opening one built-in Windows application only. "
+                           "HUD approval required. Never claim its window opened.",
+            "parameters": {"type": "object", "properties": {
+                "app": {"type": "string", "enum": list(realtime_apps.APPLICATIONS)}},
+                "required": ["app"], "additionalProperties": False}}
+
+
 def tool_output(response, *, guide_enabled, volume_enabled, seen, brightness_enabled=None,
-                media_enabled=None):
+                media_enabled=None, app_enabled=None):
     """Select only an allowed function; never dispatch arbitrary action names."""
     items = response.get("output", [])
     if not isinstance(items, list):
@@ -116,6 +126,8 @@ def tool_output(response, *, guide_enabled, volume_enabled, seen, brightness_ena
         raise RealtimeError("Realtime araç çağrısı izinli değil.")
     call = calls[0]
     name = call.get("name")
+    if name == "request_open_app":
+        return _app_output(call, allowed=app_enabled or (lambda: False), seen=seen)
     if name == "request_media":
         return _media_output(call, allowed=media_enabled or (lambda: False), seen=seen)
     if name == "request_volume":
@@ -198,5 +210,41 @@ def _media_output(call, *, allowed, seen):
         "type": "function_call_output", "call_id": cid,
         "output": json.dumps({"status": "pending_confirmation" if pending else "not_executed",
                               "operation": operation,
+                              "message": "Not performed. Ask for HUD approval." if pending
+                                         else "Not performed; confirmation unavailable."})}}
+
+
+def _app_output(call, *, allowed, seen):
+    cid, raw = call.get("call_id"), call.get("arguments")
+    if (not allowed() or not realtime_apps.supported() or call.get("status") != "completed"
+            or not isinstance(cid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", cid)
+            or cid in seen or not isinstance(raw, str) or len(raw) > MAX_ARGUMENTS):
+        raise RealtimeError("Realtime uygulama açma izni yok.")
+    try:
+        args = json.loads(raw, object_pairs_hook=_unique_pairs)
+        if (not isinstance(args, dict) or set(args) != {"app"}
+                or not isinstance(args["app"], str) or args["app"] not in realtime_apps.APPLICATIONS):
+            raise ValueError("invalid application")
+    except (ValueError, RecursionError):
+        raise RealtimeError("Realtime uygulama seçimi geçersiz.") from None
+    seen.add(cid)
+    app_id = args["app"]
+    label = realtime_apps.APPLICATIONS[app_id][1]
+    from core import confirm
+
+    def after_human_approval():
+        if not allowed():
+            return "NOT EXECUTED: Realtime izni veya oturumu sona erdi."
+        return realtime_apps.launch(app_id)
+
+    result = confirm.request(key="realtime_open_app", title=f"{label} aç",
+        detail=f"Yalnızca {label} adlı Windows sistem uygulamasının başlatılması isteniyor. "
+               "Pencerenin açıldığı doğrulanmayacak. Ekran onayı olmadan işlem yapılmaz.",
+        run=after_human_approval)
+    pending = result.startswith("[CONFIRMATION_PENDING]")
+    return {"type": "conversation.item.create", "item": {
+        "type": "function_call_output", "call_id": cid,
+        "output": json.dumps({"status": "pending_confirmation" if pending else "not_executed",
+                              "app": app_id,
                               "message": "Not performed. Ask for HUD approval." if pending
                                          else "Not performed; confirmation unavailable."})}}
