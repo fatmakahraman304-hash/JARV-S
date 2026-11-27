@@ -159,6 +159,8 @@ class RealtimeEngine:
                         await self._queue.put(event)
                     else:
                         if not allowed():
+                            self._invalid = True
+                            self._reconnect()
                             return
                         if event.data and not oversized:
                             if len(private_pcm) + len(event.data) > MAX_REPLY_BYTES:
@@ -169,7 +171,9 @@ class RealtimeEngine:
                         if event.server_content and event.server_content.turn_complete:
                             complete = True
             if reply is not None and allowed() and complete and not oversized and private_pcm:
-                await reply(bytes(private_pcm))
+                delivered = await reply(bytes(private_pcm))
+                if delivered is False:
+                    self._log("SYS: Telefon yanıtı teslim edilemedi; başka cihaza aktarılmadı.")
             elif reply is not None and oversized:
                 self._log("SYS: Telefon yanıtı 30 saniye sınırını aştı; gönderilmedi.")
         except asyncio.CancelledError:
@@ -179,7 +183,7 @@ class RealtimeEngine:
             if not self._closed:
                 # Avoid leaking provider error bodies or user input to logs.
                 self._log(f"SYS: Realtime yanıtı tamamlanmadı ({type(exc).__name__}).")
-                if request.get("phone_pcm") is None and reply is None:
+                if reply is None:
                     await self._queue.put(Msg.turn_end())
                 self._reconnect()
 
