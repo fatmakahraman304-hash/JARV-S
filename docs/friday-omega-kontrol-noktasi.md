@@ -119,3 +119,29 @@ Başlangıç: `main` a147e81c4a7e8b11542d5eefd977e5bc1b0769f1; #252–#255 korun
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının kendi Windows bilgisayarında CIM, gerçek donanım/batarya ve GÜNCELLE paneli testleri; telefon, tablet, saat, TV ve akıllı ev cihazlarıyla uçtan uca testler bekliyor.
+
+## 2026-11-27 — NEXUS: kurtarılan bilişsel görev grafiği
+
+Başlangıç `main`: `128209817d6fbf20cf7ea7a7e371d4278614c3bd`; #252–#256 korunur. Önceki yerel çalışma kurtarıldı ve doğrulanmamış hâli ayrı `codex/friday-cognitive-recovered-wip` dalında saklandı.
+
+### Tamamlanan
+
+- Konuşmadaki `background_tasks` aracı üzerinden 1–6 düğümlü, döngüsüz bağımlılık grafiği başlatma, listeleme, durum, iptal ve henüz başlamamış düğümü güncelleme; birbirinden bağımsız düğümler mevcut paralel çalışan sınırına kadar eşzamanlı çalışır.
+- Düğüm ve alternatiflerin araç çağrısı, yaklaşık görev süresi ve tur sınırları mevcut görev motoruna bağlanır. Önceden sağlanan alternatifler başarısızlık veya istenen dosya kanıtının yokluğu sonrasında denenebilir; modele otomatik yeni plan hazırlatılmaz. Farklı web/gizli veri sınırları arasında önceki sonuç aktarılmaz.
+- Görev ve grafik kaydı yeniden başlatmada korunur; belirlenimci görev kimliği kesintide ikinci görev açılmasını engeller. Dosya ve not yazıları öncesinde kalıcı kayıt tutulur; sonucu belirsiz kalan yazı otomatik tekrarlanmaz ve inceleme bekler. Yalnızca açıkça izin verilen araçlar erişilebilirdir.
+- Yazılmış dosya içeriği mevcut bağımsız dosya kontrolüyle karşılaştırılabilir. Görev raporunun veya nihai hedefin doğruluğu bununla kanıtlanmaz; tamamlanan grafik `finished_unverified` kalır.
+
+### Doğrulama ve başarısızlıklar
+
+- Bağımlılık, gerçekten eşzamanlı yürütme, alternatif, kesinti, tekrarı önleme, bütçe, mahremiyet ve #255–#256 regresyon testleri eklendi/çalıştırıldı. Windows ve Linux CI sonuçları ilgili değişiklik isteğinde doğrulanmalıdır.
+- Önceki doğrudan `git push` denemesi kimlik bilgisi bulunmadığından başarısız oldu; kurtarma dalı GitHub bağlantısı üzerinden oluşturuldu. Bu, çalışma kodunun doğrulandığı anlamına gelmez.
+
+### Eksik kalanlar
+
+- Ayrı model tabanlı planlayıcı, otomatik dinamik yeniden planlama ve bağımsız anlamsal doğrulayıcı yoktur. Kullanıcının veya konuşma modelinin verdiği grafik ve alternatifler uygulanır. Maliyet ölçümü veya para cinsinden üst sınır yoktur; sağlayıcı gecikmesi/kesintisi süre sınırını aşabilir ve araştırma modunda tur bütçesi kesin bir üst sınır değildir.
+- Görev ve grafik verileri şifrelenmemiş mevcut JSON deposundadır, #254 Neural Journal ile birleştirilmemiştir. Birden fazla bağımsız süreç veya cihaz arasında tam olarak bir kez yürütme garantisi yoktur. Denetim mevcut yazma/not araçlarıyla sınırlıdır.
+- Gerçek işletim sistemi yönetimi, gizlilik tercihine bağlı yerel donanım analizi, tüm Multi-Brain katmanları, kişisel yaşam araçları ve uçtan uca şifreli cihaz ağı tamamlanmadı. Omega'nın 29 bölümünün tamamı ve tam kaynak denetimi bitmedi.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows cihazında yerel işlem/performans, mikrofon, ses, bağlı cihazlar ve GÜNCELLE paneliyle uçtan uca kabul testleri henüz yapılmadı. Gerçek model sağlayıcılarıyla maliyet, hız ve kalite değerlendirilmedi.
