@@ -93,3 +93,29 @@ Başlangıç `main`: `73514d8c7e0e91375969b47a207a6db42c1e8ef1`; #252, #253 ve #
 
 - Linux/Python 3.12 üzerinde merkezi plan, model geri dönüşü, #254 şifreli kayıt, eşitleme ve güncelleyici dâhil 183 ilgili test geçti. Üretim sağlayıcı anahtarı veya gerçek donanım kullanılmadı.
 - GitHub Actions merkezi plan testleri Windows ve Linux/Python 3.13 üzerinde geçti; genel regresyonun durumu #255 iş akışında izlenir. Kullanıcının bilgisayarındaki güncelleme panelinin önceki takılma nedeni hâlâ belirlenmedi.
+
+
+## 2026-11-27 — Yerel sistem teşhisi ve oturum durumu
+
+Başlangıç: `main` a147e81c4a7e8b11542d5eefd977e5bc1b0769f1; #252–#255 korunmuştur.
+
+### Tamamlanan kod
+
+- Salt okunur yerel CPU, bellek, sistem diski, batarya ve ağ bağlantı arayüzü ölçümleri; Windows'ta sabit PowerShell/CIM sorgusuyla işletim sistemi, işlemci, grafik ve BIOS envanteri.
+- Etkileşimli araç ve mevcut arka plan görevlerine özel teşhis uzmanı; eksik kaynaklar açıkça belirtilir. Teşhis ve web erişimi aynı arka plan ajanında bir araya getirilmez. Bulut sunucusunun donanımı kullanıcının bilgisayarı olarak sunulmaz.
+- Sistem bilgileri kullanıcının yapılandırdığı görev modeli sağlayıcısına işlenmek üzere gönderilebilir. Ağ arayüzünün açık olması internet erişiminin kanıtı değildir.
+
+### Doğrulama ve başarısızlıklar
+
+- Bu değişiklik için Linux ve Windows üzerinde GitHub Actions testleri eklenmiştir; sonuçları ilgili değişiklik isteğinden doğrulanmalıdır.
+- Yerel çalışma ortamı, bu oturumdaki diğer kaydedilmemiş çalışmalar tamamlanmadan erişilemez duruma geldi. Daha önceki ara test sonuçları, burada sunulan son kodun geçtiğini kanıtlamaz.
+
+### Eksik kalanlar
+
+- Paralel bağımlılık grafiği, yeniden planlama ve gelişmiş bilişsel motor üzerinde erişilemeyen yerel değişiklikler bu kapsamda birleştirilmemiştir.
+- Genel PowerShell/CMD kontrolü, Windows üzerinde işlem yapma, şifreli görev depolaması, doğrulanmış uçtan uca şifreli cihaz ağı ve Omega'nın diğer açık aşamaları tamamlanmamıştır.
+- GÜNCELLE paneliyle uçtan uca kurulum ve gerçek sağlayıcılarla kullanım henüz doğrulanmamıştır.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının kendi Windows bilgisayarında CIM, gerçek donanım/batarya ve GÜNCELLE paneli testleri; telefon, tablet, saat, TV ve akıllı ev cihazlarıyla uçtan uca testler bekliyor.
