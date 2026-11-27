@@ -116,6 +116,13 @@ class RealtimeEngine:
             return
         self._start(recall_payload=payload, _recall_allowed=allowed)
 
+    async def send_approved_phone(self, text, allowed):
+        """Submit one locally approved remote question; no normal tool access."""
+        if not isinstance(text, str) or not 0 < len(text.strip()) <= 4000 or not allowed():
+            return
+        from .realtime_recall import phone_payload
+        self._start(recall_payload=phone_payload(text), _recall_allowed=allowed)
+
     def _start(self, **request):
         if self._closed or ("pcm" in request and not self._capture_allowed()):
             return
