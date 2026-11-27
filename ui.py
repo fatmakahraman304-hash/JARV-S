@@ -275,12 +275,15 @@ class FridayUI:
     def on_push_to_talk(self, cb):
         self._win.on_push_to_talk = cb
 
-    def push_visemes(self, frames, hop: float, at: float) -> None:
+    def clear_voice_animation(self, epoch=None) -> None:
+        self._win.hud.clear_voice_animation(epoch)
+
+    def push_visemes(self, frames, hop: float, at: float, epoch=None) -> None:
         """Thread-safe: post a schedule of (level, openness, width) mouth frames
         for FRIDAY's own speech. `at` is the wall-clock time the batch begins to
         sound, not the time of the call. See HudCanvas.push_visemes()."""
         try:
-            self._win.hud.push_visemes(frames, hop, at)
+            self._win.hud.push_visemes(frames, hop, at, epoch=epoch)
         except Exception:
             pass
 
