@@ -1678,6 +1678,9 @@ class FridayLive:
         # The words we were about to mouth are never going to be spoken now.
         self._visemes.reset()
         self._play_cursor = 0.0     # next batch starts a fresh timeline
+        clear = getattr(self.ui, "clear_voice_animation", None)
+        if callable(clear):
+            clear(self._playback_epoch)
         if self._turn_done_event:
             self._turn_done_event.clear()
         # Draining the queue stops the speakers, but a local engine is still
@@ -3222,6 +3225,11 @@ class FridayLive:
                         self._turn_done_event.clear()
                     continue
 
+                epoch = getattr(self, "_playback_epoch", 0)
+                # A remote audio owner must not make the local core appear to speak.
+                if self._yield_voice or self._interrupted:
+                    self.set_speaking(False)
+                    continue
                 self.set_speaking(True)
 
                 # Batch all immediately-available chunks into one write to reduce
@@ -3270,7 +3278,7 @@ class FridayLive:
                     self._play_cursor += pcm.size / RECEIVE_SAMPLE_RATE
                     if frames:
                         frames = self._visemes.frames(frames, hop)
-                        self.ui.push_visemes(frames, hop, at)
+                        self.ui.push_visemes(frames, hop, at, epoch=epoch)
                         # Barge-in needs to know what we are playing, not just
                         # how loud: the guard subtracts this from the microphone.
                         self._out_level = max(f[0] for f in frames)
@@ -3288,8 +3296,9 @@ class FridayLive:
                 except Exception:
                     pass
 
-                if self._yield_voice:
-                    continue        # another device is the one speaking
+                if (self._yield_voice or self._interrupted
+                        or epoch != getattr(self, "_playback_epoch", 0)):
+                    continue        # interrupted or handed to another device
                 out_bytes = bytes(batch)
                 try:
                     if time.monotonic() - self._gain_checked > 3:       # a new level, or the hour turned night
@@ -3333,6 +3342,12 @@ class FridayLive:
             print(f"[FRIDAY] ❌ Play: {e}")
             raise
         finally:
+            self._playback_epoch = getattr(self, "_playback_epoch", 0) + 1
+            self._play_cursor = 0.0
+            self._visemes.reset()
+            clear = getattr(self.ui, "clear_voice_animation", None)
+            if callable(clear):
+                clear(self._playback_epoch)
             self.set_speaking(False)
             if stream is not None:
                 try:
