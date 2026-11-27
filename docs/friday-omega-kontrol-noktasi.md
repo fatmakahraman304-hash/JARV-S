@@ -191,3 +191,25 @@ Başlangıç `main`: `fe7acc21026c7b0b4979f8f90b69541189a77fc6`; #252–#258 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows bilgisayarında gerçek sıcaklık/yük uyarıları, konuşma akışı, mikrofon, GÜNCELLE paneli ve bağlı cihazlarla kabul testi yapılmadı.
+
+## 2026-11-27 — APEX: model tabanlı bilişsel planlama
+
+### Tamamlanan
+
+- Konuşmadaki `background_tasks` aracı üzerinden `cognitive_auto`, mevcut SMART model katmanına kullanıcının hedefini ve mevcut ajanların sınırlı yeteneklerini gönderir; gelen grafiği kodla doğruladıktan sonra mevcut kalıcı görev motorunda başlatır. Hatalı veya boş model yanıtında grafik ve görev oluşturulmaz.
+- Model bağımlılıkları, uygun ajanları ve en fazla iki önceden belirlenmiş alternatifi önerebilir. Kod bilinmeyen ajanları, döngüleri, geçersiz düğümleri ve ayrılan toplam süre/araç bütçesini aşan grafikleri reddeder; model ajanlara yeni araç yetkisi veremez. Var olan paralellik, belirsiz yazıların durdurulması ve sonuçların doğrulanmamış olarak işaretlenmesi korunur.
+- Üst sınır 6'dan 12 düğüme çıktı; çağrı başına daha düşük düğüm, toplam dakika ve araç çağrısı bütçeleri belirtilebilir. Alternatif girişimleri toplam bütçeye dahildir. Modelin kullanılabilirliği garanti edilmez; yeni model kimliği eklenmedi.
+
+### Testler ve başarısızlıklar
+
+- Sağlayıcı taklit edilerek görev grafiğinin gerçek görev motoruna bağlanması, yedi düğümlü grafik, bütçe, geçersiz grafik, yetki ve sağlayıcı hataları sınandı. Gerçek API anahtarıyla model kalitesi, gecikme ve maliyet ölçülmedi. Windows/Linux CI ve regresyon durumu ilgili değişiklik isteğinden izlenmelidir.
+
+### Eksik kalan
+
+- Model çalışma sırasında kendiliğinden yeniden planlama veya yeni alternatif üretme yapmaz; alternatifleri ilk plan sırasında üretir. Bağımsız anlamsal doğrulayıcı ve otomatik düzeltme yoktur. Dosya doğrulaması tüm hedefin doğruluğunu kanıtlamaz.
+- Token ve para cinsinden kullanım ölçümü/üst sınırı yoktur. Dakika bütçesi kesin duvar saati sınırı değildir; araştırma ajanının bazı iç işlemleri ve tur sayısı bütçelerin kesin üst sınırı değildir. Planlayıcı model çağrısı ek sağlayıcı ücreti doğurabilir.
+- Grafik ve görev kayıtları düz metin JSON'dur; şifreli Neural Journal'a taşınmadı ve birden fazla bağımsız süreçte tam olarak bir kez yürütme garantisi yoktur. Evrensel gizlilik, Windows yönetimi, cihaz ağı ve 29 Omega bölümünün tamamı bitmedi.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows cihazında, gerçek sağlayıcı hesaplarında ve GÜNCELLE panelinde uçtan uca kullanım doğrulanmadı.
