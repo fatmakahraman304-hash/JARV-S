@@ -507,6 +507,19 @@ def save_hardware_model_sharing(enabled: bool) -> None:
     _patch_config(hardware_model_sharing=enabled is True)
 
 
+def get_cognitive_review_sharing() -> bool:
+    """A stale backup must never restore permission to disclose task results."""
+    try:
+        data = _storage.read_document(CONFIG_FILE)
+    except (OSError, ValueError, _storage.StorageError):
+        return False
+    return isinstance(data, dict) and data.get("cognitive_review_sharing") is True
+
+
+def save_cognitive_review_sharing(enabled: bool) -> None:
+    _patch_config(cognitive_review_sharing=enabled is True)
+
+
 def get_input_device() -> str:
     """Microphone device name, or '' for the system default."""
     return (load_api_keys().get("input_device", "") or "").strip()
