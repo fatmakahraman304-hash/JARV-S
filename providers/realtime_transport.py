@@ -10,7 +10,8 @@ import asyncio
 import base64
 import binascii
 import json
-from contextlib import asynccontextmanager
+import logging
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from . import audio
 
@@ -120,15 +121,33 @@ async def exchange(ws, *, text=None, pcm=None, voice="marin"):
 
 @asynccontextmanager
 async def open_realtime(api_key: str, model: str = MODELS[0]):
-    """Explicit connection only. No proxy, automatic retry, or token logging."""
-    if not isinstance(api_key, str) or not api_key.strip():
-        raise ValueError("OpenAI API anahtarı gerekli.")
+    """Explicit connection to the fixed API origin; never forward credentials."""
+    if (not isinstance(api_key, str) or not api_key
+            or any(not 33 <= ord(c) <= 126 for c in api_key)):
+        raise ValueError("Geçerli OpenAI API anahtarı gerekli.")
     if model not in MODELS:
         raise ValueError("Desteklenen Realtime modelini seçin.")
     from websockets.asyncio.client import connect
-    # The optional transport requires websockets >= 15 for proxy=False.
-    async with connect(f"{URL}?model={model}",
-                       additional_headers={"Authorization": f"Bearer {api_key.strip()}"},
-                       proxy=None, open_timeout=10, close_timeout=3,
-                       max_size=MAX_EVENT, max_queue=16) as ws:
+
+    class DirectConnect(connect):
+        def process_redirect(self, exc):
+            # websockets >=15 may follow a redirect with the original headers.
+            # Returning an exception (not a URI) forbids every redirect.
+            return RealtimeError("Realtime bağlantı el sıkışması tamamlanamadı.")
+
+    # Suppress the transport's raw HTTP header and frame debug logs even when
+    # the application's root logger is configured for verbose diagnostics.
+    quiet = logging.Logger("friday.realtime.transport")
+    quiet.disabled = True
+    quiet.propagate = False
+    async with AsyncExitStack() as stack:
+        try:
+            ws = await stack.enter_async_context(DirectConnect(
+                f"{URL}?model={model}",
+                additional_headers={"Authorization": f"Bearer {api_key}"},
+                proxy=None, open_timeout=10, close_timeout=3,
+                max_size=MAX_EVENT, max_queue=16, logger=quiet))
+        except Exception:
+            # Never include a handshake body, header, URI, or raw credentials.
+            raise RealtimeError("Realtime bağlantısı kurulamadı.") from None
         yield ws
