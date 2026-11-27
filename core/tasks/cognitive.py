@@ -20,6 +20,23 @@ _ID = re.compile(r"^c[0-9a-f]{24}$")
 _NODE = re.compile(r"^[a-z][a-z0-9_]{0,15}$")
 _WEB = {"search_web", "web_search", "fetch_page"}
 _LIVE = {"running", "stopping_failure", "stopping_review", "cancelling"}
+MAX_NODES = 12
+MAX_MINUTES = 360
+MAX_CALLS = 300
+
+
+def workflow_limits(limits=None):
+    limits = {} if limits is None else limits
+    if not isinstance(limits, dict):
+        raise ValueError("workflow limits must be an object")
+    values = {}
+    for name, ceiling in (("max_nodes", MAX_NODES), ("max_minutes", MAX_MINUTES),
+                          ("max_calls", MAX_CALLS)):
+        value = limits.get(name, ceiling)
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= ceiling:
+            raise ValueError(f"{name} must be an integer between 1 and {ceiling}")
+        values[name] = value
+    return values
 
 
 def _failure_hint(error):
@@ -65,10 +82,11 @@ class CognitiveCoordinator:
         digest = hashlib.sha256(f"{workflow}/{node}/{attempt}".encode()).hexdigest()[:24]
         return f"t{digest}-1"
 
-    def create(self, goal, nodes, deliver="voice"):
+    def create(self, goal, nodes, deliver="voice", limits=None):
+        limits = workflow_limits(limits)
         goal = str(goal or "").strip()
-        if not goal or len(goal) > 5000 or not isinstance(nodes, list) or not 1 <= len(nodes) <= 6:
-            raise ValueError("goal and 1-6 nodes are required")
+        if not goal or len(goal) > 5000 or not isinstance(nodes, list) or not 1 <= len(nodes) <= limits["max_nodes"]:
+            raise ValueError(f"goal and 1-{limits['max_nodes']} nodes are required")
         profiles = self.engine.agents()
         checked, identifiers, total_minutes, total_calls = [], set(), 0, 0
         for raw in nodes:
@@ -105,8 +123,8 @@ class CognitiveCoordinator:
                             "verification": verification, "tools": sorted(set(profile.tools)),
                             "mode": profile.mode, "web": bool(_WEB & set(profile.tools)),
                             "attempt": 0, "status": "pending", "task_id": ""})
-        if total_minutes > 360 or total_calls > 300:
-            raise ValueError("workflow budgets exceed 360 minutes or 300 tool calls including alternatives")
+        if total_minutes > limits["max_minutes"] or total_calls > limits["max_calls"]:
+            raise ValueError("workflow budgets exceed configured minutes or tool calls including alternatives")
         graph = {n["id"]: n["depends_on"] for n in checked}
         if any(len(set(deps)) != len(deps) or any(d not in graph or d == nid for d in deps)
                for nid, deps in graph.items()):
@@ -127,7 +145,7 @@ class CognitiveCoordinator:
         ident = "c" + secrets.token_hex(12)
         for node in checked:
             node["task_id"] = self._task_id(ident, node["id"], 0)
-        doc = {"id": ident, "goal": goal, "nodes": checked, "status": "running",
+        doc = {"id": ident, "goal": goal, "nodes": checked, "limits": limits, "status": "running",
                "created": self.engine._clock(), "finished": 0, "error": "",
                "deliver": deliver if deliver in ("voice", "panel", "silent") else "voice"}
         with self.engine._lock:

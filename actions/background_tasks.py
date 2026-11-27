@@ -48,9 +48,22 @@ def background_tasks(parameters: dict, player=None) -> str:
     a = dict(parameters or {})
     action = str(a.get("action") or "list").strip().lower()
 
+    if action == "cognitive_auto":
+        try:
+            from core.tasks.cognitive_planner import create_workflow
+            doc = create_workflow(eng, a.get("task"), deliver=a.get("deliver") or "voice",
+                                  limits=a.get("limits"))
+        except (ValueError, TypeError) as e:
+            return outcome.failed("cognitive_workflow", str(e))
+        except Exception as e:
+            return outcome.failed("cognitive_workflow", f"planner unavailable: {type(e).__name__}")
+        return outcome.started("cognitive_workflow", workflow_id=doc["id"], nodes=len(doc["nodes"]),
+                               note="model-generated graph started; final outcome is not independently verified")
+
     if action == "cognitive_start":
         try:
-            doc = eng.cognitive.create(a.get("task"), a.get("nodes"), a.get("deliver") or "voice")
+            doc = eng.cognitive.create(a.get("task"), a.get("nodes"), a.get("deliver") or "voice",
+                                       limits=a.get("limits"))
         except (ValueError, TypeError) as e:
             return outcome.failed("cognitive_workflow", str(e))
         return outcome.started("cognitive_workflow", workflow_id=doc["id"], nodes=len(doc["nodes"]),
@@ -234,7 +247,9 @@ TOOL = {
         "simple extraction or formatting, smart for reasoning and all research. The user's "
         "existing provider preferences and model fallback remain in effect. Wait for a step to finish before "
         "starting the next. Use this only when the user wants work carried out, not merely "
-        "a plan drafted. cognitive_start runs 1-6 nodes with explicit depends_on ids; "
+        "a plan drafted. cognitive_auto independently asks the configured model to generate "
+        "and run a graph for the user's goal, using existing agent permissions. "
+        "cognitive_start runs 1-12 nodes with explicit depends_on ids; "
         "independent nodes can run in parallel. Provide bounded alternatives where useful, "
         "without expanding tool permissions; uncertain operations are not repeated. Each node has minutes, rounds and max_calls; report or "
         "file_written selects the evidence check. Monetary costs are not capped. "
@@ -245,14 +260,15 @@ TOOL = {
         "plan_cancel accept plan_id or use the latest matching plan. Results "
         "are task reports, not proof that real-world actions succeeded. "
         "task_id may be left empty to mean the latest task."),
-    "brief": "Runs background work: cognitive_start executes dependency graphs with budgets and "
+    "brief": "Runs background work: cognitive_auto generates and runs a bounded graph; cognitive_start "
+             "executes supplied dependency graphs with budgets and "
              "cognitive_status/cancel/revise manage them; plan runs ordered steps. Also supports task start/list/status/cancel.",
     "tier": "core",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise"]},
+                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise"]},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},
             "minutes": {"type": "INTEGER", "description": "for start: time budget in minutes"},
@@ -265,7 +281,11 @@ TOOL = {
             "plan_id": {"type": "STRING", "description": "for plan_status or plan_cancel"},
             "workflow_id": {"type": "STRING", "description": "for cognitive workflow actions"},
             "node_id": {"type": "STRING", "description": "for cognitive_revise: unstarted node id"},
-            "nodes": {"type": "ARRAY", "description": "for cognitive_start: 1-6 dependency graph nodes",
+            "limits": {"type": "OBJECT", "description": "optional cognitive workflow limits; alternatives count against totals",
+                       "properties": {"max_nodes": {"type": "INTEGER", "description": "1-12"},
+                                      "max_minutes": {"type": "INTEGER", "description": "1-360 total node minutes"},
+                                      "max_calls": {"type": "INTEGER", "description": "1-300 total tool calls"}}},
+            "nodes": {"type": "ARRAY", "description": "for cognitive_start: 1-12 dependency graph nodes",
                       "items": {"type": "OBJECT", "properties": {
                           "id": {"type": "STRING"}, "task": {"type": "STRING"},
                           "agent": {"type": "STRING"},

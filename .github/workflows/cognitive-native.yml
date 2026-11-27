@@ -8,6 +8,7 @@ on:
       - 'core/native_diagnostics.py'
       - 'core/tasks/**'
       - 'tests/test_cognitive_engine.py'
+      - 'tests/test_cognitive_planner.py'
       - 'tests/test_native_diagnostics.py'
       - '.github/workflows/cognitive-native.yml'
   workflow_dispatch:
@@ -33,4 +34,4 @@ jobs:
       - name: Install existing diagnostics dependency
         run: python -m pip install "psutil>=5.9,<8"
       - name: Graph execution, interruption safety and native CIM
-        run: python -m unittest -v tests.test_cognitive_engine tests.test_native_diagnostics tests.test_central_plans tests.test_task_store_atomic
+        run: python -m unittest -v tests.test_cognitive_planner tests.test_cognitive_engine tests.test_native_diagnostics tests.test_central_plans tests.test_task_store_atomic
