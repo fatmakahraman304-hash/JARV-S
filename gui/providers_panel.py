@@ -662,10 +662,10 @@ class ProvidersOverlay(_HudOverlay):
             Field("model", "Model", kind="choice", choices=MODELS, default=MODELS[0]),
             Field("voice_id", "Ses", kind="choice", choices=VOICES, default=VOICES[0]),
             Field("microphone", "Mikrofon aktarımını aç", kind="bool", default=False),
-            Field("phone_text", "Eşleştirilmiş telefondan ekran onaylı yazılı soru (yanıt bilgisayarda)", kind="bool", default=False),
+            Field("input_transcription", "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)", kind="bool", default=False),
+            Field("phone_text", "Eşleştirilmiş telefondan ekran onaylı yazılı soru", kind="bool", default=False),
             Field("phone_audio", "Eşleştirilmiş telefondan ekran onaylı ses kaydı (en fazla 15 saniye)", kind="bool", default=False),
             Field("phone_reply", "Onaylı telefon sorusunun sesli yanıtını yalnızca telefona gönder (HTTPS)", kind="bool", default=False),
-            Field("input_transcription", "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)", kind="bool", default=False),
             Field("volume_control", "Ekran onayıyla hoparlör ses kontrolü", kind="bool", default=False),
             Field("brightness_control", "Ekran onayıyla parlaklık kontrolü (%10–100)", kind="bool", default=False),
             Field("media_control", "Ekran onayıyla sistem medya kontrolü", kind="bool", default=False),
@@ -675,11 +675,6 @@ class ProvidersOverlay(_HudOverlay):
         self._hidden[PROVIDER_ID] = set()
         sections = {"api_key": "01  MOTOR VE SES", "microphone": "02  SES GİRİŞİ",
                     "phone_text": "03  CİHAZ BAĞLANTISI", "volume_control": "04  ONAYLI KONTROLLER"}
-        # Keep voice input and local transcription together in FRIDAY's own panel.
-        fields = tuple(f for f in fields if f.key not in ("input_transcription",)) 
-        fields = fields[:4] + (Field("input_transcription",
-            "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)",
-            kind="bool", default=False),) + fields[4:]
         for field in fields:
             if field.key in sections:
                 lay.addSpacing(8)
