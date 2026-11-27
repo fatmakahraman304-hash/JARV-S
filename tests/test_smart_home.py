@@ -212,3 +212,30 @@ class SummaryAndGraceTest(unittest.TestCase):
             sh._save_timers([{"at": time.time() - 3 * 3600, "params": {"action": "off", "target": "salon ışığı"}}])
             out = sh.run_due_timers()
         self.assertIn("Skipped", out[0])
+
+class AmbiguousDeviceTest(unittest.TestCase):
+    def setUp(self):
+        self.states = [
+            {"entity_id": "light.salon_tavan", "state": "off", "attributes": {"friendly_name": "Salon Tavan Işığı"}},
+            {"entity_id": "light.salon_masa", "state": "off", "attributes": {"friendly_name": "Salon Masa Işığı"}},
+            {"entity_id": "light.mutfak", "state": "off", "attributes": {"friendly_name": "Mutfak Işığı"}},
+        ]
+
+    def test_ambiguous_room_does_not_control_arbitrary_light(self):
+        with mock.patch.object(sh, "_states", return_value=self.states), mock.patch.object(sh, "_call") as call:
+            result = sh.run({"action": "on", "target": "salon ışığı"})
+        call.assert_not_called()
+        self.assertIn("hangisini", result)
+        self.assertIn("Salon Tavan", result)
+        self.assertIn("Salon Masa", result)
+
+    def test_explicit_group_controls_matching_room(self):
+        with mock.patch.object(sh, "_states", return_value=self.states), mock.patch.object(sh, "_call") as call:
+            result = sh.run({"action": "on", "target": "salondaki bütün ışıklar"})
+        self.assertEqual(call.call_count, 2)
+        self.assertIn("doğrulanmadı", result)
+
+    def test_unknown_room_does_not_match_a_known_room(self):
+        with mock.patch.object(sh, "_states", return_value=self.states), mock.patch.object(sh, "_call") as call:
+            sh.run({"action": "on", "target": "salon garaj ışığı"})
+        call.assert_not_called()
