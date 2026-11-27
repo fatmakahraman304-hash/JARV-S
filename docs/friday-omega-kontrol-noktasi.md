@@ -237,3 +237,25 @@ Başlangıç `main`: `21445324de9e5dcec9079814b4896bb88e878a6c`; #252–#260 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows bilgisayarı, gerçek model sağlayıcıları, GÜNCELLE paneli ve cihazlarla uçtan uca kabul testi yapılmadı.
+
+## 2026-11-27 — SOVEREIGN: ayrı sonuç incelemesi
+
+### Tamamlanan
+
+- `cognitive_review`, tamamlanmış bir düğümün görevini ve yanıtını araç kullanamayan ayrı bir model çağrısında eleştirir. İnceleme açıkça istendiğinde yapılır; düğümün metni ve sonucu yapılandırılmış model sağlayıcısına gönderilebilir. Bir çağrıda yalnızca bir düğüm incelenir; web ve özel düğümlerin sonuçları birleştirilmez.
+- Aynı işlem sırasında kaydedilmiş dosyaların mevcut baytları, ilgili başarılı yazma çağrısının içeriğiyle yeniden karşılaştırılır. Model çağrısı sırasında dosya veya görev sonucu değişirse inceleme kaydedilmez. Eksik/değişmiş dosya açıkça belirtilir.
+- Model değerlendirmesi ve nesnel dosya kontrolü ayrı tutulur; olumlu model görüşü genel doğruluğun kanıtı sayılmaz ve iş akışının `finished_unverified` durumu değiştirilmez. İnceleme sonucu mevcut görev kaydına yazılır ve durum ekranından görülebilir.
+
+### Testler ve başarısızlıklar
+
+- Dosya değiştirme, çağrı sırasında yarış, yanıltıcı model görüşü, geçersiz veya ulaşılamayan model, belirsiz görev ve konuşma aracı entegrasyonu taklit sağlayıcı yanıtlarıyla test edildi. Gerçek model sağlayıcısı ile kalite, hız veya maliyet doğrulanmadı; GitHub Windows/Linux sonuçları ilgili değişiklik isteğinde izlenmelidir.
+
+### Eksik kalan
+
+- Eleştiri ayrı bir çağrıdır ancak farklı bir model ya da sağlayıcı garantisi yoktur; dış kaynaklar veya gerçek dünya etkileri bağımsız doğrulanmaz. Henüz otomatik denetim, otomatik düzeltme veya token/para bütçesi yoktur.
+- Yalnızca mevcut `write_file` kayıtlarından en fazla 16 dosyanın baytları karşılaştırılır; başka araçların veya kullanıcı bilgisayarındaki sistem değişikliklerinin doğruluğu bu kontrolle kanıtlanmaz. Görev ve inceleme kayıtları şifrelenmemiş JSON'da kalır.
+- Evrensel izin yönetimi, Windows yönetimi, kişisel hayat araçları ve uçtan uca şifreli cihaz ağı tamamlanmadı. Orijinal 29 bölümün ayrı başlık listesi bu depoda bulunmadığından tamamı tek tek doğrulanmış olarak işaretlenmedi.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows cihazı, GÜNCELLE paneli ve gerçek sağlayıcı hesaplarıyla uçtan uca kabul testleri yapılmadı.

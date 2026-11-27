@@ -74,6 +74,22 @@ def background_tasks(parameters: dict, player=None) -> str:
         return ("\n".join(f"{p['id']} [{p['status']}] {p['goal'][:150]}" for p in docs)
                 if docs else "No cognitive workflows yet.")
 
+    if action == "cognitive_review":
+        try:
+            from core.tasks.cognitive_review import review_node
+            ident = str(a.get("workflow_id") or "").strip()
+            node_id = str(a.get("node_id") or "").strip()
+            review = review_node(eng, ident, node_id)
+        except (ValueError, TypeError) as e:
+            return outcome.failed("cognitive_review", str(e))
+        except Exception as e:
+            return outcome.failed("cognitive_review", f"review unavailable: {type(e).__name__}")
+        counts = review["file_counts"]
+        return (outcome.unverified("cognitive_review", "model opinion is not independent proof of truth",
+                    opinion=review["opinion"], files_verified=counts["verified"],
+                    files_changed=counts["changed"], files_unavailable=counts["unavailable"])
+                + "\n" + outcome.untrusted("review-opinion", review["reason"]))
+
     if action in ("cognitive_status", "cognitive_cancel", "cognitive_revise"):
         try:
             wid = str(a.get("workflow_id") or "").strip()
@@ -102,6 +118,8 @@ def background_tasks(parameters: dict, player=None) -> str:
                 lines.append(f"  tool_calls={budget.get('used_calls', 0)}/{budget.get('max_calls', 0)}")
                 if child.get("result"):
                     lines.append(outcome.untrusted("node-result", child["result"][:2000]))
+            if node.get("review"):
+                lines.append(f"  model_review={node['review'].get('opinion', 'unknown')} (not proof of truth)")
             for artifact in node.get("artifacts") or []:
                 lines.append(f"  file={artifact.get('location') or artifact.get('path')} verification={artifact.get('status')}")
         if doc.get("error"):
@@ -256,7 +274,10 @@ TOOL = {
         "without expanding tool permissions; uncertain operations are not repeated. Each node has minutes, rounds and max_calls; report or "
         "file_written selects the evidence check. Monetary costs are not capped. "
         "cognitive_list/status/cancel manage workflows; cognitive_revise updates only an unstarted "
-        "node when the user asks. Do not treat generated reports as independently verified. "
+        "node when the user asks. cognitive_review separately rechecks file bytes and asks the "
+        "configured model to critique a completed node; it sends that node's task and result to the "
+        "provider. Its opinion does not independently prove the result. "
+        "Do not treat generated reports as independently verified. "
         "The existing restricted background tools apply; no computer control, "
         "external messaging or purchases. plan_list shows saved plans, plan_status and "
         "plan_cancel accept plan_id or use the latest matching plan. Results "
@@ -270,7 +291,7 @@ TOOL = {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise"]},
+                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review"]},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},
             "minutes": {"type": "INTEGER", "description": "for start: time budget in minutes"},
@@ -282,7 +303,7 @@ TOOL = {
             "note": {"type": "STRING", "description": "for steer: the new instruction"},
             "plan_id": {"type": "STRING", "description": "for plan_status or plan_cancel"},
             "workflow_id": {"type": "STRING", "description": "for cognitive workflow actions"},
-            "node_id": {"type": "STRING", "description": "for cognitive_revise: unstarted node id"},
+            "node_id": {"type": "STRING", "description": "for cognitive_revise: unstarted node; cognitive_review: completed node"},
             "max_replans": {"type": "INTEGER", "description": "0-2 automatic model replans; cognitive_auto defaults to 1, cognitive_start to 0"},
             "limits": {"type": "OBJECT", "description": "optional cognitive workflow limits; alternatives count against totals",
                        "properties": {"max_nodes": {"type": "INTEGER", "description": "1-12"},
