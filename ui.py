@@ -293,6 +293,9 @@ class FridayUI:
     def set_state(self, state: str):
         self._win._state_sig.emit(state)
 
+    def set_engine_status(self, phase: str, mode: str) -> None:
+        self._win._engine_status_sig.emit(phase, mode)
+
     def set_mode_note(self, note: str) -> None:
         """A standing mode beside the state chip ('SESSİZ MOD', 'TOPLANTI'); '' clears it. Any thread."""
         try:

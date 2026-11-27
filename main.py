@@ -4029,6 +4029,12 @@ class FridayLive:
             self._engine = None
             await engine.close()
 
+    def _publish_engine_status(self, phase, mode):
+        # Only fixed lifecycle identifiers leave the engine thread.
+        notify = getattr(self.ui, "set_engine_status", None)
+        if callable(notify):
+            notify(phase, mode)
+
     async def run(self):
         self._loop = asyncio.get_event_loop()
         self._reconnect_event = asyncio.Event()
@@ -4106,10 +4112,14 @@ class FridayLive:
             print(f"[Sync] Disabled: {e}")
 
         while True:
+            lifecycle_mode = "unknown"
+            lifecycle_phase = "connecting"
             try:
+                lifecycle_mode = self._engine_mode()
+                self._publish_engine_status(lifecycle_phase, lifecycle_mode)
                 self._ensure_executor()
                 print("[FRIDAY] Connecting...")
-                self.ui.set_state("THINKING")
+                self.ui.set_state("INITIALISING")
                 # Pick the rung to open the conversation on. A model resting
                 # off a quota limit is skipped; the name is published back to
                 # LIVE_MODEL so plugins follow whatever is actually in use.
@@ -4138,6 +4148,8 @@ class FridayLive:
                         self.ui.write_log(
                             "SYS: No Gemini key and no local engine set up yet — open ⚙ → "
                             "ENGINE & PROVIDERS and choose MY OWN SETUP, or add a Gemini key.")
+                    lifecycle_phase = "configuration"
+                    self._publish_engine_status(lifecycle_phase, lifecycle_mode)
                     self.ui.set_state("SLEEPING")
                     await asyncio.sleep(5)
                     continue
@@ -4160,6 +4172,8 @@ class FridayLive:
                     # covered. The wrapper is per-session, so it goes away with
                     # the session it belongs to.
                     realtime_mode = callable(getattr(session, "send_user_content", None))
+                    lifecycle_mode = ("realtime" if realtime_mode else
+                                      "pipeline" if self._engine is session else "gemini")
                     _orig_send = session.send_client_content
 
                     async def _send_and_arm(*a, **kw):
@@ -4186,6 +4200,8 @@ class FridayLive:
                     self._interrupted          = False
                     self._goaway_pending       = False
 
+                    lifecycle_phase = "ready"
+                    self._publish_engine_status(lifecycle_phase, lifecycle_mode)
                     print("[FRIDAY] Connected.")
                     if _resumed_with:
                         # Say it plainly: the difference between "it reconnected"
@@ -4311,6 +4327,8 @@ class FridayLive:
                 # Voluntary reconnect (voice change) — not an error. Rebuild the
                 # session immediately with no backoff and no scary logs.
                 if _is_reconnect_signal(e):
+                    lifecycle_phase = "retry"
+                    self._publish_engine_status(lifecycle_phase, lifecycle_mode)
                     print("[FRIDAY] Voluntary reconnect requested.")
                     if not _keep_context_of(e):
                         # A deliberate clean slate (voice change) — drop the
@@ -4318,6 +4336,9 @@ class FridayLive:
                         self._resume_handle = None
                     self._conn_backoff = 0
                     continue
+
+                lifecycle_phase = "error"
+                self._publish_engine_status(lifecycle_phase, lifecycle_mode)
 
                 # A resumption handle the server will not accept — expired, or
                 # belonging to a session it has since dropped. Without this, the
@@ -4337,7 +4358,7 @@ class FridayLive:
                     self._conn_backoff = 0
                     continue
 
-                if self._engine_mode() == "realtime":
+                if lifecycle_mode == "realtime":
                     self.ui.write_log(f"SYS: Realtime bağlantısı tamamlanmadı ({type(e).__name__}); Gemini'ye geçilmedi.")
                     self.ui.set_state("SLEEPING")
                     await asyncio.sleep(5)
@@ -4396,6 +4417,8 @@ class FridayLive:
 
                 # Invalid API key — stop hammering the API, prompt re-configuration
                 if "API key not valid" in err_str or "1007" in err_str:
+                    lifecycle_phase = "configuration"
+                    self._publish_engine_status(lifecycle_phase, lifecycle_mode)
                     self.ui.write_log("ERR: API key invalid — please re-enter your key.")
                     self.ui.set_state("SLEEPING")
                     self.ui.prompt_reconfig()
@@ -4422,6 +4445,8 @@ class FridayLive:
             finally:
                 self.session = None
                 self._session_realtime = False
+                if lifecycle_phase in ("connecting", "ready"):
+                    self._publish_engine_status("offline", lifecycle_mode)
                 # Only save if there was a real conversation (≥3 turns)
                 if len(self._session_log) >= 3 and not locals().get("realtime_mode", False):
                     self._keep_task(asyncio.create_task(self._save_session_summary()))
@@ -4434,6 +4459,7 @@ class FridayLive:
                 self._dashboard.set_state("sleeping")
 
             delay = getattr(self, "_conn_backoff", 3)
+            self._publish_engine_status("retry", lifecycle_mode)
             print(f"[FRIDAY] Reconnecting in {delay}s...")
             await asyncio.sleep(delay)
 

@@ -487,6 +487,11 @@ class ControlCenter(QWidget):
         self._system_status.setWordWrap(True)
         self._system_status.setStyleSheet(f"color: {C.PRI}; padding: 2px 10px;")
         root.addWidget(self._system_status)
+        self._engine_status = QLabel("MOTOR · BEKLEMEDE")
+        self._engine_status.setFont(px_font(11, QFont.Weight.Medium))
+        self._engine_status.setWordWrap(True)
+        self._engine_status.setStyleSheet(f"color: {C.TEXT_DIM}; padding: 2px 10px;")
+        root.addWidget(self._engine_status)
 
         body = QHBoxLayout()
         body.setSpacing(14)
@@ -512,6 +517,13 @@ class ControlCenter(QWidget):
         self._state = ("", False, False)
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._tick)
+
+    def set_engine_status(self, phase, mode):
+        from gui.engine_status import engine_status
+        label, color, engine = engine_status(phase, mode)
+        self._engine_status.setText(f"{engine} · {label}")
+        self._engine_status.setStyleSheet(f"color: {getattr(C, color)}; padding: 2px 10px;")
+        self._engine_status.setToolTip("Oturum durumu; sağlayıcı ve araçların tümü sınanmış değildir.")
 
     def set_system_metrics(self, snapshot):
         """Reuse the main HUD sampler; never start another CPU/GPU probe."""
