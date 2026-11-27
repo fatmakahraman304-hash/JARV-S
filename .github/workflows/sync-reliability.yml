@@ -1,0 +1,30 @@
+name: FRIDAY device sync reliability
+on:
+  pull_request:
+    paths:
+      - 'core/sync_hub.py'
+      - 'tests/test_sync_hub.py'
+      - 'tests/test_sync_delivery_reliability.py'
+      - '.github/workflows/sync-reliability.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  retry-and-preserve:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Retry, ambiguous delivery and sync regressions
+        run: python -m unittest -v tests.test_sync_delivery_reliability tests.test_sync_hub

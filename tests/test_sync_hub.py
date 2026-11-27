@@ -280,11 +280,11 @@ class SendToDeviceTest(unittest.TestCase):
         ok, msg = sync_hub.send_to_device("tv", {"kind": "open", "url": "https://youtu.be/x"})
         self.assertTrue(ok, msg)
         writes = {}
-        sync_hub._deliver_out({"inbox-w-tv.json": json.dumps([{"id": "old", "kind": "say", "text": "x"}])}, writes)
+        batch = sync_hub._deliver_out({"inbox-w-tv.json": json.dumps([{"id": "old", "kind": "say", "text": "x"}])}, writes)
         box = json.loads(writes["inbox-w-tv.json"])
         self.assertEqual([b["kind"] for b in box], ["say", "open"])
         self.assertEqual(box[-1]["url"], "https://youtu.be/x")
-        self.assertFalse(sync_hub._state["out_cmds"])
+        self.assertEqual(sync_hub._state["out_cmds"], batch)  # retained until write succeeds
 
     def test_plugin_sends_free_picture_as_link(self):
         from plugins import send_to_device

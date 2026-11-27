@@ -287,7 +287,7 @@ def note_turn(role: str, text: str) -> None:
         return
     turn = {"ts": _now(), "device": device_name(),
             "role": "user" if role.lower().startswith(("kullan", "user")) else "aether",
-            "text": str(text)[:600]}
+            "text": str(text)[:600], "sync_id": uuid.uuid4().hex}
     with _state["lock"]:
         _state["turns"].append(turn)
         _state["arch_queue"].append(turn)
@@ -407,13 +407,17 @@ def _save_known() -> None:
         pass
 
 
-def _sync_reminders(files: dict, writes: dict, now: float) -> None:
+def _sync_reminders(files: dict, writes: dict, now: float) -> list:
     try:
         cloud = json.loads(files.get("reminders.json") or "[]")
     except Exception:
-        cloud = []
+        _log("[Sync] Geçersiz uzak hatırlatıcı listesi korunuyor.")
+        return []
+    if not isinstance(cloud, list):
+        _log("[Sync] Geçersiz uzak hatırlatıcı listesi korunuyor.")
+        return []
     with _state["lock"]:
-        mine, _state["rem_new"] = _state["rem_new"], []
+        mine = list(_state["rem_new"])
     merged = merge_reminders(cloud if isinstance(cloud, list) else [], mine, now * 1000)
     _state["reminders"] = merged
     _push_due_reminders(merged, now)
@@ -440,6 +444,7 @@ def _sync_reminders(files: dict, writes: dict, now: float) -> None:
         _save_known()
     if _rem_sig(merged) != _rem_sig(merge_reminders(cloud if isinstance(cloud, list) else [], [], now * 1000)):
         writes["reminders.json"] = json.dumps(merged, ensure_ascii=False)
+    return mine
 
 
 # ── this computer → another device (phone, tablet, TV …) ────────────────────
@@ -492,7 +497,7 @@ def send_to_device(name: str, cmd: dict) -> tuple[bool, str]:
     if d.get("kind") == "pc":
         return False, f"{d.get('name')} bir bilgisayar; bilgisayarlar arası gönderme henüz yok."
     item = dict(cmd)
-    item.update({"id": f"{device_id()}-{int(time.time() * 1000):x}", "from": device_name(), "ts": _now()})
+    item.update({"id": f"{device_id()}-{uuid.uuid4().hex}", "from": device_name(), "ts": _now()})
     if len(json.dumps(item)) > 4_000_000:
         return False, "Gönderilecek şey çok büyük."
     with _state["lock"]:
@@ -501,20 +506,45 @@ def send_to_device(name: str, cmd: dict) -> tuple[bool, str]:
     return True, f"{d.get('name')} cihazına gönderiyorum{tail}."
 
 
-def _deliver_out(files: dict, writes: dict) -> None:
+def _deliver_out(files: dict, writes: dict) -> list:
     with _state["lock"]:
-        out, _state["out_cmds"] = _state["out_cmds"], []
+        out = list(_state["out_cmds"])
     by: dict[str, list] = {}
-    for dev_id, item in out:
-        by.setdefault(dev_id, []).append(item)
-    for dev_id, items in by.items():
+    for entry in out:
+        by.setdefault(entry[0], []).append(entry)
+    delivered = []
+    for dev_id, entries in by.items():
         name = f"inbox-{dev_id}.json"
         try:
             box = json.loads(writes.get(name) or files.get(name) or "[]")
         except Exception:
-            box = []
-        box = [b for b in box if isinstance(b, dict)] + items
-        writes[name] = json.dumps(box[-10:], ensure_ascii=False)
+            continue
+        if not isinstance(box, list) or any(not isinstance(b, dict) for b in box):
+            continue
+        ids = {str(b.get("id")) for b in box if b.get("id")}
+        changed = False
+        for entry in entries:
+            item = entry[1]
+            cid = str(item.get("id") or "")
+            if cid and cid in ids:
+                delivered.append(entry)
+            elif len(box) < 10:
+                box.append(item)
+                if cid:
+                    ids.add(cid)
+                delivered.append(entry)
+                changed = True
+        if changed:
+            writes[name] = json.dumps(box, ensure_ascii=False)
+    return delivered
+
+
+def _ack_queue(name: str, batch: list) -> None:
+    """Remove exact objects from a successful snapshot; caller holds the lock."""
+    if not batch:
+        return
+    ids = {id(item) for item in batch}
+    _state[name] = [item for item in _state[name] if id(item) not in ids]
 
 
 # ── this computer's projects, readable on every device ──────────────────────
@@ -1032,8 +1062,11 @@ def _cycle() -> None:
     try:
         inbox = json.loads(files.get(inbox_name) or "[]")
     except Exception:
+        inbox = None
+    if not isinstance(inbox, list) or any(not isinstance(cmd, dict) for cmd in inbox):
+        _log("[Sync] Geçersiz gelen kutusu korunuyor.")
         inbox = []
-    for cmd in inbox if isinstance(inbox, list) else []:
+    for cmd in inbox:
         cid = str(cmd.get("id") or "")
         if not cid or cid in _state["done"]:
             continue
@@ -1043,33 +1076,49 @@ def _cycle() -> None:
         else:
             _run_command(cid, str(cmd.get("text") or ""), str(cmd.get("from") or "cihaz"))
     if inbox:
-        writes[inbox_name] = "[]"
+        # A malformed entry must not disappear merely because another entry
+        # was usable. Entries without an id cannot be safely deduplicated.
+        remaining = [cmd for cmd in inbox if not cmd.get("id")]
+        if len(remaining) != len(inbox):
+            writes[inbox_name] = json.dumps(remaining, ensure_ascii=False)
 
     # 2. answers
     with _state["lock"]:
-        answered = [p for p in _state["pending"] if p.get("reply") is not None or now - p["at"] > REPLY_WAIT]
-        _state["pending"] = [p for p in _state["pending"] if p not in answered]
+        answered = [p for p in _state["pending"] if p.get("reply") is not None or now - p["at"] > REPLY_WAIT][:10]
     if answered:
         try:
             outbox = json.loads(files.get(f"outbox-{me}.json") or "[]")
         except Exception:
-            outbox = []
-        outbox = [o for o in outbox if isinstance(o, dict)][-20:]
-        for p in answered:
-            outbox.append({"id": p["id"], "ts": _now(),
-                           "reply": p.get("reply") or "Komutu aldım ama henüz bir yanıt üretmedim."})
-        writes[f"outbox-{me}.json"] = json.dumps(outbox[-30:], ensure_ascii=False)
+            outbox = None
+        if isinstance(outbox, list) and all(isinstance(o, dict) for o in outbox):
+            known = {str(o.get("id")) for o in outbox if o.get("id")}
+            for p in answered:
+                if str(p["id"]) not in known:
+                    outbox.append({"id": p["id"], "ts": _now(),
+                                   "reply": p.get("reply") or "Komutu aldım ama henüz bir yanıt üretmedim."})
+                    known.add(str(p["id"]))
+            writes[f"outbox-{me}.json"] = json.dumps(outbox[-30:], ensure_ascii=False)
+        else:
+            answered = []  # preserve both the malformed remote data and local replies
 
     # 3. recent conversation
     with _state["lock"]:
-        turns, _state["turns"] = _state["turns"], []
+        turns = list(_state["turns"])
     try:
         recent = json.loads(files.get("recent.json") or "[]")
     except Exception:
+        recent = None
+    if not isinstance(recent, list) or any(not isinstance(t, dict) for t in recent):
         recent = []
-    recent = [t for t in (recent if isinstance(recent, list) else []) if isinstance(t, dict)]
+        turns = []  # do not overwrite malformed remote history
     if turns:
-        recent = recent + turns
+        ids = {t.get("sync_id") for t in recent if t.get("sync_id")}
+        for turn in turns:
+            sid = turn.get("sync_id")
+            if (sid and sid not in ids) or (not sid and turn not in recent):
+                recent.append(turn)
+                if sid:
+                    ids.add(sid)
         writes["recent.json"] = json.dumps(recent[-RECENT_MAX:], ensure_ascii=False)
     _state["recent"] = recent[-RECENT_MAX:]
 
@@ -1079,22 +1128,25 @@ def _cycle() -> None:
     _push_inboxes(files, now)
 
     # 3a. things this computer sends to the phone, tablet, TV …
-    _deliver_out(files, writes)
+    outgoing = _deliver_out(files, writes)
 
     # 3c. the picture gallery
     try:
         cloud_g = json.loads(files.get("images.json") or "[]")
     except Exception:
-        cloud_g = []
+        cloud_g = None
     with _state["lock"]:
-        new_g, _state["img_new"] = _state["img_new"], []
+        new_g = list(_state["img_new"])
+    if not isinstance(cloud_g, list) or any(not isinstance(g, dict) for g in cloud_g):
+        cloud_g = []
+        new_g = []
     merged_g = merge_gallery(cloud_g if isinstance(cloud_g, list) else [], new_g)
     _state["gallery"] = merged_g
     if new_g:
         writes["images.json"] = json.dumps(merged_g, ensure_ascii=False)
 
     # 3b. reminders, shared by every device
-    _sync_reminders(files, writes, now)
+    reminders = _sync_reminders(files, writes, now)
 
     # 4. memory, both ways
     if now - _state["last_memory"] > MEMORY_EVERY:
@@ -1133,8 +1185,21 @@ def _cycle() -> None:
                 "claim": _state["claim"], **health()}
         writes[f"device-{me}.json"] = json.dumps(info, ensure_ascii=False)
 
-    if writes and write_files(token, gid, writes):
+    if not writes or write_files(token, gid, writes):
+        with _state["lock"]:
+            _ack_queue("pending", answered)
+            _ack_queue("turns", turns)
+            _ack_queue("out_cmds", outgoing)
+            _ack_queue("img_new", new_g)
+            _ack_queue("rem_new", reminders)
         _state["etag"] = ""
+    else:
+        # Force a fresh snapshot after a failed or ambiguous write. Queues stay
+        # intact; identifiers prevent a retry from appending the same item.
+        _state["etag"] = ""
+        _state["status"] = "hata: eşitleme yazılamadı; yeniden denenecek"
+        _state["last_memory"] = _state["last_beat"] = 0.0
+        _state["last_projects"] = 0.0
 
 
 def _update_owner(me: str) -> None:
@@ -1231,7 +1296,7 @@ def _receive_item(cid: str, cmd: dict, sender: str) -> None:
 
 def _queue_to(dev_id: str, cmd: dict) -> None:
     item = dict(cmd)
-    item.update({"id": f"{device_id()}-{int(time.time() * 1000):x}", "from": device_name(), "ts": _now()})
+    item.update({"id": f"{device_id()}-{uuid.uuid4().hex}", "from": device_name(), "ts": _now()})
     with _state["lock"]:
         _state["out_cmds"].append((dev_id, item))
 
