@@ -206,6 +206,29 @@ class CentralPlanTests(unittest.TestCase):
             self.assertTrue(err.exception.transient)
             ask.assert_not_called()
 
+    def test_preferred_provider_avoids_unnecessary_gemini_discovery(self):
+        from core import gemini
+        from core.tasks import brain
+        with patch.object(gemini, "api_key", return_value="key"), \
+             patch.object(gemini, "_provider_rungs", return_value=("prov:chosen",)), \
+             patch.object(gemini, "_provider_first", return_value=True), \
+             patch.object(brain, "_accessible_gemini") as catalog, \
+             patch.object(brain, "_ask_provider", return_value={"text": "ok", "calls": []}):
+            self.assertEqual(brain.ask("sys", [], None, verified_models=True)["text"], "ok")
+            catalog.assert_not_called()
+
+    def test_provider_failure_and_catalog_outage_is_retried_later(self):
+        from core import gemini
+        from core.tasks import brain
+        with patch.object(gemini, "api_key", return_value="key"), \
+             patch.object(gemini, "_provider_rungs", return_value=("prov:chosen",)), \
+             patch.object(gemini, "_provider_first", return_value=True), \
+             patch.object(brain, "_accessible_gemini", return_value=None), \
+             patch.object(brain, "_ask_provider", side_effect=RuntimeError("401 invalid provider key")):
+            with self.assertRaises(brain.NoModel) as err:
+                brain.ask("sys", [], None, verified_models=True)
+            self.assertTrue(err.exception.transient)
+
     def test_conversation_tool_starts_and_reads_a_real_plan(self):
         with patch("core.tasks.desktop.ensure", return_value=self.engine):
             result = background_tasks.background_tasks({"action": "plan", "task": "araştır ve hazırla",
