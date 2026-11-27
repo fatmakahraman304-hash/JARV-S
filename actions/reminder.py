@@ -1,11 +1,14 @@
 import json
 import os
 import platform
+import secrets
+import shlex
 import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 _CNW: dict = (
     {"creationflags": subprocess.CREATE_NO_WINDOW}
@@ -160,8 +163,8 @@ def _schedule_windows(target_dt: datetime, task_name: str,
         '    <Enabled>true</Enabled>\n'
         '  </TimeTrigger></Triggers>\n'
         '  <Actions><Exec>\n'
-        f'    <Command>{python_exe}</Command>\n'
-        f'    <Arguments>"{script_path}"</Arguments>\n'
+        f'    <Command>{escape(str(python_exe))}</Command>\n'
+        f'    <Arguments>"{escape(str(script_path))}"</Arguments>\n'
         '  </Exec></Actions>\n'
         '  <Settings>\n'
         '    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n'
@@ -271,7 +274,7 @@ def _schedule_linux(target_dt: datetime, task_name: str,
 
     if shutil.which("at"):
         at_time = target_dt.strftime("%H:%M %Y-%m-%d")
-        cmd_str = f"{sys.executable} {script_path}\n"
+        cmd_str = f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))}\n"
         result  = subprocess.run(
             ["at", at_time],
             input=cmd_str, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -308,7 +311,7 @@ def reminder(
 
     os_name    = _get_os()
     safe_msg   = _sanitise(message)
-    task_name  = f"AETHERReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}"
+    task_name  = f"AETHERReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
 
     # The phone copy is made first and independently: if this machine's
     # scheduler fails, the reminder still reaches the phone, and the other way
