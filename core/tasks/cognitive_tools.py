@@ -88,5 +88,9 @@ class CognitiveTools:
 
 
 def has_uncertain_call(task):
-    return any(isinstance(value, dict) and value.get("status") == "started"
-               for value in (task.get("cognitive_ledger") or {}).values())
+    ledger = task.get("cognitive_ledger")
+    # A missing or malformed ledger cannot establish that no write occurred.
+    if not isinstance(ledger, dict):
+        return True
+    return any(not isinstance(value, dict) or value.get("status") != "completed"
+               for value in ledger.values())
