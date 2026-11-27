@@ -763,6 +763,8 @@ class DashboardServer:
         self._history: list[dict]         = []
         self._command_queue               = asyncio.Queue()
         self._wake_callback               = None
+        self._realtime_active             = lambda: False
+        self._realtime_phone_command      = None
         self._connect_callback            = None
         self._scan_callback               = None
         self._pending_keys: dict[str, float] = {}
@@ -876,6 +878,17 @@ class DashboardServer:
 
     def set_wake_callback(self, fn) -> None:
         self._wake_callback = fn
+
+    def set_realtime_phone_callbacks(self, active, command) -> None:
+        self._realtime_active = active
+        self._realtime_phone_command = command
+
+    def _route_realtime_phone(self, token, text):
+        if not self._valid(token) or not isinstance(text, str) or not 0 < len(text.strip()) <= 4000:
+            return {"ok": False, "status": "rejected"}
+        if self._realtime_phone_command is None:
+            return {"ok": False, "status": "unavailable"}
+        return self._realtime_phone_command(token, text.strip())
 
     def set_connect_callback(self, fn) -> None:
         self._connect_callback = fn
@@ -1149,6 +1162,9 @@ class DashboardServer:
                     return JSONResponse({"error": "Decryption failed"}, status_code=400)
             else:
                 text = (body.get("text") or "").strip()
+            if self._realtime_active():
+                result = self._route_realtime_phone(token, text)
+                return JSONResponse(result, status_code=202 if result.get("ok") else 403)
             if text:
                 await self._command_queue.put(text)
                 self.set_state("thinking")
@@ -1380,6 +1396,9 @@ class DashboardServer:
             if not self._valid(tok):
                 await websocket.close(code=4001)
                 return
+            if self._realtime_active():
+                await websocket.close(code=4003)
+                return
             await websocket.accept()
             asyncio.create_task(self.broadcast(
                 {"type": "sys", "text": "Phone microphone live."}
@@ -1387,6 +1406,9 @@ class DashboardServer:
             try:
                 while True:
                     data = await websocket.receive_bytes()
+                    if self._realtime_active():
+                        await websocket.close(code=4003)
+                        break
                     if not self._valid(tok):
                         await websocket.close(code=4001)
                         break
@@ -1527,6 +1549,9 @@ class DashboardServer:
                     if data.get("type") == "command":
                         enc = data.get("enc", "")
                         t   = self._decrypt(tok, enc) if enc else (data.get("text") or "").strip()
+                        if self._realtime_active():
+                            await websocket.send_json({"type": "realtime_command_status", **self._route_realtime_phone(tok, t)})
+                            continue
                         if t:
                             await self._command_queue.put(t)
                             self.set_state("thinking")
