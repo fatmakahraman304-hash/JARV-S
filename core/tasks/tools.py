@@ -28,8 +28,9 @@ from pathlib import Path
 from core import outcome
 
 _WEB = {"web_search", "search_web", "fetch_page"}
+_PRIVATE = {"recall_memory", "system_snapshot"}
 KNOWN = ("search_web", "web_search", "fetch_page", "notes", "write_file", "file_processor",
-         "recall_memory")
+         "recall_memory", "system_snapshot")
 _MAX_WRITE = 2_000_000
 
 _DECLS = {
@@ -81,6 +82,13 @@ _DECLS = {
         "description": "Look up a stored fact about the user. Empty query lists all.",
         "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}}},
     },
+    "system_snapshot": {
+        "name": "system_snapshot",
+        "description": ("Read current CPU, memory, disk, battery and network link state, plus "
+                        "Windows CIM hardware inventory when available. Read-only; network link "
+                        "state does not prove internet access. Unavailable measurements are explicit."),
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
 }
 
 
@@ -102,8 +110,8 @@ class TaskTools:
         dropped = [n for n in wanted if n not in KNOWN]
         if dropped:
             log(f"[Tasks] not available to background agents: {', '.join(dropped)}")
-        if _WEB & set(names) and "recall_memory" in names:
-            names.remove("recall_memory")
+        if _WEB & set(names):
+            names = [name for name in names if name not in _PRIVATE]
         self.names = names
         self._borrowed: dict = {}
         # Called with (requested_url, document) for every page read in full —
@@ -161,6 +169,10 @@ class TaskTools:
             if name == "recall_memory":
                 from memory.memory_manager import search_memory
                 return search_memory(str(args.get("query") or ""), limit=8)
+            if name == "system_snapshot":
+                import json
+                from core.native_diagnostics import collect
+                return outcome.untrusted("local-system-data", json.dumps(collect(), ensure_ascii=False))
             from core.action_loader import _call_handler
             if name == "file_processor":
                 if str(args.get("action") or "").lower() in ("run", "test"):
