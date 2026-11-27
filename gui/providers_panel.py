@@ -655,7 +655,7 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(self._label(
             "Komutlar OpenAI bulutuna gönderilir ve ücret oluşabilir. Mikrofon kapalı "
             "başlar; isterseniz yerel konuşma algılama veya bas-konuş kullanılır. "
-            "Kılavuz ve isteğe bağlı onaylı ses seviyesi, parlaklık, medya ve sınırlı Windows uygulama açma dışında araçlar, diğer araçlar desteklenmez. Telefon soruları isteğe bağlıdır; sesli yanıt bilgisayarda verilir. "
+            "Kılavuz ve isteğe bağlı onaylı ses seviyesi, parlaklık, medya ve sınırlı Windows uygulama açma dışında araçlar, diğer araçlar desteklenmez. Telefon soruları isteğe bağlıdır; ayrı izinle sesli yanıt yalnız telefona gönderilebilir. "
             "Bağlantı için websockets>=15 gerekir.", 7, C.TEXT_DIM))
         fields = (
             Field("api_key", "Ayrı OpenAI API anahtarı", kind="secret"),
@@ -664,6 +664,7 @@ class ProvidersOverlay(_HudOverlay):
             Field("microphone", "Mikrofon aktarımını aç", kind="bool", default=False),
             Field("phone_text", "Eşleştirilmiş telefondan ekran onaylı yazılı soru (yanıt bilgisayarda)", kind="bool", default=False),
             Field("phone_audio", "Eşleştirilmiş telefondan ekran onaylı ses kaydı (en fazla 15 saniye)", kind="bool", default=False),
+            Field("phone_reply", "Onaylı telefon sorusunun sesli yanıtını yalnızca telefona gönder (HTTPS)", kind="bool", default=False),
             Field("input_transcription", "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)", kind="bool", default=False),
             Field("volume_control", "Ekran onayıyla hoparlör ses kontrolü", kind="bool", default=False),
             Field("brightness_control", "Ekran onayıyla parlaklık kontrolü (%10–100)", kind="bool", default=False),
