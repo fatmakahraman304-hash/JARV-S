@@ -74,6 +74,29 @@ class AdaptiveCognitiveTests(unittest.TestCase):
         self.assertEqual(self.engine.cognitive.get(doc["id"])["status"], "needs_review")
         self.assertEqual(len(self.engine.store.all()), 1)
 
+    def test_missing_or_malformed_ledger_requires_inspection(self):
+        for ledger in (None, [], ["bad"], {"x": {"status": "unknown"}}):
+            with self.subTest(ledger=ledger):
+                doc = self.workflow()
+                self.engine.cognitive.advance()
+                tid = doc["nodes"][0]["task_id"]
+                self.engine.store.update(tid, cognitive_ledger=ledger)
+                self.engine._finish(tid, "failed", error="failed")
+                with patch("core.tasks.cognitive_planner.suggest_alternative") as ask:
+                    self.engine.cognitive.advance()
+                ask.assert_not_called()
+                self.assertEqual(self.engine.cognitive.get(doc["id"])["status"], "needs_review")
+
+    def test_equivalent_replan_is_not_executed_again(self):
+        doc = self.workflow()
+        self.engine.cognitive.advance()
+        self.engine._finish(doc["nodes"][0]["task_id"], "failed", error="failed")
+        with patch("core.tasks.cognitive_planner.suggest_alternative", return_value="  FIRST   APPROACH  "):
+            self.engine.cognitive.advance()
+            self.wait_workers()
+        self.assertEqual(self.engine.cognitive.get(doc["id"])["status"], "failed")
+        self.assertEqual(len(self.engine.store.all()), 1)
+
     def test_no_replan_without_remaining_budget(self):
         doc = self.workflow(limits={"max_minutes": 1, "max_calls": 2})
         self.engine.cognitive.advance()

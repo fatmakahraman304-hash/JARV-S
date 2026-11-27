@@ -342,7 +342,7 @@ class CognitiveCoordinator:
     def _has_writes(task):
         # A completed write remains a side effect even if the task later failed.
         # Unknown ledger formats also fail closed.
-        ledger = task.get("cognitive_ledger") or {}
+        ledger = task.get("cognitive_ledger")
         return not isinstance(ledger, dict) or bool(ledger)
 
     def _request_replan(self, doc, node, task, hint):
@@ -385,7 +385,9 @@ class CognitiveCoordinator:
                 if node.get("replan") != {"status": "started", "token": token}:
                     return
                 previous = [node["task"], *node["alternatives"]]
-                if not alternative or alternative.strip() in previous:
+                normal = lambda value: " ".join(value.split()).casefold()
+                if (not isinstance(alternative, str) or not alternative.strip() or len(alternative) > 5000
+                        or normal(alternative) in {normal(value) for value in previous}):
                     node["replan"] = {"status": "failed"}
                     return self._halt(doc, "stopping_failure", "The planner did not produce a new valid alternative.")
                 node["alternatives"].append(alternative.strip())

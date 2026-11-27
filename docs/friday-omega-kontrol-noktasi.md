@@ -223,6 +223,7 @@ Başlangıç `main`: `21445324de9e5dcec9079814b4896bb88e878a6c`; #252–#260 kor
 - Modelin oluşturduğu bilişsel grafiklerde başarısız, yazma işlemi yapmamış düğüm için kalan dakika/araç bütçesi varsa model yeni bir yöntem önerebilir. Varsayılan bir, en fazla iki model yeniden planlaması yapılır; mevcut ajan, araçlar, bağımlılıklar ve bütçeler değiştirilmez. Tamamlanmış düğümler yeniden yürütülmez.
 - Model çağrısı öncesinde plan durumu ve hak kullanımı diske kaydedilir. Çağrı sırasında çökme veya sonucu belirsiz yazma olursa otomatik tekrar yerine inceleme istenir; iptalden sonra geç gelen öneri çalıştırılmaz. Paralel öneriler ayrılmış bütçeyi iki kez kullanamaz.
 - Önceden tanımlı alternatifler de dahil, önceki denemede tamamlanmış yazma/not işlemi varsa başarısız adım otomatik tekrarlanmaz. Bu durum `failed` yerine `needs_review` olarak bildirilir.
+- Yazma kaydı eksik veya bozuksa da işlem güvenli varsayılmaz. Yalnızca büyük/küçük harf veya boşlukları değiştiren model önerileri yeni yöntem olarak çalıştırılmaz.
 
 ### Testler ve başarısızlıklar
 
