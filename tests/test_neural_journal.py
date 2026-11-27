@@ -130,6 +130,18 @@ os._exit(33)
                 sync_hub._enqueue_locked("out_cmds", ("tv", {"id": "a"}))
             self.assertEqual(sync_hub._state["out_cmds"], [])
 
+    def test_failed_journal_start_does_not_fall_back_to_volatile_queue(self):
+        state = {name: [] for name in QUEUES}
+        state.update({"journal": None, "journal_required": False, "thread": None,
+                      "stop": threading.Event(), "done": set()})
+        with patch.dict(sync_hub._state, state), \
+             patch.object(sync_hub, "settings", return_value={"github_token": "t", "gist_id": "gist"}), \
+             patch("core.neural_journal.NeuralJournal", side_effect=OSError("key unavailable")):
+            self.assertFalse(sync_hub.start(lambda _: None))
+            with sync_hub._state["lock"], self.assertRaises(RuntimeError):
+                sync_hub._enqueue_locked("out_cmds", ("tv", {"id": "a"}))
+            self.assertEqual(sync_hub._state["out_cmds"], [])
+
     def test_start_restores_pending_queues_and_marks_unknown_outcome(self):
         journal = NeuralJournal(self.root, "gist")
         data = empty()
