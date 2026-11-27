@@ -1588,14 +1588,19 @@ class MainWindow(QMainWindow):
             f"QPushButton:disabled {{ color: {C.PRI_DIM}; }}")
         self._update_btn.setToolTip("GitHub’ı kontrol et ve mevcut dalı güncelle")
         self._update_btn.clicked.connect(self._start_update)
-        self._update_btn.setEnabled(not getattr(self, "_updating", False))
+        self._update_btn.setEnabled(not (getattr(self, "_updating", False)
+                                         or getattr(self, "_restart_requested", False)
+                                         or (getattr(self, "_update_restart_pending", False)
+                                             and not getattr(self, "_retry_update_restart", False))))
         return self._update_btn
 
     def _start_update(self):
+        if getattr(self, "_restart_requested", False) or getattr(self, "_restart_in_progress", False):
+            return
         if getattr(self, "_retry_update_restart", False):
             self._restart_after_update()
             return
-        if getattr(self, "_updating", False):
+        if getattr(self, "_updating", False) or getattr(self, "_update_restart_pending", False):
             return
         self._updating = True
         if hasattr(self, "_update_btn"):
@@ -1623,6 +1628,8 @@ class MainWindow(QMainWindow):
         self._log.append_log(f"SYS: {message}")
 
     def _update_done(self, changed, message):
+        # Lock out remote and local update requests throughout the delayed restart.
+        self._update_restart_pending = bool(changed)
         self._updating = False
         if hasattr(self, "_update_btn"):
             self._update_btn.setEnabled(not changed)
@@ -1644,17 +1651,25 @@ class MainWindow(QMainWindow):
         separate helper. Never close the current GUI if the helper cannot
         start, so users can still see the error and restart manually.
         """
+        if (getattr(self, "_restart_requested", False) or getattr(self, "_restart_in_progress", False)
+                or getattr(self, "_updating", False)):
+            return
+        self._restart_in_progress = True
         try:
             from core.restart_manager import schedule_restart
             project = Path(__file__).resolve().parents[1]
             self._retry_update_restart = False
+            self._update_restart_pending = True
+            if hasattr(self, "_update_btn"):
+                self._update_btn.setEnabled(False)
+                self._update_btn.setText("YENİDEN BAŞLATILIYOR…")
             schedule_restart(project, os.getpid(), executable=sys.executable)
             self._restart_requested = True
             QApplication.instance().quit()
         except Exception as exc:
             self._restart_requested = False
+            self._retry_update_restart = True
             if hasattr(self, "_update_btn"):
-                self._retry_update_restart = True
                 self._update_btn.setEnabled(True)
                 self._update_btn.setText("YENİDEN AÇ")
                 self._update_btn.setToolTip("Güncelleme kuruldu. Yeniden başlatmayı tekrar dene.")
@@ -1668,6 +1683,8 @@ class MainWindow(QMainWindow):
                 "Güncelleme uygulandı ancak otomatik yeniden başlatılamadı. "
                 "Lütfen FRIDAY'ı kapatıp tekrar açın.\n\n" + str(exc)
             )
+        finally:
+            self._restart_in_progress = False
 
     def _tick_clock(self):
         self._clock_lbl.setText(time.strftime("%H:%M"))
