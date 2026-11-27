@@ -43,11 +43,31 @@ _N_SHELL = 600          # loose particles on the sphere's surface
 _N_DUST = 260           # sparse outer dust
 _GLOW_DIV = 4           # the glow image is this many times smaller than the widget
 
-# Electric cyan palette; the original 3D geometry and motion are unchanged.
-_HOT = QColor("#f1feff")
-_GOLD = QColor("#a9f5ff")
-_ORANGE = QColor("#27cfff")
-_EMBER = QColor("#0759c9")
+# Native FRIDAY palette: derive the glow from the live theme and state accent.
+def _mix(a, b, amount):
+    return QColor.fromRgbF(*(x + (y - x) * amount
+                             for x, y in zip(a.getRgbF()[:3], b.getRgbF()[:3])))
+
+
+def _energy_palette(main, acc, white, muted):
+    if muted:
+        return QColor(white), QColor(main), QColor(main), QColor(main)
+    return (_mix(white, acc, .10), _mix(acc, white, .42),
+            _mix(main, acc, .55), _mix(main, QColor("#060b16"), .60))
+
+
+def _motion_targets(speaking, thinking, muted, state, amp):
+    if muted:
+        return .10, .42
+    if speaking:
+        return .82 + .30 * amp, .90 + .10 * amp
+    if thinking:
+        return 1.64, .92
+    if state == "SLEEPING":
+        return .12, .36
+    if state in ("TEXT_READY", "PTT_READY", "IDLE", "ONLINE", "INITIALISING"):
+        return .28, .64
+    return .34 + .18 * amp, .72 + .28 * amp
 
 
 def _rx(a):
@@ -165,14 +185,24 @@ class Reactor3D:
         self._dust_ph = rng.uniform(0, 2 * math.pi, _N_DUST)
 
         self.spin = 0.0
+        self.arc_spin = 0.0
         self.t = 0.0
+        self._rate = .34
+        self._energy = .72
         self._glow: QImage | None = None
 
     # ── motion ────────────────────────────────────────────────────────────────
-    def step(self, dt: float, speaking: bool, thinking: bool, muted: bool) -> None:
+    def step(self, dt: float, speaking: bool, thinking: bool, muted: bool,
+             *, state: str = "", amp: float = 0.0) -> None:
         dt = min(0.10, max(0.0, dt))
-        rate = 0.10 if muted else 0.34 + (1.3 if thinking else 0.0) + (0.6 if speaking else 0.0)
-        self.spin += dt * rate
+        amp = 0.0 if muted or state in ("SLEEPING", "TEXT_READY") else max(0., min(1., amp))
+        rate, energy = _motion_targets(speaking, thinking, muted, state, amp)
+        # Smooth transitions, integrate angular velocity rather than multiplying
+        # accumulated angle by the instantaneous volume (which teleports arcs).
+        self._rate += (rate - self._rate) * (1.0 - math.exp(-dt / .22))
+        self._energy += (energy - self._energy) * (1.0 - math.exp(-dt / .16))
+        self.spin += dt * self._rate
+        self.arc_spin += dt * self._rate * (1.0 + .6 * amp)
         self.t += dt
 
     # ── helpers ───────────────────────────────────────────────────────────────
@@ -186,13 +216,14 @@ class Reactor3D:
         """A particle cloud, one drawPoints call per brightness level."""
         if len(X) == 0:
             return
-        lv = np.clip((alpha * levels).astype(np.int16), 0, levels - 1)
+        # Zero brightness means invisible; preserve the lowest nonzero bin.
+        lv = np.clip(np.rint(alpha * levels).astype(np.int16), 0, levels)
         xs, ys = X.tolist(), Y.tolist()
-        for k in range(levels):
+        for k in range(1, levels + 1):
             idx = np.flatnonzero(lv == k).tolist()
             if not idx:
                 continue
-            pen = QPen(_with_alpha(col, (k + 1) / levels), size * (0.8 + 0.15 * k))
+            pen = QPen(_with_alpha(col, k / levels), size * (0.8 + 0.15 * (k - 1)))
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             p.setPen(pen)
             p.drawPoints(QPolygonF([QPointF(xs[i], ys[i]) for i in idx]))
@@ -202,7 +233,7 @@ class Reactor3D:
         out = []
         R_all = _rz(spin * 0.3)
         for arc in self._arcs:
-            start = arc["phase"] + spin * arc["speed"] * (1.0 + 0.6 * amp)
+            start = arc["phase"] + self.arc_spin * arc["speed"]
             a = start + np.linspace(0.0, arc["span"], _N_ARC_PTS)
             rad = arc["radius"] * (1.0 + 0.04 * amp)
             pts = np.vstack([np.cos(a) * rad, np.sin(a) * rad, np.zeros_like(a)])
@@ -262,13 +293,9 @@ class Reactor3D:
     def paint(self, p: QPainter, cx: float, cy: float, r: float, main: QColor, acc: QColor,
               white: QColor, amp: float, live: bool, name: str = "",
               muted: bool = False) -> None:
-        amp = max(0.0, min(1.0, amp))
-        if muted:
-            pal = (QColor(white), QColor(main), QColor(main), QColor(main))
-            dim = 0.50
-        else:
-            pal = (_HOT, _GOLD, _ORANGE, _EMBER)
-            dim = 1.0
+        amp = 0.0 if muted else max(0.0, min(1.0, amp))
+        pal = _energy_palette(main, acc, white, muted)
+        dim = min(.50, self._energy) if muted else self._energy
         hot, gold, orange, ember = pal
         spin, t = self.spin, self.t
         energy = min(1.0, 0.80 + 0.35 * amp + (0.05 if live else 0.0))
