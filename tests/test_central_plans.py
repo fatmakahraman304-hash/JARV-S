@@ -243,6 +243,22 @@ class CentralPlanTests(unittest.TestCase):
             self.assertIn(plan["id"], background_tasks.background_tasks({"action": "plan_list"}))
             self.assertIn(plan["id"], background_tasks.background_tasks({"action": "plan_status"}))
 
+    def test_plan_results_reach_desktop_and_device_queue_without_claiming_verification(self):
+        from core.tasks import desktop
+        plan = self.engine.plans.create("Rapor hazırla", [{"task": "Raporu yaz"}], "voice")
+        self.engine.plans.advance()
+        self.engine._finish(plan["steps"][0]["task_id"], "done", result="Rapor metni")
+        self.engine.plans.advance()
+        plan = self.engine.plans.get(plan["id"])
+        player = unittest.mock.Mock()
+        with patch.object(desktop, "_engine", self.engine), patch.object(desktop, "_player", player), \
+             patch("core.sync_hub.deliver_to_voice") as deliver:
+            desktop._notify("plan_finished_unverified", plan, "")
+        self.assertIn("Rapor metni", player.show_content.call_args.args[1])
+        self.assertIn("doğruluğu ayrıca", player.show_content.call_args.args[1])
+        self.assertIn("not been independently verified", player.request_say.call_args.args[0])
+        self.assertIn("Rapor metni", deliver.call_args.args[1])
+
     def test_real_scheduler_executes_both_steps_and_writes_files(self):
         done = threading.Event()
         observations = []
@@ -292,3 +308,4 @@ class CentralPlanTests(unittest.TestCase):
         self.engine.plans.advance()
         step = self.engine.plans.get(plan["id"])["steps"][0]
         self.assertEqual(step["artifacts"][0]["status"], "changed")
+
