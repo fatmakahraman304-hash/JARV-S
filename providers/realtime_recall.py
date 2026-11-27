@@ -41,3 +41,23 @@ def response_event(payload):
             "proves completion; state uncertainty. Do not invent facts."),
         "input": [{"type": "message", "role": "user",
                    "content": [{"type": "input_text", "text": payload}]}]}}
+
+
+MIN_PHONE_BYTES = 8000  # 250 ms, mono PCM16LE 16 kHz
+MAX_PHONE_BYTES = 15 * 16000 * 2
+
+
+def valid_phone_pcm(pcm):
+    return isinstance(pcm, bytes) and MIN_PHONE_BYTES <= len(pcm) <= MAX_PHONE_BYTES and len(pcm) % 2 == 0
+
+
+def phone_audio_event(pcm):
+    if not valid_phone_pcm(pcm):
+        raise ValueError("Telefon kaydı 0,25–15 saniye olmalı.")
+    from .realtime_transport import input_event
+    item = input_event(pcm=pcm)["item"]
+    return {"type": "response.create", "response": {
+        "conversation": "none", "output_modalities": ["audio"],
+        "tools": [], "tool_choice": "none",
+        "instructions": "Answer the recorded question in the user's language. Do not perform actions or claim tool access. No previous conversation is supplied.",
+        "input": [item]}}

@@ -95,7 +95,7 @@ class RealtimeSession:
             if not self._ready:
                 await self.close()
 
-    async def turn(self, *, text=None, pcm=None, recall_payload=None):
+    async def turn(self, *, text=None, pcm=None, recall_payload=None, phone_pcm=None):
         """Yield FRIDAY audio, one full output transcript, then turn-end."""
         if not self._ready or self._closed:
             raise rt.RealtimeError("Önce yeni bir Realtime oturumu açın.")
@@ -103,11 +103,12 @@ class RealtimeSession:
             raise rt.RealtimeError("Önceki Realtime yanıtı hâlâ çalışıyor.")
         if self._turns >= MAX_TURNS:
             raise rt.RealtimeError("Oturum tur sınırı doldu; yeni oturum açın.")
-        if recall_payload is not None and (text is not None or pcm is not None):
-            raise ValueError("Hafıza isteği ayrı bir konuşma turu olmalı.")
-        read_only = recall_payload is not None
+        if sum(value is not None for value in (text, pcm, recall_payload, phone_pcm)) != 1:
+            raise ValueError("Tek bir konuşma girdisi gerekli.")
+        read_only = recall_payload is not None or phone_pcm is not None
         item = None if read_only else rt.input_event(text=text, pcm=pcm)
-        response_event = recall.response_event(recall_payload) if read_only else {"type": "response.create"}
+        response_event = (recall.phone_audio_event(phone_pcm) if phone_pcm is not None else
+                          recall.response_event(recall_payload) if read_only else {"type": "response.create"})
         self._busy = True
         self._turns += 1
         finished = False

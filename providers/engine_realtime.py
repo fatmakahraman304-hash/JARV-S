@@ -123,6 +123,11 @@ class RealtimeEngine:
         from .realtime_recall import phone_payload
         self._start(recall_payload=phone_payload(text), _recall_allowed=allowed)
 
+    async def send_approved_phone_audio(self, pcm, allowed):
+        from .realtime_recall import valid_phone_pcm
+        if valid_phone_pcm(pcm) and allowed():
+            self._start(phone_pcm=pcm, _recall_allowed=allowed)
+
     def _start(self, **request):
         if self._closed or ("pcm" in request and not self._capture_allowed()):
             return
@@ -137,7 +142,7 @@ class RealtimeEngine:
     async def _generate(self, request):
         try:
             allowed = request.pop("_recall_allowed", None)
-            if "recall_payload" in request and (allowed is None or not allowed()):
+            if ("recall_payload" in request or "phone_pcm" in request) and (allowed is None or not allowed()):
                 return
             if "pcm" in request and not self._capture_allowed():
                 return

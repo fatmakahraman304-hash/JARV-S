@@ -1122,7 +1122,16 @@
 
 
     async function doMic() {
-      if (_voiceWs) { _stopVoice(); return; }
+      if (_voiceWs) {
+        const w = _voiceWs;
+        if (w._realtimeRecording && w.readyState === 1 && !w._submitted) {
+          w._submitted = true;
+          _stopVoice(true);
+          w.send('submit');
+          sys('Ses kaydı gönderildi; bilgisayar onayı bekleniyor.');
+        } else if (!w._submitted) { _stopVoice(); }
+        return;
+      }
       if (!navigator.mediaDevices?.getUserMedia) { _showVoiceSetup(); return; }
       let stream;
       try {
@@ -1141,6 +1150,24 @@
       const t = T(), u = new URL(t.base || location.origin);
       const ws2 = new WebSocket(`${u.protocol === 'https:' ? 'wss' : 'ws'}://${u.host}/ws/phone-audio?token=${encodeURIComponent(t.token)}`);
       ws2.binaryType = 'arraybuffer';
+      let sentBytes = 0;
+      ws2.onmessage = e => {
+        if (_voiceWs !== ws2) return;
+        let m; try { m = JSON.parse(e.data); } catch { return; }
+        if (m.type === 'realtime_recording') {
+          ws2._realtimeRecording = true;
+          sys('En fazla 15 saniye konuş; göndermek için mikrofon düğmesine tekrar dokun.');
+        } else if (m.type === 'realtime_command_status') realtimeCommandStatus(m);
+      };
+      function sendFrame(buffer) {
+        if (ws2.readyState !== 1 || ws2._submitted) return;
+        if (ws2._realtimeRecording && sentBytes + buffer.byteLength > 480000) {
+          _stopVoice(true);
+          sys('Kayıt sınırına ulaşıldı. Göndermek için mikrofon düğmesine dokun.');
+          return;
+        }
+        ws2.send(buffer); sentBytes += buffer.byteLength;
+      }
       ws2.onopen = async () => {
         const rate = ctx.sampleRate;
         const src = ctx.createMediaStreamSource(stream);
@@ -1157,30 +1184,31 @@
             if (_plen >= 1024) {
               const out = new Int16Array(_plen); let off = 0;
               for (const c of _pbuf) { out.set(c, off); off += c.length; }
-              if (ws2.readyState === 1) ws2.send(out.buffer);
+              sendFrame(out.buffer);
               _pbuf = []; _plen = 0;
             }
           };
           src.connect(nd); _audioNd = nd;
         } catch (_) {
           const sp = ctx.createScriptProcessor(4096, 1, 1);
-          sp.onaudioprocess = e => { if (ws2.readyState === 1) ws2.send(_f32toPcm16(e.inputBuffer.getChannelData(0), rate)); };
+          sp.onaudioprocess = e => { sendFrame(_f32toPcm16(e.inputBuffer.getChannelData(0), rate)); };
           src.connect(sp); sp.connect(ctx.destination); _audioNd = sp;
         }
         micBtn.textContent = '⏹'; micBtn.title = 'Durdurmak için dokun'; micBtn.classList.add('recording');
         stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, FRIDAY seni duyuyor.';
         toast('🎙️ Canlı');
       };
-      ws2.onclose = (e) => { if (e.code === 4003) sys("Realtime telefon mikrofonu henüz desteklenmiyor."); _stopVoice(); };
-      ws2.onerror = () => { sys('Ses bağlantısı kurulamadı.'); _stopVoice(); };
+      ws2.onclose = (e) => { if (_voiceWs !== ws2) return; if (e.code === 4003) sys("Realtime telefon mikrofonu için güvenli HTTPS bağlantısı ve bilgisayar izni gerekli."); _stopVoice(); };
+      ws2.onerror = () => { if (_voiceWs !== ws2) return; sys('Ses bağlantısı kurulamadı.'); _stopVoice(); };
       _voiceWs = ws2; _audioCtx = ctx; _micStm = stream;
     }
-    function _stopVoice() {
+    function _stopVoice(keepSocket = false) {
       if (_audioNd)  { try { _audioNd.disconnect(); } catch (_) {} _audioNd = null; }
       if (_audioCtx) { try { _audioCtx.close(); } catch (_) {} _audioCtx = null; }
       if (_micStm)   { _micStm.getTracks().forEach(t => t.stop()); _micStm = null; }
-      if (_voiceWs)  { const w = _voiceWs; _voiceWs = null; if (w.readyState < 2) w.close(); }
-      _micIdle();
+      if (!keepSocket && _voiceWs)  { const w = _voiceWs; _voiceWs = null; if (w.readyState < 2) w.close(); }
+      if (keepSocket) { micBtn.textContent = '➤'; micBtn.title = 'Ses kaydını gönder'; }
+      else _micIdle();
       if (curState === 'idle') setState('idle');
     }
     micBtn.onclick = doMic;

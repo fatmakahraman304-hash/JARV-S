@@ -765,6 +765,9 @@ class DashboardServer:
         self._wake_callback               = None
         self._realtime_active             = lambda: False
         self._realtime_phone_command      = None
+        self._phone_audio_allowed         = lambda token: False
+        self._realtime_phone_audio         = None
+        self._realtime_recording          = False
         self._connect_callback            = None
         self._scan_callback               = None
         self._pending_keys: dict[str, float] = {}
@@ -879,9 +882,11 @@ class DashboardServer:
     def set_wake_callback(self, fn) -> None:
         self._wake_callback = fn
 
-    def set_realtime_phone_callbacks(self, active, command) -> None:
+    def set_realtime_phone_callbacks(self, active, command, *, audio_allowed=None, audio_command=None) -> None:
         self._realtime_active = active
         self._realtime_phone_command = command
+        self._phone_audio_allowed = audio_allowed or (lambda token: False)
+        self._realtime_phone_audio = audio_command
 
     def _route_realtime_phone(self, token, text):
         if not self._valid(token) or not isinstance(text, str) or not 0 < len(text.strip()) <= 4000:
@@ -889,6 +894,48 @@ class DashboardServer:
         if self._realtime_phone_command is None:
             return {"ok": False, "status": "unavailable"}
         return self._realtime_phone_command(token, text.strip())
+
+    async def _record_realtime_phone(self, websocket, token):
+        from providers.realtime_recall import MAX_PHONE_BYTES, valid_phone_pcm
+        def allowed():
+            return (self._realtime_active() and self._valid(token)
+                    and self._phone_audio_allowed(token))
+        if (websocket.url.scheme != "wss" or self._realtime_recording
+                or self._realtime_phone_audio is None or not allowed()):
+            await websocket.close(code=4003)
+            return
+        self._realtime_recording = True
+        pcm = bytearray()
+        try:
+            await websocket.accept()
+            await websocket.send_json({"type": "realtime_recording", "max_seconds": 15})
+            async with asyncio.timeout(25):
+                while True:
+                    message = await websocket.receive()
+                    if message["type"] == "websocket.disconnect":
+                        return
+                    if not allowed():
+                        await websocket.close(code=4003)
+                        return
+                    if message.get("text") == "submit":
+                        result = (self._realtime_phone_audio(token, bytes(pcm)) if valid_phone_pcm(bytes(pcm))
+                                  else {"ok": False, "status": "rejected"})
+                        await websocket.send_json({"type": "realtime_command_status", **result})
+                        await websocket.close(code=1000)
+                        return
+                    chunk = message.get("bytes")
+                    if not isinstance(chunk, bytes) or not chunk or len(chunk) % 2 or len(pcm) + len(chunk) > MAX_PHONE_BYTES:
+                        await websocket.close(code=1009)
+                        return
+                    pcm.extend(chunk)
+        except (TimeoutError, WebSocketDisconnect):
+            try:
+                await websocket.close(code=1000)
+            except Exception:
+                pass
+        finally:
+            pcm.clear()
+            self._realtime_recording = False
 
     def set_connect_callback(self, fn) -> None:
         self._connect_callback = fn
@@ -1397,7 +1444,7 @@ class DashboardServer:
                 await websocket.close(code=4001)
                 return
             if self._realtime_active():
-                await websocket.close(code=4003)
+                await self._record_realtime_phone(websocket, tok)
                 return
             await websocket.accept()
             asyncio.create_task(self.broadcast(

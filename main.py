@@ -3669,6 +3669,48 @@ class FridayLive:
     def _realtime_phone_active(self):
         return self._engine_mode() == "realtime" or getattr(self, "_session_realtime", False)
 
+    def _phone_audio_allowed(self, token):
+        from memory.config_manager import get_provider_config
+        from providers.realtime_settings import PROVIDER_ID, enabled
+        cfg = get_provider_config(PROVIDER_ID)
+        return (self._engine_mode() == "realtime" and getattr(self, "_session_realtime", False)
+                and self.session is not None and self.session is self._engine
+                and self._awake and not self.ui.muted and self._dashboard is not None
+                and self._dashboard._valid(token) and enabled(cfg.get("cloud_consent"))
+                and enabled(cfg.get("phone_audio")))
+
+    def _request_realtime_phone_audio(self, token, pcm):
+        from providers.realtime_recall import valid_phone_pcm
+        from core import confirm
+        engine, loop = self._engine, self._loop
+
+        def allowed():
+            return self._engine is engine and self._phone_audio_allowed(token)
+
+        send = getattr(engine, "send_approved_phone_audio", None)
+        if not valid_phone_pcm(pcm) or not allowed() or not callable(send) or not loop or not loop.is_running():
+            return {"ok": False, "status": "rejected"}
+        if confirm.pending_title():
+            return {"ok": False, "status": "busy"}
+
+        def after_approval():
+            if not allowed() or not loop.is_running():
+                return "NOT EXECUTED: Telefon kaydı izni veya oturumu sona erdi."
+            coroutine = send(pcm, allowed)
+            try:
+                asyncio.run_coroutine_threadsafe(coroutine, loop)
+            except RuntimeError:
+                coroutine.close()
+                return "NOT EXECUTED: Realtime oturumu kapandı."
+            return "Ses kaydı sıraya alındı; gönderim henüz doğrulanmadı."
+
+        result = confirm.request(key="realtime_phone_audio", title="Telefon ses kaydını OpenAI'ye gönder",
+            detail=f"Eşleştirilmiş telefondan {len(pcm)/32000:.1f} saniyelik ses kaydı alındı. "
+                   "İçeriği henüz dinlenmedi. Onaylarsanız OpenAI'ye iletilir; "
+                   "araçlar kapalı, yanıt bilgisayarda. Ücret oluşabilir.", run=after_approval)
+        pending = result.startswith("[CONFIRMATION_PENDING]")
+        return {"ok": pending, "status": "pending_confirmation" if pending else "unavailable"}
+
     def _request_realtime_phone_text(self, token, text):
         from memory.config_manager import get_provider_config
         from providers.realtime_settings import PROVIDER_ID, enabled
@@ -3974,7 +4016,8 @@ class FridayLive:
             self._dashboard.set_scan_callback(self.ui.show_camera_scan)
             self._dashboard.set_update_callback(self.ui.start_update)
             self._dashboard.set_realtime_phone_callbacks(
-                self._realtime_phone_active, self._request_realtime_phone_text)
+                self._realtime_phone_active, self._request_realtime_phone_text,
+                audio_allowed=self._phone_audio_allowed, audio_command=self._request_realtime_phone_audio)
             self._keep_task(asyncio.create_task(self._dashboard.serve()))
             # Runs for the whole lifetime, not just inside an active session
             self._keep_task(asyncio.create_task(self._process_dashboard_commands()))
