@@ -1154,10 +1154,12 @@ class StateChip(QWidget):
     """What the assistant is doing: a glass pill with a glowing status dot."""
 
     _COLOURS = {"LISTENING": "GREEN", "SPEAKING": "ACC", "THINKING": "ACC2",
-                "PROCESSING": "ACC2", "MUTED": "MUTED_C"}
+                "PROCESSING": "ACC2", "MUTED": "MUTED_C",
+                "TEXT_READY": "PRI", "PTT_READY": "PRI_DIM"}
     _TR = {"LISTENING": "DİNLİYOR", "SPEAKING": "KONUŞUYOR", "THINKING": "DÜŞÜNÜYOR",
            "PROCESSING": "İŞLİYOR", "MUTED": "SESSİZ", "INITIALISING": "BAŞLATILIYOR",
-           "ONLINE": "HAZIR", "IDLE": "HAZIR", "SLEEPING": "UYKUDA"}
+           "ONLINE": "HAZIR", "IDLE": "HAZIR", "SLEEPING": "UYKUDA",
+           "TEXT_READY": "YAZILI KOMUT", "PTT_READY": "BAS-KONUŞ"}
 
     def __init__(self, parent=None):
         super().__init__(parent)

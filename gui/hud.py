@@ -323,8 +323,11 @@ class HudCanvas(QWidget):
 
         # Audio threads push peaks into _live_amp; decay it toward silence so
         # gaps between chunks fade out instead of freezing, then smooth it.
-        self._live_amp *= 0.86
-        self._amp_disp += (self._live_amp - self._amp_disp) * 0.45
+        if self.state == "TEXT_READY" and not self.speaking:
+            self._live_amp = self._amp_disp = 0.0
+        else:
+            self._live_amp *= 0.86
+            self._amp_disp += (self._live_amp - self._amp_disp) * 0.45
         amp = self._amp_disp
 
         # The avatar animates off the very same smoothed level the waveform
@@ -639,7 +642,9 @@ class HudCanvas(QWidget):
 
         # state line: a quiet caption under the core, in the state's colour
         tr = {"MUTED": "SESSİZ", "SPEAKING": "KONUŞUYOR", "THINKING": "DÜŞÜNÜYOR",
-              "PROCESSING": "İŞLİYOR", "LISTENING": "DİNLİYOR"}
+              "PROCESSING": "İŞLİYOR", "LISTENING": "DİNLİYOR",
+              "TEXT_READY": "YAZILI KOMUT", "PTT_READY": "BAS-KONUŞ",
+              "SLEEPING": "UYKUDA", "INITIALISING": "BAŞLATILIYOR", "IDLE": "HAZIR", "ONLINE": "HAZIR"}
         if self.muted:
             key, col = "MUTED", qcol(C.MUTED_C)
         elif self.speaking:
@@ -667,12 +672,12 @@ class HudCanvas(QWidget):
         for i in range(n + 1):
             u = i / n
             env = math.sin(math.pi * u) ** 1.5
-            if self.muted:
+            if self.muted or amp < 0.01 or self.state == "TEXT_READY":
                 yv = 0.0
             else:
                 wave = (math.sin(u * 22.0 + self._tick * 0.21) * 0.6
                         + math.sin(u * 37.0 - self._tick * 0.13) * 0.4)
-                yv = env * (1.2 + amp * 26.0) * wave
+                yv = env * amp * 27.2 * wave
             pt = QPointF(x0 + span * u, wy + yv)
             if i == 0:
                 path.moveTo(pt)

@@ -655,17 +655,17 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(self._label(
             "Komutlar OpenAI bulutuna gönderilir ve ücret oluşabilir. Mikrofon kapalı "
             "başlar; isterseniz yerel konuşma algılama veya bas-konuş kullanılır. "
-            "Kılavuz ve isteğe bağlı onaylı ses seviyesi, parlaklık, medya ve sınırlı Windows uygulama açma dışında araçlar, diğer araçlar desteklenmez. Telefon soruları isteğe bağlıdır; ayrı izinle sesli yanıt yalnız telefona gönderilebilir. "
+            "Yalnızca kılavuz ve isteğe bağlı onaylı sınırlı bilgisayar kontrolleri desteklenir. Telefon soruları ve sesli yanıt ayrı izinlere bağlıdır. "
             "Bağlantı için websockets>=15 gerekir.", 7, C.TEXT_DIM))
         fields = (
             Field("api_key", "Ayrı OpenAI API anahtarı", kind="secret"),
             Field("model", "Model", kind="choice", choices=MODELS, default=MODELS[0]),
             Field("voice_id", "Ses", kind="choice", choices=VOICES, default=VOICES[0]),
             Field("microphone", "Mikrofon aktarımını aç", kind="bool", default=False),
-            Field("phone_text", "Eşleştirilmiş telefondan ekran onaylı yazılı soru (yanıt bilgisayarda)", kind="bool", default=False),
+            Field("input_transcription", "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)", kind="bool", default=False),
+            Field("phone_text", "Eşleştirilmiş telefondan ekran onaylı yazılı soru", kind="bool", default=False),
             Field("phone_audio", "Eşleştirilmiş telefondan ekran onaylı ses kaydı (en fazla 15 saniye)", kind="bool", default=False),
             Field("phone_reply", "Onaylı telefon sorusunun sesli yanıtını yalnızca telefona gönder (HTTPS)", kind="bool", default=False),
-            Field("input_transcription", "Sesli komutları metne dönüştür ve yerel geçmişe kaydet (ek API ücreti oluşabilir)", kind="bool", default=False),
             Field("volume_control", "Ekran onayıyla hoparlör ses kontrolü", kind="bool", default=False),
             Field("brightness_control", "Ekran onayıyla parlaklık kontrolü (%10–100)", kind="bool", default=False),
             Field("media_control", "Ekran onayıyla sistem medya kontrolü", kind="bool", default=False),
@@ -673,7 +673,12 @@ class ProvidersOverlay(_HudOverlay):
         )
         self._edits[PROVIDER_ID] = {}
         self._hidden[PROVIDER_ID] = set()
+        sections = {"api_key": "01  MOTOR VE SES", "microphone": "02  SES GİRİŞİ",
+                    "phone_text": "03  CİHAZ BAĞLANTISI", "volume_control": "04  ONAYLI KONTROLLER"}
         for field in fields:
+            if field.key in sections:
+                lay.addSpacing(8)
+                lay.addWidget(self._label(sections[field.key], 9, C.PRI, bold=True))
             lay.addWidget(self._label(field.label, 8, C.TEXT_DIM))
             widget = self._make_widget(PROVIDER_ID, field, self._realtime_draft.get(field.key, field.default))
             if isinstance(widget, QComboBox):

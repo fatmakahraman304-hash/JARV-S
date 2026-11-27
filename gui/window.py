@@ -183,6 +183,10 @@ class MainWindow(QMainWindow):
         self.ptt_hold          = None   # callable: (held: bool) -> None — windowed chord
         self.wake_get_state    = None   # callable: () -> dict {enabled, awake, ready}
         self._muted            = False
+        self._conversation_state = "INITIALISING"
+        self._realtime_mode = False
+        self._realtime_mic_permitted = False
+        self._voice_ptt = False
         self._current_file: str | None = None
         self._remote_overlay: RemoteKeyOverlay | None = None
         self._customize_overlay: CustomizeOverlay | None = None
@@ -1721,28 +1725,55 @@ class MainWindow(QMainWindow):
     def _refresh_identity_rows(self) -> None:
         """Engine and voice, read from config — on start and whenever they change."""
         try:
-            from memory.config_manager import get_provider_mode, get_voice, get_provider_config
+            from memory.config_manager import (get_provider_mode, get_voice, get_provider_config,
+                                               get_push_to_talk_enabled)
+            from gui.voice_status import realtime_mic_permitted
             mode = str(get_provider_mode() or "gemini")
+            self._realtime_mode = mode == "realtime"
+            self._voice_ptt = bool(get_push_to_talk_enabled())
+            self._realtime_mic_permitted = False
             if mode == "realtime":
                 engine = "OPENAI REALTIME · BULUT"
-                voice = str(get_provider_config("openai_realtime").get("voice_id") or "marin").upper()
+                cfg = get_provider_config("openai_realtime")
+                voice = str(cfg.get("voice_id") or "marin").upper()
+                self._realtime_mic_permitted = realtime_mic_permitted(cfg)
             else:
                 engine = "GEMINI LIVE" if mode == "gemini" else f"YEREL {mode.upper()}"
                 voice = str(get_voice() or "--").upper()
         except Exception:
-            engine, voice = "GEMINI LIVE", "--"
+            engine, voice = "AYAR OKUNAMADI", "--"
+            self._realtime_mic_permitted = False
         self._engine_label = engine
         if hasattr(self, "_row_engine"):
             self._row_engine.set_value(engine, "PRI")
             self._row_voice.set_value(voice)
+        self._sync_voice_presentation()
+        if hasattr(self, "_mute_btn"):
+            self._style_mute_btn()
+        self._refresh_status_strip()
+
+    def _voice_presentation(self):
+        from gui.voice_status import presentation
+        return presentation(self._conversation_state, realtime=self._realtime_mode,
+                            mic_permitted=self._realtime_mic_permitted,
+                            muted=self._muted, ptt=self._voice_ptt)
+
+    def _sync_voice_presentation(self):
+        state, _ = self._voice_presentation()
+        if hasattr(self, "hud"):
+            self.hud.state = state
+            self.hud.speaking = self._conversation_state == "SPEAKING"
+            self.hud.update()
+        if hasattr(self, "_state_chip"):
+            self._state_chip.set_state(state)
         self._refresh_status_strip()
 
     def _refresh_status_strip(self) -> None:
         if not hasattr(self, "_status_strip"):
             return
-        mic = ("MİKROFON · KAPALI", "MUTED_C") if self._muted else ("MİKROFON · AÇIK", "GREEN")
+        _, mic = self._voice_presentation()
         self._status_strip.set_items([
-            (f"MOTOR · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "GREEN"),
+            (f"MOTOR · {getattr(self, '_engine_label', 'GEMINI LIVE')}", "PRI" if self._realtime_mode else "GREEN"),
             mic,
             (f"PROTOKOL · {APP_PROTOCOL}", "PRI"),
         ])
@@ -3317,7 +3348,10 @@ class MainWindow(QMainWindow):
                 save_push_to_talk_enabled(False)
                 want = False
         self._apply_ptt_shortcut(want and scope != "global")
+        self._voice_ptt = bool(want)
         self._refresh_talk_btns()
+        self._sync_voice_presentation()
+        self._style_mute_btn()
 
     def _apply_ptt_shortcut(self, needed: bool):
         """Bind the chord inside the window when no global hook is available.
@@ -3679,13 +3713,20 @@ class MainWindow(QMainWindow):
             self._log.append_log("SYS: Microphone muted." + (f" {note}" if note else ""))
         else:
             self._apply_state("LISTENING")
-            self._log.append_log("SYS: Microphone active." + (f" {note}" if note else ""))
+            message = ("SYS: Realtime ses aktarımı motor ayarlarında kapalı." if
+                       self._realtime_mode and not self._realtime_mic_permitted else "SYS: Microphone active.")
+            self._log.append_log(message + (f" {note}" if note else ""))
 
     def _style_mute_btn(self):
-        if self._muted:
+        if self._realtime_mode and not self._realtime_mic_permitted:
+            self._mute_btn.set_look("mic_off", "SES AKTARIMI KAPALI", "MUTED_C")
+            self._mute_btn.setToolTip("Realtime ses aktarımı motor ayarlarında kapalı. F4 yalnızca yerel mikrofonu değiştirir.")
+        elif self._muted:
             self._mute_btn.set_look("mic_off", "MİKROFON KAPALI", "MUTED_C")
+            self._mute_btn.setToolTip("Mikrofonu aç / kapat  [F4]")
         else:
             self._mute_btn.set_look("mic", "MİKROFON AÇIK", "GREEN")
+            self._mute_btn.setToolTip("Mikrofonu aç / kapat  [F4]")
         self._refresh_status_strip()
 
     def _send(self):
@@ -3715,12 +3756,10 @@ class MainWindow(QMainWindow):
             self._state_chip.set_note(note)
 
     def _apply_state(self, state: str):
-        self.hud.state    = state
-        self.hud.speaking = (state == "SPEAKING")
-        if hasattr(self, "_state_chip"):
-            self._state_chip.set_state(state)
+        self._conversation_state = state
+        self._sync_voice_presentation()
         if getattr(self, "_control_center", None) is not None:
-            self._control_center.set_state(state, state == "SPEAKING", self._muted)
+            self._control_center.set_state(self.hud.state, state == "SPEAKING", self._muted)
 
     # ── Control Centre ─────────────────────────────────────────────────────────
     def _set_control_center(self, opened: bool) -> None:
@@ -3785,13 +3824,24 @@ class MainWindow(QMainWindow):
     def _talk_from_control_center(self) -> None:
         if self._muted:
             self._toggle_mute()
-        self._log.append_log("SYS: Dinliyorum — konuşabilirsin.")
+        if self._realtime_mode and not self._realtime_mic_permitted:
+            self._log.append_log("SYS: Realtime yazılı komuta hazır; ses aktarımı motor ayarlarında kapalı.")
+        else:
+            self._log.append_log("SYS: Dinliyorum — konuşabilirsin.")
 
     def _check_config(self) -> bool:
         d = _read_full_config()
         if not d.get("os_system"):
             return False
         providers = d.get("providers") if isinstance(d.get("providers"), dict) else {}
+        if str(providers.get("mode") or "").lower() == "realtime":
+            try:
+                from memory.config_manager import get_provider_config
+                from providers.realtime_settings import PROVIDER_ID, validate_settings
+                validate_settings(get_provider_config(PROVIDER_ID))
+                return True
+            except (ValueError, RuntimeError):
+                return False
         # A Gemini key, or a choice to run without one: a local engine needs no key.
         return bool(d.get("gemini_api_key") or d.get("local_only")
                     or str(providers.get("mode") or "").lower() == "pipeline")
