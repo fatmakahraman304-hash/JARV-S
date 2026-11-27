@@ -164,6 +164,11 @@ class Reactor3D:
                 phase=float((k_arc + rng.uniform(-0.25, 0.25)) * 2 * math.pi / _N_ARCS),
                 width=float(rng.uniform(0.016, 0.030))))
 
+        # Arc samples are fixed in each local plane; rotate the cached geometry.
+        for arc in self._arcs:
+            a = np.linspace(0.0, arc["span"], _N_ARC_PTS)
+            arc["samples"] = np.vstack([np.cos(a), np.sin(a), np.zeros_like(a)])
+
         # swirling bands: particles on tilted rings, bunched into streams
         self._bands, self._band_ph, self._band_spd = [], [], []
         for _ in range(_N_BANDS):
@@ -234,12 +239,26 @@ class Reactor3D:
         R_all = _rz(spin * 0.3)
         for arc in self._arcs:
             start = arc["phase"] + self.arc_spin * arc["speed"]
-            a = start + np.linspace(0.0, arc["span"], _N_ARC_PTS)
             rad = arc["radius"] * (1.0 + 0.04 * amp)
-            pts = np.vstack([np.cos(a) * rad, np.sin(a) * rad, np.zeros_like(a)])
-            X, Y, Z, _ = self._project(R_all @ arc["tilt"] @ pts, cx, cy, r)
+            pts = (R_all @ arc["tilt"] @ _rz(start)) @ arc["samples"] * rad
+            X, Y, Z, _ = self._project(pts, cx, cy, r)
             out.append((X, Y, Z, arc["width"]))
         return out
+
+    @staticmethod
+    def _arc_segments(arcs):
+        """Build each Qt line once; share it between glow and sharp passes."""
+        result = []
+        for X, Y, Z, width in arcs:
+            xs, ys = X.tolist(), Y.tolist()
+            front = ((Z[:-1] + Z[1:]) >= 0).tolist()
+            lines = [QLineF(xs[k], ys[k], xs[k + 1], ys[k + 1])
+                     for k in range(len(xs) - 1)]
+            back_lines, front_lines = [], []
+            for line, near in zip(lines, front):
+                (front_lines if near else back_lines).append(line)
+            result.append((lines, back_lines, front_lines, width))
+        return result
 
     def _ray_tips(self, spin, amp):
         R = _rz(spin * 0.25) @ _ry(0.25 * math.sin(spin * 0.4))
@@ -268,13 +287,11 @@ class Reactor3D:
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 q.setPen(pen)
                 q.drawLine(QLineF(cx, cy, float(tx[i]), float(ty[i])))
-            for X, Y, _Z, aw in arcs:
+            for lines, _back, _front, aw in arcs:
                 pen = QPen(_with_alpha(ember, 0.55 * dim), r * aw * 3.0)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 q.setPen(pen)
-                xs, ys = X.tolist(), Y.tolist()
-                q.drawLines([QLineF(xs[k], ys[k], xs[k + 1], ys[k + 1])
-                             for k in range(len(xs) - 1)])
+                q.drawLines(lines)
             q.setPen(Qt.PenStyle.NoPen)
             gr = r * (0.55 + 0.20 * amp)
             g = QRadialGradient(cx, cy, gr)
@@ -301,7 +318,7 @@ class Reactor3D:
         energy = min(1.0, 0.80 + 0.35 * amp + (0.05 if live else 0.0))
         box = QRectF(cx - r * 1.9, cy - r * 1.9, r * 3.8, r * 3.8)
 
-        arcs = self._arc_paths(cx, cy, r, spin, amp)
+        arcs = self._arc_segments(self._arc_paths(cx, cy, r, spin, amp))
         tips3d, flick = self._ray_tips(spin, amp)
         rays = (self._project(tips3d, cx, cy, r), flick)
         glow, wide = self._draw_glow(cx, cy, r, box, pal, amp, dim, arcs, rays)
@@ -370,13 +387,8 @@ class Reactor3D:
             p.drawLine(QLineF(cx, cy, x1r, y1r))
 
         # 5. thick arc segments: a cyan body with an ice-white line down the middle
-        for X, Y, Z, aw in arcs:
-            xs, ys = X.tolist(), Y.tolist()
-            zmid = ((Z[:-1] + Z[1:]) * 0.5).tolist()
-            segs = [(QLineF(xs[k], ys[k], xs[k + 1], ys[k + 1]), zmid[k] >= 0)
-                    for k in range(len(xs) - 1)]
-            for want, k in ((False, 0.55), (True, 1.0)):
-                lines = [ln for ln, f in segs if f == want]
+        for _all, back, front, aw in arcs:
+            for lines, k in ((back, 0.55), (front, 1.0)):
                 if not lines:
                     continue
                 for col, wmul, a in ((orange, 1.0, 0.90), (gold, 0.30, 0.70)):
