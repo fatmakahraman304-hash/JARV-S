@@ -487,6 +487,7 @@
         else if (m.type === 'hello') { if (m.state) setState(m.state); }
         else if (m.type === 'wake') sys('Uyandırma sözcüğü duyuldu — bağlanıyor…');
         else if (m.type === 'sys') sys(m.text);
+        else if (m.type === 'realtime_command_status') realtimeCommandStatus(m);
         else if (m.type === 'file_received') _onFileReceived(m);
       };
     }
@@ -1053,8 +1054,19 @@
       try {
         const r = await _authFetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                      body: JSON.stringify(enc ? { enc } : { text: txt }) });
+        if (r.status === 202 || r.status === 403) {
+          const data = await r.json().catch(() => ({}));
+          if (data.status) { realtimeCommandStatus(data); return; }
+        }
         if (!r.ok) { toast('Komut gönderilemedi'); setState('idle'); }
       } catch { toast('Cihaza ulaşılamadı'); setState('offline'); }
+    }
+    function realtimeCommandStatus(data) {
+      const message = data.status === 'pending_confirmation'
+        ? 'Bilgisayarda ekran onayı bekleniyor. Yanıt bilgisayarda verilecek.'
+        : data.status === 'busy' ? 'Bilgisayarda başka bir onay bekleniyor.'
+        : 'Realtime telefon sorusu kabul edilmedi. Bilgisayarda izin ve bağlantıyı kontrol et.';
+      sys(message); setState('idle');
     }
     document.getElementById('ask').addEventListener('submit', e => { e.preventDefault(); doSend(); });
     wake.onclick = () => { closeMenu(); sys('Uyandırma gönderiliyor…'); _authFetch('/api/wake', { method: 'POST' }); };
@@ -1159,7 +1171,7 @@
         stTitle.textContent = 'Dinliyor...'; stSub.textContent = 'Konuş, FRIDAY seni duyuyor.';
         toast('🎙️ Canlı');
       };
-      ws2.onclose = () => { _stopVoice(); };
+      ws2.onclose = (e) => { if (e.code === 4003) sys("Realtime telefon mikrofonu henüz desteklenmiyor."); _stopVoice(); };
       ws2.onerror = () => { sys('Ses bağlantısı kurulamadı.'); _stopVoice(); };
       _voiceWs = ws2; _audioCtx = ctx; _micStm = stream;
     }
