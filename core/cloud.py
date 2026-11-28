@@ -107,18 +107,24 @@ WORKSPACE = BASE_DIR / "workspace"
 MANIFEST = (
     "core/__init__.py", "core/cloud.py", "core/action_loader.py", "core/confirm.py",
     "core/gemini.py", "core/lazyimport.py", "core/outcome.py", "core/plugin_loader.py",
+    "core/identity.py", "core/retired_providers.py", "core/tls.py",
     "core/prompt.txt", "core/undo.py",
     # the engines both bodies run
     "core/tasks/__init__.py", "core/tasks/agents.py", "core/tasks/brain.py",
     "core/tasks/desktop.py", "core/tasks/engine.py", "core/tasks/research.py",
     "core/tasks/store.py", "core/tasks/tools.py", "core/tasks/web.py",
+    "core/tasks/plans.py", "core/tasks/cognitive.py", "core/tasks/cognitive_tools.py",
+    "core/tasks/cognitive_planner.py", "core/tasks/cognitive_review.py",
     "core/routines/__init__.py", "core/routines/desktop.py", "core/routines/engine.py",
     "core/routines/rules.py",
     "agents/general.md", "agents/researcher.md",
     "memory/__init__.py", "memory/config_manager.py", "memory/memory_manager.py",
+    "memory/process_lock.py", "memory/secret_storage.py", "memory/continuity.py",
     "actions/background_monitor.py", "actions/file_processor.py",
     "actions/system_monitor.py", "actions/web_search.py",
-    "plugins/__init__.py", "plugins/_telegram_ops.py", "plugins/telegram_remote.py",
+    # The optional Telegram plugin is absent from this source tree. Existing
+    # server installations are not deleted, but a new bundle must not invent it.
+    "plugins/__init__.py",
     "providers/__init__.py", "providers/audio.py", "providers/base.py",
     "providers/llm_openai.py", "providers/llm_routellm.py", "providers/registry.py", "providers/schema.py",
     "providers/tts_system.py",
@@ -139,7 +145,7 @@ IMPORT_CHECK = (
     "core.tasks.brain", "core.tasks.engine", "core.tasks.research", "core.tasks.tools",
     "core.tasks.web", "core.routines.engine", "core.routines.rules",
     "actions.web_search", "actions.file_processor", "actions.background_monitor",
-    "plugins.telegram_remote", "providers.registry", "providers.llm_openai",
+    "providers.registry", "providers.llm_openai",
     "google.genai", "bs4", "requests", "pdfplumber", "cryptography", "psutil",
 )
 _IMPORT_CHECK_CODE = (
@@ -149,7 +155,12 @@ _IMPORT_CHECK_CODE = (
     "from core.tasks import agents\n"
     "found = agents.load([pathlib.Path('agents')], log=lambda *_: None)\n"
     "missing = sorted({'general', 'researcher'} - set(found))\n"
-    "sys.exit('agent profiles missing: ' + ', '.join(missing) if missing else 0)\n"
+    "if missing: sys.exit('agent profiles missing: ' + ', '.join(missing))\n"
+    "import tempfile\n"
+    "from core.tasks.engine import TaskEngine\n"
+    "with tempfile.TemporaryDirectory() as d:\n"
+    "    root = pathlib.Path(d)\n"
+    "    TaskEngine(root / 'tasks', root / 'reports', [pathlib.Path('agents')], autostart=False)\n"
 )
 
 
@@ -1630,7 +1641,9 @@ class TelegramFront:
 
     def start(self) -> str:
         with self._switch:
-            if not self.tr or not self.configured():
+            if not self.tr:
+                return "Telegram plugin unavailable on this server"
+            if not self.configured():
                 return "no bot token synced yet"
             if self.held_by_desk():
                 return "the computer is answering Telegram"
@@ -2111,7 +2124,7 @@ class Runtime:
     def _task_tools(self, task: dict, profile):
         research = getattr(profile, "mode", "") == "research"
         # A cloud server must not present its own hardware as the user's laptop.
-        wanted = [name for name in profile.tools if name != "system_snapshot"]
+        wanted = [name for name in profile.tools if name not in {"system_snapshot", "windows_power_status"}]
         return cloud_task_tools(self.tasks.store.workdir(task["id"]), wanted, self.toolbox,
                                 () if research else _TASK_EXTRAS, log=self.log)
 

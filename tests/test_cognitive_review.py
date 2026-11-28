@@ -97,7 +97,7 @@ class CognitiveReviewTests(unittest.TestCase):
                 review_node(self.engine, self.doc["id"], "a", ask=lambda _: self.fail("must not send"))
 
     def test_private_memory_or_hardware_node_is_blocked_even_with_review_consent(self):
-        for tool in ("recall_memory", "system_snapshot"):
+        for tool in ("recall_memory", "system_snapshot", "windows_power_status"):
             with self.subTest(tool=tool):
                 self.engine._agents["private"] = AgentProfile("private", tools=[tool], minutes=1)
                 doc = self.engine.cognitive.create("Goal", [{"id": "p", "task": "Private", "agent": "private"}], "silent")

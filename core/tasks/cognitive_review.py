@@ -48,7 +48,7 @@ def review_node(engine, ident, node_id, ask=None):
         raise ValueError("task-result model review is disabled in Settings")
     with engine._lock:
         doc, node, child = _completed_node(engine, ident, node_id)
-        if {"recall_memory", "system_snapshot"} & set(node.get("tools") or []):
+        if {"recall_memory", "system_snapshot", "windows_power_status"} & set(node.get("tools") or []):
             raise ValueError("private memory or hardware nodes cannot be sent to the reviewer")
         attempt = node["attempt"]
         instruction = node["task"] if not attempt else node["alternatives"][attempt - 1]

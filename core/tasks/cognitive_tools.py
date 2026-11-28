@@ -9,7 +9,7 @@ from core import outcome
 # Only tools with an understood interruption and privacy contract can be used.
 # A future addition to TaskTools must not silently grant the workflow new powers.
 _ALLOWED = frozenset({"search_web", "web_search", "fetch_page", "notes", "write_file",
-                      "recall_memory", "system_snapshot"})
+                      "recall_memory", "system_snapshot", "windows_power_status"})
 
 
 class CognitiveTools:

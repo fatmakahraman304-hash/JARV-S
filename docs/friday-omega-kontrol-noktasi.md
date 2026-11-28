@@ -271,11 +271,11 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 3 | FRIDAY CENTRAL INTELLIGENCE | Kısmi: #255, #257, #260 ve bu oturumdaki görev planlama/yürütme çalışmaları. |
 | 4 | MULTI-BRAIN — ÇOKLU MODEL ZEKÂSI | Kısmi: mevcut FAST/SMART yönlendirmesi; bütün katmanlar ve canlı performans ölçümü eksik. |
 | 5 | FRIDAY PERSONAL OPERATING SYSTEM | Henüz uçtan uca doğrulanmadı. |
-| 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi; kapsamlı yetkili yönetim tamamlanmadı. |
+| 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi ve INFINITY güç planı işlemi; kapsamlı yetkili yönetim tamamlanmadı. |
 | 7 | HARDWARE INTELLIGENCE | Kısmi: #256 ve #258 yerel ölçümler ve basit eşikler; tüm sensörler ve fiziksel kabul eksik. |
 | 8 | FRIDAY OMNIVISION — EKRANI ANLAMA | Henüz uçtan uca doğrulanmadı. |
 | 9 | UNIVERSAL APPLICATION INTELLIGENCE | Henüz uçtan uca doğrulanmadı. |
-| 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: #253–#254 eşitleme ve yerel kuyruk güvenilirliği; uçtan uca şifreli cihaz ağı eksik. |
+| 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: #253–#254 eşitleme ve yerel kuyruk güvenilirliği; bulut paketindeki görev motoru dosyaları düzeltildi, gerçek sunucu ve uçtan uca şifreli cihaz ağı eksik. |
 | 11 | FRIDAY SMART HOME | Henüz uçtan uca doğrulanmadı; varsayılan oda sınırı korunmalı. |
 | 12 | FRIDAY VOICE — DOĞAL CANLI KONUŞMA | Henüz fiziksel cihazda ve uçtan uca doğrulanmadı; mevcut kadın sesi korunmalı. |
 | 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü; birleşik şifreli görev/hafıza geçişi eksik. |
@@ -295,3 +295,30 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 27 | GELİŞTİRME VE KABUL PLANI | Kısmi: aşamalı kod, test ve kontrol noktaları var; 12 aşamanın tamamı bitmedi. |
 | 28 | KESİN KURALLAR | Sürekli uygulanıyor; tüm depo için uyum denetimi tamamlanmadı. |
 | 29 | NİHAİ TESLİM | Tamamlanmadı; yalnızca doğrulanmış ara işler teslim edildi. |
+
+## 2026-11-27 — INFINITY: Windows güç işlemi ve şifreli işlem kaydı
+
+Başlangıç `main`: `1df5722c258c5d674e155a24408b1a42b1db72c4`; #252–#262 korunur.
+
+### Tamamlanan
+
+- `windows_power` konuşma aracı, yalnızca mevcut yerleşik dengeli, güç tasarrufu veya yüksek performans Windows planını seçebilir. Sistem dizinindeki `powercfg.exe` sabit argümanlarla, kabuksuz ve süre sınırlı çalışır. Önce etkin ve mevcut planlar okunur; değişiklik sonrasında etkin plan yeniden okunarak doğrulanır. Olmayan plan oluşturulmaz, yönetici yetkisi veya güvenlik mekanizması değiştirilmez.
+- Önceki plan kayıtlıdır ve mevcut plan son işlemden sonra kullanıcı tarafından değiştirilmediyse geri alınabilir. Uygulamanın mevcut geri alma komutuna bağlandı; yeniden başlatma sonrasında işlem kimliğiyle ayrıca geri alınabilir.
+- Windows güç işlemlerinin öncesi/hedefi, durumu ve işlem kimliği, #254 Neural Journal ile aynı AES-GCM ve Windows DPAPI anahtar korumasını kullanan ayrı SQLite kaydında saklanır. İşlem öncesinde `started`, doğrulanınca `done` yazılır. Sonucu belirsiz işlem otomatik tekrarlanmaz ve yenileri durur; çözümleme yalnız gerçek kullanıcı onayından sonra kaydı incelenmiş sayar, işletim sistemini değiştirmez.
+- Bilişsel görevler için `windows_power` uzmanı yalnızca güç durumunu okuyabilir; donanım paylaşım iznine bağlıdır, web araçlarıyla bir arada kullanılamaz ve bulut sunucusunun güç durumu kullanıcının laptopu gibi sunulmaz. Değiştirme/geri alma yetkisi arka plan ajanına verilmedi.
+- Bulut paketleme listesindeki bilişsel görev motoru ve hafıza bağımlılıkları tamamlandı; izole paketle görev motorunun oluşturulması sınandı. Depoda bulunmayan Telegram eklentileri yeni pakete dahil edilmez; mevcut sunucu dosyaları silinmez ve yeni kurulumda Telegram desteği sağlandığı iddia edilmez.
+
+### Testler ve başarısızlıklar
+
+- Taklit Windows komutlarıyla değiştir/geri al, kullanıcının aradaki değişikliğini koruma, doğrulama hatası, süreç kesintisi, sahte onay, şifreli kayıt, eksik anahtar ve bozulmuş kayıt senaryoları test edildi. İlk eşzamanlı erişim testi kilit yarışını ortaya çıkardı; süreç içi kilitleme düzeltildi ve yeniden sınandı.
+- Gerçek `powercfg` okuma ve uygunsa geçici değiştir/geri al testi yalnız izole Windows CI çalıştırıcısında etkinleştirilir; sonuçları ilgili değişiklik isteğinde doğrulanmalıdır. Gerçek kullanıcı cihazı kullanılmadı.
+
+### Eksik kalan
+
+- Şifreli SQLite kaydı **Windows güç işlemleriyle sınırlıdır**; `core/tasks` görevleri, plan grafikleri, konuşmalar, araştırma dosyaları ve kullanıcı çıktıları hâlâ mevcut düz metin depolarındadır. Bunlar Neural Journal'a taşınmadı ve eski dosyalar silinmedi. GÜNCELLE geri alma uyumu ve veri kaybı riskleri çözülmeden genel görev göçü tamamlanmış sayılamaz.
+- Şifreli kayıt anahtarı kaybında otomatik kurtarma yoktur. Windows DPAPI aynı kullanıcı profilindeki işlemlere karşı izolasyon sağlamaz; POSIX anahtarı 0600 izinli dosyadır. İşlem kimlikleri ve kayıt zamanına ilişkin dosya meta verisi gizlenmez.
+- Geniş PowerShell/CMD yürütmesi, servisler, Registry, UAC gerektiren işlemler, kişisel hayat ve cihaz yönetimi bu değişiklikte uygulanmadı. Yeni bulut kurulumu için eksik Telegram eklentileri ve gerçek sunucuda dağıtım ayrıca çözülmelidir.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows bilgisayarında kullanılabilir güç planları, gerçek değişiklik/geri alma, kullanıcı onay ekranı ve GÜNCELLE paneliyle uçtan uca kabul testi yapılmadı.

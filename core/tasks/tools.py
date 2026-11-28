@@ -28,9 +28,9 @@ from pathlib import Path
 from core import outcome
 
 _WEB = {"web_search", "search_web", "fetch_page"}
-_PRIVATE = {"recall_memory", "system_snapshot"}
+_PRIVATE = {"recall_memory", "system_snapshot", "windows_power_status"}
 KNOWN = ("search_web", "web_search", "fetch_page", "notes", "write_file", "file_processor",
-         "recall_memory", "system_snapshot")
+         "recall_memory", "system_snapshot", "windows_power_status")
 _MAX_WRITE = 2_000_000
 
 _DECLS = {
@@ -87,6 +87,12 @@ _DECLS = {
         "description": ("Read aggregate CPU, memory, disk and battery percentages only if the user "
                         "enabled hardware model sharing in Settings. Hardware identifiers and network "
                         "names are excluded; internet connectivity is not tested."),
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    "windows_power_status": {
+        "name": "windows_power_status",
+        "description": ("Read the local Windows power scheme category and available built-in modes, "
+                        "only if the user enabled hardware sharing in Settings. Read-only."),
         "parameters": {"type": "OBJECT", "properties": {}},
     },
 }
@@ -179,6 +185,16 @@ class TaskTools:
                 if not model_sharing_enabled():
                     return outcome.failed("system_snapshot", "hardware sharing was disabled while collecting")
                 return outcome.untrusted("local-system-metrics", json.dumps(model_metrics(snapshot), ensure_ascii=False))
+            if name == "windows_power_status":
+                import json
+                from core.hardware_privacy import model_sharing_enabled
+                if not model_sharing_enabled():
+                    return outcome.failed(name, "hardware sharing with models is disabled")
+                from core.windows_executive import status
+                snapshot = status()
+                if not model_sharing_enabled():
+                    return outcome.failed(name, "hardware sharing was disabled while collecting")
+                return outcome.untrusted("local-power-status", json.dumps(snapshot))
             from core.action_loader import _call_handler
             if name == "file_processor":
                 if str(args.get("action") or "").lower() in ("run", "test"):
