@@ -119,11 +119,13 @@ class TaskStore:
         return self.root / (f"{tid}.{key}.turns.json" if key else f"{tid}.turns.json")
 
     def load_turns(self, tid: str, key: str = "") -> list:
-        data = read_json(self._turns_path(tid, key), [])
-        return data if isinstance(data, list) else []
+        with self._lock:
+            data = read_json(self._turns_path(tid, key), [])
+            return data if isinstance(data, list) else []
 
     def save_turns(self, tid: str, turns: list, key: str = "") -> None:
-        write_json(self._turns_path(tid, key), turns)
+        with self._lock:
+            write_json(self._turns_path(tid, key), turns)
 
     # ── housekeeping ─────────────────────────────────────────────────────────
     def _prune(self) -> None:
