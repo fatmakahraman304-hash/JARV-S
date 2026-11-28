@@ -1,4 +1,4 @@
-"""A small reversible Windows executive: built-in power schemes only.
+"""Reversible Windows settings with typed, allowlisted operations.
 
 No shell, arbitrary command, elevation, or creation/deletion of power schemes.
 Every mutation is checkpointed before execution and verified afterwards.
@@ -79,43 +79,77 @@ def status():
     return {"current": current, "available": [name for name, guid in SCHEMES.items() if guid in available]}
 
 
-def set_plan(mode, directory=None):
-    if mode not in SCHEMES:
-        raise ValueError("Choose balanced, power_saver or high_performance")
-    target = SCHEMES[mode]
+def _pointer_speed():
+    value = ctypes.c_int()
+    if not ctypes.windll.user32.SystemParametersInfoW(0x0070, 0, ctypes.byref(value), 0):
+        raise ExecutiveError("Windows could not read pointer speed")
+    if not 1 <= value.value <= 20:
+        raise ExecutiveError("Windows returned an invalid pointer speed")
+    return str(value.value)
+
+
+def _write_pointer(value):
+    if value not in {str(n) for n in range(1, 21)}:
+        raise ValueError("Pointer speed must be between 1 and 20")
+    # SPI_SETMOUSESPEED, current session only. No registry persistence or broadcast.
+    if not ctypes.windll.user32.SystemParametersInfoW(0x0071, 0, ctypes.c_void_p(int(value)), 0):
+        raise ExecutiveError("Windows could not set pointer speed")
+
+
+def _setting(kind):
+    if kind == "power_plan":
+        return active_guid, lambda guid: _run("/setactive", guid)
+    if kind == "pointer_speed":
+        return _pointer_speed, _write_pointer
+    raise ExecutiveError("Unsupported Windows setting")
+
+
+def _apply(journal, ident, kind, expected, target, undoing=False):
+    read, write = _setting(kind)
+    state, cancelled, success = ("undo_started", "done", "undone") if undoing else ("started", "aborted", "done")
+    try:
+        if read() != expected:
+            raise ExecutiveError("Setting changed before undo" if undoing else "Setting changed before execution")
+    except Exception:
+        try:
+            journal.transition(ident, state, cancelled)
+        except Exception as exc:
+            raise UnknownOutcome(ident) from exc
+        raise
+    try:
+        write(target)
+        if read() != target:
+            raise ExecutiveError("Setting readback differs from target")
+        journal.transition(ident, state, success)
+    except Exception as exc:
+        raise UnknownOutcome(ident) from exc
+
+
+def _set(kind, target, directory):
     with ExecutiveJournal(directory or journal_directory()) as journal:
         if journal.pending():
             raise JournalError("An earlier operation has an unknown result and needs user inspection")
-        before, available = active_guid(), available_guids()
-        if target not in available:
+        read, _ = _setting(kind)
+        before = read()
+        if kind == "power_plan" and target not in available_guids():
             raise ExecutiveError("The requested built-in power scheme is not available")
         if before == target:
-            return {"status": "unchanged", "mode": mode}
-        record = journal.begin("power_plan", before, target)
-        ident = record["id"]
-        try:
-            # Do not overwrite a setting the user changed while we prepared.
-            current = active_guid()
-        except Exception as exc:
-            try:
-                journal.transition(ident, "started", "aborted")
-            except Exception as journal_exc:
-                raise UnknownOutcome(ident) from journal_exc
-            raise ExecutiveError("The current power scheme could not be rechecked; nothing was done") from exc
-        if current != before:
-            try:
-                journal.transition(ident, "started", "aborted")
-            except Exception as exc:
-                raise UnknownOutcome(ident) from exc
-            raise ExecutiveError("The power scheme changed before execution; nothing was done")
-        try:
-            _run("/setactive", target)
-            if active_guid() != target:
-                raise ExecutiveError("The requested power scheme could not be verified")
-            journal.transition(ident, "started", "done")
-        except Exception as exc:
-            raise UnknownOutcome(ident) from exc
-        return {"status": "done", "mode": mode, "operation_id": ident}
+            return {"status": "unchanged"}
+        ident = journal.begin(kind, before, target)["id"]
+        _apply(journal, ident, kind, before, target)
+        return {"status": "done", "operation_id": ident}
+
+
+def set_plan(mode, directory=None):
+    if mode not in SCHEMES:
+        raise ValueError("Choose balanced, power_saver or high_performance")
+    return dict(_set("power_plan", SCHEMES[mode], directory), mode=mode)
+
+
+def set_pointer_speed(speed, directory=None):
+    if type(speed) is not int or not 1 <= speed <= 20:
+        raise ValueError("Pointer speed must be an integer between 1 and 20")
+    return _set("pointer_speed", str(speed), directory)
 
 
 def undo(operation_id, directory=None):
@@ -123,35 +157,16 @@ def undo(operation_id, directory=None):
         if journal.pending():
             raise JournalError("An earlier operation has an unknown result and needs user inspection")
         record = journal.get(operation_id)
-        if not record or record.get("kind") != "power_plan" or record.get("status") != "done":
+        if not record or record["status"] != "done":
             raise ExecutiveError("That operation cannot be undone")
-        before, target = record.get("before", ""), record.get("target", "")
-        if not _GUID.fullmatch(before) or target not in SCHEMES.values() or before not in available_guids():
+        kind, before, target = record["kind"], record["before"], record["target"]
+        read, _ = _setting(kind)
+        if kind == "power_plan" and (not _GUID.fullmatch(before) or target not in SCHEMES.values() or before not in available_guids()):
             raise ExecutiveError("The previous scheme is no longer available")
-        if active_guid() != target:
-            raise ExecutiveError("The current scheme changed since this operation; it was not overwritten")
+        if read() != target:
+            raise ExecutiveError("The setting changed since this operation; it was not overwritten")
         journal.transition(operation_id, "done", "undo_started")
-        try:
-            current = active_guid()
-        except Exception as exc:
-            try:
-                journal.transition(operation_id, "undo_started", "done")
-            except Exception as journal_exc:
-                raise UnknownOutcome(operation_id) from journal_exc
-            raise ExecutiveError("The current power scheme could not be rechecked; nothing was done") from exc
-        if current != target:
-            try:
-                journal.transition(operation_id, "undo_started", "done")
-            except Exception as exc:
-                raise UnknownOutcome(operation_id) from exc
-            raise ExecutiveError("The current scheme changed before undo; it was not overwritten")
-        try:
-            _run("/setactive", before)
-            if active_guid() != before:
-                raise ExecutiveError("The previous scheme could not be verified")
-            journal.transition(operation_id, "undo_started", "undone")
-        except Exception as exc:
-            raise UnknownOutcome(operation_id) from exc
+        _apply(journal, operation_id, kind, target, before, undoing=True)
         return {"status": "undone", "operation_id": operation_id}
 
 

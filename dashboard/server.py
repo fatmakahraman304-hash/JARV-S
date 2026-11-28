@@ -30,7 +30,9 @@ except ImportError:
 # python-multipart is required for file uploads — optional dependency
 _UPLOAD_OK = False
 try:
+    from importlib.metadata import version
     from fastapi import UploadFile, File as FastAPIFile
+    version("python-multipart")
     _UPLOAD_OK = True
 except Exception:
     pass
@@ -580,11 +582,10 @@ def _local_ip() -> str:
     # Method 1: route trick (fast, works when internet is available)
     for probe in ("8.8.8.8", "1.1.1.1", "192.168.1.1"):
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(0.5)
-            s.connect((probe, 80))
-            ip = s.getsockname()[0]
-            s.close()
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(0.5)
+                s.connect((probe, 80))
+                ip = s.getsockname()[0]
             if not ip.startswith("127."):
                 return ip
         except Exception:
@@ -1328,6 +1329,16 @@ class DashboardServer:
                 return JSONResponse({"ok": False, "message": f"Güncelleme başlatılamadı: {exc}"})
             asyncio.create_task(self.broadcast({"type": "sys", "text": "Güncelleme başladı."}))
             return JSONResponse({"ok": True, "message": "Güncelleme başladı; FRIDAY kendini yeniden açacak."})
+
+        @app.get("/api/task-status")
+        async def task_status(req: Request):
+            if req.url.scheme != "https" or not _auth(req):
+                return JSONResponse({"error": "Secure controller session required"}, status_code=403)
+            from core.tasks import desktop
+            engine = desktop.engine()
+            if engine is None:
+                return JSONResponse({"error": "Task engine unavailable"}, status_code=503)
+            return JSONResponse({"tasks": engine.store.recent_statuses()}, headers={"Cache-Control": "no-store"})
 
         @app.get("/api/devices")
         async def devices_ep(req: Request):

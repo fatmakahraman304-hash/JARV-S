@@ -143,6 +143,15 @@ class NativeDiagnosticsTests(unittest.TestCase):
         self.assertIn("MiB", player.show_content.call_args.args[1])
         self.assertNotIn("MiB", result)
 
+    def test_slowdown_samples_real_host_without_model_disclosure(self):
+        player = Mock()
+        result = action.native_diagnostics({"view": "slowdown"}, player)
+        report = player.show_content.call_args.args[1]
+        self.assertIn("CPU", report)
+        self.assertIn("Kullanılabilir", report)
+        self.assertNotIn("MiB", result)
+        self.assertIn("status=done", result)
+
     def test_real_local_snapshot_has_no_invented_measurements(self):
         result = native.collect()
         self.assertIn("observed_at", result)

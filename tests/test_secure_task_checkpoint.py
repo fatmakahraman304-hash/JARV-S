@@ -106,6 +106,18 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         self.assertIn("görev: 1", doc["nodes"][0]["task"])
         self.assertEqual(doc["nodes"][0]["tools"], ["notes"])
 
+    def test_routine_start_minute_blocks_suggested_slot(self):
+        from datetime import datetime
+        display = Mock()
+        when = datetime(2026, 12, 1, 9, 30)
+        routines = Mock()
+        routines.list.return_value = [{"next_ts": when.timestamp(), "enabled": True, "name": "Ders"}]
+        with patch("core.tasks.desktop.ensure", return_value=self.engine), patch("core.routines.desktop.engine", return_value=routines):
+            background_tasks.background_tasks({"action": "agenda_add", "day": "2026-12-01", "task": "Proje",
+                                               "start_time": "09:10", "duration": 35}, display)
+            background_tasks.background_tasks({"action": "agenda_day", "day": "2026-12-01"}, display)
+        self.assertIn("Öneri 09:31", display.show_content.call_args.args[1])
+
     def test_encrypted_snapshot_preserves_task_turns_and_notes_without_copying_outputs(self):
         info = checkpoint.checkpoint(self.engine)
         self.assertGreaterEqual(info["files"], 4)

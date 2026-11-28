@@ -271,11 +271,11 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 3 | FRIDAY CENTRAL INTELLIGENCE | Kısmi: #255, #257, #260 ve bu oturumdaki görev planlama/yürütme çalışmaları. |
 | 4 | MULTI-BRAIN — ÇOKLU MODEL ZEKÂSI | Kısmi: mevcut FAST/SMART yönlendirmesi; FAST/SMART Türkçe değerlendirmesinde sağlayıcının döndürdüğü model sürümü ve token sayıları okunur. Bütün katmanlar ve canlı performans ölçümü eksik. |
 | 5 | FRIDAY PERSONAL OPERATING SYSTEM | Kısmi: şifreli kişisel görev, günlük öncelik, zaman çakışması, yeniden zamanlama ve haftalık ilerleme. |
-| 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi ve INFINITY güç planı işlemi; kapsamlı yetkili yönetim tamamlanmadı. |
+| 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi ve GENESIS ortak işlem yolunda güç planı ve oturumluk işaretçi hızı; kapsamlı yetkili yönetim tamamlanmadı. |
 | 7 | HARDWARE INTELLIGENCE | Kısmi: #256 ve #258 yerel ölçümler ve basit eşikler; tüm sensörler ve fiziksel kabul eksik. |
 | 8 | FRIDAY OMNIVISION — EKRANI ANLAMA | Henüz uçtan uca doğrulanmadı. |
 | 9 | UNIVERSAL APPLICATION INTELLIGENCE | Henüz uçtan uca doğrulanmadı. |
-| 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: #253–#254 eşitleme ve yerel kuyruk güvenilirliği; bulut paketindeki görev motoru dosyaları düzeltildi, gerçek sunucu ve uçtan uca şifreli cihaz ağı eksik. |
+| 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: HTTPS telefon panelinde görev kimliği/durumu ve #253–#254 eşitleme güvenilirliği; bulut paketindeki görev motoru dosyaları düzeltildi, gerçek sunucu ve uçtan uca şifreli cihaz ağı eksik. |
 | 11 | FRIDAY SMART HOME | Henüz uçtan uca doğrulanmadı; varsayılan oda sınırı korunmalı. |
 | 12 | FRIDAY VOICE — DOĞAL CANLI KONUŞMA | Henüz fiziksel cihazda ve uçtan uca doğrulanmadı; mevcut kadın sesi korunmalı. |
 | 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü ve kişisel ajanda dahil sürümlü görev yedeği; canlı birleşik şifreli görev/hafıza geçişi eksik. |
@@ -391,3 +391,14 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 
 - Haftalık uzman değerlendirmesi ayrı bir HUD onayından sonra Cognitive Engine'de tek düğümlü sınırlı görev açar. Kullanıcı hangi iki sayının (toplam ve tamamlanan) normal görev bağlamıyla modele gönderilebileceğini ve düz metin görev geçmişine kaydedileceğini görür. Uzman yalnızca görev notu aracını kullanır. Kabul testi sahte onayın reddini, gerçek onaydan sonra grafiğin oluşturulmasını ve özel görev başlığının grafiğe girmediğini denetler; uzman model yanıtı canlı test edilmedi.
 - Kullanıcı, “Görev yedeklerime 256 MiB sınır koy” isteğiyle güncel ve geçmiş sürümlerdeki toplam şifreli veri için kalıcı bir bütçe seçebilir. Sınırı aşacak yeni yedek reddedilir. Mevcut sürümler korunur. Bu sınır SQLite sayfaları, anahtar, canlı ajanda ve ayrı düz metin kurtarma klasörlerinin disk kullanımını kapsamaz. Testte bütçeyi aşan yazıdan sonra eski yedek ve geçmiş yeniden doğrulandı.
+
+## GENESIS — Ortak Windows işlem doğrulaması ve sistem incelemesi
+
+- Güç planı ve Win32 oturumluk fare işaretçisi hızı (1–20), aynı şifreli işlem günlüğüyle ön durum okuma, yeniden kontrol, uygulama, bağımsız yeniden okuma ve geri alma kullanır. Aradaki kullanıcı değişikliği geri almayı engeller. Belirsiz sonuç otomatik tekrarlanmaz. Fare hızında yönetici yetkisi veya kalıcı kayıt değişikliği gerekmez. İzole Windows CI için gerçek değiştir/geri al kabulü eklendi.
+- Yavaşlama incelemesi iki CPU örneğini, RAM yüzdesini, kullanılabilir belleği ve süreçlerin anlık bellek sıralamasını yerel HUD üzerinde birlikte gösterir. Öneriden sonra aynı araç tekrar çalıştırılabilir. GPU, disk gecikmesi ve olay günlükleri bu incelemeye henüz dahil değildir; otomatik onarım ve neden doğrulaması yapılmaz.
+- Kişisel ajanda seçilen güne denk gelen etkin rutinlerin bir sonraki başlangıç dakikasını alternatif saat hesabına katar. Rutin süresi bilinmediğinden bitiş tahmin edilmez. Harici takvimler ve diğer gelecek tekrarlar açık.
+- Gerçek kullanıcı bilgisayarında işaretçi hissi, kurulu GÜNCELLE ve donanım kabulü yapılmadı. Model, Telegram, cihazlar ve canlı görev/grafik göçünde yeni kabul sonucu yoktur. 29 bölümün açık işleri sürer.
+
+- Yetkili telefon denetleyicisi, mevcut HTTPS panelinden bu bilgisayarın son 20 arka plan görevinin kimliğini ve durumunu okuyabilir. Başlıklar, sonuçlar ve dosya yolları gönderilmez. Oturum yoksa, iptal edildiyse veya düz HTTP kullanılırsa erişim reddedilir. ASGI kabulü gerçek TaskStore verisini okur. Fiziksel telefon, cihazlar arası yürütme ve Telegram botu henüz doğrulanmadı.
+
+- Temiz Windows/Linux panel kabulü, python-multipart bulunmadığında FastAPI yükleme rotasının hatayla açıldığını ortaya çıkardı. Gerçek dağıtım bağımlılığı kontrolü eklendi. Dosya yükleme paketi olmadan görev durumu çalışabilir.
