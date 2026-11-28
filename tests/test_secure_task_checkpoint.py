@@ -243,4 +243,11 @@ class ModelEvaluationTests(unittest.TestCase):
         from tools.evaluate_task_brain import evaluate
         answers = iter(['{"bitis":"10:35"}', '', '{"tekrar":0}'])
         rows = list(evaluate(lambda *a, **k: next(answers), 'fast'))
+        self.assertIsNone(rows[1]["elapsed_ms"])
+        from types import SimpleNamespace
+        response = SimpleNamespace(text='{"bitis":"10:35"}', model_version="fixture",
+                                   usage_metadata=SimpleNamespace(prompt_token_count=20, candidates_token_count=9))
+        sample = next(evaluate(lambda *a, **k: response, "smart"))
+        self.assertEqual((sample["input_tokens"], sample["output_tokens"]), (20, 9))
+        self.assertIsNone(sample["cost_usd"])
         self.assertEqual([row["status"] for row in rows], ["passed", "unavailable", "failed"])
