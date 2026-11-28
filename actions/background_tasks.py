@@ -55,9 +55,13 @@ def background_tasks(parameters: dict, player=None) -> str:
         except Exception as exc:
             return outcome.failed(action, f"personal agenda unavailable: {type(exc).__name__}")
 
-    if action in ("task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"):
+    if action in ("task_checkpoint", "task_checkpoint_limit", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"):
         try:
             from core.tasks import secure_checkpoint
+            if action == "task_checkpoint_limit":
+                with secure_checkpoint.TaskCheckpoint(eng.store.root / "_encrypted_checkpoint") as archive:
+                    archive.set_limit(a.get("limit_mib"))
+                return outcome.done(action, limit_mib=a["limit_mib"], note="applies to encrypted snapshot payloads; all versions retained")
             if action == "task_checkpoint":
                 info = secure_checkpoint.checkpoint(eng)
                 return outcome.done("task_checkpoint", files=info["files"], bytes=info["bytes"],
@@ -88,6 +92,8 @@ def background_tasks(parameters: dict, player=None) -> str:
             return confirm.request("task_checkpoint_recover", "Görev kurtarma kopyası oluştur",
                 f"Kişisel ajanda dahil olabilecek şifreli yedek sürümü {version if version is not None else 'son'} yerel bir klasöre okunabilir dosyalar olarak çıkarılacak. "
                 "Canlı görevler değiştirilmez veya çalıştırılmaz. Ekler ve üretilen dosyalar dahil değildir.", recover)
+        except ValueError as e:
+            return outcome.failed("task_checkpoint", str(e) if isinstance(e, secure_checkpoint.SnapshotLimitError) else type(e).__name__)
         except Exception as e:
             return outcome.failed("task_checkpoint", f"checkpoint unavailable: {type(e).__name__}")
 
@@ -342,11 +348,12 @@ TOOL = {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["agenda_day", "agenda_reschedule", "agenda_week_review", "agenda_week", "agenda_add", "agenda_complete", "start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"]},
+                       "enum": ["agenda_day", "agenda_reschedule", "agenda_week_review", "agenda_week", "agenda_add", "agenda_complete", "start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_limit", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"]},
             "priority": {"type": "STRING", "enum": ["high", "normal", "low"]},
             "start_time": {"type": "STRING", "description": "Personal task start HH:MM; requires duration"},
             "duration": {"type": "INTEGER", "description": "Personal task duration in minutes"},
             "day": {"type": "STRING", "description": "Local YYYY-MM-DD for personal agenda, defaults to today"},
+            "limit_mib": {"type": "INTEGER", "description": "For task_checkpoint_limit, maximum total encrypted snapshot payload size in MiB, from 1 to 65536. No history is removed."},
             "checkpoint_version": {"type": "INTEGER", "description": "historical checkpoint ID from task_checkpoint_history; omit for latest"},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},

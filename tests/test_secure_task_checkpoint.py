@@ -152,6 +152,19 @@ class SecureTaskCheckpointTests(unittest.TestCase):
             checkpoint.verify(self.engine, 99999)
         checkpoint.verify(self.engine)
 
+    def test_persisted_limit_refuses_new_copy_without_evicting_old_version(self):
+        checkpoint.checkpoint(self.engine)
+        checkpoint.checkpoint(self.engine)
+        old = checkpoint.history(self.engine)
+        before = checkpoint.verify(self.engine)
+        with checkpoint.TaskCheckpoint(self.backup) as archive:
+            archive.set_limit(1)
+        (self.engine.store.workdir(self.tid) / "pages" / "large.txt").write_bytes(b"x" * 1024**2)
+        with self.assertRaises(checkpoint.SnapshotLimitError):
+            checkpoint.checkpoint(self.engine)
+        self.assertEqual(checkpoint.history(self.engine), old)
+        self.assertEqual(checkpoint.verify(self.engine), before)
+
     def test_running_worker_refuses_without_replacing_previous_snapshot(self):
         before = checkpoint.checkpoint(self.engine)
         self.engine._workers["active"] = Mock(is_alive=lambda: True)

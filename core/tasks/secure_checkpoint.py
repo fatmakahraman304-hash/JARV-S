@@ -105,6 +105,10 @@ def _collect(engine):
             "scope": "task-json-turns-research-notes; excludes attachments, generated files and reports"}
 
 
+class SnapshotLimitError(ValueError):
+    pass
+
+
 class TaskCheckpoint:
     def __init__(self, directory):
         self._journal = None
@@ -133,6 +137,7 @@ class TaskCheckpoint:
             self._db = self._journal._connection
             self._db.execute("CREATE TABLE IF NOT EXISTS task_snapshot (id INTEGER PRIMARY KEY CHECK(id=1), data BLOB NOT NULL)")
             self._db.execute("CREATE TABLE IF NOT EXISTS task_snapshot_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created REAL NOT NULL, data BLOB NOT NULL)")
+            self._db.execute("CREATE TABLE IF NOT EXISTS snapshot_policy (id INTEGER PRIMARY KEY CHECK(id=1), limit_mib INTEGER NOT NULL)")
             self._db.commit()
         except Exception:
             self.close()
@@ -172,6 +177,12 @@ class TaskCheckpoint:
                                       "data": base64.b64encode(data).decode("ascii")})
         snapshot["scope"] += "; includes personal agenda"
 
+    def set_limit(self, limit_mib):
+        if type(limit_mib) is not int or not 1 <= limit_mib <= 65536:
+            raise ValueError("checkpoint limit must be 1 to 65536 MiB")
+        with self._db:
+            self._db.execute("INSERT OR REPLACE INTO snapshot_policy VALUES (1, ?)", (limit_mib,))
+
     def save(self, snapshot):
         if self._db.execute("SELECT 1 FROM task_snapshot WHERE id=1").fetchone() is not None:
             self.load()  # Never overwrite an unreadable/tampered older checkpoint.
@@ -180,6 +191,13 @@ class TaskCheckpoint:
         encrypted = nonce + AESGCM(self._journal.key).encrypt(nonce, raw, _AAD)
         with self._db:
             old = self._db.execute("SELECT data FROM task_snapshot WHERE id=1").fetchone()
+            policy = self._db.execute("SELECT limit_mib FROM snapshot_policy WHERE id=1").fetchone()
+            if policy:
+                history_size = self._db.execute(
+                    "SELECT COALESCE(SUM(length(data)),0) FROM task_snapshot_history").fetchone()[0]
+                current_size = len(old[0]) if old is not None else 0
+                if history_size + current_size + len(encrypted) > policy[0] * 1024 ** 2:
+                    raise SnapshotLimitError("Configured encrypted snapshot limit reached; existing versions preserved")
             if old is not None:
                 self._db.execute("INSERT INTO task_snapshot_history(created,data) VALUES (?,?)", (time.time(), old[0]))
             self._db.execute("INSERT OR REPLACE INTO task_snapshot(id,data) VALUES (1,?)", (encrypted,))
