@@ -83,12 +83,29 @@ def agenda(engine, action, params, player):
             item = read_record(cipher, ident, blob)
             scheduled = date.fromisoformat(item["day"])
             matches = scheduled == day
-            if action == "agenda_week":
+            if action in ("agenda_week", "agenda_week_review"):
                 matches = 0 <= (scheduled - monday).days < 7
             if matches:
                 tasks.append((ident, item))
-    if action == "agenda_week":
+    if action in ("agenda_week", "agenda_week_review"):
         done = sum(item["done"] for _, item in tasks)
+        if action == "agenda_week_review":
+            from core import confirm, outcome
+            total = len(tasks)
+            def start_review():
+                expert = engine.agents().get("weekly_planner")
+                if expert is None or expert.tools != ["notes"] or expert.mode:
+                    return outcome.failed("agenda_week_review", "weekly expert profile unavailable")
+                node = {"id": "review", "agent": "weekly_planner", "minutes": 2, "rounds": 3,
+                        "max_calls": 2, "task": f"Haftaya planlanan görev: {total}. Tamamlanan: {done}. "
+                        "Bu sayılara dayanarak Türkçe kısa bir değerlendirme ve bir öneri yaz."}
+                doc = engine.cognitive.create("Haftalık görev değerlendirmesi", [node], deliver="silent")
+                player.show_content("HAFTALIK DEĞERLENDİRME", "Görev merkezi · " + doc["id"])
+                return outcome.started("agenda_week_review", workflow_id=doc["id"])
+            return confirm.request("agenda_week_review", "Haftalık görev sayılarını uzmanla paylaş",
+                                   f"Toplam {total}, tamamlanan {done}. Bu iki sayı yerel görev geçmişine "
+                                   "okunabilir biçimde kaydedilip normal görev bağlamıyla yapılandırılmış "
+                                   "veya yedek model sağlayıcısına gönderilebilir.", start_review)
         player.show_content("HAFTALIK İLERLEME", f"{monday} – {monday + timedelta(days=6)}"
                             + f"\nBu haftaya planlanan {len(tasks)} görevin {done} tanesi tamamlandı.")
         return "Weekly progress shown locally."

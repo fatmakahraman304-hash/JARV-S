@@ -85,6 +85,27 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         self.assertEqual(json.loads((prior / record).read_bytes())["start"], 570)
         self.assertEqual(json.loads((latest / record).read_bytes())["start"], 600)
 
+    def test_week_review_starts_only_after_consent_with_aggregate_counts(self):
+        player, tokens = Mock(), []
+        profile = AgentProfile("weekly_planner", tools=["notes"])
+        self.engine._agents[profile.name] = profile
+        confirm.bind(lambda _title, _detail, token: tokens.append(token), lambda: None)
+        self.addCleanup(lambda: confirm.bind(None, None))
+        with patch("core.tasks.desktop.ensure", return_value=self.engine):
+            background_tasks.background_tasks({"action": "agenda_add", "task": "SENSITIVE TITLE"}, player)
+            result = background_tasks.background_tasks({"action": "agenda_week_review"}, player)
+        self.assertIn("CONFIRMATION_PENDING", result)
+        confirm.resolve(True, "wrong")
+        self.assertFalse(self.engine.cognitive.all())
+        confirm.resolve(True, tokens[0])
+        deadline = time.monotonic() + 3
+        while not player.show_content.called and time.monotonic() < deadline:
+            time.sleep(0.01)
+        doc, = self.engine.cognitive.all()
+        self.assertNotIn("SENSITIVE TITLE", json.dumps(doc))
+        self.assertIn("görev: 1", doc["nodes"][0]["task"])
+        self.assertEqual(doc["nodes"][0]["tools"], ["notes"])
+
     def test_encrypted_snapshot_preserves_task_turns_and_notes_without_copying_outputs(self):
         info = checkpoint.checkpoint(self.engine)
         self.assertGreaterEqual(info["files"], 4)

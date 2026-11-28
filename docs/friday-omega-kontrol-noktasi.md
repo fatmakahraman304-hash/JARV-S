@@ -388,3 +388,5 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 - Testler gerçek SQLite üzerinde çakışma, yeniden zamanlama, tamamlanma sayısı, önceki ve güncel sürümdeki farklı saatlerin kurtarılmasını ve yerel süreç belleği okumayı kapsar. Canlı sağlayıcı, cihaz geçişi, harici takvim ve kullanıcı bilgisayarında kurulum doğrulanmadı. 29 bölümlü izleme tablosunun açık durumları sürüyor.
 
 - Türkçe değerlendirmede sağlayıcı yanıtı olmayan denemelerin gecikmesi boş bırakılır. Token sayıları ve model sürümü yalnız yanıtın metadata alanlarından alınır; fiyat bilgisi doğrulanmadığı için maliyet boş kalır.
+
+- Haftalık uzman değerlendirmesi ayrı bir HUD onayından sonra Cognitive Engine'de tek düğümlü sınırlı görev açar. Kullanıcı hangi iki sayının (toplam ve tamamlanan) normal görev bağlamıyla modele gönderilebileceğini ve düz metin görev geçmişine kaydedileceğini görür. Uzman yalnızca görev notu aracını kullanır. Kabul testi sahte onayın reddini, gerçek onaydan sonra grafiğin oluşturulmasını ve özel görev başlığının grafiğe girmediğini denetler; uzman model yanıtı canlı test edilmedi.
