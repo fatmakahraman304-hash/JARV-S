@@ -123,6 +123,17 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         self.assertFalse((self.backup / "neural_sync.sqlite3").exists())
         self.assertTrue((self.backup / "neural_sync.key").exists())
 
+    def test_symbolic_link_backup_directory_is_rejected(self):
+        target = self.root / "target"
+        target.mkdir()
+        try:
+            self.backup.symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symbolic link creation is unavailable")
+        with self.assertRaises(JournalError):
+            checkpoint.checkpoint(self.engine)
+        self.assertEqual(list(target.iterdir()), [])
+
     def test_recovery_requires_human_confirmation_and_never_changes_live_store(self):
         checkpoint.checkpoint(self.engine)
         self.engine.store.update(self.tid, title="LIVE MODIFIED")
