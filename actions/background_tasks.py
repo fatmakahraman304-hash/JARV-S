@@ -48,6 +48,37 @@ def background_tasks(parameters: dict, player=None) -> str:
     a = dict(parameters or {})
     action = str(a.get("action") or "list").strip().lower()
 
+    if action in ("task_checkpoint", "task_checkpoint_verify", "task_checkpoint_recover"):
+        try:
+            from core.tasks import secure_checkpoint
+            if action == "task_checkpoint":
+                info = secure_checkpoint.checkpoint(eng)
+                return outcome.done("task_checkpoint", files=info["files"], bytes=info["bytes"],
+                                    note="encrypted copy created; live task files remain plaintext")
+            if action == "task_checkpoint_verify":
+                info = secure_checkpoint.verify(eng)
+                return outcome.done("task_checkpoint_verify", files=info["files"], bytes=info["bytes"],
+                                    note="integrity checked; attachments and output files are not included")
+            if player is None:
+                return outcome.failed("task_checkpoint_recover", "the local desktop interface is unavailable")
+            secure_checkpoint.verify(eng)
+            from core import confirm
+            def recover():
+                path = secure_checkpoint.recover_to_isolated_folder(eng)
+                shown = False
+                try:
+                    player.show_content("GÖREV KURTARMA KOPYASI", str(path))
+                    shown = True
+                except Exception:
+                    pass
+                return outcome.done("task_checkpoint_recover", folder_shown=shown, live_tasks_changed=False,
+                                    note="isolated plaintext recovery copy; no tasks were started")
+            return confirm.request("task_checkpoint_recover", "Görev kurtarma kopyası oluştur",
+                "Şifreli yedek yerel bir klasöre okunabilir dosyalar olarak çıkarılacak. "
+                "Canlı görevler değiştirilmez veya çalıştırılmaz. Ekler ve üretilen dosyalar dahil değildir.", recover)
+        except Exception as e:
+            return outcome.failed("task_checkpoint", f"checkpoint unavailable: {type(e).__name__}")
+
     if action == "cognitive_auto":
         try:
             from core.tasks.cognitive_planner import create_workflow
@@ -279,7 +310,11 @@ TOOL = {
         "configured model to critique a completed node; it requires the user's task review "
         "sharing preference, off by default, and sends that node's task and result to the provider. "
         "Nodes using private memory or hardware tools are blocked. Its opinion does not independently prove the result. "
-        "Do not treat generated reports as independently verified. "
+        "Do not treat generated reports as independently verified. task_checkpoint makes an encrypted "
+        "local copy of task records and research notes, not live encrypted storage; it excludes attachments, "
+        "generated files and external reports. task_checkpoint_verify checks its integrity. "
+        "task_checkpoint_recover asks the user before exporting plaintext into an isolated folder; "
+        "it never restarts tasks or overwrites the active store. "
         "The existing restricted background tools apply; no computer control, "
         "external messaging or purchases. plan_list shows saved plans, plan_status and "
         "plan_cancel accept plan_id or use the latest matching plan. Results "
@@ -293,7 +328,7 @@ TOOL = {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review"]},
+                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_verify", "task_checkpoint_recover"]},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},
             "minutes": {"type": "INTEGER", "description": "for start: time budget in minutes"},

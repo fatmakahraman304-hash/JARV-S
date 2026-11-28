@@ -278,7 +278,7 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: #253–#254 eşitleme ve yerel kuyruk güvenilirliği; bulut paketindeki görev motoru dosyaları düzeltildi, gerçek sunucu ve uçtan uca şifreli cihaz ağı eksik. |
 | 11 | FRIDAY SMART HOME | Henüz uçtan uca doğrulanmadı; varsayılan oda sınırı korunmalı. |
 | 12 | FRIDAY VOICE — DOĞAL CANLI KONUŞMA | Henüz fiziksel cihazda ve uçtan uca doğrulanmadı; mevcut kadın sesi korunmalı. |
-| 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü; birleşik şifreli görev/hafıza geçişi eksik. |
+| 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü ve INFINITY görevlerin şifreli yedek kopyası; canlı birleşik şifreli görev/hafıza geçişi eksik. |
 | 14 | FRIDAY EXPERT AGENT NETWORK | Kısmi: mevcut genel ve araştırma ajanları ile sınırlı paralel görevler; tüm uzmanlıklar eksik. |
 | 15 | FRIDAY AUTONOMOUS WORK | Kısmi: kalıcı graf ve sınırlı yeniden planlama; genel yetkiler ve kesinti garantileri eksik. |
 | 16 | FRIDAY SOFTWARE ENGINEER | Henüz tam kapsamda doğrulanmadı. |
@@ -322,3 +322,26 @@ Başlangıç `main`: `1df5722c258c5d674e155a24408b1a42b1db72c4`; #252–#262 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows bilgisayarında kullanılabilir güç planları, gerçek değişiklik/geri alma, kullanıcı onay ekranı ve GÜNCELLE paneliyle uçtan uca kabul testi yapılmadı.
+
+## 2026-11-28 — INFINITY: şifreli görev yedeği ve güvenli kurtarma kopyası
+
+### Tamamlanan
+
+- Konuşma görev aracı, istek üzerine görev JSON kayıtlarını, plan ve bilişsel grafikleri, model tur kayıtlarını ve araştırma çalışma notlarını #254 ile aynı AES-GCM/Windows DPAPI anahtar yaklaşımını kullanan ayrı SQLite yedeğine alabilir. Yedek SQLite işlemiyle değiştirilir ve okunurken bütünlük kontrolünden geçirilir. Eski görev dosyaları silinmez veya değiştirilmez.
+- Yedekleme çalışan görev iş parçacıkları varken durur; kaynak dosyalar okuma sırasında değişirse işlem iptal edilir. Geçersiz JSON, bozuk şifreli yedek, eksik anahtar/veritabanı veya kayıp tablo tespitinde kayıt korunur ve üzerine yazılmaz. Görev tur kaydı okumaları/yazmaları süreç içi kilitle korunur.
+- Kullanıcı gerçek onay verdiğinde yedek, canlı görev dizininden ayrı yeni bir klasöre okunabilir dosyalar olarak çıkarılır. Mevcut görevler üzerine yazılmaz veya otomatik çalıştırılmaz. İşlem, onay ekranında açıkça düz metin kurtarma kopyası olarak tanımlanır.
+
+### Testler ve başarısızlıklar
+
+- Süreç ortasında kesinti, bozuk içerik, eksik anahtar/veritabanı, dosya ve onay sınırları, sahte onay ve canlı görevi değiştirmeyen kurtarma senaryoları yerel testlerle sınandı. Windows/Linux GitHub sonuçları ilgili değişiklik isteğinden doğrulanmalıdır.
+
+### Eksik kalan
+
+- Bu **şifreli yedek kopyasıdır**; canlı görev/plan kayıtları ve kullanıcı çıktıları hâlâ düz metindir. Otomatik ya da kayıpsız canlı depoya geçiş yapılmadı; GÜNCELLE geri alma ve çoklu süreç koordinasyonu çözülmeden mevcut dosyalar silinmemelidir.
+- Ekler, görevlerin `files` ve `inputs` dizinleri ile görev deposu dışındaki raporlar yedeğe dahil değildir. Üst sınırlar 5.000 dosya ve 32 MB'dır; aşıldığında önceki yedek korunur. Yalnızca son başarılı şifreli anlık görüntü tutulur; sürüm geçmişi ve anahtar kurtarma henüz yoktur.
+- Ayrı kurtarma klasörüne çıkarılan dosyalar **düz metindir**. Çıkartma işleminde ani süreç kesilmesi, yerel kurtarma dizininde kısmi bir klasör bırakabilir. Bu kopya görev motoruna otomatik geri yüklenmez.
+- Birden fazla bağımsız süreçte ortak kilitli canlı görev deposu yoktur; dış süreç değişiklikleri yalnız dosya kontrolüyle yakalanmaya çalışılır, tam eşzamanlılık garantisi verilmez. Gerçek model, genel Windows yönetimi, kişisel hayat ve cihaz ağı hâlâ eksiktir.
+
+### Fiziksel cihaz gerektirenler
+
+- Kullanıcının Windows profilinde DPAPI anahtarı, gerçek görev arşiviyle kurtarma ve GÜNCELLE paneli üzerinden uçtan uca kabul testi yapılmadı.
