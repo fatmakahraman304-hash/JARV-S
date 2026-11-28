@@ -55,6 +55,34 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         self.assertNotIn(f"{self.tid}/inputs/in.txt", files)
         self.assertTrue((self.engine.store.root / f"{self.tid}.json").exists())
 
+    def test_history_retains_and_recovers_previous_encrypted_version(self):
+        checkpoint.checkpoint(self.engine)
+        self.engine.store.save_turns(self.tid, [{"role": "user", "text": "NEW PRIVATE TURN"}])
+        checkpoint.checkpoint(self.engine)
+        versions = checkpoint.history(self.engine)
+        self.assertEqual(len(versions), 1)
+        version = versions[0]["id"]
+        self.assertEqual(checkpoint.verify(self.engine, version)["files"], checkpoint.verify(self.engine)["files"])
+        with patch("core.identity.data_home", return_value=self.root):
+            folder = checkpoint.recover_to_isolated_folder(self.engine, version)
+        self.assertIn("PRIVATE TURN", (folder / f"{self.tid}.turns.json").read_text())
+        self.assertNotIn("NEW PRIVATE TURN", (folder / f"{self.tid}.turns.json").read_text())
+        self.assertNotIn(b"PRIVATE TURN", (self.backup / "neural_sync.sqlite3").read_bytes())
+        self.assertIn("NEW PRIVATE TURN", str(self.engine.store.load_turns(self.tid)))
+
+    def test_history_missing_or_tampered_version_fails_closed(self):
+        checkpoint.checkpoint(self.engine)
+        checkpoint.checkpoint(self.engine)
+        version = checkpoint.history(self.engine)[0]["id"]
+        with checkpoint.TaskCheckpoint(self.backup) as archive:
+            archive._db.execute("UPDATE task_snapshot_history SET data=? WHERE id=?", (b"corrupt", version))
+            archive._db.commit()
+        with self.assertRaises(JournalError):
+            checkpoint.verify(self.engine, version)
+        with self.assertRaises(JournalError):
+            checkpoint.verify(self.engine, 99999)
+        checkpoint.verify(self.engine)
+
     def test_running_worker_refuses_without_replacing_previous_snapshot(self):
         before = checkpoint.checkpoint(self.engine)
         self.engine._workers["active"] = Mock(is_alive=lambda: True)
