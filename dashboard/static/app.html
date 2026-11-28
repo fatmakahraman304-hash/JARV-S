@@ -184,6 +184,7 @@
     <button type="button" id="m-tv">📺 Televizyona gönder</button>
     <button type="button" id="m-shot">🖼️ Ekran görüntüsü al</button>
     <button type="button" id="wake">⚡ FRIDAY'ı uyandır</button>
+    <button type="button" id="m-task-status">Bu bilgisayardaki görevler</button>
     <button type="button" id="m-refresh">🔄 Cihazları yenile</button>
     <button type="button" id="m-update">⬆ Bilgisayarı güncelle</button>
     <div class="enc">Bağlantı: <b id="enc">…</b><br><span>__IP__:__PORT__</span></div>
@@ -591,6 +592,18 @@
       const nm = key === 'self' ? (devState.self?.name || 'bu bilgisayar') : (peers[key]?.name || 'cihaz');
       toast(`Kontrol: ${nm}`);
     }
+    document.getElementById('m-task-status').onclick = async () => {
+      closeMenu();
+      if (location.protocol !== 'https:') return toast('Görevler için HTTPS bağlantısı gerekli.');
+      try {
+        const r = await selfFetch('/api/task-status', {cache: 'no-store', redirect: 'error'});
+        if (!r.ok) return toast(r.status === 403 ? 'Yetkili oturum gerekli.' : 'Görev motoruna ulaşılamadı.');
+        const {tasks} = await r.json();
+        const labels = {queued:'Sırada', scheduled:'Planlandı', running:'Çalışıyor', waiting_quota:'Kota bekliyor',
+          done:'Tamamlandı', failed:'Başarısız', cancelled:'İptal edildi', needs_review:'İnceleme gerekiyor'};
+        sys(tasks.length ? tasks.map(t => t.id + ' · ' + labels[t.status]).join(' | ') : 'Kayıtlı görev yok.');
+      } catch { toast('Görev durumu alınamadı.'); }
+    };
     document.getElementById('m-refresh').onclick = () => { closeMenu(); refreshDevices(); toast('Cihazlar yenilendi'); };
 
     // ── Pairing: another computer, or a TV ───────────────────────────────────

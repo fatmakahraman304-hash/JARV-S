@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import shutil
 import tempfile
@@ -108,6 +109,14 @@ class TaskStore:
 
     def update(self, tid: str, **fields) -> dict | None:
         return self.mutate(tid, lambda t: t.update(fields))
+
+    def recent_statuses(self):
+        """Metadata for the authenticated phone view. Never copy task bodies."""
+        with self._lock:
+            recent = sorted(self._tasks.values(), key=lambda task: task.get("created", 0), reverse=True)
+            states = {"queued", "scheduled", "running", "waiting_quota", "done", "failed", "cancelled", "needs_review"}
+            return [{"id": task["id"], "status": task["status"]} for task in recent[:20]
+                    if re.fullmatch(r"t[0-9a-f-]{1,70}", str(task["id"])) and task.get("status") in states]
 
     def all(self) -> list[dict]:
         with self._lock:
