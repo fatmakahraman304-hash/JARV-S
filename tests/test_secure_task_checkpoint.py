@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -55,6 +56,56 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         invoke("agenda_day", day="2026-12-02")
         self.assertNotIn(title, display.show_content.call_args.args[1])
 
+    def test_plan_conflict_reschedule_and_versioned_personal_recovery(self):
+        display = Mock()
+        def invoke(action, **args):
+            with patch("core.tasks.desktop.ensure", return_value=self.engine):
+                return background_tasks.background_tasks(dict(action=action, **args), display)
+        day = "2026-12-01"
+        first = invoke("agenda_add", task="Ders", day=day, start_time="09:00", duration=60,
+                       priority="high").split()[-1]
+        second = invoke("agenda_add", task="Proje", day=day, start_time="09:30", duration=30).split()[-1]
+        invoke("agenda_day", day=day)
+        panel = display.show_content.call_args.args[1]
+        self.assertLess(panel.index("Ders"), panel.index("Proje"))
+        self.assertIn("Öneri 10:00", panel)
+        checkpoint.checkpoint(self.engine)
+        invoke("agenda_reschedule", task_id=second, start_time="10:00", duration=30)
+        invoke("agenda_complete", task_id=first)
+        invoke("agenda_day", day=day)
+        self.assertNotIn("Çakışma", display.show_content.call_args.args[1])
+        invoke("agenda_week", day=day)
+        self.assertIn("2 görevin 1", display.show_content.call_args.args[1])
+        checkpoint.checkpoint(self.engine)
+        old = checkpoint.history(self.engine)[0]["id"]
+        with patch("core.identity.data_home", return_value=self.root):
+            prior = checkpoint.recover_to_isolated_folder(self.engine, old)
+            latest = checkpoint.recover_to_isolated_folder(self.engine)
+        record = Path("personal_agenda") / (second + ".json")
+        self.assertEqual(json.loads((prior / record).read_bytes())["start"], 570)
+        self.assertEqual(json.loads((latest / record).read_bytes())["start"], 600)
+
+    def test_week_review_starts_only_after_consent_with_aggregate_counts(self):
+        player, tokens = Mock(), []
+        profile = AgentProfile("weekly_planner", tools=["notes"])
+        self.engine._agents[profile.name] = profile
+        confirm.bind(lambda _title, _detail, token: tokens.append(token), lambda: None)
+        self.addCleanup(lambda: confirm.bind(None, None))
+        with patch("core.tasks.desktop.ensure", return_value=self.engine):
+            background_tasks.background_tasks({"action": "agenda_add", "task": "SENSITIVE TITLE"}, player)
+            result = background_tasks.background_tasks({"action": "agenda_week_review"}, player)
+        self.assertIn("CONFIRMATION_PENDING", result)
+        confirm.resolve(True, "wrong")
+        self.assertFalse(self.engine.cognitive.all())
+        confirm.resolve(True, tokens[0])
+        deadline = time.monotonic() + 3
+        while not player.show_content.called and time.monotonic() < deadline:
+            time.sleep(0.01)
+        doc, = self.engine.cognitive.all()
+        self.assertNotIn("SENSITIVE TITLE", json.dumps(doc))
+        self.assertIn("görev: 1", doc["nodes"][0]["task"])
+        self.assertEqual(doc["nodes"][0]["tools"], ["notes"])
+
     def test_encrypted_snapshot_preserves_task_turns_and_notes_without_copying_outputs(self):
         info = checkpoint.checkpoint(self.engine)
         self.assertGreaterEqual(info["files"], 4)
@@ -100,6 +151,19 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         with self.assertRaises(JournalError):
             checkpoint.verify(self.engine, 99999)
         checkpoint.verify(self.engine)
+
+    def test_persisted_limit_refuses_new_copy_without_evicting_old_version(self):
+        checkpoint.checkpoint(self.engine)
+        checkpoint.checkpoint(self.engine)
+        old = checkpoint.history(self.engine)
+        before = checkpoint.verify(self.engine)
+        with checkpoint.TaskCheckpoint(self.backup) as archive:
+            archive.set_limit(1)
+        (self.engine.store.workdir(self.tid) / "pages" / "large.txt").write_bytes(b"x" * 1024**2)
+        with self.assertRaises(checkpoint.SnapshotLimitError):
+            checkpoint.checkpoint(self.engine)
+        self.assertEqual(checkpoint.history(self.engine), old)
+        self.assertEqual(checkpoint.verify(self.engine), before)
 
     def test_running_worker_refuses_without_replacing_previous_snapshot(self):
         before = checkpoint.checkpoint(self.engine)
@@ -213,4 +277,11 @@ class ModelEvaluationTests(unittest.TestCase):
         from tools.evaluate_task_brain import evaluate
         answers = iter(['{"bitis":"10:35"}', '', '{"tekrar":0}'])
         rows = list(evaluate(lambda *a, **k: next(answers), 'fast'))
+        self.assertIsNone(rows[1]["elapsed_ms"])
+        from types import SimpleNamespace
+        response = SimpleNamespace(text='{"bitis":"10:35"}', model_version="fixture",
+                                   usage_metadata=SimpleNamespace(prompt_token_count=20, candidates_token_count=9))
+        sample = next(evaluate(lambda *a, **k: response, "smart"))
+        self.assertEqual((sample["input_tokens"], sample["output_tokens"]), (20, 9))
+        self.assertIsNone(sample["cost_usd"])
         self.assertEqual([row["status"] for row in rows], ["passed", "unavailable", "failed"])

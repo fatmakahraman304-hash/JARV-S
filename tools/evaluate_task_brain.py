@@ -18,8 +18,14 @@ def evaluate(call, tier):
     for name, prompt, expected in CASES:
         start = time.monotonic()
         status = "unavailable"
+        input_tokens = output_tokens = model = None
         try:
             response = call(prompt, tier=tier, timeout_ms=15000)
+            usage = getattr(response, "usage_metadata", None)
+            input_tokens = getattr(usage, "prompt_token_count", None)
+            output_tokens = getattr(usage, "candidates_token_count", None)
+            model = getattr(response, "model_version", None)
+            response = response if isinstance(response, str) else getattr(response, "text", None)
             if response:
                 try:
                     actual = json.loads(response)
@@ -31,7 +37,9 @@ def evaluate(call, tier):
         except Exception:
             status = "error"
         yield {"case": name, "tier": tier, "status": status,
-               "elapsed_ms": round((time.monotonic() - start) * 1000)}
+               "model": model, "input_tokens": input_tokens, "output_tokens": output_tokens,
+               "cost_usd": None,
+               "elapsed_ms": round((time.monotonic() - start) * 1000) if status in ("passed", "failed") else None}
 
 
 if __name__ == "__main__":
@@ -39,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument("--live", required=True, action="store_true", help="send three synthetic prompts")
     parser.add_argument("--tier", choices=("fast", "smart"), default="fast")
     args = parser.parse_args()
-    from core.gemini import text
-    results = list(evaluate(text, args.tier))
+    from core.gemini import call
+    results = list(evaluate(call, args.tier))
     print(json.dumps(results, ensure_ascii=False, indent=2))
     raise SystemExit(int(any(row["status"] != "passed" for row in results)))

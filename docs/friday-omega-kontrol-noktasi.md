@@ -269,8 +269,8 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 1 | ANA GÖREVİN | Kısmi: merkezi görev ve cihaz çalışmaları sürüyor; nihai hedef açık. |
 | 2 | BAŞTAN SONA KAYNAK KOD DENETİMİ | Kısmi: önceki oturumlardaki belirli hata düzeltmeleri kaydedildi; bütün kaynak denetlenmedi. |
 | 3 | FRIDAY CENTRAL INTELLIGENCE | Kısmi: #255, #257, #260 ve bu oturumdaki görev planlama/yürütme çalışmaları. |
-| 4 | MULTI-BRAIN — ÇOKLU MODEL ZEKÂSI | Kısmi: mevcut FAST/SMART yönlendirmesi; bütün katmanlar ve canlı performans ölçümü eksik. |
-| 5 | FRIDAY PERSONAL OPERATING SYSTEM | Kısmi: şifreli kişisel görev ekleme, günlük yerel görünüm ve tamamlama. |
+| 4 | MULTI-BRAIN — ÇOKLU MODEL ZEKÂSI | Kısmi: mevcut FAST/SMART yönlendirmesi; FAST/SMART Türkçe değerlendirmesinde sağlayıcının döndürdüğü model sürümü ve token sayıları okunur. Bütün katmanlar ve canlı performans ölçümü eksik. |
+| 5 | FRIDAY PERSONAL OPERATING SYSTEM | Kısmi: şifreli kişisel görev, günlük öncelik, zaman çakışması, yeniden zamanlama ve haftalık ilerleme. |
 | 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi ve INFINITY güç planı işlemi; kapsamlı yetkili yönetim tamamlanmadı. |
 | 7 | HARDWARE INTELLIGENCE | Kısmi: #256 ve #258 yerel ölçümler ve basit eşikler; tüm sensörler ve fiziksel kabul eksik. |
 | 8 | FRIDAY OMNIVISION — EKRANI ANLAMA | Henüz uçtan uca doğrulanmadı. |
@@ -278,7 +278,7 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 10 | FRIDAY EVERYWHERE — BÜTÜN CİHAZLAR TEK SİSTEM | Kısmi: #253–#254 eşitleme ve yerel kuyruk güvenilirliği; bulut paketindeki görev motoru dosyaları düzeltildi, gerçek sunucu ve uçtan uca şifreli cihaz ağı eksik. |
 | 11 | FRIDAY SMART HOME | Henüz uçtan uca doğrulanmadı; varsayılan oda sınırı korunmalı. |
 | 12 | FRIDAY VOICE — DOĞAL CANLI KONUŞMA | Henüz fiziksel cihazda ve uçtan uca doğrulanmadı; mevcut kadın sesi korunmalı. |
-| 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü ve INFINITY görevlerin şifreli yedek kopyası; canlı birleşik şifreli görev/hafıza geçişi eksik. |
+| 13 | PERSONAL MEMORY — GERÇEK KİŞİSEL HAFIZA | Kısmi: #254 eşitleme günlüğü ve kişisel ajanda dahil sürümlü görev yedeği; canlı birleşik şifreli görev/hafıza geçişi eksik. |
 | 14 | FRIDAY EXPERT AGENT NETWORK | Kısmi: mevcut genel ve araştırma ajanları ile sınırlı paralel görevler; tüm uzmanlıklar eksik. |
 | 15 | FRIDAY AUTONOMOUS WORK | Kısmi: kalıcı graf ve sınırlı yeniden planlama; genel yetkiler ve kesinti garantileri eksik. |
 | 16 | FRIDAY SOFTWARE ENGINEER | Henüz tam kapsamda doğrulanmadı. |
@@ -378,3 +378,16 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 - GitHub main geçmişinde bulut dağıtımının beklediği `plugins/telegram_remote.py` yolu sorgulandı ve commit bulunamadı. Eski kurulum ve diğer dallardan kurtarma veya yeni eşleştirilmiş bot uygulaması açık.
 
 - “Başlangıç uygulamalarımı göster” sabit CIM sorgusundan en fazla 100 başlangıç girdisi adını yerel panele getirir. “Odaktaki denetimin türünü göster” Windows UI Automation üzerinden tür ve etkinlik okur. Aynı süre sınırlı PowerShell yürütme yolu üç izinli sorguyu destekler. Etkileşimli masaüstünde odak kabulü, uygulama içi yazma ve yönetici işlemleri açıktır.
+
+## SINGULARITY — Ajanda, sürümlü kurtarma ve süreç belleği
+
+- Kişisel görevlerde öncelik, gün içi başlangıç ve süre saklanır. Günlük görünüm açık işleri önceliğe göre sıralar. Aynı güne kaydedilmiş kişisel görev blokları çakıştığında daha geç bir boş saat varsa önerir. Kullanıcı istediğinde görev kimliğiyle zaman ve öncelik güncellenir. Öneriler harici takvim veya rutinleri boş zaman hesabına katmaz.
+- Haftalık panel pazartesi–pazar arasına planlanmış görevlerin kaçının tamamlanmış olduğunu sayar. Eski kayıtlar normal öncelikli ve saatsiz okunur. Hedef ve alışkanlıklar ayrı metrikler olarak henüz izlenmez.
+- Şifreli yedeğe canlı kişisel görevler mevcut kilit altında katılır. Onaylı kurtarmada sürümdeki görevler ayrı klasöre JSON olarak çıkarılır. Otomatik canlı içe aktarma, ekler, kurtarma anahtarı ve eski arka plan görevlerinin canlı göçü açık.
+- Yavaşlama incelemesi için anlık yerleşik bellek kullanımına göre erişilebilen ilk on işlem yerel panelde gösterilir. Ölçüm tek başına yavaşlığın nedenini kanıtlamaz.
+- Testler gerçek SQLite üzerinde çakışma, yeniden zamanlama, tamamlanma sayısı, önceki ve güncel sürümdeki farklı saatlerin kurtarılmasını ve yerel süreç belleği okumayı kapsar. Canlı sağlayıcı, cihaz geçişi, harici takvim ve kullanıcı bilgisayarında kurulum doğrulanmadı. 29 bölümlü izleme tablosunun açık durumları sürüyor.
+
+- Türkçe değerlendirmede sağlayıcı yanıtı olmayan denemelerin gecikmesi boş bırakılır. Token sayıları ve model sürümü yalnız yanıtın metadata alanlarından alınır; fiyat bilgisi doğrulanmadığı için maliyet boş kalır.
+
+- Haftalık uzman değerlendirmesi ayrı bir HUD onayından sonra Cognitive Engine'de tek düğümlü sınırlı görev açar. Kullanıcı hangi iki sayının (toplam ve tamamlanan) normal görev bağlamıyla modele gönderilebileceğini ve düz metin görev geçmişine kaydedileceğini görür. Uzman yalnızca görev notu aracını kullanır. Kabul testi sahte onayın reddini, gerçek onaydan sonra grafiğin oluşturulmasını ve özel görev başlığının grafiğe girmediğini denetler; uzman model yanıtı canlı test edilmedi.
+- Kullanıcı, “Görev yedeklerime 256 MiB sınır koy” isteğiyle güncel ve geçmiş sürümlerdeki toplam şifreli veri için kalıcı bir bütçe seçebilir. Sınırı aşacak yeni yedek reddedilir. Mevcut sürümler korunur. Bu sınır SQLite sayfaları, anahtar, canlı ajanda ve ayrı düz metin kurtarma klasörlerinin disk kullanımını kapsamaz. Testte bütçeyi aşan yazıdan sonra eski yedek ve geçmiş yeniden doğrulandı.

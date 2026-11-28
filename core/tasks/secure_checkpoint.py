@@ -105,6 +105,10 @@ def _collect(engine):
             "scope": "task-json-turns-research-notes; excludes attachments, generated files and reports"}
 
 
+class SnapshotLimitError(ValueError):
+    pass
+
+
 class TaskCheckpoint:
     def __init__(self, directory):
         self._journal = None
@@ -133,6 +137,7 @@ class TaskCheckpoint:
             self._db = self._journal._connection
             self._db.execute("CREATE TABLE IF NOT EXISTS task_snapshot (id INTEGER PRIMARY KEY CHECK(id=1), data BLOB NOT NULL)")
             self._db.execute("CREATE TABLE IF NOT EXISTS task_snapshot_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created REAL NOT NULL, data BLOB NOT NULL)")
+            self._db.execute("CREATE TABLE IF NOT EXISTS snapshot_policy (id INTEGER PRIMARY KEY CHECK(id=1), limit_mib INTEGER NOT NULL)")
             self._db.commit()
         except Exception:
             self.close()
@@ -154,6 +159,30 @@ class TaskCheckpoint:
                 self._locked = False
                 _LOCK.release()
 
+    def include_agenda(self, snapshot):
+        from core.tasks.agenda import read_record
+        if not self._db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='personal_tasks'").fetchone():
+            return
+        cipher = AESGCM(self._journal.key)
+        for ident, blob in self._db.execute("SELECT id,data FROM personal_tasks ORDER BY id"):
+            if not re.fullmatch("[0-9a-f]{32}", ident):
+                raise ValueError("invalid agenda identity")
+            item = read_record(cipher, ident, blob)
+            data = json.dumps(item, ensure_ascii=False).encode("utf-8")
+            snapshot["total_bytes"] += len(data)
+            if snapshot["total_bytes"] > _MAX_BYTES or len(snapshot["files"]) >= _MAX_FILES:
+                raise ValueError("personal agenda exceeds checkpoint limit")
+            snapshot["files"].append({"path": f"personal_agenda/{ident}.json",
+                                      "sha256": hashlib.sha256(data).hexdigest(),
+                                      "data": base64.b64encode(data).decode("ascii")})
+        snapshot["scope"] += "; includes personal agenda"
+
+    def set_limit(self, limit_mib):
+        if type(limit_mib) is not int or not 1 <= limit_mib <= 65536:
+            raise ValueError("checkpoint limit must be 1 to 65536 MiB")
+        with self._db:
+            self._db.execute("INSERT OR REPLACE INTO snapshot_policy VALUES (1, ?)", (limit_mib,))
+
     def save(self, snapshot):
         if self._db.execute("SELECT 1 FROM task_snapshot WHERE id=1").fetchone() is not None:
             self.load()  # Never overwrite an unreadable/tampered older checkpoint.
@@ -162,6 +191,13 @@ class TaskCheckpoint:
         encrypted = nonce + AESGCM(self._journal.key).encrypt(nonce, raw, _AAD)
         with self._db:
             old = self._db.execute("SELECT data FROM task_snapshot WHERE id=1").fetchone()
+            policy = self._db.execute("SELECT limit_mib FROM snapshot_policy WHERE id=1").fetchone()
+            if policy:
+                history_size = self._db.execute(
+                    "SELECT COALESCE(SUM(length(data)),0) FROM task_snapshot_history").fetchone()[0]
+                current_size = len(old[0]) if old is not None else 0
+                if history_size + current_size + len(encrypted) > policy[0] * 1024 ** 2:
+                    raise SnapshotLimitError("Configured encrypted snapshot limit reached; existing versions preserved")
             if old is not None:
                 self._db.execute("INSERT INTO task_snapshot_history(created,data) VALUES (?,?)", (time.time(), old[0]))
             self._db.execute("INSERT OR REPLACE INTO task_snapshot(id,data) VALUES (1,?)", (encrypted,))
@@ -211,6 +247,7 @@ def checkpoint(engine):
         with engine.store._lock:
             snapshot = _collect(engine)
             with TaskCheckpoint(engine.store.root / "_encrypted_checkpoint") as archive:
+                archive.include_agenda(snapshot)
                 archive.save(snapshot)
     return {"files": len(snapshot["files"]), "bytes": snapshot["total_bytes"]}
 

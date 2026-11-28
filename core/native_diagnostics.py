@@ -10,6 +10,16 @@ import platform
 import subprocess
 
 
+def process_memory():
+    import psutil
+    samples = []
+    for process in psutil.process_iter(["name", "memory_info"]):
+        info = process.info
+        if info["name"] and info["memory_info"] is not None:
+            samples.append((info["memory_info"].rss, info["name"]))
+    return sorted(samples, reverse=True)[:10]
+
+
 def model_sharing_enabled():
     """Fail closed if settings are absent or cannot be read."""
     from core.hardware_privacy import model_sharing_enabled as allowed

@@ -133,6 +133,16 @@ class NativeDiagnosticsTests(unittest.TestCase):
             runtime._task_tools({"id": "x"}, profile)
         self.assertEqual(build.call_args.args[1], ["notes"])
 
+    def test_real_process_samples_and_local_display(self):
+        rows = native.process_memory()
+        self.assertTrue(rows)
+        self.assertEqual(rows, sorted(rows, reverse=True))
+        self.assertLessEqual(len(rows), 10)
+        player = Mock()
+        result = action.native_diagnostics({"view": "memory_processes"}, player)
+        self.assertIn("MiB", player.show_content.call_args.args[1])
+        self.assertNotIn("MiB", result)
+
     def test_real_local_snapshot_has_no_invented_measurements(self):
         result = native.collect()
         self.assertIn("observed_at", result)
