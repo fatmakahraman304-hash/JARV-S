@@ -345,3 +345,25 @@ Başlangıç `main`: `1df5722c258c5d674e155a24408b1a42b1db72c4`; #252–#262 kor
 ### Fiziksel cihaz gerektirenler
 
 - Kullanıcının Windows profilinde DPAPI anahtarı, gerçek görev arşiviyle kurtarma ve GÜNCELLE paneli üzerinden uçtan uca kabul testi yapılmadı.
+
+## 2026-11-28 — ABSOLUTE: görev yedek sürüm geçmişi
+
+Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 korunur.
+
+### Tamamlanan
+
+- Mevcut şifreli görev yedeği, yeni yedek yazılırken önceki sürümü aynı SQLite işlemi içinde şifreli geçmişe taşır. Sürüm kimlikleri listelenebilir, seçilen sürüm doğrulanabilir ve gerçek kullanıcı onayıyla canlı görevlerden ayrı düz metin kurtarma klasörüne çıkarılabilir. Eski tek sürümlü depolar uyumlu biçimde açılır.
+- Linux yerel testleri önceki sürümün kurtarılmasını, canlı görevin değişmemesini ve bozuk/geçersiz sürümün reddini kapsar. Canlı model kullanılmadı.
+
+### Eksik kalan
+
+- Bu hâlâ istek üzerine alınan yedektir; canlı görevler, planlar, grafikler ve kişisel hafıza şifreli depoya geçirilmedi. Sürüm geçmişi otomatik silinmez ve disk kullanımı büyür. Ekler ve üretilmiş dosyalar hâlâ kapsam dışıdır; anahtar kurtarma ve süreçler arası canlı görev koordinasyonu yoktur.
+- Genel Windows işlemleri, kişisel hayat, cihazlar ve 29 Omega bölümünün tamamı bitmedi. Telegram dosyaları yerel Git geçmişinde arandı, belirlenen adlarla geçmiş bulunamadı; tüm eski sürüm ve dağıtım kaynaklarının incelenmesi ve güvenli entegrasyon açık.
+
+### Başarısız veya doğrulanamayan
+
+- Gerçek sağlayıcı testi, gerçek cihazda güncelleme ve anahtar kurtarma testi bu çalışma kapsamında yapılmadı. Windows/Linux CI sonuçları ilgili değişiklik isteğinden izlenmelidir.
+
+### Fiziksel cihaz gerektiren
+
+- Kullanıcının Windows profilinde DPAPI, gerçek arşiv geri yükleme ve GÜNCELLE paneli uçtan uca doğrulanmadı.

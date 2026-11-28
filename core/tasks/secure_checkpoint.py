@@ -132,6 +132,7 @@ class TaskCheckpoint:
             self._journal = NeuralJournal(directory, "task-checkpoint-v1")
             self._db = self._journal._connection
             self._db.execute("CREATE TABLE IF NOT EXISTS task_snapshot (id INTEGER PRIMARY KEY CHECK(id=1), data BLOB NOT NULL)")
+            self._db.execute("CREATE TABLE IF NOT EXISTS task_snapshot_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created REAL NOT NULL, data BLOB NOT NULL)")
             self._db.commit()
         except Exception:
             self.close()
@@ -160,10 +161,21 @@ class TaskCheckpoint:
         nonce = os.urandom(12)
         encrypted = nonce + AESGCM(self._journal.key).encrypt(nonce, raw, _AAD)
         with self._db:
+            old = self._db.execute("SELECT data FROM task_snapshot WHERE id=1").fetchone()
+            if old is not None:
+                self._db.execute("INSERT INTO task_snapshot_history(created,data) VALUES (?,?)", (time.time(), old[0]))
             self._db.execute("INSERT OR REPLACE INTO task_snapshot(id,data) VALUES (1,?)", (encrypted,))
 
-    def load(self):
-        row = self._db.execute("SELECT data FROM task_snapshot WHERE id=1").fetchone()
+    def versions(self):
+        """List history identifiers, newest first; contents stay encrypted."""
+        return [{"id": row[0], "archived_at": row[1]} for row in
+                self._db.execute("SELECT id,created FROM task_snapshot_history ORDER BY id DESC")]
+
+    def load(self, version=None):
+        if version is None:
+            row = self._db.execute("SELECT data FROM task_snapshot WHERE id=1").fetchone()
+        else:
+            row = self._db.execute("SELECT data FROM task_snapshot_history WHERE id=?", (version,)).fetchone()
         if row is None:
             raise JournalError("No encrypted task checkpoint exists")
         try:
@@ -203,16 +215,21 @@ def checkpoint(engine):
     return {"files": len(snapshot["files"]), "bytes": snapshot["total_bytes"]}
 
 
-def verify(engine):
+def history(engine):
     with TaskCheckpoint(engine.store.root / "_encrypted_checkpoint") as archive:
-        snapshot = archive.load()
+        return archive.versions()
+
+
+def verify(engine, version=None):
+    with TaskCheckpoint(engine.store.root / "_encrypted_checkpoint") as archive:
+        snapshot = archive.load(version)
     return {"files": len(snapshot["files"]), "bytes": snapshot["total_bytes"], "created": snapshot["created"]}
 
 
-def recover_to_isolated_folder(engine):
+def recover_to_isolated_folder(engine, version=None):
     """Export plaintext to a new isolated folder; never touches live tasks."""
     with TaskCheckpoint(engine.store.root / "_encrypted_checkpoint") as archive:
-        snapshot = archive.load()
+        snapshot = archive.load(version)
     from core.identity import data_home
     base = data_home() / "task_recovery"
     base.mkdir(parents=True, exist_ok=True)
