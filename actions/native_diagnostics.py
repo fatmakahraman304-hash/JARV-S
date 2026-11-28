@@ -9,6 +9,16 @@ def native_diagnostics(parameters: dict, player=None) -> str:
     from core.native_diagnostics import collect, local_analysis, model_metrics, model_sharing_enabled
     try:
         view = (parameters or {}).get("view", "hardware")
+        if view == "memory_processes":
+            if not callable(getattr(player, "show_content", None)):
+                return outcome.failed("native_diagnostics", "local desktop required")
+            from core.native_diagnostics import process_memory
+            rows = process_memory()
+            if not rows:
+                return outcome.unverified("native_diagnostics", "no accessible process memory samples")
+            detail = "\n".join(f"{name} · {rss / (1024 ** 2):.1f} MiB" for rss, name in rows)
+            player.show_content("RAM KULLANAN İŞLEMLER", detail + "\nAnlık yerleşik bellek ölçümü.")
+            return outcome.done("native_diagnostics", observed=True, panel_shown=True)
         if view in ("startup", "focus"):
             import platform
             from core.native_diagnostics import windows_query
@@ -57,6 +67,6 @@ TOOL = {
                     "Use when the user asks to analyze the computer or its hardware."),
     "brief": "Read-only local CPU, memory, disk, battery and Windows CIM hardware diagnostics.",
     "tier": "core",
-    "parameters": {"type": "OBJECT", "properties": {"view": {"type": "STRING", "enum": ["hardware", "startup", "focus"], "description": "Windows startup entry names or the focused UI Automation control role, shown locally."}}},
+    "parameters": {"type": "OBJECT", "properties": {"view": {"type": "STRING", "enum": ["hardware", "startup", "focus", "memory_processes"], "description": "For slowdown or RAM pressure inspect memory_processes. Windows startup entry names or the focused UI Automation control role, shown locally."}}},
     "handler": native_diagnostics,
 }

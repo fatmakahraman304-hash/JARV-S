@@ -378,3 +378,11 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 - GitHub main geçmişinde bulut dağıtımının beklediği `plugins/telegram_remote.py` yolu sorgulandı ve commit bulunamadı. Eski kurulum ve diğer dallardan kurtarma veya yeni eşleştirilmiş bot uygulaması açık.
 
 - “Başlangıç uygulamalarımı göster” sabit CIM sorgusundan en fazla 100 başlangıç girdisi adını yerel panele getirir. “Odaktaki denetimin türünü göster” Windows UI Automation üzerinden tür ve etkinlik okur. Aynı süre sınırlı PowerShell yürütme yolu üç izinli sorguyu destekler. Etkileşimli masaüstünde odak kabulü, uygulama içi yazma ve yönetici işlemleri açıktır.
+
+## SINGULARITY — Ajanda, sürümlü kurtarma ve süreç belleği
+
+- Kişisel görevlerde öncelik, gün içi başlangıç ve süre saklanır. Günlük görünüm açık işleri önceliğe göre sıralar. Aynı güne kaydedilmiş kişisel görev blokları çakıştığında daha geç bir boş saat varsa önerir. Kullanıcı istediğinde görev kimliğiyle zaman ve öncelik güncellenir. Öneriler harici takvim veya rutinleri boş zaman hesabına katmaz.
+- Haftalık panel pazartesi–pazar arasına planlanmış görevlerin kaçının tamamlanmış olduğunu sayar. Eski kayıtlar normal öncelikli ve saatsiz okunur. Hedef ve alışkanlıklar ayrı metrikler olarak henüz izlenmez.
+- Şifreli yedeğe canlı kişisel görevler mevcut kilit altında katılır. Onaylı kurtarmada sürümdeki görevler ayrı klasöre JSON olarak çıkarılır. Otomatik canlı içe aktarma, ekler, kurtarma anahtarı ve eski arka plan görevlerinin canlı göçü açık.
+- Yavaşlama incelemesi için anlık yerleşik bellek kullanımına göre erişilebilen ilk on işlem yerel panelde gösterilir. Ölçüm tek başına yavaşlığın nedenini kanıtlamaz.
+- Testler gerçek SQLite üzerinde çakışma, yeniden zamanlama, tamamlanma sayısı, önceki ve güncel sürümdeki farklı saatlerin kurtarılmasını ve yerel süreç belleği okumayı kapsar. Canlı sağlayıcı, cihaz geçişi, harici takvim ve kullanıcı bilgisayarında kurulum doğrulanmadı. 29 bölümlü izleme tablosunun açık durumları sürüyor.

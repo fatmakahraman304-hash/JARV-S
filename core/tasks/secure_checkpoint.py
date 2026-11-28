@@ -154,6 +154,24 @@ class TaskCheckpoint:
                 self._locked = False
                 _LOCK.release()
 
+    def include_agenda(self, snapshot):
+        from core.tasks.agenda import read_record
+        if not self._db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='personal_tasks'").fetchone():
+            return
+        cipher = AESGCM(self._journal.key)
+        for ident, blob in self._db.execute("SELECT id,data FROM personal_tasks ORDER BY id"):
+            if not re.fullmatch("[0-9a-f]{32}", ident):
+                raise ValueError("invalid agenda identity")
+            item = read_record(cipher, ident, blob)
+            data = json.dumps(item, ensure_ascii=False).encode("utf-8")
+            snapshot["total_bytes"] += len(data)
+            if snapshot["total_bytes"] > _MAX_BYTES or len(snapshot["files"]) >= _MAX_FILES:
+                raise ValueError("personal agenda exceeds checkpoint limit")
+            snapshot["files"].append({"path": f"personal_agenda/{ident}.json",
+                                      "sha256": hashlib.sha256(data).hexdigest(),
+                                      "data": base64.b64encode(data).decode("ascii")})
+        snapshot["scope"] += "; includes personal agenda"
+
     def save(self, snapshot):
         if self._db.execute("SELECT 1 FROM task_snapshot WHERE id=1").fetchone() is not None:
             self.load()  # Never overwrite an unreadable/tampered older checkpoint.
@@ -211,6 +229,7 @@ def checkpoint(engine):
         with engine.store._lock:
             snapshot = _collect(engine)
             with TaskCheckpoint(engine.store.root / "_encrypted_checkpoint") as archive:
+                archive.include_agenda(snapshot)
                 archive.save(snapshot)
     return {"files": len(snapshot["files"]), "bytes": snapshot["total_bytes"]}
 

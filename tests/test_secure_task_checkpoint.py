@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -54,6 +55,35 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         self.assertIn("Tamamlandı · " + title, display.show_content.call_args.args[1])
         invoke("agenda_day", day="2026-12-02")
         self.assertNotIn(title, display.show_content.call_args.args[1])
+
+    def test_plan_conflict_reschedule_and_versioned_personal_recovery(self):
+        display = Mock()
+        def invoke(action, **args):
+            with patch("core.tasks.desktop.ensure", return_value=self.engine):
+                return background_tasks.background_tasks(dict(action=action, **args), display)
+        day = "2026-12-01"
+        first = invoke("agenda_add", task="Ders", day=day, start_time="09:00", duration=60,
+                       priority="high").split()[-1]
+        second = invoke("agenda_add", task="Proje", day=day, start_time="09:30", duration=30).split()[-1]
+        invoke("agenda_day", day=day)
+        panel = display.show_content.call_args.args[1]
+        self.assertLess(panel.index("Ders"), panel.index("Proje"))
+        self.assertIn("Öneri 10:00", panel)
+        checkpoint.checkpoint(self.engine)
+        invoke("agenda_reschedule", task_id=second, start_time="10:00", duration=30)
+        invoke("agenda_complete", task_id=first)
+        invoke("agenda_day", day=day)
+        self.assertNotIn("Çakışma", display.show_content.call_args.args[1])
+        invoke("agenda_week", day=day)
+        self.assertIn("2 görevin 1", display.show_content.call_args.args[1])
+        checkpoint.checkpoint(self.engine)
+        old = checkpoint.history(self.engine)[0]["id"]
+        with patch("core.identity.data_home", return_value=self.root):
+            prior = checkpoint.recover_to_isolated_folder(self.engine, old)
+            latest = checkpoint.recover_to_isolated_folder(self.engine)
+        record = Path("personal_agenda") / (second + ".json")
+        self.assertEqual(json.loads((prior / record).read_bytes())["start"], 570)
+        self.assertEqual(json.loads((latest / record).read_bytes())["start"], 600)
 
     def test_encrypted_snapshot_preserves_task_turns_and_notes_without_copying_outputs(self):
         info = checkpoint.checkpoint(self.engine)

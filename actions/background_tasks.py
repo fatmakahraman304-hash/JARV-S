@@ -48,7 +48,7 @@ def background_tasks(parameters: dict, player=None) -> str:
     a = dict(parameters or {})
     action = str(a.get("action") or "list").strip().lower()
 
-    if action in ("agenda_add", "agenda_complete", "agenda_day"):
+    if action in ("agenda_add", "agenda_complete", "agenda_reschedule", "agenda_week", "agenda_day"):
         try:
             from core.tasks.agenda import agenda
             return agenda(eng, action, a, player)
@@ -86,7 +86,7 @@ def background_tasks(parameters: dict, player=None) -> str:
                 return outcome.done("task_checkpoint_recover", folder_shown=shown, live_tasks_changed=False,
                                     note="isolated plaintext recovery copy; no tasks were started")
             return confirm.request("task_checkpoint_recover", "Görev kurtarma kopyası oluştur",
-                f"Şifreli yedek sürümü {version if version is not None else 'son'} yerel bir klasöre okunabilir dosyalar olarak çıkarılacak. "
+                f"Kişisel ajanda dahil olabilecek şifreli yedek sürümü {version if version is not None else 'son'} yerel bir klasöre okunabilir dosyalar olarak çıkarılacak. "
                 "Canlı görevler değiştirilmez veya çalıştırılmaz. Ekler ve üretilen dosyalar dahil değildir.", recover)
         except Exception as e:
             return outcome.failed("task_checkpoint", f"checkpoint unavailable: {type(e).__name__}")
@@ -323,7 +323,7 @@ TOOL = {
         "sharing preference, off by default, and sends that node's task and result to the provider. "
         "Nodes using private memory or hardware tools are blocked. Its opinion does not independently prove the result. "
         "agenda_day displays personal tasks and next scheduled routines locally. agenda_add saves a personal task; "
-        "agenda_complete marks it done by task_id. "
+        "agenda_week displays progress for the week containing day. agenda_reschedule updates the specified task only when requested; agenda_complete marks it done by task_id. "
         "Do not treat generated reports as independently verified. task_checkpoint makes an encrypted "
         "local copy of task records and research notes, not live encrypted storage; it excludes attachments, "
         "generated files and external reports. task_checkpoint_history lists previous versions; checkpoint_version selects one for verify or recover. task_checkpoint_verify checks its integrity. "
@@ -342,7 +342,10 @@ TOOL = {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["agenda_day", "agenda_add", "agenda_complete", "start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"]},
+                       "enum": ["agenda_day", "agenda_reschedule", "agenda_week", "agenda_add", "agenda_complete", "start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"]},
+            "priority": {"type": "STRING", "enum": ["high", "normal", "low"]},
+            "start_time": {"type": "STRING", "description": "Personal task start HH:MM; requires duration"},
+            "duration": {"type": "INTEGER", "description": "Personal task duration in minutes"},
             "day": {"type": "STRING", "description": "Local YYYY-MM-DD for personal agenda, defaults to today"},
             "checkpoint_version": {"type": "INTEGER", "description": "historical checkpoint ID from task_checkpoint_history; omit for latest"},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
