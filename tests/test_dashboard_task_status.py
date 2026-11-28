@@ -6,10 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
-from dashboard.server import DashboardServer
+from dashboard.server import DashboardServer, _DEPS_OK
 from core.tasks.store import TaskStore
 
 
+@unittest.skipUnless(_DEPS_OK, "requires FastAPI and uvicorn; covered by the Windows executive matrix")
 class DashboardTaskStatusTests(unittest.IsolatedAsyncioTestCase):
     async def test_read_only_metadata_requires_live_https_session(self):
         with tempfile.TemporaryDirectory() as tmp:
