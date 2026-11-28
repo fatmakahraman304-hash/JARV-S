@@ -30,7 +30,9 @@ except ImportError:
 # python-multipart is required for file uploads — optional dependency
 _UPLOAD_OK = False
 try:
+    from importlib.metadata import version
     from fastapi import UploadFile, File as FastAPIFile
+    version("python-multipart")
     _UPLOAD_OK = True
 except Exception:
     pass

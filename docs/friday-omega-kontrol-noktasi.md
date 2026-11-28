@@ -400,3 +400,5 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 - Gerçek kullanıcı bilgisayarında işaretçi hissi, kurulu GÜNCELLE ve donanım kabulü yapılmadı. Model, Telegram, cihazlar ve canlı görev/grafik göçünde yeni kabul sonucu yoktur. 29 bölümün açık işleri sürer.
 
 - Yetkili telefon denetleyicisi, mevcut HTTPS panelinden bu bilgisayarın son 20 arka plan görevinin kimliğini ve durumunu okuyabilir. Başlıklar, sonuçlar ve dosya yolları gönderilmez. Oturum yoksa, iptal edildiyse veya düz HTTP kullanılırsa erişim reddedilir. ASGI kabulü gerçek TaskStore verisini okur. Fiziksel telefon, cihazlar arası yürütme ve Telegram botu henüz doğrulanmadı.
+
+- Temiz Windows/Linux panel kabulü, python-multipart bulunmadığında FastAPI yükleme rotasının hatayla açıldığını ortaya çıkardı. Gerçek dağıtım bağımlılığı kontrolü eklendi. Dosya yükleme paketi olmadan görev durumu çalışabilir.
