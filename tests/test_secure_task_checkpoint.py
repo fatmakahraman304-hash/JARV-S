@@ -206,3 +206,11 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         for value in ("../outside", "/absolute", "C:/outside", "a\\..\\x", ".", ""):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 checkpoint._safe_path(value)
+
+
+class ModelEvaluationTests(unittest.TestCase):
+    def test_exact_score_and_unavailable(self):
+        from tools.evaluate_task_brain import evaluate
+        answers = iter(['{"bitis":"10:35"}', '', '{"tekrar":0}'])
+        rows = list(evaluate(lambda *a, **k: next(answers), 'fast'))
+        self.assertEqual([row["status"] for row in rows], ["passed", "unavailable", "failed"])
