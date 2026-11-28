@@ -376,3 +376,5 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 
 - Model değerlendirmesi için `python -m tools.evaluate_task_brain --live --tier smart` yapılandırılmış gerçek sağlayıcı yoluna üç sentetik Türkçe görev gönderir. JSON sonucu nesnel beklentiyle karşılaştırır, her isteğin toplam süresini ölçer. FAST da seçilebilir. Yerel puanlama testi taklittir. Model adı, token ve para maliyeti bu ölçümden çıkarılamaz.
 - GitHub main geçmişinde bulut dağıtımının beklediği `plugins/telegram_remote.py` yolu sorgulandı ve commit bulunamadı. Eski kurulum ve diğer dallardan kurtarma veya yeni eşleştirilmiş bot uygulaması açık.
+
+- “Başlangıç uygulamalarımı göster” sabit CIM sorgusundan en fazla 100 başlangıç girdisi adını yerel panele getirir. “Odaktaki denetimin türünü göster” Windows UI Automation üzerinden tür ve etkinlik okur. Aynı süre sınırlı PowerShell yürütme yolu üç izinli sorguyu destekler. Etkileşimli masaüstünde odak kabulü, uygulama içi yazma ve yönetici işlemleri açıktır.

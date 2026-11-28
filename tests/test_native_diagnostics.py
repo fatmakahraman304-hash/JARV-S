@@ -142,6 +142,8 @@ class NativeDiagnosticsTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "nt", "requires native Windows CIM")
     def test_real_windows_cim_query(self):
+        startup = native.windows_query("startup", timeout=30)
+        self.assertLessEqual(len(startup["names"]), 100)
         result = native._windows_cim(timeout=30)
         self.assertTrue(result["operating_system"].get("Caption"))
         self.assertIsInstance(result["processors"], list)
