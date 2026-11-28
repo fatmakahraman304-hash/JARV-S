@@ -35,20 +35,22 @@ def windows_power(parameters: dict, player=None) -> str:
             history = executive.operation_history()
             return ("\n".join(f"operation_id={x['id']} status={x['status']}" for x in history)
                     if history else "No Windows power operations recorded.")
-        if action == "set":
+        if action in ("set", "pointer_speed"):
             if player is None:
                 return outcome.failed("windows_power", "The local desktop interface is unavailable")
             mode = str(args.get("mode") or "").strip().lower()
-            record = executive.set_plan(mode)
+            record = executive.set_plan(mode) if action == "set" else executive.set_pointer_speed(args.get("speed"))
+            label = "Windows güç planı" if action == "set" else "Windows işaretçi hızı"
+            facts = {"mode": mode} if action == "set" else {"speed": args["speed"]}
             if record["status"] == "unchanged":
-                return outcome.done("windows_power", mode=mode, changed=False, verified=True)
+                return outcome.done("windows_power", **facts, changed=False, verified=True)
             ident = record["operation_id"]
             from core.undo import push_undo
             def restore():
                 executive.undo(ident)
-                return "The previous Windows power scheme was verified."
-            push_undo("Windows güç planı", restore)
-            return outcome.done("windows_power", mode=mode, changed=True, verified=True, operation_id=ident)
+                return "Previous Windows setting verified."
+            push_undo(label, restore)
+            return outcome.done("windows_power", **facts, changed=True, verified=True, operation_id=ident)
         if action == "undo":
             if player is None:
                 return outcome.failed("windows_power", "The local desktop interface is unavailable")
@@ -64,12 +66,12 @@ def windows_power(parameters: dict, player=None) -> str:
                 return outcome.failed("windows_power", "No matching unresolved operation")
             from core import confirm
             expected = record["status"]
-            detail = (f"İşlem {ident}. Windows güç ayarlarını kontrol edin. Onay yalnızca belirsiz işlem "
-                      "kaydını incelenmiş olarak işaretler; güç planını değiştirmez veya geri almaz.")
+            detail = (f"İşlem {ident}. Windows ayarını kontrol edin. Onay yalnızca belirsiz işlem "
+                      "kaydını incelenmiş olarak işaretler; ayarı değiştirmez veya geri almaz.")
             def acknowledge():
                 executive.acknowledge(ident, expected)
                 return outcome.done("windows_power_review", operation_id=ident, system_changed=False)
-            return confirm.request("windows_power_review", "Belirsiz güç işlemini incele", detail, acknowledge)
+            return confirm.request("windows_power_review", "Belirsiz Windows işlemini incele", detail, acknowledge)
         return outcome.failed("windows_power", "Unknown action")
     except executive.UnknownOutcome as exc:
         return outcome.unverified("windows_power", "the operation may have changed Windows; inspect before retrying",
@@ -84,13 +86,14 @@ TOOL = {
     "name": "windows_power",
     "description": ("Windows only. Inspect the power plan locally or select an existing built-in "
                     "balanced, power_saver or high_performance plan. The setting is checked before and "
-                    "after; it is reversible. Do not claim success unless verified. history lists operation "
+                    "after; it is reversible. pointer_speed sets mouse pointer speed (1–20) for this Windows session. Do not claim success unless verified. history lists operation "
                     "ids; undo needs the operation_id; review requires the user's physical confirmation "
                     "for an unresolved operation. Never invent availability or change another setting."),
     "brief": "Inspect or reversibly switch an existing Windows power scheme with verification.",
     "tier": "core",
     "parameters": {"type": "OBJECT", "properties": {
-        "action": {"type": "STRING", "enum": ["status", "set", "undo", "history", "review"]},
+        "action": {"type": "STRING", "enum": ["status", "set", "pointer_speed", "undo", "history", "review"]},
+        "speed": {"type": "INTEGER", "description": "Mouse pointer speed 1 through 20"},
         "mode": {"type": "STRING", "enum": ["balanced", "power_saver", "high_performance"]},
         "operation_id": {"type": "STRING"}}, "required": ["action"]},
     "handler": windows_power,

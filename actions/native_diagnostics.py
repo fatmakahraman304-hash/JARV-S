@@ -9,6 +9,12 @@ def native_diagnostics(parameters: dict, player=None) -> str:
     from core.native_diagnostics import collect, local_analysis, model_metrics, model_sharing_enabled
     try:
         view = (parameters or {}).get("view", "hardware")
+        if view == "slowdown":
+            if not callable(getattr(player, "show_content", None)):
+                return outcome.failed("native_diagnostics", "local desktop required")
+            from core.native_diagnostics import slowdown_report
+            player.show_content("YAVAŞLAMA İNCELEMESİ", slowdown_report())
+            return outcome.done("native_diagnostics", observed=True, panel_shown=True)
         if view == "memory_processes":
             if not callable(getattr(player, "show_content", None)):
                 return outcome.failed("native_diagnostics", "local desktop required")
@@ -67,6 +73,6 @@ TOOL = {
                     "Use when the user asks to analyze the computer or its hardware."),
     "brief": "Read-only local CPU, memory, disk, battery and Windows CIM hardware diagnostics.",
     "tier": "core",
-    "parameters": {"type": "OBJECT", "properties": {"view": {"type": "STRING", "enum": ["hardware", "startup", "focus", "memory_processes"], "description": "For slowdown or RAM pressure inspect memory_processes. Windows startup entry names or the focused UI Automation control role, shown locally."}}},
+    "parameters": {"type": "OBJECT", "properties": {"view": {"type": "STRING", "enum": ["hardware", "startup", "focus", "memory_processes", "slowdown"], "description": "For a slow PC use slowdown to sample CPU and memory together. For a RAM ranking use memory_processes. Windows startup entry names or the focused UI Automation control role, shown locally."}}},
     "handler": native_diagnostics,
 }

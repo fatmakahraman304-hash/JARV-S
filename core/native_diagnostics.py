@@ -20,6 +20,28 @@ def process_memory():
     return sorted(samples, reverse=True)[:10]
 
 
+def slowdown_report():
+    """Two successive CPU samples and memory pressure, kept on the local HUD."""
+    import psutil
+    cpu = [psutil.cpu_percent(interval=0.5) for _ in range(2)]
+    vm = psutil.virtual_memory()
+    rows = [f"CPU (iki yarım saniyelik örnek): %{cpu[0]:.1f}, %{cpu[1]:.1f}",
+            f"RAM: %{vm.percent:.1f} · Kullanılabilir {vm.available / 1024**3:.2f} GiB"]
+    cpu_high = min(cpu) >= 90
+    ram_high = vm.percent >= 90
+    if cpu_high and ram_high:
+        rows.append("İki örnekte de CPU yüksek ve bellek dolu. Yoğun uygulamayı duraklatıp tekrar ölçün.")
+    elif cpu_high:
+        rows.append("İki örnekte de CPU yüksek. Görev Yöneticisi'nde CPU sırasını inceleyip tekrar ölçün.")
+    elif ram_high:
+        rows.append("Bellek baskısı olası. Kullanılmayan uygulamayı kaydedip kapattıktan sonra tekrar ölçün.")
+    else:
+        rows.append("Örnekleme sırasında yüksek CPU veya RAM baskısı görülmedi. Yavaşlama anında tekrar ölçün.")
+    rows.append("Anlık işlem belleği (paylaşılan sayfalar dahil olabilir):")
+    rows.extend(f"{name} · {rss / 1024**2:.0f} MiB" for rss, name in process_memory()[:5])
+    return "\n".join(rows)
+
+
 def model_sharing_enabled():
     """Fail closed if settings are absent or cannot be read."""
     from core.hardware_privacy import model_sharing_enabled as allowed

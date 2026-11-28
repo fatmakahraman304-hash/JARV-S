@@ -53,6 +53,34 @@ class WindowsExecutiveTests(unittest.TestCase):
         self.assertNotIn(self.before.encode(), raw)
         self.assertNotIn(self.target.encode(), raw)
 
+    def test_pointer_change_uses_shared_undo_and_refuses_external_change(self):
+        speed = ["10"]
+        with patch.object(win, "_pointer_speed", side_effect=lambda: speed[0]), patch.object(
+                win, "_write_pointer", side_effect=lambda value: speed.__setitem__(0, value)):
+            record = win.set_pointer_speed(13, self.path)
+            self.assertEqual(speed, ["13"])
+            speed[0] = "11"
+            with self.assertRaisesRegex(win.ExecutiveError, "changed"):
+                win.undo(record["operation_id"], self.path)
+            self.assertEqual(speed, ["11"])
+            for bad in (True, 21, "10"):
+                with self.assertRaises(ValueError):
+                    win.set_pointer_speed(bad, self.path)
+
+    @unittest.skipUnless(os.name == "nt" and os.environ.get("FRIDAY_ALLOW_POWER_TEST") == "1",
+                         "isolated Windows runner required")
+    def test_real_pointer_speed_and_journal_undo(self):
+        previous = win._pointer_speed()
+        target = 11 if previous == "10" else 10
+        try:
+            record = win.set_pointer_speed(target, self.path)
+            self.assertEqual(win._pointer_speed(), str(target))
+            win.undo(record["operation_id"], self.path)
+            self.assertEqual(win._pointer_speed(), previous)
+        finally:
+            if win._pointer_speed() != previous:
+                win._write_pointer(previous)
+
     def test_external_change_prevents_undo_overwriting_user(self):
         with patch.object(win, "_run", side_effect=self.fake_run):
             record = win.set_plan("power_saver", self.path)

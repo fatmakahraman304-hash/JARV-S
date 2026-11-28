@@ -112,6 +112,21 @@ def agenda(engine, action, params, player):
     rows = []
     blocks = sorted((item["start"], item["start"] + item["duration"], ident)
                     for ident, item in tasks if not item["done"] and "start" in item)
+    routine_rows = []
+    from core.routines import desktop
+    routines = desktop.engine()
+    if routines is None:
+        routine_rows.append("Rutin motoruna ulaşılamadı.")
+    else:
+        for routine in sorted(routines.list(), key=lambda r: r.get("next_ts") or 0):
+            stamp = routine.get("next_ts")
+            if routine.get("enabled") and stamp:
+                when = datetime.fromtimestamp(stamp)
+                if when.date() == day:
+                    minute = when.hour * 60 + when.minute
+                    blocks.append((minute, minute + 1, "routine"))
+                    routine_rows.append(f"{when:%H:%M} · {routine['name']} (başlangıç)")
+    blocks.sort()
     for ident, item in sorted(tasks, key=lambda pair: (pair[1]["done"],
                               list(PRIORITIES).index(pair[1].get("priority", "normal")), pair[1].get("start", 1440))):
         status = "Tamamlandı" if item["done"] else "Bekliyor"
@@ -130,16 +145,6 @@ def agenda(engine, action, params, player):
                     if candidate + duration <= 1440:
                         line += f" · Öneri {clock_text(candidate)}"
         rows.append(line)
-    from core.routines import desktop
-    routines = desktop.engine()
-    if routines is None:
-        rows.append("Rutin motoruna ulaşılamadı.")
-    else:
-        for routine in sorted(routines.list(), key=lambda r: r.get("next_ts") or 0):
-            stamp = routine.get("next_ts")
-            if routine.get("enabled") and stamp:
-                when = datetime.fromtimestamp(stamp)
-                if when.date() == day:
-                    rows.append(f"{when:%H:%M} · {routine['name']}")
+    rows.extend(routine_rows)
     player.show_content("GÜNLÜK PLAN · " + day.isoformat(), "\n".join(rows) or "Bu tarih için kayıt yok.")
     return "Daily plan shown locally."
