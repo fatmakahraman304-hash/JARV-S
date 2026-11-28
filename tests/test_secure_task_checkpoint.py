@@ -37,6 +37,24 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         (work / "inputs" / "in.txt").write_text("EXCLUDED INPUT", encoding="utf-8")
         self.backup = self.engine.store.root / "_encrypted_checkpoint"
 
+    def test_personal_agenda_persists_and_completes_through_desktop_tool(self):
+        display = Mock()
+        def invoke(action, **args):
+            with patch("core.tasks.desktop.ensure", return_value=self.engine):
+                return background_tasks.background_tasks(dict(action=action, **args), display)
+        title = "PRIVATE EDUCATION TASK"
+        result = invoke("agenda_add", day="2026-12-01", task=title)
+        ident = result.split()[-1]
+        self.assertEqual(len(ident), 32)
+        self.assertNotIn(title.encode(), (self.backup / "neural_sync.sqlite3").read_bytes())
+        self.assertNotIn(title, invoke("agenda_day", day="2026-12-01"))
+        self.assertIn("Bekliyor · " + title, display.show_content.call_args.args[1])
+        self.assertIn("complete", invoke("agenda_complete", task_id=ident))
+        invoke("agenda_day", day="2026-12-01")
+        self.assertIn("Tamamlandı · " + title, display.show_content.call_args.args[1])
+        invoke("agenda_day", day="2026-12-02")
+        self.assertNotIn(title, display.show_content.call_args.args[1])
+
     def test_encrypted_snapshot_preserves_task_turns_and_notes_without_copying_outputs(self):
         info = checkpoint.checkpoint(self.engine)
         self.assertGreaterEqual(info["files"], 4)
@@ -188,3 +206,11 @@ class SecureTaskCheckpointTests(unittest.TestCase):
         for value in ("../outside", "/absolute", "C:/outside", "a\\..\\x", ".", ""):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 checkpoint._safe_path(value)
+
+
+class ModelEvaluationTests(unittest.TestCase):
+    def test_exact_score_and_unavailable(self):
+        from tools.evaluate_task_brain import evaluate
+        answers = iter(['{"bitis":"10:35"}', '', '{"tekrar":0}'])
+        rows = list(evaluate(lambda *a, **k: next(answers), 'fast'))
+        self.assertEqual([row["status"] for row in rows], ["passed", "unavailable", "failed"])

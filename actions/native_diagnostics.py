@@ -8,6 +8,23 @@ from core import outcome
 def native_diagnostics(parameters: dict, player=None) -> str:
     from core.native_diagnostics import collect, local_analysis, model_metrics, model_sharing_enabled
     try:
+        view = (parameters or {}).get("view", "hardware")
+        if view in ("startup", "focus"):
+            import platform
+            from core.native_diagnostics import windows_query
+            if platform.system() != "Windows" or not callable(getattr(player, "show_content", None)):
+                return outcome.failed("native_diagnostics", "Windows desktop required")
+            result = windows_query(view)
+            if view == "startup":
+                title = "BAŞLANGIÇ UYGULAMALARI"
+                detail = "\n".join(result["names"]) or "Bu kaynakta kayıt bulunamadı."
+                if result["truncated"]:
+                    detail += "\nİlk 100 kayıt gösteriliyor."
+            else:
+                title = "ODAKLANILAN DENETİM"
+                detail = result["role"] + (" · Etkin" if result["enabled"] else " · Devre dışı")
+            player.show_content(title, detail)
+            return outcome.done("native_diagnostics", observed=True, panel_shown=True)
         snapshot = collect()
         detail = "YEREL DEĞERLENDİRME\n" + "\n".join(local_analysis(snapshot)) + "\n\nÖLÇÜMLER\n" + json.dumps(snapshot, ensure_ascii=False, indent=2)
         shown = False
@@ -40,6 +57,6 @@ TOOL = {
                     "Use when the user asks to analyze the computer or its hardware."),
     "brief": "Read-only local CPU, memory, disk, battery and Windows CIM hardware diagnostics.",
     "tier": "core",
-    "parameters": {"type": "OBJECT", "properties": {}},
+    "parameters": {"type": "OBJECT", "properties": {"view": {"type": "STRING", "enum": ["hardware", "startup", "focus"], "description": "Windows startup entry names or the focused UI Automation control role, shown locally."}}},
     "handler": native_diagnostics,
 }

@@ -60,12 +60,31 @@ $bios = @(Get-CimInstance -ClassName Win32_BIOS | Select-Object -Property Manufa
 '''
 
 
-def _windows_cim(timeout=15):
+_QUERIES = {
+    "hardware": _CIM_SCRIPT,
+    "startup": r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$items = @(Get-CimInstance Win32_StartupCommand | Select-Object -First 101 -ExpandProperty Name)
+@{names=@($items | Select-Object -First 100); truncated=($items.Count -gt 100)} | ConvertTo-Json -Compress
+""",
+    "focus": r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName UIAutomationClient
+$e = [System.Windows.Automation.AutomationElement]::FocusedElement
+if ($null -eq $e) { throw 'No focused control' }
+@{role=$e.Current.ControlType.ProgrammaticName; enabled=$e.Current.IsEnabled} | ConvertTo-Json -Compress
+""",
+}
+
+
+def windows_query(name, timeout=15):
+    script = _QUERIES[name]
     root = os.environ.get("SystemRoot") or os.environ.get("WINDIR") or r"C:\Windows"
     exe = Path(root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     if not exe.is_file():
         raise RuntimeError("Windows PowerShell 5.1 bulunamadı")
-    cmd = [str(exe), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", _CIM_SCRIPT]
+    cmd = [str(exe), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]
     proc = subprocess.run(cmd, shell=False, stdin=subprocess.DEVNULL, capture_output=True,
                           timeout=timeout, encoding="utf-8", errors="replace",
                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -75,9 +94,21 @@ def _windows_cim(timeout=15):
     if len(proc.stdout.encode("utf-8")) > 200_000:
         raise RuntimeError("CIM yanıtı sınırı aştı")
     result = json.loads(proc.stdout.lstrip("\ufeff"))
-    if not isinstance(result, dict) or not isinstance(result.get("operating_system"), dict):
+    if not isinstance(result, dict):
+        raise ValueError("Invalid Windows query response")
+    if name == "focus" and not (isinstance(result.get("role"), str) and isinstance(result.get("enabled"), bool)):
+        raise ValueError("Invalid accessibility response")
+    if name == "startup" and not (isinstance(result.get("names"), list) and
+                                  all(isinstance(x, str) for x in result["names"]) and
+                                  isinstance(result.get("truncated"), bool)):
+        raise ValueError("Invalid startup inventory")
+    if name == "hardware" and not isinstance(result.get("operating_system"), dict):
         raise ValueError("CIM yanıt biçimi doğrulanamadı")
     return result
+
+
+def _windows_cim(timeout=15):
+    return windows_query("hardware", timeout)
 
 
 def collect():

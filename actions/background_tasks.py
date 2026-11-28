@@ -48,6 +48,13 @@ def background_tasks(parameters: dict, player=None) -> str:
     a = dict(parameters or {})
     action = str(a.get("action") or "list").strip().lower()
 
+    if action in ("agenda_add", "agenda_complete", "agenda_day"):
+        try:
+            from core.tasks.agenda import agenda
+            return agenda(eng, action, a, player)
+        except Exception as exc:
+            return outcome.failed(action, f"personal agenda unavailable: {type(exc).__name__}")
+
     if action in ("task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"):
         try:
             from core.tasks import secure_checkpoint
@@ -315,6 +322,8 @@ TOOL = {
         "configured model to critique a completed node; it requires the user's task review "
         "sharing preference, off by default, and sends that node's task and result to the provider. "
         "Nodes using private memory or hardware tools are blocked. Its opinion does not independently prove the result. "
+        "agenda_day displays personal tasks and next scheduled routines locally. agenda_add saves a personal task; "
+        "agenda_complete marks it done by task_id. "
         "Do not treat generated reports as independently verified. task_checkpoint makes an encrypted "
         "local copy of task records and research notes, not live encrypted storage; it excludes attachments, "
         "generated files and external reports. task_checkpoint_history lists previous versions; checkpoint_version selects one for verify or recover. task_checkpoint_verify checks its integrity. "
@@ -333,7 +342,8 @@ TOOL = {
         "type": "OBJECT",
         "properties": {
             "action": {"type": "STRING",
-                       "enum": ["start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"]},
+                       "enum": ["agenda_day", "agenda_add", "agenda_complete", "start", "list", "status", "result", "finish", "cancel", "steer", "agents", "plan", "plan_list", "plan_status", "plan_cancel", "cognitive_auto", "cognitive_start", "cognitive_list", "cognitive_status", "cognitive_cancel", "cognitive_revise", "cognitive_review", "task_checkpoint", "task_checkpoint_history", "task_checkpoint_verify", "task_checkpoint_recover"]},
+            "day": {"type": "STRING", "description": "Local YYYY-MM-DD for personal agenda, defaults to today"},
             "checkpoint_version": {"type": "INTEGER", "description": "historical checkpoint ID from task_checkpoint_history; omit for latest"},
             "task": {"type": "STRING", "description": "for start: the whole task, self-contained"},
             "agent": {"type": "STRING", "description": "for start: researcher | general | system_diagnostics"},

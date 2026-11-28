@@ -270,7 +270,7 @@ Başlıklar kullanıcının özgün ana talebindeki sırayı izler. **Kısmi** y
 | 2 | BAŞTAN SONA KAYNAK KOD DENETİMİ | Kısmi: önceki oturumlardaki belirli hata düzeltmeleri kaydedildi; bütün kaynak denetlenmedi. |
 | 3 | FRIDAY CENTRAL INTELLIGENCE | Kısmi: #255, #257, #260 ve bu oturumdaki görev planlama/yürütme çalışmaları. |
 | 4 | MULTI-BRAIN — ÇOKLU MODEL ZEKÂSI | Kısmi: mevcut FAST/SMART yönlendirmesi; bütün katmanlar ve canlı performans ölçümü eksik. |
-| 5 | FRIDAY PERSONAL OPERATING SYSTEM | Henüz uçtan uca doğrulanmadı. |
+| 5 | FRIDAY PERSONAL OPERATING SYSTEM | Kısmi: şifreli kişisel görev ekleme, günlük yerel görünüm ve tamamlama. |
 | 6 | FRIDAY WINDOWS NATIVE CONTROL | Kısmi: #256 salt okunur CIM teşhisi ve INFINITY güç planı işlemi; kapsamlı yetkili yönetim tamamlanmadı. |
 | 7 | HARDWARE INTELLIGENCE | Kısmi: #256 ve #258 yerel ölçümler ve basit eşikler; tüm sensörler ve fiziksel kabul eksik. |
 | 8 | FRIDAY OMNIVISION — EKRANI ANLAMA | Henüz uçtan uca doğrulanmadı. |
@@ -367,3 +367,14 @@ Başlangıç `main`: `d5a7f7ede37418d3400c7b4f75eeec03a0b488d4`; #252–#264 kor
 ### Fiziksel cihaz gerektiren
 
 - Kullanıcının Windows profilinde DPAPI, gerçek arşiv geri yükleme ve GÜNCELLE paneli uçtan uca doğrulanmadı.
+
+## TRANSCENDENCE — Canlı kişisel görevler ve günlük plan
+
+- “Yarınki planıma ders çalışmayı ekle”, “Bugünkü planımı göster” ve “Bu görevi tamamla” işlemleri mevcut konuşma görev aracından kullanılır. Kişisel görevler #264 veritabanında ayrı satırlarda canlı olarak şifrelenir. Günlük panel seçilen tarihteki görevleri ve rutin motorunun o tarihe denk gelen bir sonraki çalıştırmalarını gösterir.
+- Kabul testi gerçek SQLite üzerinden ekleme, yeniden açma, tarih süzme ve tamamlama işlemlerini denetler. Model çağrısı veya gerçek kullanıcı hesabı kullanılmadı.
+- Eski arka plan görevlerinin JSON kayıtları, planlar, grafikler ve ekler henüz göç etmedi. Kişisel görev tablosu #265 yedek dışa aktarımına henüz dahil değildir. Anahtar kurtarma, harici takvim ve sesle fiziksel cihaz kabulü açıktır.
+
+- Model değerlendirmesi için `python -m tools.evaluate_task_brain --live --tier smart` yapılandırılmış gerçek sağlayıcı yoluna üç sentetik Türkçe görev gönderir. JSON sonucu nesnel beklentiyle karşılaştırır, her isteğin toplam süresini ölçer. FAST da seçilebilir. Yerel puanlama testi taklittir. Model adı, token ve para maliyeti bu ölçümden çıkarılamaz.
+- GitHub main geçmişinde bulut dağıtımının beklediği `plugins/telegram_remote.py` yolu sorgulandı ve commit bulunamadı. Eski kurulum ve diğer dallardan kurtarma veya yeni eşleştirilmiş bot uygulaması açık.
+
+- “Başlangıç uygulamalarımı göster” sabit CIM sorgusundan en fazla 100 başlangıç girdisi adını yerel panele getirir. “Odaktaki denetimin türünü göster” Windows UI Automation üzerinden tür ve etkinlik okur. Aynı süre sınırlı PowerShell yürütme yolu üç izinli sorguyu destekler. Etkileşimli masaüstünde odak kabulü, uygulama içi yazma ve yönetici işlemleri açıktır.
