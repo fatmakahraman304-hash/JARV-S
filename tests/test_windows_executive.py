@@ -174,6 +174,17 @@ class WindowsExecutiveTests(unittest.TestCase):
         self.assertFalse((self.path / "neural_sync.sqlite3").exists())
         self.assertTrue((self.path / "neural_sync.key").exists())
 
+    def test_missing_operation_table_is_not_silently_recreated(self):
+        with ExecutiveJournal(self.path) as journal:
+            journal.begin("power_plan", "before", "target")
+            journal._db.execute("DROP TABLE executive_ops")
+            journal._db.commit()
+        database = self.path / "neural_sync.sqlite3"
+        before = database.read_bytes()
+        with self.assertRaises(JournalError):
+            ExecutiveJournal(self.path)
+        self.assertEqual(database.read_bytes(), before)
+
     def test_action_requires_desktop_and_only_accepts_fixed_modes(self):
         with patch.object(windows_power.platform, "system", return_value="Windows"), \
              patch.object(win, "set_plan") as set_plan:

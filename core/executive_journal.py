@@ -6,10 +6,12 @@ directory. A started operation is never replayed after a crash.
 from __future__ import annotations
 
 import json
+from contextlib import closing
 import os
 from pathlib import Path
 import re
 import secrets
+import sqlite3
 import threading
 import time
 
@@ -31,8 +33,20 @@ class ExecutiveJournal:
         self._locked = True
         try:
             directory = Path(directory)
-            if (directory / "neural_sync.key").exists() and not (directory / "neural_sync.sqlite3").exists():
+            database = directory / "neural_sync.sqlite3"
+            had_database = database.exists()
+            if (directory / "neural_sync.key").exists() and not had_database:
                 raise JournalError("Operation database is missing; the existing key was preserved")
+            if database.is_symlink():
+                raise JournalError("Operation database cannot be a symbolic link")
+            if had_database:
+                try:
+                    with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as probe:
+                        table = probe.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executive_ops'").fetchone()
+                except sqlite3.Error as exc:
+                    raise JournalError("Operation database cannot be read; it was preserved") from exc
+                if table is None:
+                    raise JournalError("Operation table is missing; the database was preserved")
             self._journal = NeuralJournal(directory, "windows-executive-v1")
             self._db = self._journal._connection
             self._db.execute("CREATE TABLE IF NOT EXISTS executive_ops (id TEXT PRIMARY KEY, data BLOB NOT NULL)")
