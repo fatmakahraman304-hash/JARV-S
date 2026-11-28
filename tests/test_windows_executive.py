@@ -185,6 +185,18 @@ class WindowsExecutiveTests(unittest.TestCase):
             ExecutiveJournal(self.path)
         self.assertEqual(database.read_bytes(), before)
 
+    def test_symbolic_link_journal_directory_is_rejected(self):
+        target = self.path / "target"
+        target.mkdir()
+        link = self.path / "link"
+        try:
+            link.symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symbolic link creation is unavailable")
+        with self.assertRaises(JournalError):
+            ExecutiveJournal(link)
+        self.assertEqual(list(target.iterdir()), [])
+
     def test_action_requires_desktop_and_only_accepts_fixed_modes(self):
         with patch.object(windows_power.platform, "system", return_value="Windows"), \
              patch.object(win, "set_plan") as set_plan:

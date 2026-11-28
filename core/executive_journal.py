@@ -33,6 +33,8 @@ class ExecutiveJournal:
         self._locked = True
         try:
             directory = Path(directory)
+            if directory.is_symlink():
+                raise JournalError("Operation journal directory cannot be a symbolic link")
             database = directory / "neural_sync.sqlite3"
             had_database = database.exists()
             if (directory / "neural_sync.key").exists() and not had_database:
